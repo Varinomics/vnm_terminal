@@ -1,5 +1,0 @@
-if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL Linux)
-    add_subdirectory(terminal_app)
-else()
-    message(STATUS "Skipping vnm_terminal examples: no native terminal backend for this platform")
-endif()
