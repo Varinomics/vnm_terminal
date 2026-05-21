@@ -1,0 +1,6 @@
+build/
+out/
+more_tests/
+CMakeUserPresets.json
+*.user
+*.user.*

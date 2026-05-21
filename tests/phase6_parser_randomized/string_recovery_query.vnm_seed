@@ -1,0 +1,33 @@
+# vnm-fixture-format: 1
+# vnm-provenance-origin: independently-authored
+# vnm-provenance-license: BSD-3-Clause
+# vnm-provenance-generator: none
+# vnm-provenance-independent: true
+# vnm-provenance-reviewer: Phase 6.1 parser randomized hardening
+name = "string_recovery_query"
+grid_rows = 3
+grid_columns = 12
+scrollback_limit = 4
+tab_width = 4
+chunk_seed = 2459162287
+byte_stream_hex = "1B 5D 31 30 3B 3F 1B 5C 41 1B 50 69 67 6E 6F 72 65 64 1B 5C 42 1B 5B 3F 39 39 39 39 68 43"
+expected_visible_text_utf8_hex = "41 42 43 0A 0A"
+expected_diagnostic_count = 2
+expected_diagnostic_0_code = 3
+expected_diagnostic_0_source_sequence_utf8_hex = "44 43 53"
+expected_diagnostic_0_family = 5
+expected_diagnostic_0_raw_payload_size = 7
+expected_diagnostic_0_limit_bytes = 1048576
+expected_diagnostic_0_recovery = 3
+expected_diagnostic_1_code = 3
+expected_diagnostic_1_source_sequence_utf8_hex = "43 53 49"
+expected_diagnostic_1_family = 3
+expected_diagnostic_1_raw_payload_size = 8
+expected_diagnostic_1_limit_bytes = 4096
+expected_diagnostic_1_recovery = 2
+expected_reply_count = 1
+expected_reply_0_kind = 5
+expected_reply_0_source_family = 4
+expected_reply_0_wire_bytes_hex = "1B 5D 31 30 3B 72 67 62 3A 66 66 66 66 2F 66 66 66 66 2F 66 66 66 66 1B 5C"
+expected_reply_0_source_sequence_utf8_hex = "4F 53 43 20 31 30"
+compare_actions = 1

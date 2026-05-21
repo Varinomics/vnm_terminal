@@ -1,0 +1,11 @@
+# vnm-fixture-format: 1
+# vnm-provenance-origin: independently-authored
+# vnm-provenance-license: BSD-3-Clause
+# vnm-provenance-generator: none
+# vnm-provenance-independent: true
+# vnm-provenance-reviewer: conformance capture corpus integration
+name = "tui_partial_redraw"
+byte_stream_hex = "48 65 61 64 65 72 0D 0A 53 74 61 74 75 73 3A 20 77 6F 72 6B 69 6E 67 0D 0A 49 6E 70 75 74 3A 20 64 72 61 66 74 0D 0A 1B 5B 32 3B 31 48 1B 5B 32 4B 53 74 61 74 75 73 3A 20 64 6F 6E 65 1B 5B 33 3B 38 48 66 69 6E 61 6C"
+max_diagnostics = 0
+visible_contains_utf8_hex = "53 74 61 74 75 73 3A 20 64 6F 6E 65"
+visible_excludes_utf8_hex = "77 6F 72 6B 69 6E 67"

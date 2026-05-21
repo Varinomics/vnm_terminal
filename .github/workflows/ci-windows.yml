@@ -1,0 +1,50 @@
+name: CI Windows
+
+on:
+  push:
+    branches: [ master, main, dev ]
+  pull_request:
+    branches: [ master, main, dev ]
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CMAKE_BUILD_TYPE: Release
+
+jobs:
+  build-and-test:
+    name: Qt Quick Terminal (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          version: '6.10.1'
+          arch: 'win64_msvc2022_64'
+          archives: 'qtbase qtdeclarative'
+          cache: 'true'
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . \
+            -G "Visual Studio 17 2022" \
+            -A x64 \
+            -DVNM_TERMINAL_BUILD_EXAMPLES=ON \
+            -DVNM_TERMINAL_BUILD_BENCHMARKS=OFF \
+            -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --config ${CMAKE_BUILD_TYPE} --parallel
+
+      - name: Run tests
+        working-directory: build
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --output-on-failure -C ${CMAKE_BUILD_TYPE}
