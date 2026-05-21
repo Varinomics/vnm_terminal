@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(vnm_terminal LANGUAGES CXX VERSION 0.1.0)
+project(vnm_terminal LANGUAGES C CXX VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,6 +34,10 @@ qt_add_resources(vnm_terminal "vnm_terminal_resources"
 
 target_link_libraries(vnm_terminal PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
+)
+
+target_compile_definitions(vnm_terminal PRIVATE
+    VNM_TERMINAL_VERSION_STRING="${PROJECT_VERSION}"
 )
 
 if(MSVC)
@@ -80,6 +84,13 @@ if(WIN32)
     )
 
     vnm_terminal_copy_qt_platform_plugin(Qt6::QWindowsIntegrationPlugin)
+
+    add_executable(vnm_terminal_portable_launcher WIN32
+        src/portable_launcher_win.c
+    )
+    target_link_libraries(vnm_terminal_portable_launcher PRIVATE
+        shell32
+    )
 endif()
 
 include(CTest)

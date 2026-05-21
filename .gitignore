@@ -1,6 +1,9 @@
 build/
+build_portable/
+dist/
 out/
 more_tests/
 CMakeUserPresets.json
+build_config.bat
 *.user
 *.user.*
