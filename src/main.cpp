@@ -646,7 +646,7 @@ QStringList default_shell_argv()
 {
 #if defined(_WIN32)
     return {environment_or_default("COMSPEC", QStringLiteral("cmd.exe"))};
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__APPLE__)
     return {environment_or_default("SHELL", QStringLiteral("/bin/sh"))};
 #else
     return {};
