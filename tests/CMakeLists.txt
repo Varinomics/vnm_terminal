@@ -190,6 +190,38 @@ set_tests_properties(vnm_terminal_custom_titlebar_integration PROPERTIES
     TIMEOUT 30
 )
 
+add_executable(vnm_terminal_app_persistence
+    terminal_app/app_persistence_tests.cpp
+    "${PROJECT_SOURCE_DIR}/src/frameless_resize_filter.cpp"
+    "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
+    "${PROJECT_SOURCE_DIR}/src/window_chrome.cpp"
+)
+
+target_link_libraries(vnm_terminal_app_persistence PRIVATE
+    vnm_terminal_surface::vnm_terminal_surface
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Quick
+)
+
+set_target_properties(vnm_terminal_app_persistence PROPERTIES
+    AUTOMOC OFF
+)
+
+add_test(
+    NAME vnm_terminal_app_persistence
+    COMMAND
+        "${CMAKE_COMMAND}" -E env
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
+        "${vnm_terminal_qt_runtime_path}"
+        "$<TARGET_FILE:vnm_terminal_app_persistence>"
+)
+
+set_tests_properties(vnm_terminal_app_persistence PROPERTIES
+    TIMEOUT 30
+)
+
 if(TARGET vnm_terminal_canvas_fixture)
     add_test(
         NAME vnm_terminal_smoke
@@ -516,6 +548,7 @@ set(vnm_terminal_test_process_targets
     vnm_terminal_window_chrome_item
     vnm_terminal_window_chrome_resize_filter
     vnm_terminal_custom_titlebar_integration
+    vnm_terminal_app_persistence
 )
 
 foreach(vnm_terminal_test_process_target IN LISTS vnm_terminal_test_process_targets)

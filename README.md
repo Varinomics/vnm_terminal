@@ -36,7 +36,7 @@ The app starts the platform default shell when no explicit command follows
 Run a specific command by placing it after `--`:
 
 ```powershell
-.\build\Release\vnm_terminal.exe --window-size 1000x640 -- pwsh -NoLogo
+.\build\Release\vnm_terminal.exe --window-size 1000x640 -- cmd.exe
 ```
 
 Run tests:
