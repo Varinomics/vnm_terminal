@@ -1,0 +1,13 @@
+name = "Unicode 16.0.0 Data Files"
+spdx_license_expression = "Unicode-3.0"
+upstream_url = "https://www.unicode.org/Public/16.0.0/"
+commit_or_version = "Unicode 16.0.0"
+source_path = "unicode.org public UCD and emoji data URLs"
+imported_path = "not vendored"
+notice = "THIRD_PARTY_NOTICES.md#unicode-160-data-files"
+dependency_kind = "generated_data_source"
+rationale = "Pinned source data for terminal cell-width table generation."
+reviewer = "Unicode width policy review"
+direct_dependencies = []
+transitive_dependencies = []
+cmake_targets = []

@@ -1,0 +1,57 @@
+name: CI Linux
+
+on:
+  push:
+    branches: [ master, main, dev ]
+  pull_request:
+    branches: [ master, main, dev ]
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CMAKE_BUILD_TYPE: Release
+  LINUX_SYSTEM_DEPS: >-
+    libgl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
+    libxi-dev libxext-dev libwayland-dev libxkbcommon-dev libvulkan-dev
+
+jobs:
+  build-and-test:
+    name: Qt Quick Terminal (Linux)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${LINUX_SYSTEM_DEPS}
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          version: '6.10.1'
+          arch: 'linux_gcc_64'
+          archives: 'icu qtbase qtdeclarative'
+          cache: 'true'
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DVNM_TERMINAL_BUILD_EXAMPLES=ON \
+            -DVNM_TERMINAL_BUILD_BENCHMARKS=OFF \
+            -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --config ${CMAKE_BUILD_TYPE} --parallel
+
+      - name: Run tests
+        working-directory: build
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --output-on-failure

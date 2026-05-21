@@ -1,0 +1,11 @@
+# vnm-fixture-format: 1
+# vnm-provenance-origin: independently-authored
+# vnm-provenance-license: BSD-3-Clause
+# vnm-provenance-generator: none
+# vnm-provenance-independent: true
+# vnm-provenance-reviewer: dirty row coverage regression
+name = "same_text_style_dirty_coverage"
+byte_stream_hex = "1B 5B 33 32 6D 73 74 61 74 75 73 20 E2 94 80 E2 96 88 1B 5B 31 3B 31 48 1B 5B 31 3B 31 48 1B 5B 31 3B 31 48 1B 5B 31 3B 31 48 1B 5B 31 3B 31 48 1B 5B 31 3B 31 48 1B 5B 31 3B 31 48 1B 5B 31 3B 31 48 1B 5B 31 3B 31 48 1B 5B 33 31 6D 73 74 61 74 75 73 20 E2 94 80 E2 96 88"
+max_diagnostics = 0
+check_dirty_cell_coverage = true
+visible_contains_utf8_hex = "73 74 61 74 75 73 20 E2 94 80 E2 96 88"

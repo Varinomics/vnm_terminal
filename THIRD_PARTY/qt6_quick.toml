@@ -1,0 +1,15 @@
+name = "Qt 6 Quick"
+spdx_license_expression = "GPL-3.0-only OR LGPL-3.0-only OR LicenseRef-Qt-Commercial"
+upstream_url = "https://www.qt.io/"
+commit_or_version = "Qt 6.x, resolved by find_package(Qt6)"
+source_path = "system Qt installation"
+imported_path = "not vendored"
+notice = "THIRD_PARTY_NOTICES.md#qt-6"
+dependency_kind = "qt_module"
+rationale = "Required Qt module for QQuickItem and future scene graph rendering."
+reviewer = "Qt module policy review"
+license_posture = "qt_lgpl_dynamic_linking_or_commercial"
+gpl_only = false
+direct_dependencies = ["Qt 6 Core", "Qt 6 Gui"]
+transitive_dependencies = []
+cmake_targets = ["Qt6::Quick"]

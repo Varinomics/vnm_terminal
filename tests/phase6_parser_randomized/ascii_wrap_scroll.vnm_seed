@@ -1,0 +1,18 @@
+# vnm-fixture-format: 1
+# vnm-provenance-origin: independently-authored
+# vnm-provenance-license: BSD-3-Clause
+# vnm-provenance-generator: none
+# vnm-provenance-independent: true
+# vnm-provenance-reviewer: Phase 6.1 parser randomized hardening
+name = "ascii_wrap_scroll"
+grid_rows = 3
+grid_columns = 10
+scrollback_limit = 5
+tab_width = 4
+chunk_seed = 1308276131
+byte_stream_hex = "4F 6E 65 0D 0A 54 77 6F 09 58 08 59 0D 0A 54 68 72 65 65"
+expected_visible_text_utf8_hex = "4F 6E 65 0A 54 77 6F 20 59 0A 54 68 72 65 65"
+expected_title_utf8_hex = ""
+expected_diagnostic_count = 0
+expected_reply_count = 0
+compare_actions = 0

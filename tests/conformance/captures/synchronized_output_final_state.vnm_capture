@@ -1,0 +1,11 @@
+# vnm-fixture-format: 1
+# vnm-provenance-origin: independently-authored
+# vnm-provenance-license: BSD-3-Clause
+# vnm-provenance-generator: none
+# vnm-provenance-independent: true
+# vnm-provenance-reviewer: conformance capture corpus integration
+name = "synchronized_output_final_state"
+byte_stream_hex = "1B 5B 3F 32 30 32 36 68 73 79 6E 63 20 73 74 61 72 74 0D 0A 71 75 65 75 65 64 20 73 74 61 6C 65 1B 5B 32 3B 31 48 1B 5B 32 4B 71 75 65 75 65 64 20 66 72 65 73 68 1B 5B 3F 32 30 32 36 6C 0D 0A 61 66 74 65 72 20 73 79 6E 63 0D 0A"
+max_diagnostics = 0
+visible_contains_utf8_hex = "71 75 65 75 65 64 20 66 72 65 73 68"
+visible_excludes_utf8_hex = "71 75 65 75 65 64 20 73 74 61 6C 65"
