@@ -5,10 +5,15 @@ on:
     branches: [ master, main, dev ]
   pull_request:
     branches: [ master, main, dev ]
+  release:
+    types: [ published ]
 
 defaults:
   run:
     shell: bash
+
+permissions:
+  contents: read
 
 env:
   CMAKE_BUILD_TYPE: Release
@@ -17,6 +22,9 @@ jobs:
   build-and-test:
     name: Qt Quick Terminal (macOS)
     runs-on: macos-15-intel
+    outputs:
+      artifact_name: ${{ steps.package.outputs.artifact_name }}
+      zip_name: ${{ steps.package.outputs.zip_name }}
 
     steps:
       - name: Checkout app
@@ -30,6 +38,26 @@ jobs:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
           ref: master
+
+      - name: Derive package names
+        id: package
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
+            package_version="${GITHUB_REF_NAME#v}"
+          else
+            package_version="$(
+              sed -nE 's/^project\(vnm_terminal .* VERSION ([^ )]+)\).*/\1/p' \
+                vnm_terminal/CMakeLists.txt
+            )"
+          fi
+
+          if [[ -z "${package_version}" ]]; then
+            echo "Could not derive package version." >&2
+            exit 1
+          fi
+
+          echo "artifact_name=vnm_terminal_v${package_version}_macos_x64" >> "${GITHUB_OUTPUT}"
+          echo "zip_name=vnm_terminal_v${package_version}_macos_x64.zip" >> "${GITHUB_OUTPUT}"
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.1
@@ -69,11 +97,36 @@ jobs:
           mkdir -p vnm_terminal/dist
           ditto -c -k --sequesterRsrc --keepParent \
             "vnm_terminal/build/vnm_terminal.app" \
-            "vnm_terminal/dist/vnm_terminal_v1.0.1_macos_x64.zip"
+            "vnm_terminal/dist/${{ steps.package.outputs.zip_name }}"
 
       - name: Upload macOS bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vnm_terminal_v1.0.1_macos_x64
-          path: vnm_terminal/dist/vnm_terminal_v1.0.1_macos_x64.zip
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: vnm_terminal/dist/${{ steps.package.outputs.zip_name }}
           if-no-files-found: error
+
+  attach-release-asset:
+    name: Attach macOS Bundle
+    if: github.event_name == 'release'
+    needs: build-and-test
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download macOS bundle artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build-and-test.outputs.artifact_name }}
+          path: dist
+
+      - name: Attach macOS bundle to GitHub release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload \
+            "${GITHUB_REF_NAME}" \
+            "dist/${{ needs.build-and-test.outputs.zip_name }}" \
+            --clobber
