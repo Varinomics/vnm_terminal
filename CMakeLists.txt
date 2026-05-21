@@ -87,6 +87,7 @@ if(WIN32)
 
     add_executable(vnm_terminal_portable_launcher WIN32
         src/portable_launcher_win.c
+        src/vnm_terminal.rc
     )
     target_link_libraries(vnm_terminal_portable_launcher PRIVATE
         shell32
