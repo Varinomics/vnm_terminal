@@ -38,11 +38,6 @@ qreal paint_device_pixel_ratio(const QPaintDevice* device)
     return std::max<qreal>(1.0, device->devicePixelRatioF());
 }
 
-QColor titlebar_separator_color(bool active)
-{
-    return active ? QColor(42, 49, 60) : QColor(31, 36, 44);
-}
-
 QColor title_text_color(bool active)
 {
     return active ? QColor(235, 239, 245) : QColor(147, 156, 169);
@@ -194,6 +189,11 @@ void paint_button(
 QColor chrome::window_chrome_background_color(bool active)
 {
     return active ? QColor(18, 23, 30) : QColor(14, 17, 22);
+}
+
+QColor chrome::terminal_content_border_color(bool active)
+{
+    return active ? QColor(42, 49, 60) : QColor(31, 36, 44);
 }
 
 chrome::Terminal_window_chrome::Terminal_window_chrome(QQuickItem* parent)
@@ -419,14 +419,6 @@ void chrome::Terminal_window_chrome::paint(QPainter* painter)
         paint_button(*painter, button, m_window_active, layout.window_maximized);
     }
 
-    const qreal separator_width = 1.0 / device_pixel_ratio;
-    QPen separator_pen(titlebar_separator_color(m_window_active));
-    separator_pen.setWidthF(separator_width);
-    painter->setPen(separator_pen);
-    painter->drawLine(
-        QPointF(titlebar_rect.left(), titlebar_rect.bottom() - separator_width / 2.0),
-        QPointF(titlebar_rect.right(), titlebar_rect.bottom() - separator_width / 2.0));
-
     painter->restore();
 }
 
@@ -497,6 +489,57 @@ void chrome::Terminal_window_chrome::mouseReleaseEvent(QMouseEvent* event)
     if (released_button == pressed_button) {
         invoke_window_command(command_for_button(*pressed_button));
     }
+}
+
+chrome::Terminal_content_border::Terminal_content_border(QQuickItem* parent)
+:
+    QQuickPaintedItem(parent)
+{
+    setAcceptedMouseButtons(Qt::NoButton);
+    setAcceptHoverEvents(false);
+    setAntialiasing(false);
+    setActiveFocusOnTab(false);
+    setFocusPolicy(Qt::NoFocus);
+    setFocus(false);
+}
+
+bool chrome::Terminal_content_border::window_active() const
+{
+    return m_window_active;
+}
+
+void chrome::Terminal_content_border::set_window_active(bool active)
+{
+    if (m_window_active == active) {
+        return;
+    }
+
+    m_window_active = active;
+    update();
+}
+
+void chrome::Terminal_content_border::paint(QPainter* painter)
+{
+    if (painter == nullptr) {
+        return;
+    }
+
+    const QRectF border_rect = item_rect(*this);
+    if (border_rect.isEmpty()) {
+        return;
+    }
+
+    painter->save();
+    painter->fillRect(border_rect, terminal_content_border_color(m_window_active));
+    painter->restore();
+}
+
+void chrome::Terminal_content_border::geometryChange(
+    const QRectF&  new_geometry,
+    const QRectF&  old_geometry)
+{
+    QQuickPaintedItem::geometryChange(new_geometry, old_geometry);
+    update();
 }
 
 void chrome::Terminal_window_chrome::mouseDoubleClickEvent(QMouseEvent* event)

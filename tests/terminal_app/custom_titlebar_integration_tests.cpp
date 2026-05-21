@@ -404,15 +404,18 @@ bool test_custom_titlebar_geometry()
     chrome_test::Terminal_window_chrome titlebar(window.contentItem());
     VNM_TerminalSurface surface(window.contentItem());
     chrome_test::Terminal_scrollbar scrollbar(window.contentItem());
+    chrome_test::Terminal_content_border content_border(window.contentItem());
 
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
 
     bool ok = true;
     ok &= check_rect_equal(item_rect(titlebar), QRectF(0.0, 0.0, 800.0, 32.0),
         "custom titlebar occupies the top band");
-    ok &= check_rect_equal(item_rect(surface), QRectF(6.0, 32.0, 776.0, 442.0),
-        "custom terminal is below the titlebar and left of the scrollbar");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(782.0, 32.0, 12.0, 442.0),
+    ok &= check_rect_equal(item_rect(content_border), QRectF(6.0, 32.0, 788.0, 442.0),
+        "custom content border surrounds terminal and scrollbar");
+    ok &= check_rect_equal(item_rect(surface), QRectF(7.0, 33.0, 774.0, 440.0),
+        "custom terminal is inset inside the content border");
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(781.0, 33.0, 12.0, 440.0),
         "custom scrollbar touches the inner right frame edge");
     ok &= check(surface.y() >= titlebar.y() + titlebar.height(),
         "terminal top is below titlebar bottom");
@@ -421,9 +424,8 @@ bool test_custom_titlebar_geometry()
     ok &= check(nearly_equal(surface.x() + surface.width(), scrollbar.x()),
         "terminal right edge is adjacent to scrollbar");
     ok &= check(
-        nearly_equal(
-            scrollbar.x() + scrollbar.width(),
-            window.width() - chrome_test::k_default_frameless_resize_border_width),
+        scrollbar.x() + scrollbar.width() <=
+            window.width() - chrome_test::k_default_frameless_resize_border_width,
         "scrollbar right edge is inside resize border");
     ok &= check(
         surface.y() + surface.height() <=
@@ -431,36 +433,44 @@ bool test_custom_titlebar_geometry()
         "terminal bottom edge is inside resize border");
 
     window.resize(360, 240);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
     ok &= check_rect_equal(item_rect(titlebar), QRectF(0.0, 0.0, 360.0, 32.0),
         "resized custom titlebar tracks window width");
-    ok &= check_rect_equal(item_rect(surface), QRectF(6.0, 32.0, 336.0, 202.0),
+    ok &= check_rect_equal(item_rect(content_border), QRectF(6.0, 32.0, 348.0, 202.0),
+        "resized custom content border tracks the terminal content area");
+    ok &= check_rect_equal(item_rect(surface), QRectF(7.0, 33.0, 334.0, 200.0),
         "resized custom terminal tracks titlebar and border insets");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(342.0, 32.0, 12.0, 202.0),
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(341.0, 33.0, 12.0, 200.0),
         "resized custom scrollbar remains inside the right frame");
 
     window.setWindowStates(Qt::WindowMaximized);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
-    ok &= check_rect_equal(item_rect(surface), QRectF(0.0, 32.0, 348.0, 208.0),
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
+    ok &= check_rect_equal(item_rect(content_border), QRectF(0.0, 32.0, 360.0, 208.0),
+        "maximized custom content border drops inactive resize gutters");
+    ok &= check_rect_equal(item_rect(surface), QRectF(1.0, 33.0, 346.0, 206.0),
         "maximized custom terminal drops inactive resize border gutters");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(348.0, 32.0, 12.0, 208.0),
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(347.0, 33.0, 12.0, 206.0),
         "maximized custom scrollbar remains inside content bounds");
     window.setWindowStates(Qt::WindowNoState);
 
     window.resize(8, 40);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
-    ok &= check_rect_equal(item_rect(surface), QRectF(4.0, 32.0, 0.0, 2.0),
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
+    ok &= check_rect_equal(item_rect(content_border), QRectF(4.0, 32.0, 0.0, 2.0),
+        "very narrow custom content border clamps horizontal resize insets");
+    ok &= check_rect_equal(item_rect(surface), QRectF(4.0, 33.0, 0.0, 0.0),
         "very narrow custom terminal clamps horizontal resize insets");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(4.0, 32.0, 0.0, 2.0),
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(4.0, 33.0, 0.0, 0.0),
         "very narrow custom scrollbar clamps inside horizontal resize insets");
 
     window.resize(200, 20);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
     ok &= check_rect_equal(item_rect(titlebar), QRectF(0.0, 0.0, 200.0, 20.0),
         "very short custom titlebar clamps to window height");
-    ok &= check_rect_equal(item_rect(surface), QRectF(6.0, 20.0, 176.0, 0.0),
+    ok &= check_rect_equal(item_rect(content_border), QRectF(6.0, 20.0, 188.0, 0.0),
+        "very short custom content border clamps nonnegative height");
+    ok &= check_rect_equal(item_rect(surface), QRectF(7.0, 20.0, 174.0, 0.0),
         "very short custom terminal clamps nonnegative height");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(182.0, 20.0, 12.0, 0.0),
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(181.0, 20.0, 12.0, 0.0),
         "very short custom scrollbar clamps nonnegative height");
 
     window.resize(360, 240);
@@ -1086,6 +1096,39 @@ bool test_installed_resize_filter_preempts_live_titlebar(QGuiApplication& app)
     return ok;
 }
 
+#if defined(Q_OS_MACOS)
+bool test_macos_command_shortcuts_are_host_shortcuts(QGuiApplication& app)
+{
+    QQuickWindow window;
+    window.resize(360, 240);
+    VNM_TerminalSurface surface(window.contentItem());
+    Recording_event_filter key_filter(QEvent::KeyPress);
+    Terminal_shortcut_filter shortcut_filter(&surface);
+
+    window.installEventFilter(&key_filter);
+    window.installEventFilter(&shortcut_filter);
+    window.show();
+    pump_events(app);
+    surface.forceActiveFocus();
+    pump_events(app);
+
+    QKeyEvent paste_event(QEvent::KeyPress, Qt::Key_V, Qt::MetaModifier);
+    paste_event.setAccepted(false);
+    const bool paste_sent = QCoreApplication::sendEvent(&window, &paste_event);
+
+    QKeyEvent copy_event(QEvent::KeyPress, Qt::Key_C, Qt::MetaModifier);
+    copy_event.setAccepted(false);
+    const bool copy_sent = QCoreApplication::sendEvent(&window, &copy_event);
+
+    bool ok = true;
+    ok &= check(paste_sent, "macOS Command+V event is delivered");
+    ok &= check(copy_sent, "macOS Command+C event is delivered");
+    ok &= check(key_filter.recorded_count == 0,
+        "macOS Command copy/paste shortcuts are consumed by the terminal app");
+    return ok;
+}
+#endif
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1101,5 +1144,8 @@ int main(int argc, char** argv)
     ok &= test_focus_after_custom_titlebar_interactions(app);
     ok &= test_installed_filter_chain_order();
     ok &= test_installed_resize_filter_preempts_live_titlebar(app);
+#if defined(Q_OS_MACOS)
+    ok &= test_macos_command_shortcuts_are_host_shortcuts(app);
+#endif
     return ok ? 0 : 1;
 }

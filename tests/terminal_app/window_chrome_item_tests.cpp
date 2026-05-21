@@ -635,7 +635,7 @@ bool test_focus_policy()
 
 bool test_titlebar_background_paint_uses_window_chrome_color()
 {
-    auto painted_background_color = [](bool active) {
+    auto painted_titlebar = [](bool active) {
         chrome::Terminal_window_chrome titlebar;
         titlebar.setSize(QSizeF(64.0, 32.0));
         titlebar.set_window_active(active);
@@ -645,18 +645,63 @@ bool test_titlebar_background_paint_uses_window_chrome_color()
         QPainter painter(&image);
         titlebar.paint(&painter);
         painter.end();
-        return image.pixelColor(2, 2);
+        return image;
     };
+
+    const QImage active_titlebar   = painted_titlebar(true);
+    const QImage inactive_titlebar = painted_titlebar(false);
 
     bool ok = true;
     ok &= check_qcolor_equal(
-        painted_background_color(true),
+        active_titlebar.pixelColor(2, 2),
         chrome::window_chrome_background_color(true),
         "active titlebar background uses the shared chrome background color");
     ok &= check_qcolor_equal(
-        painted_background_color(false),
+        inactive_titlebar.pixelColor(2, 2),
         chrome::window_chrome_background_color(false),
         "inactive titlebar background uses the shared chrome background color");
+    ok &= check_qcolor_equal(
+        active_titlebar.pixelColor(2, 31),
+        chrome::window_chrome_background_color(true),
+        "active titlebar bottom edge has no separator line");
+    ok &= check_qcolor_equal(
+        inactive_titlebar.pixelColor(2, 31),
+        chrome::window_chrome_background_color(false),
+        "inactive titlebar bottom edge has no separator line");
+    return ok;
+}
+
+bool test_terminal_content_border_paint_uses_border_color()
+{
+    auto painted_border = [](bool active) {
+        chrome::Terminal_content_border border;
+        border.setSize(QSizeF(20.0, 12.0));
+        border.set_window_active(active);
+
+        QImage image(QSize(20, 12), QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::transparent);
+        QPainter painter(&image);
+        border.paint(&painter);
+        painter.end();
+        return image;
+    };
+
+    const QImage active_border   = painted_border(true);
+    const QImage inactive_border = painted_border(false);
+
+    bool ok = true;
+    ok &= check_qcolor_equal(
+        active_border.pixelColor(0, 0),
+        chrome::terminal_content_border_color(true),
+        "active content border uses the shared border color");
+    ok &= check_qcolor_equal(
+        active_border.pixelColor(10, 6),
+        chrome::terminal_content_border_color(true),
+        "active content border fill uses the shared border color");
+    ok &= check_qcolor_equal(
+        inactive_border.pixelColor(19, 11),
+        chrome::terminal_content_border_color(false),
+        "inactive content border uses the shared border color");
     return ok;
 }
 
@@ -758,6 +803,7 @@ int main(int argc, char** argv)
     ok &= test_hover_and_ungrab_state_paths();
     ok &= test_focus_policy();
     ok &= test_titlebar_background_paint_uses_window_chrome_color();
+    ok &= test_terminal_content_border_paint_uses_border_color();
     ok &= test_focus_survives_titlebar_interactions();
     ok &= test_null_window_event_paths_are_safe();
     ok &= test_state_and_title_derivation();
