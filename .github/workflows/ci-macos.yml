@@ -1,0 +1,57 @@
+name: CI macOS
+
+on:
+  push:
+    branches: [ master, main, dev ]
+  pull_request:
+    branches: [ master, main, dev ]
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CMAKE_BUILD_TYPE: Release
+
+jobs:
+  build-and-test:
+    name: Qt Quick Terminal (macOS)
+    runs-on: macos-15-intel
+
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+        with:
+          path: vnm_terminal
+
+      - name: Checkout surface
+        uses: actions/checkout@v4
+        with:
+          repository: Varinomics/vnm_terminal_surface
+          path: vnm_terminal_surface
+          ref: master
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          version: '6.10.1'
+          arch: 'clang_64'
+          archives: 'qtbase qtdeclarative'
+          cache: 'true'
+
+      - name: Configure CMake
+        run: |
+          cmake -B vnm_terminal/build -S vnm_terminal \
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
+            -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build vnm_terminal/build --config ${CMAKE_BUILD_TYPE} --parallel
+
+      - name: Run tests
+        working-directory: vnm_terminal/build
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --output-on-failure
