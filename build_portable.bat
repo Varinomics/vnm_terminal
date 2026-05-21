@@ -146,14 +146,20 @@ echo [4/5] Writing build info ...
 
 set GIT_COMMIT=unknown
 set GIT_BRANCH=unknown
+set SURFACE_GIT_COMMIT=unknown
+set SURFACE_GIT_BRANCH=unknown
 for /f %%i in ('git rev-parse --short HEAD 2^>nul') do set GIT_COMMIT=%%i
 for /f %%i in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set GIT_BRANCH=%%i
+for /f %%i in ('git -C "%VNM_TERMINAL_SURFACE_SOURCE_DIR%" rev-parse --short HEAD 2^>nul') do set SURFACE_GIT_COMMIT=%%i
+for /f %%i in ('git -C "%VNM_TERMINAL_SURFACE_SOURCE_DIR%" rev-parse --abbrev-ref HEAD 2^>nul') do set SURFACE_GIT_BRANCH=%%i
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH:mm"') do set TIMESTAMP=%%i
 
 (
     echo Build timestamp: %TIMESTAMP%
     echo Git branch:      %GIT_BRANCH%
     echo Git commit:      %GIT_COMMIT%
+    echo Surface branch:  %SURFACE_GIT_BRANCH%
+    echo Surface commit:  %SURFACE_GIT_COMMIT%
     echo Version:         %PACKAGE_VERSION%
     echo Configuration:   %CONFIG%
     echo Profiling:       OFF
