@@ -32,6 +32,16 @@ qt_add_resources(vnm_terminal "vnm_terminal_resources"
         src/vnm_terminal.ico
 )
 
+set(vnm_terminal_macos_icon "${CMAKE_CURRENT_SOURCE_DIR}/src/vnm_terminal.icns")
+if(APPLE AND EXISTS "${vnm_terminal_macos_icon}")
+    target_sources(vnm_terminal PRIVATE
+        "${vnm_terminal_macos_icon}"
+    )
+    set_source_files_properties("${vnm_terminal_macos_icon}" PROPERTIES
+        MACOSX_PACKAGE_LOCATION Resources
+    )
+endif()
+
 target_link_libraries(vnm_terminal PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
 )
@@ -44,6 +54,23 @@ if(MSVC)
     target_compile_options(vnm_terminal PRIVATE
         /FS
     )
+endif()
+
+if(APPLE)
+    set_target_properties(vnm_terminal PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_BUNDLE_NAME "vnm_terminal"
+        MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+        MACOSX_BUNDLE_COPYRIGHT "Copyright Varinomics"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.varinomics.vnm-terminal"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+    )
+
+    if(EXISTS "${vnm_terminal_macos_icon}")
+        set_target_properties(vnm_terminal PROPERTIES
+            MACOSX_BUNDLE_ICON_FILE "vnm_terminal.icns"
+        )
+    endif()
 endif()
 
 if(WIN32)

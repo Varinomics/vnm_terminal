@@ -55,3 +55,25 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --output-on-failure
+
+      - name: Deploy macOS app bundle
+        run: |
+          app_bundle="vnm_terminal/build/vnm_terminal.app"
+          test -d "${app_bundle}"
+          "${QT_ROOT_DIR}/bin/macdeployqt" "${app_bundle}" -verbose=2
+          codesign --force --deep --sign - "${app_bundle}"
+          QT_QPA_PLATFORM=offscreen "${app_bundle}/Contents/MacOS/vnm_terminal" --help >/tmp/vnm_terminal_help.txt
+
+      - name: Package macOS app bundle
+        run: |
+          mkdir -p vnm_terminal/dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "vnm_terminal/build/vnm_terminal.app" \
+            "vnm_terminal/dist/vnm_terminal_v1.0_macos_x64.zip"
+
+      - name: Upload macOS bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vnm_terminal_v1.0_macos_x64
+          path: vnm_terminal/dist/vnm_terminal_v1.0_macos_x64.zip
+          if-no-files-found: error
