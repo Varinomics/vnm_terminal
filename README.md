@@ -68,4 +68,5 @@ runtime DLLs beside the real application in `vnm_terminal_runtime\`.
 The macOS GitHub Actions workflow builds a Release `vnm_terminal.app` with
 `VNM_TERMINAL_ENABLE_PROFILING=OFF`, deploys its Qt runtime with `macdeployqt`,
 ad-hoc signs the unsigned bundle, and uploads
-`vnm_terminal_v1.0.1_macos_x64.zip` as a workflow artifact.
+`vnm_terminal_v<version>_macos_x64.zip` as a workflow artifact. When a GitHub
+release is published, the workflow also attaches that ZIP to the release.
