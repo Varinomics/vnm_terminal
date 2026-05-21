@@ -340,7 +340,7 @@ bool test_launch_output(const QString& fixture_path)
             capture.callbacks());
     ok &= check(start_result.code == term::Terminal_backend_result_code::ACCEPTED,
         "Linux PTY backend starts list fixture");
-    ok &= check(capture.wait_for_output(QByteArrayLiteral("codex-canvas")),
+    ok &= check(capture.wait_for_output(QByteArrayLiteral("terminal-canvas")),
         "list fixture output reaches backend output");
     ok &= check(capture.wait_for_exit(), "list fixture exits");
 
@@ -392,7 +392,7 @@ bool test_interactive_canvas_fixture(const QString& fixture_path)
         backend->start(config, capture.callbacks());
     ok &= check(start_result.code == term::Terminal_backend_result_code::ACCEPTED,
         "Linux PTY backend starts interactive fixture");
-    ok &= check(capture.wait_for_output(QByteArrayLiteral("codex>")),
+    ok &= check(capture.wait_for_output(QByteArrayLiteral("term>")),
         "interactive fixture prompt reaches backend output");
 
     const term::Terminal_backend_result pause_result = backend->set_output_paused(true);

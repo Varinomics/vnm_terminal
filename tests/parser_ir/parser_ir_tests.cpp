@@ -13,7 +13,7 @@ namespace {
 
 using vnm_terminal::test_helpers::check;
 
-term::Parser_action dispatch_phase04_fixture(QByteArray bytes)
+term::Parser_action dispatch_parser_fixture(QByteArray bytes)
 {
     const QByteArray osc_8bit_st_prefix = QByteArray("\x1b]0;title", 9);
 
@@ -105,7 +105,7 @@ bool test_printable_and_control_ir()
 {
     bool ok = true;
 
-    const term::Parser_action print = dispatch_phase04_fixture(QByteArrayLiteral("text"));
+    const term::Parser_action print = dispatch_parser_fixture(QByteArrayLiteral("text"));
     const auto& print_mutation = std::get<term::Screen_print_text_mutation>(
         std::get<term::Screen_mutation>(print.payload));
     ok &= check(term::parser_action_kind(print) == term::Parser_action_kind::SCREEN_MUTATION,
@@ -116,7 +116,7 @@ bool test_printable_and_control_ir()
         "print fixture mutation kind");
     ok &= check(print_mutation.text == QStringLiteral("text"), "print fixture text");
 
-    const term::Parser_action esc          = dispatch_phase04_fixture(QByteArray("\x1b" "c", 2));
+    const term::Parser_action esc          = dispatch_parser_fixture(QByteArray("\x1b" "c", 2));
     const auto&               esc_sequence = std::get<term::Parser_control_sequence>(esc.payload);
     ok &= check(term::parser_action_kind(esc) == term::Parser_action_kind::CONTROL_SEQUENCE,
         "ESC fixture produces control sequence");
@@ -126,7 +126,7 @@ bool test_printable_and_control_ir()
         "ESC fixture final byte");
     ok &= check(esc_sequence.raw_bytes == QByteArray("\x1b" "c", 2), "ESC fixture raw bytes");
 
-    const term::Parser_action csi          = dispatch_phase04_fixture(QByteArray("\x1b[6n", 4));
+    const term::Parser_action csi          = dispatch_parser_fixture(QByteArray("\x1b[6n", 4));
     const auto&               csi_sequence = std::get<term::Parser_control_sequence>(csi.payload);
     ok &= check(csi_sequence.family == term::Parser_sequence_family::CSI,
         "CSI fixture family");
@@ -136,7 +136,7 @@ bool test_printable_and_control_ir()
     ok &= check(csi_sequence.raw_bytes == QByteArray("\x1b[6n", 4), "CSI fixture raw bytes");
 
     const term::Parser_action csi_private =
-        dispatch_phase04_fixture(QByteArray("\x1b[?25h", 6));
+        dispatch_parser_fixture(QByteArray("\x1b[?25h", 6));
     const auto& csi_private_sequence =
         std::get<term::Parser_control_sequence>(csi_private.payload);
     ok &= check(csi_private_sequence.private_marker == QByteArrayLiteral("?"),
@@ -146,14 +146,14 @@ bool test_printable_and_control_ir()
         "CSI fixture private parameters");
 
     const term::Parser_action csi_intermediate =
-        dispatch_phase04_fixture(QByteArray("\x1b[!p", 4));
+        dispatch_parser_fixture(QByteArray("\x1b[!p", 4));
     const auto& csi_intermediate_sequence =
         std::get<term::Parser_control_sequence>(csi_intermediate.payload);
     ok &= check(csi_intermediate_sequence.intermediates == QByteArrayLiteral("!"),
         "CSI fixture intermediates");
 
     const term::Parser_action csi_multi =
-        dispatch_phase04_fixture(QByteArray("\x1b[1;4;31m", 9));
+        dispatch_parser_fixture(QByteArray("\x1b[1;4;31m", 9));
     const auto& csi_multi_sequence =
         std::get<term::Parser_control_sequence>(csi_multi.payload);
     ok &= check(csi_multi_sequence.parameters.size() == 3U &&
@@ -209,7 +209,7 @@ bool test_string_terminators_and_dcs_discard()
     bool ok = true;
 
     const term::Parser_action osc_bel =
-        dispatch_phase04_fixture(QByteArray("\x1b]0;title\a", 10));
+        dispatch_parser_fixture(QByteArray("\x1b]0;title\a", 10));
     const auto& bel_sequence = std::get<term::Parser_control_sequence>(osc_bel.payload);
     ok &= check(bel_sequence.family == term::Parser_sequence_family::OSC,
         "OSC BEL fixture family");
@@ -219,14 +219,14 @@ bool test_string_terminators_and_dcs_discard()
         "OSC BEL fixture payload");
 
     const term::Parser_action osc_st =
-        dispatch_phase04_fixture(QByteArray("\x1b]0;title\x1b\\", 11));
+        dispatch_parser_fixture(QByteArray("\x1b]0;title\x1b\\", 11));
     const auto& st_sequence = std::get<term::Parser_control_sequence>(osc_st.payload);
     ok &= check(st_sequence.terminator == term::Parser_string_terminator::ST_7BIT,
         "OSC ST fixture terminator");
 
     QByteArray osc_8bit_st = QByteArray("\x1b]0;title", 9);
     osc_8bit_st.append(static_cast<char>(0x9c));
-    const term::Parser_action osc_st_8bit = dispatch_phase04_fixture(osc_8bit_st);
+    const term::Parser_action osc_st_8bit = dispatch_parser_fixture(osc_8bit_st);
     const auto& st_8bit_sequence =
         std::get<term::Parser_control_sequence>(osc_st_8bit.payload);
     ok &= check(st_8bit_sequence.terminator == term::Parser_string_terminator::ST_8BIT,
@@ -385,7 +385,7 @@ bool test_terminal_reply_ir()
 bool test_malformed_recovery_ir()
 {
     bool                      ok         = true;
-    const term::Parser_action malformed  = dispatch_phase04_fixture(QByteArray("\x1b[?", 3));
+    const term::Parser_action malformed  = dispatch_parser_fixture(QByteArray("\x1b[?", 3));
     const auto&               diagnostic = std::get<term::Parser_payload_diagnostic>(malformed.payload);
     ok &= check(term::parser_action_kind(malformed) == term::Parser_action_kind::DIAGNOSTIC,
         "malformed fixture produces diagnostic");
@@ -396,7 +396,7 @@ bool test_malformed_recovery_ir()
     ok &= check(diagnostic.recovery == term::Parser_recovery_strategy::RESET_TO_GROUND,
         "malformed fixture recovery");
 
-    const term::Parser_action malformed_esc = dispatch_phase04_fixture(QByteArray("\x1b", 1));
+    const term::Parser_action malformed_esc = dispatch_parser_fixture(QByteArray("\x1b", 1));
     const auto& esc_diagnostic =
         std::get<term::Parser_payload_diagnostic>(malformed_esc.payload);
     ok &= check(esc_diagnostic.family == term::Parser_sequence_family::ESC,

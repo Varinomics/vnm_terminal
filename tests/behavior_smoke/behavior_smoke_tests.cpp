@@ -1124,24 +1124,24 @@ bool check_surface_snapshot_for_smoke(
         return ok;
     }
 
-    if (name == "codex-scrollback-insert") {
+    if (name == "primary-scrollback-insert") {
         ok &= check(snapshot.viewport.active_buffer == term::Terminal_buffer_id::PRIMARY,
-            "surface Codex scrollback insert stays on primary");
+            "surface primary scrollback insert stays on primary");
         ok &= check(snapshot.viewport.scrollback_rows == 1,
-            "surface Codex scrollback insert produces one scrollback row");
+            "surface primary scrollback insert produces one scrollback row");
         ok &= check(snapshot_row_text(snapshot, 0) == QStringLiteral("top-two"),
-            "surface Codex scrollback insert shifts second row to viewport top");
+            "surface primary scrollback insert shifts second row to viewport top");
         ok &= check(snapshot_row_text(snapshot, 1) == QStringLiteral("view"),
-            "surface Codex scrollback insert keeps view row");
+            "surface primary scrollback insert keeps view row");
         ok &= check(snapshot_row_text(snapshot, 2) == QStringLiteral("HIST"),
-            "surface Codex scrollback insert keeps first inserted row");
+            "surface primary scrollback insert keeps first inserted row");
         ok &= check(snapshot_row_text(snapshot, 3) == QStringLiteral("NEXT"),
-            "surface Codex scrollback insert writes overflowing inserted row");
+            "surface primary scrollback insert writes overflowing inserted row");
         ok &= check(snapshot_row_text(snapshot, 4) == QStringLiteral("below"),
-            "surface Codex scrollback insert preserves row below insert region");
+            "surface primary scrollback insert preserves row below insert region");
         ok &= check(snapshot.cursor.position.row == 4 &&
             snapshot.cursor.position.column == 0,
-            "surface Codex scrollback insert final cursor");
+            "surface primary scrollback insert final cursor");
         return ok;
     }
 

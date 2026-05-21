@@ -1,6 +1,6 @@
-# LLM Orientation
+# Developer Orientation
 
-This document is the shortest stable map for a first-time LLM or engineer.
+This document is the shortest stable map for a first-time engineer.
 Read it first when entering the repository.
 
 ## Level 0: What This Is

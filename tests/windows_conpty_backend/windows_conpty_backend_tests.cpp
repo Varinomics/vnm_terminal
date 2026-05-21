@@ -287,7 +287,7 @@ std::optional<QByteArray> conpty_observable_output_payload(
     }
 
     if (record.label == std::string_view("prompt")) {
-        return QByteArrayLiteral("codex>");
+        return QByteArrayLiteral("term>");
     }
 
     if (record.label == std::string_view("prompt-editing-keys-ack")) {
@@ -965,7 +965,7 @@ bool test_interactive_canvas_fixture(const QString& fixture_path)
         backend->start(config, capture.callbacks());
     ok &= check(start_result.code == term::Terminal_backend_result_code::ACCEPTED,
         "ConPTY backend starts interactive fixture");
-    ok &= check(capture.wait_for_output(QByteArrayLiteral("codex>")),
+    ok &= check(capture.wait_for_output(QByteArrayLiteral("term>")),
         "interactive fixture prompt reaches backend output");
 
     const term::Terminal_backend_result pause_result = backend->set_output_paused(true);
@@ -1146,7 +1146,7 @@ bool test_resize_interleaved_with_shell_output(const QString& fixture_path)
     return ok;
 }
 
-bool test_codex_shaped_scrollback_survives_conpty(const QString& fixture_path)
+bool test_scroll_region_scrollback_survives_conpty(const QString& fixture_path)
 {
     bool ok = true;
 
@@ -1156,23 +1156,23 @@ bool test_codex_shaped_scrollback_survives_conpty(const QString& fixture_path)
         fixture_path,
         {
             QStringLiteral("--behavior-smoke"),
-            QStringLiteral("codex-scrollback-insert"),
+            QStringLiteral("primary-scrollback-insert"),
         });
     config.initial_grid_size = term::terminal_grid_size_t{5, 20};
 
     const term::Terminal_backend_result start_result =
         backend->start(config, capture.callbacks());
     ok &= check(start_result.code == term::Terminal_backend_result_code::ACCEPTED,
-        "ConPTY starts Codex-shaped scrollback fixture");
-    ok &= check(capture.wait_for_exit(), "Codex-shaped scrollback fixture exits");
+        "ConPTY starts scroll-region scrollback fixture");
+    ok &= check(capture.wait_for_exit(), "scroll-region scrollback fixture exits");
     ok &= check(capture.errors_snapshot().empty(),
-        "Codex-shaped scrollback fixture produces no backend errors");
+        "scroll-region scrollback fixture produces no backend errors");
 
     const std::optional<term::Terminal_backend_exit> exit = capture.exit_snapshot();
     ok &= check(exit.has_value() &&
         exit->reason == term::Terminal_exit_reason::EXITED &&
         exit->exit_code == 0,
-        "Codex-shaped scrollback fixture reports clean exit");
+        "scroll-region scrollback fixture reports clean exit");
 
     term::Terminal_screen_model model(
         {
@@ -1184,12 +1184,12 @@ bool test_codex_shaped_scrollback_survives_conpty(const QString& fixture_path)
     const term::Terminal_screen_model_result result =
         model.ingest(capture.output_snapshot());
     ok &= check(diagnostic_count(result) == 0,
-        "ConPTY-observed Codex-shaped scrollback has no parser diagnostics");
+        "ConPTY-observed scroll-region scrollback has no parser diagnostics");
     if (!check(model.scrollback_size() > 0,
-        "ConPTY-observed Codex-shaped scrollback creates model scrollback"))
+        "ConPTY-observed scroll-region scrollback creates model scrollback"))
     {
         std::cerr
-            << "ConPTY Codex-shaped output hex: "
+            << "ConPTY scroll-region output hex: "
             << capture.output_snapshot().toHex(' ').constData()
             << '\n';
         ok = false;
@@ -1857,7 +1857,7 @@ int main(int argc, char** argv)
     ok &= test_interactive_canvas_fixture(fixture_path);
     ok &= test_resize_storm_reports_final_shell_size(fixture_path);
     ok &= test_resize_interleaved_with_shell_output(fixture_path);
-    ok &= test_codex_shaped_scrollback_survives_conpty(fixture_path);
+    ok &= test_scroll_region_scrollback_survives_conpty(fixture_path);
     ok &= test_utf8_payload_preserves_exact_conpty_bytes(fixture_path);
     ok &= test_sync_raw_resize_gate_preserves_order(fixture_path);
     ok &= test_fast_start_exit_loop(fixture_path);

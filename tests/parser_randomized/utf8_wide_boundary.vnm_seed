@@ -3,7 +3,7 @@
 # vnm-provenance-license: BSD-3-Clause
 # vnm-provenance-generator: none
 # vnm-provenance-independent: true
-# vnm-provenance-reviewer: Phase 6.1 parser randomized hardening
+# vnm-provenance-reviewer: parser randomized coverage
 name = "utf8_wide_boundary"
 grid_rows = 2
 grid_columns = 4

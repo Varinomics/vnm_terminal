@@ -149,7 +149,7 @@ int minimum_text_pixels(const QImage& image, int column_count)
         std::round(static_cast<qreal>(area.width() * area.height()) * 0.02)));
 }
 
-QFont spike_font()
+QFont text_node_font()
 {
     QFont font(loaded_font_family());
     font.setStyleHint(QFont::Monospace);
@@ -185,7 +185,7 @@ bool append_text_run(
     QColor         color,
     int            column)
 {
-    QTextLayout layout(text, spike_font());
+    QTextLayout layout(text, text_node_font());
     prepare_text_layout(layout);
 
     QSGTextNode* node = window.createTextNode();
@@ -195,7 +195,7 @@ bool append_text_run(
     }
 
     node->setColor(color);
-    // Keep the spike on Qt's own glyph path. Native rendering can be evaluated
+    // Keep the check on Qt's own glyph path. Native rendering can be evaluated
     // separately if a target platform needs it.
     node->setRenderType(QSGTextNode::QtRendering);
     node->setViewport(QRectF(0.0, 0.0, k_window_width, k_window_height));
@@ -204,10 +204,10 @@ bool append_text_run(
     return true;
 }
 
-class Qsg_text_node_spike_item final : public QQuickItem
+class Qsg_text_node_test_item final : public QQuickItem
 {
 public:
-    Qsg_text_node_spike_item()
+    Qsg_text_node_test_item()
     {
         setFlag(ItemHasContents, true);
         setSize(QSizeF(k_window_width, k_window_height));
@@ -288,7 +288,7 @@ bool test_public_qsg_text_node_route(QGuiApplication& app)
     window.setColor(QColor(80, 0, 80));
     window.resize(k_window_width, k_window_height);
 
-    Qsg_text_node_spike_item item;
+    Qsg_text_node_test_item item;
     item.setParentItem(window.contentItem());
 
     window.show();
@@ -317,7 +317,7 @@ bool test_public_qsg_text_node_route(QGuiApplication& app)
         is_green_text_pixel);
     const int delta_tolerance = std::max(2, static_cast<int>(std::ceil(2.0 * image_scale(image))));
 
-    ok &= check(!image.isNull(), "QSGTextNode spike produced a window grab");
+    ok &= check(!image.isNull(), "QSGTextNode route produced a window grab");
     ok &= check(!item.text_node_creation_failed(), "QQuickWindow::createTextNode succeeded");
     ok &= check(red_bounds.isValid(), "red QSGTextNode text run is visible");
     ok &= check(green_bounds.isValid(), "green QSGTextNode text run is visible");

@@ -4,18 +4,18 @@ This directory contains stable orientation and reference material.
 
 ## First-Read Path
 
-1. [LLM orientation](llm_orientation.md)
+1. [Developer orientation](developer_orientation.md)
 2. [Architecture](architecture.md)
 3. [Public surface](public_surface.md)
 4. [Repository guide](repository_guide.md)
 
-These files are written for a first-time LLM or engineer that needs to navigate
+These files are written for a first-time engineer that needs to navigate
 the repository without reading every implementation detail.
 
 ## Time-Budgeted Reading
 
 - 1 minute: read the top-level `README.md`.
-- 5 minutes: read [LLM orientation](llm_orientation.md).
+- 5 minutes: read [Developer orientation](developer_orientation.md).
 - 15 minutes: read [Architecture](architecture.md) and
   [Public surface](public_surface.md).
 - Before changing build, tests, fixtures, or dependencies: read
@@ -49,5 +49,5 @@ the repository without reading every implementation detail.
 ## Maintenance Rule
 
 Documentation should describe stable contracts, policy, repository structure,
-and supported operational workflows. Do not add transient plans, review notes,
-or implementation-status snapshots to this directory.
+and supported operational workflows. Keep temporary working notes outside this
+directory.

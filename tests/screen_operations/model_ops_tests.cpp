@@ -614,7 +614,7 @@ bool test_escape_index_controls()
     return ok;
 }
 
-bool test_codex_shaped_history_insert_after_reverse_index()
+bool test_scroll_region_history_insert_after_reverse_index()
 {
     bool ok = true;
 
@@ -633,35 +633,35 @@ bool test_codex_shaped_history_insert_after_reverse_index()
             "\x1b[r\x1b[5;1H"));
 
     ok &= check(diagnostic_count(result) == 0,
-        "Codex-shaped first history insert has no diagnostics");
+        "scroll-region first history insert has no diagnostics");
     ok &= check(model.scrollback_size() == 0,
-        "Codex-shaped first history insert does not append before overflow");
+        "scroll-region first history insert does not append before overflow");
     ok &= check(!result.viewport_changed,
-        "Codex-shaped first history insert does not report viewport changed");
+        "scroll-region first history insert does not report viewport changed");
     ok &= check(model.row_text(3) == QStringLiteral("HIST"),
-        "Codex-shaped first history insert writes inserted row");
+        "scroll-region first history insert writes inserted row");
 
     result = model.ingest(
         QByteArrayLiteral("\x1b[1;4r\x1b[4;1H\r\nNEXT"
             "\x1b[r\x1b[5;1H"));
 
     ok &= check(diagnostic_count(result) == 0,
-        "Codex-shaped overflowing history insert has no diagnostics");
+        "scroll-region overflowing history insert has no diagnostics");
     ok &= check(model.scrollback_size() == 1,
-        "Codex-shaped overflowing history insert appends scrollback");
+        "scroll-region overflowing history insert appends scrollback");
     ok &= check(result.viewport_changed,
-        "Codex-shaped overflowing history insert reports viewport changed");
+        "scroll-region overflowing history insert reports viewport changed");
     const term::Terminal_render_snapshot scrollback_snapshot =
         model.render_snapshot(request_for_model(model, 29U, 1));
     ok &= check(term::validate_render_snapshot(scrollback_snapshot).status ==
         term::Terminal_render_snapshot_status::OK,
-        "Codex-shaped overflowing history insert snapshot validates");
+        "scroll-region overflowing history insert snapshot validates");
     ok &= check(snapshot_row_text(scrollback_snapshot, 0) == QStringLiteral("top-one"),
-        "Codex-shaped overflowing history insert keeps scrolled row in scrollback");
+        "scroll-region overflowing history insert keeps scrolled row in scrollback");
     ok &= check(snapshot_row_text(scrollback_snapshot, 1) == QStringLiteral("top-two"),
-        "Codex-shaped overflowing history insert shifts following row into viewport");
+        "scroll-region overflowing history insert shifts following row into viewport");
     ok &= check(snapshot_row_text(scrollback_snapshot, 4) == QStringLiteral("NEXT"),
-        "Codex-shaped overflowing history insert writes inserted row");
+        "scroll-region overflowing history insert writes inserted row");
 
     return ok;
 }
@@ -1508,7 +1508,7 @@ int main()
     ok &= test_top_anchored_scroll_region_appends_scrollback();
     ok &= test_alternate_top_anchored_scroll_region_does_not_append_scrollback();
     ok &= test_escape_index_controls();
-    ok &= test_codex_shaped_history_insert_after_reverse_index();
+    ok &= test_scroll_region_history_insert_after_reverse_index();
     ok &= test_conpty_primary_repaint_recovery_preserves_scrollback();
     ok &= test_primary_repaint_recovery_ignores_plain_home_repaint();
     ok &= test_primary_repaint_recovery_ignores_clear_after_home();
