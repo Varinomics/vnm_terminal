@@ -1,1 +1,3 @@
 * text=auto eol=lf
+*.bat text eol=crlf
+*.bat.example text eol=crlf

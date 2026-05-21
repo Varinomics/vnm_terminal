@@ -1,0 +1,18 @@
+@echo off
+REM ========================================================================
+REM build_config.bat - Local build paths for build_portable.bat
+REM ========================================================================
+REM
+REM Copy this file to build_config.bat and adjust the paths below to match
+REM your local Qt / Visual Studio installation.
+REM
+REM build_config.bat is gitignored and will not be committed.
+REM ========================================================================
+
+set QT_PREFIX=C:\Qt\6.10.1\msvc2022_64
+set CMAKE=C:\Program Files\CMake\bin\cmake.exe
+set VCVARSALL=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat
+set VS_ARCH=x64
+set CMAKE_GENERATOR=Visual Studio 17 2022
+set CMAKE_ARCH=x64
+set VNM_TERMINAL_SURFACE_SOURCE_DIR=C:\plms\varinomics\vnm_terminal_surface

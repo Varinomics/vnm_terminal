@@ -44,3 +44,19 @@ Run tests:
 ```powershell
 ctest --test-dir build -C Release --output-on-failure
 ```
+
+## Windows Portable Build
+
+Windows release zips use the same layout as the local portable distribution:
+the top-level `vnm_terminal.exe` is a launcher, and the real Qt application
+plus deployed runtime files live in `vnm_terminal_runtime\`.
+
+Copy `build_config.bat.example` to `build_config.bat`, adjust the local Qt,
+Visual Studio, CMake, and `vnm_terminal_surface` paths, then run:
+
+```bat
+build_portable.bat
+```
+
+The script writes `dist\portable\` and `dist\vnm_terminal_v1.0_w64.zip`.
+Portable releases are built with `VNM_TERMINAL_ENABLE_PROFILING=OFF`.

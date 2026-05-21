@@ -49,6 +49,10 @@
 #include <utility>
 #include <vector>
 
+#ifndef VNM_TERMINAL_VERSION_STRING
+#define VNM_TERMINAL_VERSION_STRING "0.0.0"
+#endif
+
 namespace {
 
 namespace term   = vnm_terminal::internal;
@@ -1844,6 +1848,7 @@ int main(int argc, char** argv)
     Qt_arguments qt_arguments = make_qt_arguments(argc, argv);
     QGuiApplication app(qt_arguments.argc, qt_arguments.argv.data());
     QCoreApplication::setApplicationName(QStringLiteral("vnm_terminal"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(VNM_TERMINAL_VERSION_STRING));
     const QIcon app_icon(
         QStringLiteral(
             ":/vnm_terminal/vnm_terminal.ico"));
