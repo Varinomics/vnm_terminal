@@ -23,6 +23,7 @@ enum class Window_chrome_command
 };
 
 QColor window_chrome_background_color(bool active);
+QColor terminal_content_border_color(bool active);
 
 class Terminal_window_chrome : public QQuickPaintedItem
 {
@@ -76,6 +77,23 @@ private:
     std::optional<Window_chrome_button_role>   m_hovered_button;
     std::optional<Window_chrome_button_role>   m_pressed_button;
     QIcon                                      m_app_icon;
+};
+
+class Terminal_content_border : public QQuickPaintedItem
+{
+public:
+    explicit Terminal_content_border(QQuickItem* parent = nullptr);
+
+    bool window_active() const;
+    void set_window_active(bool active);
+
+    void paint(QPainter* painter) override;
+
+protected:
+    void geometryChange(const QRectF& new_geometry, const QRectF& old_geometry) override;
+
+private:
+    bool m_window_active = true;
 };
 
 } // namespace vnm_terminal::terminal_app

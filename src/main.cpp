@@ -142,6 +142,7 @@ struct Runtime_state
 struct Terminal_shell_geometry
 {
     QRectF             chrome_rect;
+    QRectF             content_border_rect;
     QRectF             terminal_rect;
     QRectF             scrollbar_rect;
 };
@@ -358,11 +359,26 @@ protected:
         const Qt::KeyboardModifiers modifiers =
             key_event->modifiers() &
             (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
-        const bool paste_shortcut =
+        const bool control_paste_shortcut =
             key_event->key() == Qt::Key_V &&
             (modifiers == Qt::ControlModifier ||
-                modifiers == (Qt::ControlModifier | Qt::ShiftModifier));
-        if (!paste_shortcut) {
+             modifiers == (Qt::ControlModifier | Qt::ShiftModifier));
+#if defined(Q_OS_MACOS)
+        const bool platform_paste_shortcut =
+            key_event->key() == Qt::Key_V &&
+            modifiers       == Qt::MetaModifier;
+#else
+        constexpr bool platform_paste_shortcut = false;
+#endif
+        const bool paste_shortcut = control_paste_shortcut || platform_paste_shortcut;
+#if defined(Q_OS_MACOS)
+        const bool copy_shortcut =
+            key_event->key() == Qt::Key_C &&
+            modifiers       == Qt::MetaModifier;
+#else
+        constexpr bool copy_shortcut = false;
+#endif
+        if (!paste_shortcut && !copy_shortcut) {
             return false;
         }
 
@@ -370,10 +386,28 @@ protected:
             return false;
         }
 
+        if (copy_shortcut) {
+            return copy_selected_text();
+        }
+
         return paste_clipboard_text();
     }
 
 private:
+    bool copy_selected_text()
+    {
+        QClipboard* clipboard = QGuiApplication::clipboard();
+        if (clipboard == nullptr) {
+            return true;
+        }
+
+        const QString text = m_surface->selected_text();
+        if (!text.isEmpty()) {
+            clipboard->setText(text);
+        }
+        return true;
+    }
+
     bool paste_clipboard_text()
     {
         QClipboard* clipboard = QGuiApplication::clipboard();
@@ -391,7 +425,8 @@ private:
 Terminal_shell_geometry terminal_shell_geometry(
     const QSizeF&  window_size,
     bool           custom_titlebar,
-    bool           resize_border_active = true)
+    bool           resize_border_active = true,
+    qreal          content_border_width = 0.0)
 {
     const qreal width  = std::max<qreal>(0.0, window_size.width());
     const qreal height = std::max<qreal>(0.0, window_size.height());
@@ -425,16 +460,39 @@ Terminal_shell_geometry terminal_shell_geometry(
         std::max<qreal>(0.0, width - horizontal_inset * 2.0);
     const qreal terminal_height_available = std::max<qreal>(0.0, height - titlebar_height);
     const qreal bottom_inset              = std::min(border, terminal_height_available);
+    const qreal frame_border =
+        std::isfinite(content_border_width)
+            ? std::max<qreal>(0.0, content_border_width)
+            : 0.0;
 
     geometry.chrome_rect = QRectF(0.0, 0.0, width, titlebar_height);
+    geometry.content_border_rect = QRectF(
+        horizontal_inset,
+        titlebar_height,
+        terminal_width_available,
+        std::max<qreal>(0.0, terminal_height_available - bottom_inset));
+    const qreal content_horizontal_inset =
+        std::min(frame_border, geometry.content_border_rect.width() / 2.0);
+    const qreal content_vertical_inset =
+        std::min(frame_border, geometry.content_border_rect.height() / 2.0);
     split_terminal_area(
-        QRectF(
-            horizontal_inset,
-            titlebar_height,
-            terminal_width_available,
-            std::max<qreal>(0.0, terminal_height_available - bottom_inset)),
+        geometry.content_border_rect.adjusted(
+            content_horizontal_inset,
+            content_vertical_inset,
+            -content_horizontal_inset,
+            -content_vertical_inset),
         &geometry);
     return geometry;
+}
+
+qreal logical_device_pixel_width(const QQuickWindow& window)
+{
+    const qreal device_pixel_ratio = window.devicePixelRatio();
+    if (!std::isfinite(device_pixel_ratio) || device_pixel_ratio <= 0.0) {
+        return 1.0;
+    }
+
+    return 1.0 / device_pixel_ratio;
 }
 
 bool custom_titlebar_resize_border_active(const QQuickWindow& window)
@@ -451,16 +509,24 @@ void apply_terminal_shell_geometry(
     VNM_TerminalSurface&           surface,
     chrome::Terminal_scrollbar&    scrollbar,
     chrome::Terminal_window_chrome* titlebar,
-    bool                           custom_titlebar)
+    bool                           custom_titlebar,
+    chrome::Terminal_content_border* content_border = nullptr)
 {
     const Terminal_shell_geometry geometry = terminal_shell_geometry(
         QSizeF(window.width(), window.height()),
         custom_titlebar,
-        custom_titlebar_resize_border_active(window));
+        custom_titlebar_resize_border_active(window),
+        content_border != nullptr ? logical_device_pixel_width(window) : 0.0);
 
     if (titlebar != nullptr) {
         titlebar->setPosition(geometry.chrome_rect.topLeft());
         titlebar->setSize(geometry.chrome_rect.size());
+    }
+
+    if (content_border != nullptr) {
+        content_border->setPosition(geometry.content_border_rect.topLeft());
+        content_border->setSize(geometry.content_border_rect.size());
+        content_border->setVisible(custom_titlebar);
     }
 
     surface.setPosition(geometry.terminal_rect.topLeft());
@@ -619,8 +685,13 @@ void print_usage()
         << "\n"
         << "interactions:\n"
         << "  mouse-reporting apps receive unmodified mouse drags; Shift-drag selects locally\n"
+#if defined(Q_OS_MACOS)
+        << "  Command+C copies selected text; Command+V pastes clipboard text; "
+        << "Ctrl+C sends terminal input\n"
+#else
         << "  Ctrl+C copies selected text, otherwise sends Ctrl+C; "
         << "Ctrl+V/Ctrl+Shift+V paste clipboard text\n"
+#endif
         << "  OSC 52 clipboard writes are allowed for target c/clipboard and denied otherwise\n";
 }
 
@@ -2135,10 +2206,21 @@ int main(int argc, char** argv)
     }
 #endif
     auto* scrollbar = new chrome::Terminal_scrollbar(window.contentItem());
+    auto* content_border = options.custom_titlebar
+        ? new chrome::Terminal_content_border(window.contentItem())
+        : nullptr;
+    if (content_border != nullptr) {
+        content_border->setZ(-1.0);
+    }
     scrollbar->set_surface(surface);
     surface->set_font_family(options.font_family);
     surface->set_font_size(options.font_size);
     surface->set_color_theme(options.theme);
+    surface->set_wheel_event_policy(
+        VNM_TerminalSurface::Wheel_event_policy::LOCAL_SCROLLBACK_FIRST);
+#if defined(Q_OS_MACOS)
+    surface->set_copy_shortcut_policy(VNM_TerminalSurface::Copy_shortcut_policy::TERMINAL_INPUT);
+#endif
     surface->set_alternate_screen_wheel_policy(options.alternate_screen_wheel_policy);
     surface->set_backend_output_capture_path(options.backend_output_capture_path);
     const bool custom_titlebar_enabled = options.custom_titlebar;
@@ -2158,7 +2240,8 @@ int main(int argc, char** argv)
         *surface,
         *scrollbar,
         titlebar,
-        custom_titlebar_enabled);
+        custom_titlebar_enabled,
+        content_border);
     window.installEventFilter(new Terminal_shortcut_filter(surface));
     if (titlebar != nullptr) {
         auto* resize_filter = new chrome::Frameless_resize_filter(&window, &window);
@@ -2207,6 +2290,7 @@ int main(int argc, char** argv)
             &window,
             surface,
             scrollbar,
+            content_border,
             custom_titlebar_enabled,
             remember_restorable_window_state
         ] {
@@ -2215,7 +2299,8 @@ int main(int argc, char** argv)
                 *surface,
                 *scrollbar,
                 titlebar,
-                custom_titlebar_enabled);
+                custom_titlebar_enabled,
+                content_border);
             remember_restorable_window_state();
         });
     QObject::connect(
@@ -2227,6 +2312,7 @@ int main(int argc, char** argv)
             &window,
             surface,
             scrollbar,
+            content_border,
             custom_titlebar_enabled,
             remember_restorable_window_state
         ] {
@@ -2235,7 +2321,8 @@ int main(int argc, char** argv)
                 *surface,
                 *scrollbar,
                 titlebar,
-                custom_titlebar_enabled);
+                custom_titlebar_enabled,
+                content_border);
             remember_restorable_window_state();
         });
     QObject::connect(
@@ -2263,23 +2350,33 @@ int main(int argc, char** argv)
                 &window,
                 surface,
                 scrollbar,
+                content_border,
                 custom_titlebar_enabled,
                 remember_restorable_window_state
             ] {
                 sync_chrome_window_state(*titlebar, window);
+                if (content_border != nullptr) {
+                    content_border->set_window_active(window.isActive());
+                }
                 apply_terminal_shell_geometry(
                     window,
                     *surface,
                     *scrollbar,
                     titlebar,
-                    custom_titlebar_enabled);
+                    custom_titlebar_enabled,
+                    content_border);
                 remember_restorable_window_state();
             };
         QObject::connect(
             &window,
             &QWindow::activeChanged,
             titlebar,
-            sync_titlebar_state);
+            [titlebar, content_border, &window] {
+                sync_chrome_window_state(*titlebar, window);
+                if (content_border != nullptr) {
+                    content_border->set_window_active(window.isActive());
+                }
+            });
         QObject::connect(
             &window,
             &QWindow::windowStateChanged,
@@ -2288,6 +2385,9 @@ int main(int argc, char** argv)
                 sync_titlebar_state_and_geometry();
             });
         sync_titlebar_state();
+        if (content_border != nullptr) {
+            content_border->set_window_active(window.isActive());
+        }
     }
     else {
         QObject::connect(
