@@ -5,105 +5,35 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
-option(VNM_TERMINAL_BUILD_EXAMPLES "Build vnm_terminal example applications" ON)
-option(VNM_TERMINAL_BUILD_REQUIRED_READINESS "Build vnm_terminal readiness validation gates" OFF)
-option(VNM_TERMINAL_BUILD_BENCHMARKS "Build vnm_terminal benchmark executables" OFF)
-option(VNM_TERMINAL_ENABLE_PROFILING "Compile vnm_terminal profile scope instrumentation" OFF)
-
-if(VNM_TERMINAL_BUILD_REQUIRED_READINESS AND NOT VNM_TERMINAL_BUILD_BENCHMARKS)
-    set(VNM_TERMINAL_BUILD_BENCHMARKS ON)
-endif()
-if(VNM_TERMINAL_BUILD_REQUIRED_READINESS AND NOT VNM_TERMINAL_ENABLE_PROFILING)
-    set(VNM_TERMINAL_ENABLE_PROFILING ON)
-endif()
+option(VNM_TERMINAL_ENABLE_PROFILING
+    "Compile terminal surface profile scope instrumentation"
+    OFF)
 
 find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Quick)
-include(cmake/vnm_terminal_qt_posture.cmake)
+include(cmake/vnm_terminal_surface_dependency.cmake)
 
-set(vnm_terminal_qt_targets
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Quick
-)
-
-vnm_terminal_validate_qt_posture(DIRECT_TARGETS
-    ${vnm_terminal_qt_targets}
-)
-
-add_library(vnm_terminal STATIC
-    include/vnm_terminal/internal/backend_contract.h
-    include/vnm_terminal/internal/ime_contract.h
-    include/vnm_terminal/internal/metrics_contract.h
-    include/vnm_terminal/internal/parser_action.h
-    include/vnm_terminal/internal/qsg_terminal_render_frame.h
-    include/vnm_terminal/internal/qsg_terminal_renderer.h
-    include/vnm_terminal/internal/qt_grid_metrics_provider.h
-    include/vnm_terminal/internal/render_snapshot.h
-    include/vnm_terminal/internal/selection_contract.h
-    include/vnm_terminal/internal/session_contract.h
-    include/vnm_terminal/internal/terminal_canvas_fixture_contract.h
-    include/vnm_terminal/internal/terminal_input_mode.h
-    include/vnm_terminal/internal/terminal_input_encoder.h
-    include/vnm_terminal/internal/terminal_resize_controller.h
-    include/vnm_terminal/internal/terminal_screen_model.h
-    include/vnm_terminal/internal/terminal_session.h
-    include/vnm_terminal/internal/terminal_style.h
-    include/vnm_terminal/internal/utf8_scan.h
-    include/vnm_terminal/internal/unicode_width.h
-    include/vnm_terminal/internal/unicode_width_tables.h
-    include/vnm_terminal/internal/vnm_terminal_font.h
-    include/vnm_terminal/internal/viewport_contract.h
-    include/vnm_terminal/internal/vnm_terminal_surface_render_bridge.h
-    include/vnm_terminal/internal/linux_pty_backend.h
-    include/vnm_terminal/internal/windows_conpty_backend.h
-    include/vnm_terminal/vnm_terminal_surface.h
-    src/terminal_input_encoder.cpp
-    src/terminal_resize_controller.cpp
-    src/terminal_session.cpp
-    src/terminal_screen_model.cpp
-    src/metrics_contract.cpp
-    src/native_backend_io_core.cpp
-    src/qsg_terminal_renderer.cpp
-    src/qt_grid_metrics_provider.cpp
-    src/selection_contract.cpp
-    src/session_contract.cpp
-    src/unicode_width_tables.cpp
-    src/viewport_contract.cpp
-    src/vnm_terminal_font.cpp
-    src/vnm_terminal_surface.cpp
+add_executable(vnm_terminal
+    src/frameless_resize_filter.cpp
+    src/frameless_resize_filter.h
+    src/main.cpp
+    src/terminal_scrollbar.cpp
+    src/terminal_scrollbar.h
+    src/window_chrome.cpp
+    src/window_chrome.h
+    src/window_chrome_model.h
 )
 
 qt_add_resources(vnm_terminal "vnm_terminal_resources"
     PREFIX
         "/vnm_terminal"
     BASE
-        "resources"
+        "src"
     FILES
-        resources/fonts/vnm_framework_monospace.ttf
+        src/vnm_terminal.ico
 )
 
-if(WIN32)
-    target_sources(vnm_terminal PRIVATE
-        src/windows_conpty_backend.cpp
-    )
-endif()
-
-if(CMAKE_SYSTEM_NAME STREQUAL Linux)
-    target_sources(vnm_terminal PRIVATE
-        src/linux_pty_backend.cpp
-    )
-endif()
-
-target_include_directories(vnm_terminal PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
-
-target_link_libraries(vnm_terminal PUBLIC
-    ${vnm_terminal_qt_targets}
-)
-
-target_compile_definitions(vnm_terminal PUBLIC
-    VNM_TERMINAL_PROFILING_ENABLED=$<BOOL:${VNM_TERMINAL_ENABLE_PROFILING}>
+target_link_libraries(vnm_terminal PRIVATE
+    vnm_terminal_surface::vnm_terminal_surface
 )
 
 if(MSVC)
@@ -112,49 +42,48 @@ if(MSVC)
     )
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL Linux)
-    find_library(VNM_TERMINAL_UTIL_LIBRARY util)
-    if(VNM_TERMINAL_UTIL_LIBRARY)
-        target_link_libraries(vnm_terminal PRIVATE
-            ${VNM_TERMINAL_UTIL_LIBRARY}
+if(WIN32)
+    set_target_properties(vnm_terminal PROPERTIES
+        WIN32_EXECUTABLE TRUE
+    )
+
+    target_sources(vnm_terminal PRIVATE
+        src/vnm_terminal.rc
+    )
+
+    function(vnm_terminal_copy_qt_platform_plugin plugin_target)
+        if(NOT TARGET ${plugin_target})
+            message(FATAL_ERROR
+                "Required Qt platform plugin target ${plugin_target} is missing")
+        endif()
+
+        get_target_property(plugin_target_type ${plugin_target} TYPE)
+        if(NOT plugin_target_type MATCHES "^(MODULE_LIBRARY|SHARED_LIBRARY)$")
+            message(STATUS
+                "Skipping runtime copy for ${plugin_target}; target type is ${plugin_target_type}")
+            return()
+        endif()
+
+        add_custom_command(TARGET vnm_terminal POST_BUILD
+            COMMAND
+                "${CMAKE_COMMAND}" -E make_directory
+                "$<TARGET_FILE_DIR:vnm_terminal>/platforms"
+            COMMAND
+                "${CMAKE_COMMAND}" -E copy_if_different
+                "$<TARGET_FILE:${plugin_target}>"
+                "$<TARGET_FILE_DIR:vnm_terminal>/platforms/$<TARGET_FILE_NAME:${plugin_target}>"
         )
-    endif()
-endif()
+    endfunction()
 
-cmake_language(DEFER CALL vnm_terminal_validate_qt_link_interface vnm_terminal)
+    find_package(Qt6Gui 6.7 REQUIRED COMPONENTS
+        QWindowsIntegrationPlugin
+    )
 
-add_library(vnm_terminal::vnm_terminal ALIAS vnm_terminal)
-
-add_executable(vnm_terminal_canvas_fixture
-    tools/terminal_canvas_fixture/terminal_canvas_fixture.cpp
-)
-
-set_target_properties(vnm_terminal_canvas_fixture PROPERTIES
-    AUTOMOC OFF
-)
-
-target_include_directories(vnm_terminal_canvas_fixture PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
-
-if(VNM_TERMINAL_BUILD_EXAMPLES)
-    add_subdirectory(examples)
+    vnm_terminal_copy_qt_platform_plugin(Qt6::QWindowsIntegrationPlugin)
 endif()
 
 include(CTest)
 
-if(VNM_TERMINAL_BUILD_REQUIRED_READINESS AND NOT BUILD_TESTING)
-    message(FATAL_ERROR
-        "VNM_TERMINAL_BUILD_REQUIRED_READINESS requires BUILD_TESTING=ON")
-endif()
-
-if(VNM_TERMINAL_BUILD_BENCHMARKS)
-    add_subdirectory(benchmarks)
-endif()
-
 if(BUILD_TESTING)
     add_subdirectory(tests)
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/more_tests/CMakeLists.txt")
-        add_subdirectory(more_tests)
-    endif()
 endif()

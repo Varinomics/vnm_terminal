@@ -22,8 +22,18 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout app
         uses: actions/checkout@v4
+        with:
+          path: vnm_terminal
+
+      - name: Checkout surface
+        uses: actions/checkout@v4
+        with:
+          repository: Varinomics/vnm_terminal_surface
+          path: vnm_terminal_surface
+          ref: master
+          token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
 
       - name: Install dependencies
         run: |
@@ -40,18 +50,17 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -B build -S . \
+          cmake -B vnm_terminal/build -S vnm_terminal \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
-            -DVNM_TERMINAL_BUILD_EXAMPLES=ON \
-            -DVNM_TERMINAL_BUILD_BENCHMARKS=OFF \
+            -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DBUILD_TESTING=ON
 
       - name: Build
-        run: cmake --build build --config ${CMAKE_BUILD_TYPE} --parallel
+        run: cmake --build vnm_terminal/build --config ${CMAKE_BUILD_TYPE} --parallel
 
       - name: Run tests
-        working-directory: build
+        working-directory: vnm_terminal/build
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --output-on-failure -E "^vnm_terminal_qsg_render$"
+        run: ctest --output-on-failure

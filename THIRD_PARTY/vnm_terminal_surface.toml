@@ -1,0 +1,15 @@
+name = "vnm_terminal_surface"
+spdx_license_expression = "BSD-2-Clause"
+upstream_url = "https://github.com/Varinomics/vnm_terminal_surface"
+commit_or_version = "sibling checkout or installed package"
+source_path = "external Varinomics repository"
+imported_path = "not vendored"
+notice = "THIRD_PARTY_NOTICES.md#vnm_terminal_surface"
+dependency_kind = "varinomics_library"
+rationale = "Reusable terminal surface, backend, parser, renderer, and session implementation used by the app."
+reviewer = "Repository split dependency review"
+license_posture = "bsd_2_clause_varinomics_dependency"
+gpl_only = false
+direct_dependencies = []
+transitive_dependencies = ["Qt 6 Core", "Qt 6 Gui", "Qt 6 Quick"]
+cmake_targets = ["vnm_terminal_surface::vnm_terminal_surface"]

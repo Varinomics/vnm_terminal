@@ -2,55 +2,45 @@
 
 [![CI Linux](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml) [![CI Windows](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml)
 
-`vnm_terminal` is the home of the Qt Quick terminal surface used to embed
-interactive PTY and ConPTY-backed command-line applications in Varinomics
-products.
+`vnm_terminal` is the Varinomics Qt terminal application. It uses
+`vnm_terminal_surface` for terminal parsing, process hosting, screen state, and
+rendering, while this repository owns the application window, command-line
+options, window chrome, and packaging-facing behavior.
 
-The primary visual component is `VNM_TerminalSurface`, a C++ `QQuickItem`.
+## Build
 
-## Start Here
-
-For a first pass through the repository, read these in order:
-
-1. [Developer orientation](docs/developer_orientation.md) - the shortest stable explanation
-   of what the project is, where the important code lives, and how the pieces
-   fit together.
-2. [Architecture](docs/architecture.md) - the runtime model, ownership
-   boundaries, and data flow.
-3. [Public surface](docs/public_surface.md) - the `VNM_TerminalSurface` API and
-   the example terminal host.
-4. [Repository guide](docs/repository_guide.md) - build targets, test families,
-   generated/provenance material, and common entry points.
-
-The [documentation index](docs/README.md) has a time-budgeted reading path and
-links to the reference material.
-
-## Build And Run On Windows
-
-Configure once:
+Clone `vnm_terminal_surface` beside this repository, or pass
+`-DVNM_TERMINAL_SURFACE_SOURCE_DIR=<path>` during configure.
 
 ```powershell
-cmake -S . -B build -DVNM_TERMINAL_BUILD_EXAMPLES=ON -DBUILD_TESTING=ON
+cmake -S . -B build -DBUILD_TESTING=ON
 ```
 
 Build from an x64 MSVC Developer Command Prompt or another shell where the
 Visual Studio C++ environment has already been initialized:
 
 ```bat
-cmake --build build --target vnm_terminal_example_terminal --config Release
+cmake --build build --target vnm_terminal --config Release
 ```
 
-Launch the example terminal:
+## Run
 
 ```powershell
-.\build\examples\terminal_app\Release\vnm_terminal_example_terminal.exe
+.\build\Release\vnm_terminal.exe
 ```
 
-On validated platforms the example uses its built-in window chrome by default;
-pass `--native-titlebar` to use the platform frame instead.
+The app starts the platform default shell when no explicit command follows
+`--`. On validated platforms it uses built-in window chrome by default; pass
+`--native-titlebar` to use the platform frame instead.
 
-On Linux, use the same configure step and the normal generated build command for
-the selected generator, then run `build/examples/terminal_app/vnm_terminal_example_terminal`.
+Run a specific command by placing it after `--`:
 
-Use the [repository guide](docs/repository_guide.md) for test families,
-conformance controls, benchmarks, and focused validation commands.
+```powershell
+.\build\Release\vnm_terminal.exe --window-size 1000x640 -- pwsh -NoLogo
+```
+
+Run tests:
+
+```powershell
+ctest --test-dir build -C Release --output-on-failure
+```

@@ -2,6 +2,17 @@
 
 `vnm_terminal` is distributed under the project license in `LICENSE`.
 
+## vnm_terminal_surface
+
+The app depends on the Varinomics `vnm_terminal_surface` library for terminal
+parsing, process hosting, screen state, and rendering.
+
+`vnm_terminal_surface` is distributed under the BSD 2-Clause license.
+
+Repository:
+
+- https://github.com/Varinomics/vnm_terminal_surface
+
 ## Qt 6
 
 Qt 6 Core, Gui, and Quick are required. The project uses Qt through either a
@@ -9,35 +20,8 @@ commercial Qt license held by the distributor or an LGPLv3-compatible
 dynamic-linking posture. No GPL-only Qt module is allowed in the product
 dependency graph.
 
-The per-module records in `THIRD_PARTY/` name the Qt module, upstream project,
-license expression, CMake target, source path, and reviewed license posture.
-
 Qt upstream notices and license texts are supplied by the installed Qt package
 and the Qt Company distribution materials:
 
 - https://www.qt.io/licensing/
 - https://doc.qt.io/qt-6/licenses-used-in-qt.html
-
-## Ubuntu Mono - Bront Embedded Font
-
-`resources/fonts/vnm_framework_monospace.ttf` is a bundled monospace font. Its
-embedded metadata identifies it as Ubuntu Mono - Bront under the Ubuntu Font
-Licence 1.0.
-
-This font is not GPL-licensed. The font may be bundled under the Ubuntu Font
-Licence terms; derivative naming obligations must be reviewed before replacing
-or modifying the embedded font file.
-
-License reference:
-
-- https://ubuntu.com/legal/font-licence
-
-## Unicode 16.0 Data Files
-
-The terminal width policy is pinned to Unicode 16.0.0 data files published by
-the Unicode Consortium. These files are not vendored in the repository.
-Generated table artifacts record the exact input URLs and hashes used.
-
-Unicode data files are governed by the Unicode License v3. The source index is:
-
-- https://www.unicode.org/Public/16.0.0/
