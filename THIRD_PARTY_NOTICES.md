@@ -25,3 +25,19 @@ and the Qt Company distribution materials:
 
 - https://www.qt.io/licensing/
 - https://doc.qt.io/qt-6/licenses-used-in-qt.html
+
+## GCC / MinGW Runtime Libraries
+
+Windows portable packages built with the Qt MinGW kit include the GCC and
+MinGW runtime DLLs required by the application, such as `libgcc_s_seh-1.dll`,
+`libstdc++-6.dll`, and `libwinpthread-1.dll`.
+
+The GCC runtime libraries are distributed under GPLv3 with the GCC Runtime
+Library Exception 3.1. MinGW-w64 runtime components are permissively licensed;
+license details are carried by the upstream sources and distribution package.
+
+References:
+
+- https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html
+- https://www.gnu.org/licenses/gcc-exception-3.1-faq.html
+- https://www.mingw-w64.org/support/
