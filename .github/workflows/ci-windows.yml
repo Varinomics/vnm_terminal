@@ -47,4 +47,4 @@ jobs:
         working-directory: build
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --output-on-failure -C ${CMAKE_BUILD_TYPE} -E "^vnm_terminal_windows_conpty_backend$"
+        run: ctest --output-on-failure -C ${CMAKE_BUILD_TYPE} -E "^(vnm_terminal_windows_conpty_backend|vnm_terminal_compat_smoke)$"
