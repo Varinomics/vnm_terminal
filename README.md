@@ -58,7 +58,7 @@ MinGW, CMake, Ninja, and `vnm_terminal_surface` paths, then run:
 build_portable.bat
 ```
 
-The script writes `dist\portable\` and `dist\vnm_terminal_v1.0_w64.zip`.
+The script writes `dist\portable\` and `dist\vnm_terminal_v1.0.1_w64.zip`.
 Portable releases are built with `VNM_TERMINAL_ENABLE_PROFILING=OFF`.
 They are packaged from the Qt MinGW kit and include the required Qt and MinGW
 runtime DLLs beside the real application in `vnm_terminal_runtime\`.
@@ -68,4 +68,4 @@ runtime DLLs beside the real application in `vnm_terminal_runtime\`.
 The macOS GitHub Actions workflow builds a Release `vnm_terminal.app` with
 `VNM_TERMINAL_ENABLE_PROFILING=OFF`, deploys its Qt runtime with `macdeployqt`,
 ad-hoc signs the unsigned bundle, and uploads
-`vnm_terminal_v1.0_macos_x64.zip` as a workflow artifact.
+`vnm_terminal_v1.0.1_macos_x64.zip` as a workflow artifact.

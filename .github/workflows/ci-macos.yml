@@ -69,11 +69,11 @@ jobs:
           mkdir -p vnm_terminal/dist
           ditto -c -k --sequesterRsrc --keepParent \
             "vnm_terminal/build/vnm_terminal.app" \
-            "vnm_terminal/dist/vnm_terminal_v1.0_macos_x64.zip"
+            "vnm_terminal/dist/vnm_terminal_v1.0.1_macos_x64.zip"
 
       - name: Upload macOS bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: vnm_terminal_v1.0_macos_x64
-          path: vnm_terminal/dist/vnm_terminal_v1.0_macos_x64.zip
+          name: vnm_terminal_v1.0.1_macos_x64
+          path: vnm_terminal/dist/vnm_terminal_v1.0.1_macos_x64.zip
           if-no-files-found: error
