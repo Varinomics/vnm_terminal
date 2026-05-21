@@ -92,6 +92,12 @@ if(WIN32)
     target_link_libraries(vnm_terminal_portable_launcher PRIVATE
         shell32
     )
+    if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+        target_link_options(vnm_terminal_portable_launcher PRIVATE
+            -static
+            -static-libgcc
+        )
+    endif()
 endif()
 
 include(CTest)

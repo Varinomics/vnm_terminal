@@ -6,7 +6,7 @@ REM ========================================================================
 REM
 REM Creates a self-contained portable directory under dist\ with a visible
 REM vnm_terminal.exe GUI launcher and a vnm_terminal_runtime\ directory
-REM containing the real Qt application and runtime dependencies.
+REM containing the real Qt application and Qt/MinGW runtime dependencies.
 REM
 REM Requires a build_config.bat file with local tool paths.
 REM See build_config.bat.example for a template.
@@ -18,11 +18,12 @@ if not exist "%~dp0build_config.bat" (
     echo ERROR: build_config.bat not found.
     echo.
     echo Copy build_config.bat.example to build_config.bat and set the paths
-    echo for your local Qt / Visual Studio installation. For example:
+    echo for your local Qt / MinGW installation. For example:
     echo.
-    echo   set QT_PREFIX=C:\Qt\6.10.1\msvc2022_64
-    echo   set CMAKE=C:\Program Files\CMake\bin\cmake.exe
-    echo   set VCVARSALL=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat
+    echo   set QT_PREFIX=C:\Qt\6.10.1\mingw_64
+    echo   set MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin
+    echo   set CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe
+    echo   set NINJA=C:\Qt\Tools\Ninja\ninja.exe
     echo   set VNM_TERMINAL_SURFACE_SOURCE_DIR=C:\plms\varinomics\vnm_terminal_surface
     echo.
     exit /b 1
@@ -33,11 +34,12 @@ if "%QT_PREFIX%"=="" (
     echo ERROR: QT_PREFIX is not set.
     exit /b 1
 )
+if "%MINGW_BIN%"=="" (
+    echo ERROR: MINGW_BIN is not set.
+    exit /b 1
+)
 if "%CMAKE%"=="" set CMAKE=cmake
-if "%VCVARSALL%"=="" set VCVARSALL=C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat
-if "%VS_ARCH%"=="" set VS_ARCH=x64
-if "%CMAKE_GENERATOR%"=="" set CMAKE_GENERATOR=Visual Studio 17 2022
-if "%CMAKE_ARCH%"=="" set CMAKE_ARCH=x64
+if "%NINJA%"=="" set NINJA=ninja
 if "%VNM_TERMINAL_SURFACE_SOURCE_DIR%"=="" set VNM_TERMINAL_SURFACE_SOURCE_DIR=%~dp0..\vnm_terminal_surface
 
 for %%I in ("%VNM_TERMINAL_SURFACE_SOURCE_DIR%") do set VNM_TERMINAL_SURFACE_SOURCE_DIR=%%~fI
@@ -48,10 +50,26 @@ set BUILD_DIR=%~dp0build_portable
 set DIST_DIR=%~dp0dist
 set PORTABLE_DIR=%DIST_DIR%\portable
 set RUNTIME_DIR=%PORTABLE_DIR%\vnm_terminal_runtime
-set REAL_EXE=%BUILD_DIR%\%CONFIG%\vnm_terminal.exe
-set LAUNCHER_EXE=%BUILD_DIR%\%CONFIG%\vnm_terminal_portable_launcher.exe
+set REAL_EXE=%BUILD_DIR%\vnm_terminal.exe
+set LAUNCHER_EXE=%BUILD_DIR%\vnm_terminal_portable_launcher.exe
 set PACKAGE_VERSION=1.0
 
+if not exist "%CMAKE%" (
+    echo ERROR: CMake not found at %CMAKE%
+    exit /b 1
+)
+if not exist "%NINJA%" (
+    echo ERROR: Ninja not found at %NINJA%
+    exit /b 1
+)
+if not exist "%MINGW_BIN%\g++.exe" (
+    echo ERROR: MinGW g++ not found at %MINGW_BIN%\g++.exe
+    exit /b 1
+)
+if not exist "%MINGW_BIN%\gcc.exe" (
+    echo ERROR: MinGW gcc not found at %MINGW_BIN%\gcc.exe
+    exit /b 1
+)
 if not exist "%QT_PREFIX%\bin\qmake.exe" (
     echo ERROR: Qt kit not found at %QT_PREFIX%
     exit /b 1
@@ -60,29 +78,29 @@ if not exist "%WINDEPLOYQT%" (
     echo ERROR: windeployqt not found at %WINDEPLOYQT%
     exit /b 1
 )
-if not exist "%VCVARSALL%" (
-    echo ERROR: vcvarsall.bat not found at %VCVARSALL%
-    exit /b 1
-)
 if not exist "%VNM_TERMINAL_SURFACE_SOURCE_DIR%\CMakeLists.txt" (
     echo ERROR: vnm_terminal_surface not found at %VNM_TERMINAL_SURFACE_SOURCE_DIR%
     exit /b 1
 )
 
-call "%VCVARSALL%" %VS_ARCH%
-if errorlevel 1 (
-    echo ERROR: Visual Studio environment initialization failed.
-    exit /b 1
-)
-
 echo.
 echo [1/5] Configuring CMake ...
+if exist "%BUILD_DIR%\CMakeCache.txt" (
+    findstr /c:"CMAKE_GENERATOR:INTERNAL=Ninja" "%BUILD_DIR%\CMakeCache.txt" >nul
+    if errorlevel 1 (
+        echo Removing stale portable build configured with another CMake generator ...
+        rmdir /s /q "%BUILD_DIR%"
+    )
+)
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
-"%CMAKE%" -G "%CMAKE_GENERATOR%" ^
-    -A "%CMAKE_ARCH%" ^
+"%CMAKE%" -G Ninja ^
+    -DCMAKE_BUILD_TYPE=%CONFIG% ^
     -DCMAKE_PREFIX_PATH="%QT_PREFIX%" ^
     -DQt6_DIR="%QT_PREFIX%\lib\cmake\Qt6" ^
+    -DCMAKE_CXX_COMPILER="%MINGW_BIN%\g++.exe" ^
+    -DCMAKE_C_COMPILER="%MINGW_BIN%\gcc.exe" ^
+    -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
     -DVNM_TERMINAL_SURFACE_SOURCE_DIR="%VNM_TERMINAL_SURFACE_SOURCE_DIR%" ^
     -DVNM_TERMINAL_ENABLE_PROFILING=OFF ^
     -DBUILD_TESTING=OFF ^
@@ -134,6 +152,29 @@ if not exist "%RUNTIME_DIR%\platforms\qwindows.dll" (
     exit /b 1
 )
 
+for %%F in (
+    libgcc_s_seh-1.dll
+    libstdc++-6.dll
+    libwinpthread-1.dll
+) do (
+    if not exist "%RUNTIME_DIR%\%%F" (
+        if exist "%MINGW_BIN%\%%F" copy /y "%MINGW_BIN%\%%F" "%RUNTIME_DIR%\%%F" >nul
+    )
+    if not exist "%RUNTIME_DIR%\%%F" (
+        echo ERROR: Required MinGW runtime DLL %%F is missing.
+        exit /b 1
+    )
+)
+
+if exist "%PORTABLE_DIR%\vc_redist.x64.exe" (
+    echo ERROR: MSVC redistributable unexpectedly present in portable root.
+    exit /b 1
+)
+if exist "%RUNTIME_DIR%\vc_redist.x64.exe" (
+    echo ERROR: MSVC redistributable unexpectedly present in runtime directory.
+    exit /b 1
+)
+
 for %%D in (
     qmltooling
     qml
@@ -163,7 +204,7 @@ for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH:m
     echo Version:         %PACKAGE_VERSION%
     echo Configuration:   %CONFIG%
     echo Profiling:       OFF
-    echo Toolchain:       MSVC
+    echo Toolchain:       MinGW ^(GCC^)
     echo Qt:              %QT_PREFIX%
 ) > "%RUNTIME_DIR%\vnm_terminal_build_info.txt"
 
