@@ -52,7 +52,7 @@ set PORTABLE_DIR=%DIST_DIR%\portable
 set RUNTIME_DIR=%PORTABLE_DIR%\vnm_terminal_runtime
 set REAL_EXE=%BUILD_DIR%\vnm_terminal.exe
 set LAUNCHER_EXE=%BUILD_DIR%\vnm_terminal_portable_launcher.exe
-set PACKAGE_VERSION=1.0
+set PACKAGE_VERSION=1.0.1
 
 if not exist "%CMAKE%" (
     echo ERROR: CMake not found at %CMAKE%
