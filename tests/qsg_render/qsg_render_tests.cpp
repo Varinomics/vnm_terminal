@@ -2067,7 +2067,7 @@ bool cell_is_nonblank(
 QString visual_failure_directory()
 {
     QDir dir(QDir::tempPath());
-    const QString child = QStringLiteral("vnm_terminal_phase3_qsg_render_failures");
+    const QString child = QStringLiteral("vnm_terminal_qsg_render_failures");
     if (!dir.exists(child)) {
         dir.mkpath(child);
     }

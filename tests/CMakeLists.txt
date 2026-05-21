@@ -126,245 +126,245 @@ function(vnm_terminal_add_external_conformance_command test_name labels command_
     )
 endfunction()
 
-add_executable(vnm_terminal_phase0_hierarchical_profiler
-    phase0_hierarchical_profiler/hierarchical_profiler_tests.cpp
+add_executable(vnm_terminal_profiler
+    profiler/hierarchical_profiler_tests.cpp
 )
 
-target_include_directories(vnm_terminal_phase0_hierarchical_profiler PRIVATE
+target_include_directories(vnm_terminal_profiler PRIVATE
     "${CMAKE_SOURCE_DIR}/include"
 )
 
-target_compile_definitions(vnm_terminal_phase0_hierarchical_profiler PRIVATE
+target_compile_definitions(vnm_terminal_profiler PRIVATE
     VNM_TERMINAL_PROFILING_ENABLED=1
 )
 
-target_link_libraries(vnm_terminal_phase0_hierarchical_profiler PRIVATE
+target_link_libraries(vnm_terminal_profiler PRIVATE
     Threads::Threads
 )
 
-set_target_properties(vnm_terminal_phase0_hierarchical_profiler PROPERTIES
+set_target_properties(vnm_terminal_profiler PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase0_hierarchical_profiler
+    NAME vnm_terminal_profiler
     COMMAND
-        "$<TARGET_FILE:vnm_terminal_phase0_hierarchical_profiler>"
+        "$<TARGET_FILE:vnm_terminal_profiler>"
 )
 
-add_executable(vnm_terminal_phase0_parser_ir
-    phase0_parser_ir/parser_ir_tests.cpp
+add_executable(vnm_terminal_parser_ir
+    parser_ir/parser_ir_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase0_parser_ir PRIVATE
+target_link_libraries(vnm_terminal_parser_ir PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase0_parser_ir PROPERTIES
+set_target_properties(vnm_terminal_parser_ir PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase0_parser_ir
+    NAME vnm_terminal_parser_ir
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase0_parser_ir>"
+        "$<TARGET_FILE:vnm_terminal_parser_ir>"
 )
 
-add_executable(vnm_terminal_phase0_unicode_width
-    phase0_unicode_width/unicode_width_tests.cpp
+add_executable(vnm_terminal_unicode_width
+    unicode_width/unicode_width_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase0_unicode_width PRIVATE
+target_link_libraries(vnm_terminal_unicode_width PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase0_unicode_width PROPERTIES
+set_target_properties(vnm_terminal_unicode_width PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase0_unicode_width
+    NAME vnm_terminal_unicode_width
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase0_unicode_width>"
+        "$<TARGET_FILE:vnm_terminal_unicode_width>"
 )
 
 add_test(
-    NAME vnm_terminal_phase0_unicode_width_generator
+    NAME vnm_terminal_unicode_width_generator
     COMMAND
         "${Python3_EXECUTABLE}"
         "${CMAKE_SOURCE_DIR}/tools/unicode_width/generate_unicode_width_tables.py"
         --self-test
 )
 
-add_executable(vnm_terminal_phase1_unicode_width_tables
-    phase1_unicode_width_tables/unicode_width_tables_tests.cpp
+add_executable(vnm_terminal_unicode_width_tables
+    unicode_width_tables/unicode_width_tables_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase1_unicode_width_tables PRIVATE
+target_link_libraries(vnm_terminal_unicode_width_tables PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase1_unicode_width_tables PROPERTIES
+set_target_properties(vnm_terminal_unicode_width_tables PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase1_unicode_width_tables
+    NAME vnm_terminal_unicode_width_tables
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase1_unicode_width_tables>"
+        "$<TARGET_FILE:vnm_terminal_unicode_width_tables>"
 )
 
-add_executable(vnm_terminal_phase0_sequence_matrix
-    phase0_sequence_matrix/sequence_matrix_tests.cpp
+add_executable(vnm_terminal_sequence_matrix
+    sequence_matrix/sequence_matrix_tests.cpp
 )
 
-set_target_properties(vnm_terminal_phase0_sequence_matrix PROPERTIES
+set_target_properties(vnm_terminal_sequence_matrix PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase0_sequence_matrix
+    NAME vnm_terminal_sequence_matrix
     COMMAND
-        "$<TARGET_FILE:vnm_terminal_phase0_sequence_matrix>"
+        "$<TARGET_FILE:vnm_terminal_sequence_matrix>"
         "${CMAKE_SOURCE_DIR}/docs/terminal_sequence_matrix.md"
         "${CMAKE_SOURCE_DIR}/docs/terminal_conformance_oracles.md"
 )
 
-add_executable(vnm_terminal_phase0_terminal_canvas_fixture
-    phase0_terminal_canvas_fixture/terminal_canvas_fixture_tests.cpp
+add_executable(vnm_terminal_canvas_fixture_contract
+    terminal_canvas_fixture/terminal_canvas_fixture_tests.cpp
 )
 
-add_dependencies(vnm_terminal_phase0_terminal_canvas_fixture
+add_dependencies(vnm_terminal_canvas_fixture_contract
     vnm_terminal_canvas_fixture
 )
 
-target_include_directories(vnm_terminal_phase0_terminal_canvas_fixture PRIVATE
+target_include_directories(vnm_terminal_canvas_fixture_contract PRIVATE
     "${CMAKE_SOURCE_DIR}/include"
 )
 
-target_link_libraries(vnm_terminal_phase0_terminal_canvas_fixture PRIVATE
+target_link_libraries(vnm_terminal_canvas_fixture_contract PRIVATE
     Qt6::Core
 )
 
-set_target_properties(vnm_terminal_phase0_terminal_canvas_fixture PROPERTIES
+set_target_properties(vnm_terminal_canvas_fixture_contract PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase0_terminal_canvas_fixture
+    NAME vnm_terminal_canvas_fixture_contract
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase0_terminal_canvas_fixture>"
+        "$<TARGET_FILE:vnm_terminal_canvas_fixture_contract>"
         "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
 )
 
-add_executable(vnm_terminal_phase0_qt_render_smoke
-    phase0_qt_render_smoke/render_smoke_tests.cpp
+add_executable(vnm_terminal_qt_render_smoke
+    qt_render_smoke/render_smoke_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase0_qt_render_smoke PRIVATE
+target_link_libraries(vnm_terminal_qt_render_smoke PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase0_qt_render_smoke PROPERTIES
+set_target_properties(vnm_terminal_qt_render_smoke PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase0_qt_render_smoke
+    NAME vnm_terminal_qt_render_smoke
     COMMAND
         "${CMAKE_COMMAND}" -E env
         ${vnm_terminal_qt_offscreen_environment}
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase0_qt_render_smoke>"
+        "$<TARGET_FILE:vnm_terminal_qt_render_smoke>"
 )
 
-add_executable(vnm_terminal_phase3_qt_metrics
-    phase3_qt_metrics/qt_metrics_tests.cpp
+add_executable(vnm_terminal_qt_metrics
+    qt_metrics/qt_metrics_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase3_qt_metrics PRIVATE
+target_link_libraries(vnm_terminal_qt_metrics PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase3_qt_metrics PROPERTIES
+set_target_properties(vnm_terminal_qt_metrics PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase3_qt_metrics
+    NAME vnm_terminal_qt_metrics
     COMMAND
         "${CMAKE_COMMAND}" -E env
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase3_qt_metrics>"
+        "$<TARGET_FILE:vnm_terminal_qt_metrics>"
         "--expect-normal"
 )
 
 add_test(
-    NAME vnm_terminal_phase3_qt_metrics_scaled
+    NAME vnm_terminal_qt_metrics_scaled
     COMMAND
         "${CMAKE_COMMAND}" -E env
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_scaled_environment}
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase3_qt_metrics>"
+        "$<TARGET_FILE:vnm_terminal_qt_metrics>"
         "--expect-scaled"
 )
 
-add_executable(vnm_terminal_phase3_render_snapshot
-    phase3_render_snapshot/render_snapshot_tests.cpp
+add_executable(vnm_terminal_render_snapshot
+    render_snapshot/render_snapshot_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase3_render_snapshot PRIVATE
+target_link_libraries(vnm_terminal_render_snapshot PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase3_render_snapshot PROPERTIES
+set_target_properties(vnm_terminal_render_snapshot PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase3_render_snapshot
+    NAME vnm_terminal_render_snapshot
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase3_render_snapshot>"
+        "$<TARGET_FILE:vnm_terminal_render_snapshot>"
 )
 
-add_executable(vnm_terminal_phase3_render_frame
-    phase3_render_frame/render_frame_tests.cpp
+add_executable(vnm_terminal_render_frame
+    render_frame/render_frame_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase3_render_frame PRIVATE
+target_link_libraries(vnm_terminal_render_frame PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase3_render_frame PROPERTIES
+set_target_properties(vnm_terminal_render_frame PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase3_render_frame
+    NAME vnm_terminal_render_frame
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase3_render_frame>"
+        "$<TARGET_FILE:vnm_terminal_render_frame>"
 )
 
-add_executable(vnm_terminal_phase3_qsg_render
-    phase3_qsg_render/qsg_render_tests.cpp
+add_executable(vnm_terminal_qsg_render
+    qsg_render/qsg_render_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase3_qsg_render PRIVATE
+target_link_libraries(vnm_terminal_qsg_render PRIVATE
     vnm_terminal::vnm_terminal
 )
 
@@ -373,178 +373,178 @@ file(GLOB vnm_terminal_qsg_renderer_source_files CONFIGURE_DEPENDS
 )
 list(JOIN vnm_terminal_qsg_renderer_source_files "|" vnm_terminal_qsg_renderer_source_paths)
 
-target_compile_definitions(vnm_terminal_phase3_qsg_render PRIVATE
+target_compile_definitions(vnm_terminal_qsg_render PRIVATE
     VNM_TERMINAL_QSG_RENDERER_SOURCE_PATHS="${vnm_terminal_qsg_renderer_source_paths}"
 )
 
-set_target_properties(vnm_terminal_phase3_qsg_render PROPERTIES
+set_target_properties(vnm_terminal_qsg_render PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase3_qsg_render
+    NAME vnm_terminal_qsg_render
     COMMAND
         "${CMAKE_COMMAND}" -E env
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase3_qsg_render>"
+        "$<TARGET_FILE:vnm_terminal_qsg_render>"
         "--software-renderer"
 )
 
-set_tests_properties(vnm_terminal_phase3_qsg_render PROPERTIES TIMEOUT 60)
+set_tests_properties(vnm_terminal_qsg_render PROPERTIES TIMEOUT 60)
 
 if(VNM_TERMINAL_ENABLE_MANUAL_QSG_FLAT_RECT_BATCHED_GEOMETRY_TEST)
     add_test(
-        NAME vnm_terminal_phase3_qsg_render_flat_rect_batched_geometry
+        NAME vnm_terminal_qsg_render_flat_rect_batched_geometry
         COMMAND
             "${CMAKE_COMMAND}" -E env
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal_phase3_qsg_render>"
+            "$<TARGET_FILE:vnm_terminal_qsg_render>"
             "--flat-rect-batched-geometry"
     )
 
-    set_tests_properties(vnm_terminal_phase3_qsg_render_flat_rect_batched_geometry PROPERTIES
+    set_tests_properties(vnm_terminal_qsg_render_flat_rect_batched_geometry PROPERTIES
         LABELS "manual;qsg;hardware"
         TIMEOUT 60
     )
 endif()
 
-add_executable(vnm_terminal_phase3r_shaping_contract
-    phase3r_shaping_contract/shaping_contract_tests.cpp
+add_executable(vnm_terminal_shaping_contract
+    shaping_contract/shaping_contract_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase3r_shaping_contract PRIVATE
+target_link_libraries(vnm_terminal_shaping_contract PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase3r_shaping_contract PROPERTIES
+set_target_properties(vnm_terminal_shaping_contract PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase3r_shaping_contract
+    NAME vnm_terminal_shaping_contract
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase3r_shaping_contract>"
+        "$<TARGET_FILE:vnm_terminal_shaping_contract>"
 )
 
-add_executable(vnm_terminal_phase3r_qsg_text_node_spike
-    phase3r_qsg_text_node_spike/qsg_text_node_spike_tests.cpp
+add_executable(vnm_terminal_qsg_text_node
+    qsg_text_node/qsg_text_node_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase3r_qsg_text_node_spike PRIVATE
+target_link_libraries(vnm_terminal_qsg_text_node PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Quick
 )
 
-target_compile_definitions(vnm_terminal_phase3r_qsg_text_node_spike PRIVATE
+target_compile_definitions(vnm_terminal_qsg_text_node PRIVATE
     VNM_TERMINAL_TEST_MONOSPACE_FONT_PATH="${PROJECT_SOURCE_DIR}/resources/fonts/vnm_framework_monospace.ttf"
 )
 
-set_target_properties(vnm_terminal_phase3r_qsg_text_node_spike PROPERTIES
+set_target_properties(vnm_terminal_qsg_text_node PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase3r_qsg_text_node_spike
+    NAME vnm_terminal_qsg_text_node
     COMMAND
         "${CMAKE_COMMAND}" -E env
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase3r_qsg_text_node_spike>"
+        "$<TARGET_FILE:vnm_terminal_qsg_text_node>"
         "--software-renderer"
 )
-set_tests_properties(vnm_terminal_phase3r_qsg_text_node_spike PROPERTIES
+set_tests_properties(vnm_terminal_qsg_text_node PROPERTIES
     TIMEOUT 60
 )
 
-add_executable(vnm_terminal_phase4_surface_host
-    phase4_surface_host/surface_host_tests.cpp
+add_executable(vnm_terminal_surface_host
+    surface_host/surface_host_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase4_surface_host PRIVATE
+target_link_libraries(vnm_terminal_surface_host PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase4_surface_host PROPERTIES
+set_target_properties(vnm_terminal_surface_host PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase4_surface_host
+    NAME vnm_terminal_surface_host
     COMMAND
         "${CMAKE_COMMAND}" -E env
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase4_surface_host>"
+        "$<TARGET_FILE:vnm_terminal_surface_host>"
 )
 
-set_tests_properties(vnm_terminal_phase4_surface_host PROPERTIES
+set_tests_properties(vnm_terminal_surface_host PROPERTIES
     LABELS "conformance;input;mouse;paste;focus"
     TIMEOUT 60
 )
 
-add_executable(vnm_terminal_phase4_input_encoder
-    phase4_input_encoder/input_encoder_tests.cpp
+add_executable(vnm_terminal_input_encoder
+    input_encoder/input_encoder_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase4_input_encoder PRIVATE
+target_link_libraries(vnm_terminal_input_encoder PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase4_input_encoder PROPERTIES
+set_target_properties(vnm_terminal_input_encoder PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase4_input_encoder
+    NAME vnm_terminal_input_encoder
     COMMAND
         "${CMAKE_COMMAND}" -E env
         ${vnm_terminal_qt_offscreen_environment}
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase4_input_encoder>"
+        "$<TARGET_FILE:vnm_terminal_input_encoder>"
 )
 
-set_tests_properties(vnm_terminal_phase4_input_encoder PROPERTIES
+set_tests_properties(vnm_terminal_input_encoder PROPERTIES
     LABELS "conformance;input;mouse;paste;focus"
     TIMEOUT 60
 )
 
-add_executable(vnm_terminal_phase4_behavior_smoke
-    phase4_behavior_smoke/behavior_smoke_tests.cpp
+add_executable(vnm_terminal_behavior_smoke
+    behavior_smoke/behavior_smoke_tests.cpp
 )
 
-add_dependencies(vnm_terminal_phase4_behavior_smoke
+add_dependencies(vnm_terminal_behavior_smoke
     vnm_terminal_canvas_fixture
 )
 
-target_link_libraries(vnm_terminal_phase4_behavior_smoke PRIVATE
+target_link_libraries(vnm_terminal_behavior_smoke PRIVATE
     vnm_terminal::vnm_terminal
     Qt6::Core
     Qt6::Gui
     Qt6::Quick
 )
 
-set_target_properties(vnm_terminal_phase4_behavior_smoke PROPERTIES
+set_target_properties(vnm_terminal_behavior_smoke PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase4_behavior_smoke
+    NAME vnm_terminal_behavior_smoke
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase4_behavior_smoke>"
+        "$<TARGET_FILE:vnm_terminal_behavior_smoke>"
         "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
 )
 
-set_tests_properties(vnm_terminal_phase4_behavior_smoke PROPERTIES
+set_tests_properties(vnm_terminal_behavior_smoke PROPERTIES
     TIMEOUT 60
 )
 
@@ -555,7 +555,7 @@ add_test(
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase4_behavior_smoke>"
+        "$<TARGET_FILE:vnm_terminal_behavior_smoke>"
         "--surface-host"
 )
 
@@ -571,7 +571,7 @@ if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL Linux)
             ${vnm_terminal_qt_offscreen_environment}
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal_phase4_behavior_smoke>"
+            "$<TARGET_FILE:vnm_terminal_behavior_smoke>"
             "--native-surface-host"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
     )
@@ -582,85 +582,85 @@ if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL Linux)
 endif()
 
 if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL Linux)
-    add_executable(vnm_terminal_phase5_compat_smoke
-        phase5_compat_smoke/compat_smoke_tests.cpp
+    add_executable(vnm_terminal_compat_smoke
+        compat_smoke/compat_smoke_tests.cpp
     )
 
-    add_dependencies(vnm_terminal_phase5_compat_smoke
+    add_dependencies(vnm_terminal_compat_smoke
         vnm_terminal_canvas_fixture
     )
 
-    target_link_libraries(vnm_terminal_phase5_compat_smoke PRIVATE
+    target_link_libraries(vnm_terminal_compat_smoke PRIVATE
         vnm_terminal::vnm_terminal
     )
 
-    set_target_properties(vnm_terminal_phase5_compat_smoke PROPERTIES
+    set_target_properties(vnm_terminal_compat_smoke PROPERTIES
         AUTOMOC OFF
     )
 
     add_test(
-        NAME vnm_terminal_phase5_compat_smoke
+        NAME vnm_terminal_compat_smoke
         COMMAND
             "${CMAKE_COMMAND}" -E env
             ${vnm_terminal_qt_offscreen_environment}
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal_phase5_compat_smoke>"
+            "$<TARGET_FILE:vnm_terminal_compat_smoke>"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
     )
 
-    set_tests_properties(vnm_terminal_phase5_compat_smoke PROPERTIES
+    set_tests_properties(vnm_terminal_compat_smoke PROPERTIES
         TIMEOUT 120
     )
 endif()
 
-add_executable(vnm_terminal_phase6_parser_randomized
-    phase6_parser_randomized/parser_randomized_tests.cpp
+add_executable(vnm_terminal_parser_randomized
+    parser_randomized/parser_randomized_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase6_parser_randomized PRIVATE
+target_link_libraries(vnm_terminal_parser_randomized PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase6_parser_randomized PROPERTIES
+set_target_properties(vnm_terminal_parser_randomized PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase6_parser_randomized
+    NAME vnm_terminal_parser_randomized
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase6_parser_randomized>"
-        "${CMAKE_CURRENT_SOURCE_DIR}/phase6_parser_randomized"
+        "$<TARGET_FILE:vnm_terminal_parser_randomized>"
+        "${CMAKE_CURRENT_SOURCE_DIR}/parser_randomized"
 )
 
-set_tests_properties(vnm_terminal_phase6_parser_randomized PROPERTIES
+set_tests_properties(vnm_terminal_parser_randomized PROPERTIES
     LABELS "conformance;fuzz;parser"
     TIMEOUT 60
 )
 
-add_executable(vnm_terminal_phase6_resource_lifecycle
-    phase6_resource_lifecycle/resource_lifecycle_tests.cpp
+add_executable(vnm_terminal_resource_lifecycle
+    resource_lifecycle/resource_lifecycle_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase6_resource_lifecycle PRIVATE
+target_link_libraries(vnm_terminal_resource_lifecycle PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase6_resource_lifecycle PROPERTIES
+set_target_properties(vnm_terminal_resource_lifecycle PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase6_resource_lifecycle
+    NAME vnm_terminal_resource_lifecycle
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase6_resource_lifecycle>"
+        "$<TARGET_FILE:vnm_terminal_resource_lifecycle>"
 )
 
-set_tests_properties(vnm_terminal_phase6_resource_lifecycle PROPERTIES
+set_tests_properties(vnm_terminal_resource_lifecycle PROPERTIES
     TIMEOUT 60
 )
 
@@ -1043,7 +1043,7 @@ if(TARGET vnm_terminal_example_terminal)
         TIMEOUT 30
     )
 
-    add_dependencies(vnm_terminal_phase4_behavior_smoke
+    add_dependencies(vnm_terminal_behavior_smoke
         vnm_terminal_example_terminal
     )
 
@@ -1143,7 +1143,7 @@ if(TARGET vnm_terminal_example_terminal)
         COMMAND
             "${CMAKE_COMMAND}"
             "-Dcapture_path=${CMAKE_CURRENT_BINARY_DIR}/example_terminal_capture_output_$<CONFIG>.raw"
-            "-Dexpected_capture_regex=codex-canvas"
+            "-Dexpected_capture_regex=terminal-canvas"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_capture_file.cmake"
             --
             "${CMAKE_COMMAND}" -E env
@@ -1449,7 +1449,7 @@ if(TARGET vnm_terminal_example_terminal)
             ${vnm_terminal_qt_offscreen_environment}
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal_phase4_behavior_smoke>"
+            "$<TARGET_FILE:vnm_terminal_behavior_smoke>"
             "--host"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
             "$<TARGET_FILE:vnm_terminal_example_terminal>"
@@ -1476,272 +1476,272 @@ if(TARGET vnm_terminal_example_terminal)
     endif()
 endif()
 
-add_executable(vnm_terminal_phase0_qt_posture
-    phase0_qt_posture/qt_posture_tests.cpp
+add_executable(vnm_terminal_qt_posture
+    qt_posture/qt_posture_tests.cpp
 )
 
-set_target_properties(vnm_terminal_phase0_qt_posture PROPERTIES
+set_target_properties(vnm_terminal_qt_posture PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase0_qt_posture
+    NAME vnm_terminal_qt_posture
     COMMAND
-        "$<TARGET_FILE:vnm_terminal_phase0_qt_posture>"
+        "$<TARGET_FILE:vnm_terminal_qt_posture>"
         "${CMAKE_COMMAND}"
         "${CMAKE_GENERATOR}"
         "${CMAKE_SOURCE_DIR}"
-        "${CMAKE_BINARY_DIR}/phase0_qt_posture_cases"
+        "${CMAKE_BINARY_DIR}/qt_posture_cases"
 )
 
-add_executable(vnm_terminal_phase1_basic_model
-    phase1_basic_model/basic_model_tests.cpp
+add_executable(vnm_terminal_screen_basic
+    screen_basic/basic_model_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase1_basic_model PRIVATE
+target_link_libraries(vnm_terminal_screen_basic PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase1_basic_model PROPERTIES
+set_target_properties(vnm_terminal_screen_basic PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase1_basic_model
+    NAME vnm_terminal_screen_basic
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase1_basic_model>"
+        "$<TARGET_FILE:vnm_terminal_screen_basic>"
 )
 
-add_executable(vnm_terminal_phase1_sgr_model
-    phase1_sgr_model/sgr_model_tests.cpp
+add_executable(vnm_terminal_screen_sgr
+    screen_sgr/sgr_model_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase1_sgr_model PRIVATE
+target_link_libraries(vnm_terminal_screen_sgr PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase1_sgr_model PROPERTIES
+set_target_properties(vnm_terminal_screen_sgr PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase1_sgr_model
+    NAME vnm_terminal_screen_sgr
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase1_sgr_model>"
+        "$<TARGET_FILE:vnm_terminal_screen_sgr>"
 )
 
-add_executable(vnm_terminal_phase1_model_ops
-    phase1_model_ops/model_ops_tests.cpp
+add_executable(vnm_terminal_screen_operations
+    screen_operations/model_ops_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase1_model_ops PRIVATE
+target_link_libraries(vnm_terminal_screen_operations PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase1_model_ops PROPERTIES
+set_target_properties(vnm_terminal_screen_operations PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase1_model_ops
+    NAME vnm_terminal_screen_operations
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase1_model_ops>"
+        "$<TARGET_FILE:vnm_terminal_screen_operations>"
 )
 
-add_executable(vnm_terminal_phase1_alternate_screen
-    phase1_alternate_screen/alternate_screen_tests.cpp
+add_executable(vnm_terminal_screen_alternate
+    screen_alternate/alternate_screen_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase1_alternate_screen PRIVATE
+target_link_libraries(vnm_terminal_screen_alternate PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase1_alternate_screen PROPERTIES
+set_target_properties(vnm_terminal_screen_alternate PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase1_alternate_screen
+    NAME vnm_terminal_screen_alternate
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase1_alternate_screen>"
+        "$<TARGET_FILE:vnm_terminal_screen_alternate>"
 )
 
-add_executable(vnm_terminal_phase1_private_modes
-    phase1_private_modes/private_modes_tests.cpp
+add_executable(vnm_terminal_terminal_modes
+    terminal_modes/private_modes_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase1_private_modes PRIVATE
+target_link_libraries(vnm_terminal_terminal_modes PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase1_private_modes PROPERTIES
+set_target_properties(vnm_terminal_terminal_modes PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase1_private_modes
+    NAME vnm_terminal_terminal_modes
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase1_private_modes>"
+        "$<TARGET_FILE:vnm_terminal_terminal_modes>"
 )
 
-add_executable(vnm_terminal_phase1_viewport_controller
-    phase1_viewport_controller/viewport_controller_tests.cpp
+add_executable(vnm_terminal_viewport
+    viewport/viewport_controller_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase1_viewport_controller PRIVATE
+target_link_libraries(vnm_terminal_viewport PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase1_viewport_controller PROPERTIES
+set_target_properties(vnm_terminal_viewport PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase1_viewport_controller
+    NAME vnm_terminal_viewport
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase1_viewport_controller>"
+        "$<TARGET_FILE:vnm_terminal_viewport>"
 )
 
-add_executable(vnm_terminal_phase2_backend_session
-    phase2_backend_session/backend_session_tests.cpp
+add_executable(vnm_terminal_backend_session
+    backend_session/backend_session_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_phase2_backend_session PRIVATE
+target_link_libraries(vnm_terminal_backend_session PRIVATE
     vnm_terminal::vnm_terminal
 )
 
-set_target_properties(vnm_terminal_phase2_backend_session PROPERTIES
+set_target_properties(vnm_terminal_backend_session PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_phase2_backend_session
+    NAME vnm_terminal_backend_session
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_phase2_backend_session>"
+        "$<TARGET_FILE:vnm_terminal_backend_session>"
 )
 
 if(WIN32)
-    add_executable(vnm_terminal_phase2_windows_conpty
-        phase2_windows_conpty/windows_conpty_backend_tests.cpp
+    add_executable(vnm_terminal_windows_conpty_backend
+        windows_conpty_backend/windows_conpty_backend_tests.cpp
     )
 
-    add_dependencies(vnm_terminal_phase2_windows_conpty
+    add_dependencies(vnm_terminal_windows_conpty_backend
         vnm_terminal_canvas_fixture
     )
 
-    target_link_libraries(vnm_terminal_phase2_windows_conpty PRIVATE
+    target_link_libraries(vnm_terminal_windows_conpty_backend PRIVATE
         vnm_terminal::vnm_terminal
     )
 
-    set_target_properties(vnm_terminal_phase2_windows_conpty PROPERTIES
+    set_target_properties(vnm_terminal_windows_conpty_backend PROPERTIES
         AUTOMOC OFF
     )
 
     add_test(
-        NAME vnm_terminal_phase2_windows_conpty
+        NAME vnm_terminal_windows_conpty_backend
         COMMAND
             "${CMAKE_COMMAND}" -E env
             "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal_phase2_windows_conpty>"
+            "$<TARGET_FILE:vnm_terminal_windows_conpty_backend>"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
     )
 
-    set_tests_properties(vnm_terminal_phase2_windows_conpty PROPERTIES
+    set_tests_properties(vnm_terminal_windows_conpty_backend PROPERTIES
         LABELS "conformance;windows;conpty"
         TIMEOUT 120
     )
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
-    add_executable(vnm_terminal_phase2_linux_pty
-        phase2_linux_pty/linux_pty_backend_tests.cpp
+    add_executable(vnm_terminal_linux_pty_backend
+        linux_pty_backend/linux_pty_backend_tests.cpp
     )
 
-    add_dependencies(vnm_terminal_phase2_linux_pty
+    add_dependencies(vnm_terminal_linux_pty_backend
         vnm_terminal_canvas_fixture
     )
 
-    target_link_libraries(vnm_terminal_phase2_linux_pty PRIVATE
+    target_link_libraries(vnm_terminal_linux_pty_backend PRIVATE
         vnm_terminal::vnm_terminal
     )
 
-    set_target_properties(vnm_terminal_phase2_linux_pty PROPERTIES
+    set_target_properties(vnm_terminal_linux_pty_backend PROPERTIES
         AUTOMOC OFF
     )
 
     add_test(
-        NAME vnm_terminal_phase2_linux_pty
+        NAME vnm_terminal_linux_pty_backend
         COMMAND
             "${CMAKE_COMMAND}" -E env
             "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal_phase2_linux_pty>"
+            "$<TARGET_FILE:vnm_terminal_linux_pty_backend>"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
     )
 
-    set_tests_properties(vnm_terminal_phase2_linux_pty PROPERTIES
+    set_tests_properties(vnm_terminal_linux_pty_backend PROPERTIES
         TIMEOUT 120
     )
 endif()
 
 set(vnm_terminal_test_process_targets
     vnm_terminal_canvas_fixture
-    vnm_terminal_phase0_hierarchical_profiler
-    vnm_terminal_phase0_parser_ir
-    vnm_terminal_phase0_unicode_width
-    vnm_terminal_phase1_unicode_width_tables
-    vnm_terminal_phase0_sequence_matrix
-    vnm_terminal_phase0_terminal_canvas_fixture
-    vnm_terminal_phase0_qt_render_smoke
-    vnm_terminal_phase3_qt_metrics
-    vnm_terminal_phase3_render_snapshot
-    vnm_terminal_phase3_render_frame
-    vnm_terminal_phase3_qsg_render
-    vnm_terminal_phase3r_shaping_contract
-    vnm_terminal_phase3r_qsg_text_node_spike
-    vnm_terminal_phase4_input_encoder
-    vnm_terminal_phase4_surface_host
-    vnm_terminal_phase4_behavior_smoke
-    vnm_terminal_phase6_parser_randomized
-    vnm_terminal_phase6_resource_lifecycle
-    vnm_terminal_phase0_qt_posture
-    vnm_terminal_phase1_basic_model
-    vnm_terminal_phase1_sgr_model
-    vnm_terminal_phase1_model_ops
-    vnm_terminal_phase1_alternate_screen
-    vnm_terminal_phase1_private_modes
-    vnm_terminal_phase1_viewport_controller
-    vnm_terminal_phase2_backend_session
+    vnm_terminal_profiler
+    vnm_terminal_parser_ir
+    vnm_terminal_unicode_width
+    vnm_terminal_unicode_width_tables
+    vnm_terminal_sequence_matrix
+    vnm_terminal_canvas_fixture_contract
+    vnm_terminal_qt_render_smoke
+    vnm_terminal_qt_metrics
+    vnm_terminal_render_snapshot
+    vnm_terminal_render_frame
+    vnm_terminal_qsg_render
+    vnm_terminal_shaping_contract
+    vnm_terminal_qsg_text_node
+    vnm_terminal_input_encoder
+    vnm_terminal_surface_host
+    vnm_terminal_behavior_smoke
+    vnm_terminal_parser_randomized
+    vnm_terminal_resource_lifecycle
+    vnm_terminal_qt_posture
+    vnm_terminal_screen_basic
+    vnm_terminal_screen_sgr
+    vnm_terminal_screen_operations
+    vnm_terminal_screen_alternate
+    vnm_terminal_terminal_modes
+    vnm_terminal_viewport
+    vnm_terminal_backend_session
 )
 
 if(WIN32)
     list(APPEND vnm_terminal_test_process_targets
-        vnm_terminal_phase2_windows_conpty
+        vnm_terminal_windows_conpty_backend
     )
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
     list(APPEND vnm_terminal_test_process_targets
-        vnm_terminal_phase2_linux_pty
+        vnm_terminal_linux_pty_backend
     )
 endif()
 
-if(TARGET vnm_terminal_phase5_compat_smoke)
+if(TARGET vnm_terminal_compat_smoke)
     list(APPEND vnm_terminal_test_process_targets
-        vnm_terminal_phase5_compat_smoke
+        vnm_terminal_compat_smoke
     )
 endif()
 

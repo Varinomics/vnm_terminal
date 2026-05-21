@@ -18,6 +18,20 @@ and the Qt Company distribution materials:
 - https://www.qt.io/licensing/
 - https://doc.qt.io/qt-6/licenses-used-in-qt.html
 
+## Ubuntu Mono - Bront Embedded Font
+
+`resources/fonts/vnm_framework_monospace.ttf` is a bundled monospace font. Its
+embedded metadata identifies it as Ubuntu Mono - Bront under the Ubuntu Font
+Licence 1.0.
+
+This font is not GPL-licensed. The font may be bundled under the Ubuntu Font
+Licence terms; derivative naming obligations must be reviewed before replacing
+or modifying the embedded font file.
+
+License reference:
+
+- https://ubuntu.com/legal/font-licence
+
 ## Unicode 16.0 Data Files
 
 The terminal width policy is pinned to Unicode 16.0.0 data files published by

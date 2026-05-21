@@ -1439,7 +1439,7 @@ bool test_keyboard_printable_controls_and_prompt_path(QGuiApplication& app)
         "prompt path Left is accepted");
     ok &= send_key(fixture.surface, Qt::Key_Backspace, Qt::NoModifier, {},
         "prompt path Backspace is accepted");
-    for (const QChar ch : QStringLiteral("codex")) {
+    for (const QChar ch : QStringLiteral("term")) {
         ok &= send_key(
             fixture.surface,
             ch.toUpper().unicode(),
@@ -1451,7 +1451,7 @@ bool test_keyboard_printable_controls_and_prompt_path(QGuiApplication& app)
         "prompt path Return is accepted");
     ok &= check_bytes_equal(
         joined_writes_since(backend_ptr->writes, prompt_write_index),
-        bytes_from_hex("1b5b447f636f6465780d"),
+        bytes_from_hex("1b5b447f7465726d0d"),
         "prompt editing path writes exact byte stream");
     ok &= check(backend_error_count == 0,
         "keyboard printable success path emits no backend_error");
@@ -2433,7 +2433,7 @@ bool test_public_viewport_scroll_api(QGuiApplication& app)
     return ok;
 }
 
-bool test_plain_wheel_scrolls_codex_shaped_primary_scrollback(QGuiApplication& app)
+bool test_plain_wheel_scrolls_scroll_region_primary_scrollback(QGuiApplication& app)
 {
     bool ok = true;
     Surface_fixture fixture;
@@ -2459,24 +2459,24 @@ bool test_plain_wheel_scrolls_codex_shaped_primary_scrollback(QGuiApplication& a
         std::move(backend),
         { QStringLiteral("scripted-terminal") },
         &started);
-    ok &= check(started, "Codex-shaped scrollback surface starts");
+    ok &= check(started, "scroll-region scrollback surface starts");
 
     const std::shared_ptr<const term::Terminal_render_snapshot> tail_snapshot =
         term::VNM_TerminalSurface_render_bridge::render_snapshot(fixture.surface);
     ok &= check(tail_snapshot != nullptr,
-        "Codex-shaped scrollback has a render snapshot");
+        "scroll-region scrollback has a render snapshot");
     if (tail_snapshot == nullptr) {
         return ok;
     }
 
     ok &= check(tail_snapshot->viewport.active_buffer == term::Terminal_buffer_id::PRIMARY,
-        "Codex-shaped scrollback remains on primary screen");
+        "scroll-region scrollback remains on primary screen");
     ok &= check(tail_snapshot->viewport.scrollback_rows == 0,
-        "Codex-shaped first insert does not create scrollback before overflow");
+        "scroll-region first insert does not create scrollback before overflow");
     ok &= check(tail_snapshot->viewport.offset_from_tail == 0,
-        "Codex-shaped scrollback starts at tail");
+        "scroll-region scrollback starts at tail");
     ok &= check(snapshot_row_text(*tail_snapshot, 3) == QStringLiteral("HIST"),
-        "Codex-shaped first insert writes history row");
+        "scroll-region first insert writes history row");
 
     const std::size_t write_count = backend_ptr->writes.size();
     ok &= send_wheel_event(
@@ -2484,9 +2484,9 @@ bool test_plain_wheel_scrolls_codex_shaped_primary_scrollback(QGuiApplication& a
         Qt::NoModifier,
         120,
         false,
-        "plain wheel up has no Codex-shaped scrollback before overflow");
+        "plain wheel up has no scroll-region scrollback before overflow");
     ok &= check(backend_ptr->writes.size() == write_count,
-        "Codex-shaped pre-overflow wheel writes no backend bytes");
+        "scroll-region pre-overflow wheel writes no backend bytes");
 
     backend_ptr->emit_output(
         QByteArrayLiteral("\x1b[1;4r\x1b[4;1H\r\nNEXT"
@@ -2495,12 +2495,12 @@ bool test_plain_wheel_scrolls_codex_shaped_primary_scrollback(QGuiApplication& a
     const std::shared_ptr<const term::Terminal_render_snapshot> overflow_snapshot =
         term::VNM_TerminalSurface_render_bridge::render_snapshot(fixture.surface);
     ok &= check(overflow_snapshot != nullptr,
-        "Codex-shaped overflow publishes a snapshot");
+        "scroll-region overflow publishes a snapshot");
     if (overflow_snapshot != nullptr) {
         ok &= check(overflow_snapshot->viewport.scrollback_rows == 1,
-            "Codex-shaped overflow creates one primary scrollback row");
+            "scroll-region overflow creates one primary scrollback row");
         ok &= check(snapshot_row_text(*overflow_snapshot, 0) == QStringLiteral("top-two"),
-            "Codex-shaped overflow tail shows shifted primary content");
+            "scroll-region overflow tail shows shifted primary content");
     }
 
     ok &= send_wheel_event(
@@ -2508,19 +2508,19 @@ bool test_plain_wheel_scrolls_codex_shaped_primary_scrollback(QGuiApplication& a
         Qt::NoModifier,
         120,
         true,
-        "plain wheel up scrolls overflowing Codex-shaped primary scrollback");
+        "plain wheel up scrolls overflowing scroll-region primary scrollback");
     const std::shared_ptr<const term::Terminal_render_snapshot> scrolled_snapshot =
         term::VNM_TerminalSurface_render_bridge::render_snapshot(fixture.surface);
     ok &= check(scrolled_snapshot != nullptr,
-        "Codex-shaped overflowing wheel scroll publishes a snapshot");
+        "scroll-region overflowing wheel scroll publishes a snapshot");
     if (scrolled_snapshot != nullptr) {
         ok &= check(scrolled_snapshot->viewport.offset_from_tail == 1,
-            "Codex-shaped overflowing wheel scroll moves to the available scrollback row");
+            "scroll-region overflowing wheel scroll moves to the available scrollback row");
         ok &= check(snapshot_row_text(*scrolled_snapshot, 0) == QStringLiteral("top-one"),
-            "Codex-shaped overflowing wheel scroll reveals the inserted scrollback row");
+            "scroll-region overflowing wheel scroll reveals the inserted scrollback row");
     }
     ok &= check(backend_ptr->writes.size() == write_count,
-        "Codex-shaped overflowing wheel scroll writes no backend bytes");
+        "scroll-region overflowing wheel scroll writes no backend bytes");
 
     return ok;
 }
@@ -7299,7 +7299,7 @@ int main(int argc, char** argv)
     ok &= test_control_wheel_font_zoom(app);
     ok &= test_plain_wheel_scrolls_primary_scrollback(app);
     ok &= test_public_viewport_scroll_api(app);
-    ok &= test_plain_wheel_scrolls_codex_shaped_primary_scrollback(app);
+    ok &= test_plain_wheel_scrolls_scroll_region_primary_scrollback(app);
     ok &= test_plain_wheel_scrolls_csi_scroll_up_primary_scrollback(app);
     ok &= test_page_keys_scroll_primary_scrollback(app);
     ok &= test_page_keys_fall_through_on_alternate_screen(app);

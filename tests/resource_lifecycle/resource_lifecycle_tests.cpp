@@ -42,7 +42,7 @@ bool wait_until(Predicate predicate, std::chrono::milliseconds timeout)
 term::Terminal_launch_config valid_launch_config()
 {
     term::Terminal_launch_config config;
-    config.argv              = {QStringLiteral("phase6-resource-fixture"), QStringLiteral("--session")};
+    config.argv              = {QStringLiteral("resource-lifecycle-fixture"), QStringLiteral("--session")};
     config.working_directory = QStringLiteral("C:/workspace");
     config.initial_grid_size = term::terminal_grid_size_t{24, 80};
     return config;
@@ -413,7 +413,7 @@ bool test_repeated_create_start_resize_terminate_destroy()
             backend->resize_requests.back().grid_size.columns == resized_grid.columns,
             "repeated lifecycle resize reaches backend with requested grid");
 
-        backend->emit_output(QByteArrayLiteral("phase6-live-output\r\n"));
+        backend->emit_output(QByteArrayLiteral("resource-lifecycle-live-output\r\n"));
         ok &= check(!session->output_chunks().empty(),
             "repeated lifecycle observes backend output before shutdown");
 

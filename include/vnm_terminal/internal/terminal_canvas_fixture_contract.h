@@ -72,7 +72,7 @@ inline std::string_view terminal_canvas_fixture_kind_name(
 
 inline std::string_view terminal_canvas_fixture_scenario_name()
 {
-    return "codex-canvas";
+    return "terminal-canvas";
 }
 
 inline constexpr std::string_view k_terminal_canvas_fixture_enable_input_modes_label =
@@ -148,7 +148,7 @@ terminal_canvas_fixture_contract_script()
         {
             Terminal_canvas_fixture_record_kind::OUTPUT,
             "prompt",
-            "636f6465783e20",
+            "7465726d3e20",
             0,
             0,
             0,
@@ -157,7 +157,7 @@ terminal_canvas_fixture_contract_script()
         {
             Terminal_canvas_fixture_record_kind::EXPECT_INPUT,
             "prompt-editing-keys",
-            "1b5b447f636f6465780d",
+            "1b5b447f7465726d0d",
             0,
             0,
             0,
@@ -309,7 +309,7 @@ inline const std::vector<terminal_canvas_fixture_behavior_smoke_case_t>&
 terminal_canvas_fixture_behavior_smoke_cases()
 {
     // Byte-output smokes shared by the fixture and tests. Resize/output ordering
-    // needs an explicit model resize and is covered in the Phase 4 behavior test.
+    // needs an explicit model resize and is covered in the behavior smoke tests.
     static const std::vector<terminal_canvas_fixture_behavior_smoke_case_t> cases = {
         {
             "cursor-addressing",
@@ -341,7 +341,7 @@ terminal_canvas_fixture_behavior_smoke_cases()
             "1b5b313b31483131311b5b323b31483232321b5b333b31483333331b5b343b31483434341b5b323b33721b5b333b31480a",
         },
         {
-            "codex-scrollback-insert",
+            "primary-scrollback-insert",
             "1b5b313b3148746f702d6f6e651b5b323b3148746f702d74776f1b5b333b3148"
             "766965771b5b343b314862656c6f771b5b353b314870726f6d70741b5b343b3572"
             "1b5b343b31481b4d1b5b721b5b313b34721b5b333b31480d0a484953541b5b72"

@@ -12,7 +12,7 @@ The primary visual component is `VNM_TerminalSurface`, a C++ `QQuickItem`.
 
 For a first pass through the repository, read these in order:
 
-1. [LLM orientation](docs/llm_orientation.md) - the shortest stable explanation
+1. [Developer orientation](docs/developer_orientation.md) - the shortest stable explanation
    of what the project is, where the important code lives, and how the pieces
    fit together.
 2. [Architecture](docs/architecture.md) - the runtime model, ownership
@@ -33,10 +33,11 @@ Configure once:
 cmake -S . -B build -DVNM_TERMINAL_BUILD_EXAMPLES=ON -DBUILD_TESTING=ON
 ```
 
-Build with the local MSVC toolchain:
+Build from an x64 MSVC Developer Command Prompt or another shell where the
+Visual Studio C++ environment has already been initialized:
 
 ```bat
-cmd.exe /c "call ""C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"" x64 && cmake --build build --target vnm_terminal_example_terminal --config Release"
+cmake --build build --target vnm_terminal_example_terminal --config Release
 ```
 
 Launch the example terminal:

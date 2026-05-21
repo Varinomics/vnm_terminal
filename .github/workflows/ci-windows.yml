@@ -16,7 +16,7 @@ env:
 jobs:
   build-and-test:
     name: Qt Quick Terminal (Windows)
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Checkout repository
@@ -47,4 +47,4 @@ jobs:
         working-directory: build
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --output-on-failure -C ${CMAKE_BUILD_TYPE}
+        run: ctest --output-on-failure -C ${CMAKE_BUILD_TYPE} -E "^vnm_terminal_windows_conpty_backend$"

@@ -1,7 +1,7 @@
 # Repository Guide
 
-This guide maps the repository for build, test, provenance, and review tasks.
-It is the quick operational reference after `docs/llm_orientation.md`,
+This guide maps the repository for build, test, provenance, and maintenance tasks.
+It is the quick operational reference after `docs/developer_orientation.md`,
 `docs/architecture.md`, and `docs/public_surface.md`.
 
 ## Top-Level Layout
@@ -93,16 +93,17 @@ The root CMake project builds:
 
 ## Local Windows Build
 
-Initialize the MSVC x64 environment before native builds:
+Use an x64 MSVC Developer Command Prompt or another shell where the Visual
+Studio C++ environment has already been initialized:
 
 ```bat
-cmd.exe /c "call ""C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"" x64 && cmake --build build --config Release"
+cmake --build build --config Release
 ```
 
 Build only the example terminal:
 
 ```bat
-cmd.exe /c "call ""C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat"" x64 && cmake --build build --target vnm_terminal_example_terminal --config Release"
+cmake --build build --target vnm_terminal_example_terminal --config Release
 ```
 
 ## Running The Example
@@ -132,21 +133,25 @@ Useful options include `--cwd`, `--font-family`, `--font-size`, `--theme`,
 
 CTest names are the stable way to find a test. The main families are:
 
-- `vnm_terminal_phase0_*`: parser IR, Unicode policy, sequence matrix, fixture
-  protocol, Qt render smoke, Qt posture, and hierarchical profiler behavior.
-- `vnm_terminal_phase1_*`: Unicode width tables, parser and screen-model
-  behavior, SGR, model operations, alternate screen, private modes, and viewport
-  control.
-- `vnm_terminal_phase2_*`: session and platform backend behavior. Windows adds
-  `vnm_terminal_phase2_windows_conpty`; Linux adds
-  `vnm_terminal_phase2_linux_pty`.
-- `vnm_terminal_phase3_*` and `vnm_terminal_phase3r_*`: metrics, render
+- `vnm_terminal_parser_*`, `vnm_terminal_sequence_matrix`, and
+  `vnm_terminal_unicode_*`: parser IR, authored parser seeds, sequence
+  coverage, and Unicode width behavior.
+- `vnm_terminal_screen_*`, `vnm_terminal_terminal_modes`, and
+  `vnm_terminal_viewport`: screen model behavior, SGR, model operations,
+  alternate screen, private modes, and viewport control.
+- `vnm_terminal_backend_session`, `vnm_terminal_windows_conpty_backend`, and
+  `vnm_terminal_linux_pty_backend`: session and platform backend behavior.
+- `vnm_terminal_qt_*`, `vnm_terminal_render_*`,
+  `vnm_terminal_qsg_*`, and `vnm_terminal_shaping_contract`: metrics, render
   snapshots, render frames, QSG rendering, shaping, and QSG text-node checks.
-- `vnm_terminal_phase4_*`: public surface host behavior, input encoding, and
-  behavior-smoke launches through the canvas fixture.
-- `vnm_terminal_phase5_compat_smoke`: compatibility smoke behavior when the
-  target exists.
-- `vnm_terminal_phase6_*`: randomized parser seeds and resource lifecycle.
+- `vnm_terminal_surface_host`, `vnm_terminal_input_encoder`, and
+  `vnm_terminal_behavior_smoke`: public surface host behavior, input encoding,
+  and behavior-smoke launches through the canvas fixture.
+- `vnm_terminal_compat_smoke`: compatibility smoke behavior when the target
+  exists.
+- `vnm_terminal_resource_lifecycle`, `vnm_terminal_profiler`,
+  `vnm_terminal_qt_posture`, and `vnm_terminal_canvas_fixture_contract`:
+  lifecycle, profiling, Qt posture, and fixture protocol tests.
 - `vnm_terminal_example_terminal_*`: example host, command-line, capture,
   window chrome, titlebar, and behavior-smoke tests.
 - `vnm_terminal_*_conformance`, `vnm_terminal_parser_fuzz_smoke`, and
@@ -164,11 +169,11 @@ ctest --test-dir build -C Release --output-on-failure
 Focused examples:
 
 ```powershell
-ctest --test-dir build -C Release -R "^vnm_terminal_phase1_" --output-on-failure
-ctest --test-dir build -C Release -R "^vnm_terminal_phase2_(backend_session|windows_conpty|linux_pty)$" --output-on-failure
-ctest --test-dir build -C Release -R "^vnm_terminal_phase3(r)?_" --output-on-failure
-ctest --test-dir build -C Release -R "^vnm_terminal_phase4_|^vnm_terminal_surface_behavior_smokes$" --output-on-failure
-ctest --test-dir build -C Release -R "^vnm_terminal_phase6_" --output-on-failure
+ctest --test-dir build -C Release -R "^vnm_terminal_(parser|sequence_matrix|unicode)" --output-on-failure
+ctest --test-dir build -C Release -R "^vnm_terminal_(screen|terminal_modes|viewport)" --output-on-failure
+ctest --test-dir build -C Release -R "^vnm_terminal_(backend_session|windows_conpty_backend|linux_pty_backend)$" --output-on-failure
+ctest --test-dir build -C Release -R "^vnm_terminal_(qt|render|qsg|shaping)" --output-on-failure
+ctest --test-dir build -C Release -R "^vnm_terminal_(surface_host|input_encoder|behavior_smoke)$" --output-on-failure
 ```
 
 Focused example-terminal smoke tests:
@@ -276,7 +281,7 @@ count, command line, output JSON, and any profile artifacts.
   file kinds are `*.vnm_fixture`, `*.vnm_capture`, and `*.vnm_seed`.
 - The conformance fixture readers validate checked-in fixture provenance.
   `tests/conformance/captures` stores authored capture replay fixtures, and
-  `tests/phase6_parser_randomized` stores authored parser seeds.
+  `tests/parser_randomized` stores authored parser seeds.
 - `tests/conformance/README.md` defines the fixture, capture, and seed formats.
   Use it before adding or changing fixture data.
 

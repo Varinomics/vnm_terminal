@@ -2373,7 +2373,7 @@ bool test_terminal_canvas_fixture_script_through_session()
                                 if (record.label == std::string_view("prompt")) {
                                     prompt_was_visible = snapshot.has_value() &&
                                         snapshot->viewport.active_buffer == term::Terminal_buffer_id::ALTERNATE &&
-                                        snapshot_contains_text(*snapshot, QStringLiteral("codex>"));
+                                        snapshot_contains_text(*snapshot, QStringLiteral("term>"));
                                     ok &= check(prompt_was_visible,
                                         "fixture prompt is visible in alternate screen snapshot");
                                 }
@@ -2547,7 +2547,7 @@ bool test_terminal_canvas_fixture_script_through_session()
                                     snapshot->grid_size.columns == record.columns &&
                                     snapshot->viewport.active_buffer == term::Terminal_buffer_id::ALTERNATE &&
                                     snapshot->metadata.backend_geometry_in_sync &&
-                                    snapshot_contains_text(*snapshot, QStringLiteral("codex>")),
+                                    snapshot_contains_text(*snapshot, QStringLiteral("term>")),
                                     "fixture resize publishes alternate-screen grid snapshot");
                                 expected_command_kinds.push_back(term::Terminal_session_command_kind::RESIZE);
                                 break;

@@ -1152,7 +1152,7 @@ bool test_incremental_byte_stream_boundaries()
     result  = model.ingest(
         QByteArrayLiteral("\x1b]0;") +
         bytes_from_hex("e29cbb") +
-        QByteArrayLiteral(" Claude Code\a"));
+        QByteArrayLiteral(" Terminal App\a"));
     ok     &= check(diagnostic_count(result) == 0,
         "OSC UTF-8 title continuation byte is not treated as ST");
     ok     &= check(title_notification_count(result) == 1,
@@ -1160,7 +1160,7 @@ bool test_incremental_byte_stream_boundaries()
     ok     &= check(screen_mutation_kind_count(result, term::Screen_mutation_kind::PRINT_TEXT) == 0,
         "OSC UTF-8 title with 0x9c continuation emits no leaked text");
     ok     &= check(model.title() ==
-        QString::fromUtf8(bytes_from_hex("e29cbb") + QByteArrayLiteral(" Claude Code")),
+        QString::fromUtf8(bytes_from_hex("e29cbb") + QByteArrayLiteral(" Terminal App")),
         "OSC UTF-8 title with 0x9c continuation is published");
 
     model   = make_model();
@@ -1169,20 +1169,20 @@ bool test_incremental_byte_stream_boundaries()
         "split OSC UTF-8 title waits after lead byte");
     ok     &= check(model.title().isEmpty(), "split OSC UTF-8 title does not publish early");
 
-    result  = model.ingest(bytes_from_hex("9cbb") + QByteArrayLiteral(" Claude Code\a"));
+    result  = model.ingest(bytes_from_hex("9cbb") + QByteArrayLiteral(" Terminal App\a"));
     ok     &= check(diagnostic_count(result) == 0,
         "split OSC UTF-8 title continuation byte is not treated as ST");
     ok     &= check(screen_mutation_kind_count(result, term::Screen_mutation_kind::PRINT_TEXT) == 0,
         "split OSC UTF-8 title with 0x9c continuation emits no leaked text");
     ok     &= check(model.title() ==
-        QString::fromUtf8(bytes_from_hex("e29cbb") + QByteArrayLiteral(" Claude Code")),
+        QString::fromUtf8(bytes_from_hex("e29cbb") + QByteArrayLiteral(" Terminal App")),
         "split OSC UTF-8 title with 0x9c continuation is published");
 
     model   = make_model();
     result  = model.ingest(
         QByteArrayLiteral("\x1b]2;") +
         bytes_from_hex("e29cb6") +
-        QByteArrayLiteral(" Claude Code\x1b\\"));
+        QByteArrayLiteral(" Terminal App\x1b\\"));
     ok     &= check(diagnostic_count(result) == 0,
         "OSC 2 UTF-8 title with ST terminator has no diagnostics");
     ok     &= check(title_notification_count(result) == 1,
@@ -1190,7 +1190,7 @@ bool test_incremental_byte_stream_boundaries()
     ok     &= check(screen_mutation_kind_count(result, term::Screen_mutation_kind::PRINT_TEXT) == 0,
         "OSC 2 UTF-8 title with ST terminator emits no leaked text");
     ok     &= check(model.title() ==
-        QString::fromUtf8(bytes_from_hex("e29cb6") + QByteArrayLiteral(" Claude Code")),
+        QString::fromUtf8(bytes_from_hex("e29cb6") + QByteArrayLiteral(" Terminal App")),
         "OSC 2 UTF-8 title with ST terminator is published");
 
     model = make_model();
