@@ -56,8 +56,8 @@ jobs:
             exit 1
           fi
 
-          echo "artifact_name=vnm_terminal_v${package_version}_macos_x64" >> "${GITHUB_OUTPUT}"
-          echo "zip_name=vnm_terminal_v${package_version}_macos_x64.zip" >> "${GITHUB_OUTPUT}"
+          echo "artifact_name=vnm_terminal_v${package_version}_macos_x64_unnotarized" >> "${GITHUB_OUTPUT}"
+          echo "zip_name=vnm_terminal_v${package_version}_macos_x64_unnotarized.zip" >> "${GITHUB_OUTPUT}"
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.1
