@@ -68,5 +68,14 @@ runtime DLLs beside the real application in `vnm_terminal_runtime\`.
 The macOS GitHub Actions workflow builds a Release `vnm_terminal.app` with
 `VNM_TERMINAL_ENABLE_PROFILING=OFF`, deploys its Qt runtime with `macdeployqt`,
 ad-hoc signs the unsigned bundle, and uploads
-`vnm_terminal_v<version>_macos_x64.zip` as a workflow artifact. When a GitHub
-release is published, the workflow also attaches that ZIP to the release.
+`vnm_terminal_v<version>_macos_x64_unnotarized.zip` as a workflow artifact.
+When a GitHub release is published, the workflow also attaches that ZIP to the
+release.
+
+The macOS bundle is not Apple-notarized. Gatekeeper may block it on first run.
+Users who trust the downloaded build can remove the quarantine attribute:
+
+```bash
+xattr -dr com.apple.quarantine /path/to/vnm_terminal.app
+open /path/to/vnm_terminal.app
+```
