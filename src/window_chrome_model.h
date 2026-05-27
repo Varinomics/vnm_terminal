@@ -70,6 +70,9 @@ struct Window_chrome_layout_metrics
     qreal                          spinner_slot_width = 18.0;
     qreal                          title_gap          = 8.0;
     qreal                          title_button_gap   = 8.0;
+    qreal                          wheel_delivery_indicator_size       = 7.0;
+    qreal                          wheel_delivery_indicator_title_gap  = 8.0;
+    qreal                          wheel_delivery_indicator_button_gap = 8.0;
     qreal                          button_width       = 46.0;
 };
 
@@ -85,6 +88,7 @@ struct Window_chrome_layout
     QRectF                         icon_rect;
     QRectF                         spinner_slot_rect;
     QRectF                         title_text_rect;
+    QRectF                         wheel_delivery_indicator_rect;
     bool                           window_maximized = false;
     std::array<Window_chrome_button_geometry, 3> buttons = {};
 };
@@ -181,8 +185,22 @@ inline Window_chrome_layout calculate_window_chrome_layout(
     // Extremely narrow windows keep the intrinsic button sequence and rely on
     // window/item clipping instead of collapsing control hit regions.
     const qreal buttons_left = nonnegative(titlebar_width - button_width * 3.0);
-    const qreal title_text_right =
-        buttons_left - nonnegative(metrics.title_button_gap);
+    const qreal title_button_gap = nonnegative(metrics.title_button_gap);
+    const qreal indicator_size =
+        std::min(nonnegative(metrics.wheel_delivery_indicator_size), titlebar_height);
+    const qreal indicator_title_gap =
+        nonnegative(metrics.wheel_delivery_indicator_title_gap);
+    const qreal indicator_button_gap =
+        nonnegative(metrics.wheel_delivery_indicator_button_gap);
+    const qreal indicator_left =
+        buttons_left - indicator_button_gap - indicator_size;
+    const bool indicator_fits =
+        indicator_size > 0.0 &&
+        titlebar_height > 0.0 &&
+        indicator_left >= title_text_x + indicator_title_gap;
+    const qreal title_text_right = indicator_fits
+        ? indicator_left - indicator_title_gap
+        : buttons_left - title_button_gap;
     const qreal title_text_width = nonnegative(title_text_right - title_text_x);
 
     Window_chrome_layout layout;
@@ -197,6 +215,13 @@ inline Window_chrome_layout calculate_window_chrome_layout(
         0.0,
         title_text_width,
         titlebar_height);
+    if (indicator_fits) {
+        layout.wheel_delivery_indicator_rect = QRectF(
+            indicator_left,
+            (titlebar_height - indicator_size) / 2.0,
+            indicator_size,
+            indicator_size);
+    }
     layout.window_maximized  = button_states.window_maximized;
     layout.buttons           = {
         Window_chrome_button_geometry{

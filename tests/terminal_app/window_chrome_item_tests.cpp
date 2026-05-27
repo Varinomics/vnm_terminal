@@ -117,6 +117,14 @@ bool check_qcolor_equal(
     return false;
 }
 
+bool is_wheel_delivery_indicator_yellow(const QColor& color)
+{
+    return
+        color.red()   >= 200 &&
+        color.green() >= 170 &&
+        color.blue()  <=  90;
+}
+
 bool check_command_log_equal(
     const std::vector<chrome::Window_chrome_command>&      actual,
     std::initializer_list<chrome::Window_chrome_command>   expected,
@@ -671,6 +679,45 @@ bool test_titlebar_background_paint_uses_window_chrome_color()
     return ok;
 }
 
+bool test_wheel_delivery_indicator_paint_uses_layout_slot()
+{
+    chrome::Terminal_window_chrome titlebar;
+    size_titlebar(titlebar, 360.0);
+    titlebar.pulse_wheel_delivery_indicator();
+
+    const chrome::Window_chrome_layout layout = titlebar.chrome_layout();
+
+    QImage image(QSize(360, 32), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    titlebar.paint(&painter);
+    painter.end();
+
+    const QPoint center = layout.wheel_delivery_indicator_rect.center().toPoint();
+
+    bool ok = true;
+    ok &= check(!layout.wheel_delivery_indicator_rect.isEmpty(),
+        "normal titlebar exposes wheel delivery indicator slot");
+    ok &= check(!layout.wheel_delivery_indicator_rect.intersects(layout.title_text_rect),
+        "wheel delivery indicator slot does not intersect title text");
+    for (const chrome::Window_chrome_button_geometry& button : layout.buttons) {
+        ok &= check(!layout.wheel_delivery_indicator_rect.intersects(button.rect),
+            "wheel delivery indicator slot does not intersect button");
+    }
+    ok &= check(
+        is_wheel_delivery_indicator_yellow(image.pixelColor(center)),
+        "wheel delivery indicator paints in the reserved layout slot");
+
+    chrome::Terminal_window_chrome narrow_titlebar;
+    size_titlebar(narrow_titlebar, 100.0);
+    narrow_titlebar.pulse_wheel_delivery_indicator();
+    const chrome::Window_chrome_layout narrow_layout = narrow_titlebar.chrome_layout();
+    ok &= check(narrow_layout.wheel_delivery_indicator_rect.isEmpty(),
+        "narrow titlebar suppresses wheel delivery indicator slot");
+
+    return ok;
+}
+
 bool test_terminal_content_border_paint_uses_border_color()
 {
     auto painted_border = [](bool active) {
@@ -803,6 +850,7 @@ int main(int argc, char** argv)
     ok &= test_hover_and_ungrab_state_paths();
     ok &= test_focus_policy();
     ok &= test_titlebar_background_paint_uses_window_chrome_color();
+    ok &= test_wheel_delivery_indicator_paint_uses_layout_slot();
     ok &= test_terminal_content_border_paint_uses_border_color();
     ok &= test_focus_survives_titlebar_interactions();
     ok &= test_null_window_event_paths_are_safe();

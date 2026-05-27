@@ -7,9 +7,7 @@
 #include "vnm_terminal/internal/hierarchical_profiler.h"
 #include "vnm_terminal/internal/qt_grid_metrics_provider.h"
 #include "vnm_terminal/internal/vnm_terminal_font.h"
-#if VNM_TERMINAL_PROFILING_ENABLED
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
-#endif
 
 #include <QByteArray>
 #include <QClipboard>
@@ -55,6 +53,10 @@
 
 #ifndef VNM_TERMINAL_VERSION_STRING
 #define VNM_TERMINAL_VERSION_STRING "0.0.0"
+#endif
+
+#ifndef VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+#define VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED 0
 #endif
 
 namespace {
@@ -103,6 +105,7 @@ struct App_options
     QStringList        command;
     QString            working_directory;
     QString            backend_output_capture_path;
+    QString            transcript_capture_path;
     QString            profile_text_path;
     QString            font_family = term::vnm_terminal_default_monospace_font_family();
     qreal              font_size   = term::k_vnm_terminal_default_font_pixel_size;
@@ -116,6 +119,10 @@ struct App_options
     bool               keep_open_after_process_exits      = false;
     bool               require_output                     = false;
     bool               custom_titlebar                    = k_custom_titlebar_default_enabled;
+    bool               selection_trace_enabled            = false;
+    bool               transcript_snapshot_diagnostics    = false;
+    bool               transcript_timing_diagnostics      = false;
+    bool               wheel_trace_enabled                 = false;
     bool               font_size_explicit                 = false;
     bool               window_size_explicit               = false;
     bool               restore_maximized_window_state     = false;
@@ -422,6 +429,44 @@ private:
     VNM_TerminalSurface* m_surface = nullptr;
 };
 
+class Wheel_delivery_indicator_filter final : public QObject
+{
+public:
+    explicit Wheel_delivery_indicator_filter(chrome::Terminal_window_chrome& titlebar)
+    :
+        QObject(&titlebar),
+        m_titlebar(titlebar)
+    {}
+
+protected:
+    bool eventFilter(QObject*, QEvent* event) override
+    {
+        if (event->type() == QEvent::Wheel) {
+            m_titlebar.pulse_wheel_delivery_indicator();
+        }
+
+        return false;
+    }
+
+private:
+    chrome::Terminal_window_chrome& m_titlebar;
+};
+
+void install_wheel_delivery_indicator_filter(
+    VNM_TerminalSurface&             surface,
+    chrome::Terminal_scrollbar&      scrollbar,
+    chrome::Terminal_window_chrome*  titlebar,
+    bool                             enabled)
+{
+    if (!enabled || titlebar == nullptr) {
+        return;
+    }
+
+    auto* filter = new Wheel_delivery_indicator_filter(*titlebar);
+    surface.installEventFilter(filter);
+    scrollbar.installEventFilter(filter);
+}
+
 Terminal_shell_geometry terminal_shell_geometry(
     const QSizeF&  window_size,
     bool           custom_titlebar,
@@ -674,6 +719,13 @@ void print_usage()
 #endif
         << "  --alternate-wheel <mode>        alternate-screen wheel: mouse(default), cursor, or page\n"
         << "  --capture-output <path>         write raw backend output bytes to a file\n"
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+        << "  --capture-transcript <path>     write sensitive NDJSON replay transcript\n"
+        << "  --transcript-snapshot-diagnostics include visible row text/provenance snapshots\n"
+        << "  --transcript-timing-diagnostics include thresholded transcript hot-path timings\n"
+        << "  --wheel-trace                   include diagnostic wheel routing events in transcript\n"
+#endif
+        << "  --selection-trace               write selection diagnostics to stderr\n"
 #if VNM_TERMINAL_PROFILING_ENABLED
         << "  --profile-text <path>           write profile and dirty-row diagnostics\n"
 #endif
@@ -827,27 +879,88 @@ bool parse_alternate_wheel_policy(
     return false;
 }
 
-bool prepare_backend_output_capture_file(
+QString comparable_capture_path(QString path)
+{
+    path = QDir::cleanPath(std::move(path));
+#if defined(Q_OS_WIN)
+    path = path.toCaseFolded();
+#endif
+    return path;
+}
+
+bool validate_capture_path(
+    const QString& option_name,
     const QString& path,
+    QString*       out_absolute_path,
     QString*       out_error)
 {
     if (path.trimmed().isEmpty()) {
-        *out_error = QStringLiteral("--capture-output requires a non-empty path");
+        *out_error = QStringLiteral("%1 requires a non-empty path").arg(option_name);
         return false;
     }
 
     const QFileInfo file_info(path);
     const QDir parent_dir = file_info.absoluteDir();
     if (!parent_dir.exists()) {
-        *out_error = QStringLiteral("--capture-output parent directory does not exist: %1")
-            .arg(parent_dir.absolutePath());
+        *out_error = QStringLiteral("%1 parent directory does not exist: %2")
+            .arg(option_name, parent_dir.absolutePath());
+        return false;
+    }
+    if (file_info.exists() && file_info.isDir()) {
+        *out_error = QStringLiteral("%1 points to a directory: %2")
+            .arg(option_name, file_info.absoluteFilePath());
         return false;
     }
 
-    QFile file(file_info.absoluteFilePath());
+    *out_absolute_path = file_info.absoluteFilePath();
+    return true;
+}
+
+bool validate_capture_paths(App_options* options, QString* out_error)
+{
+    if (!options->backend_output_capture_path.isEmpty() &&
+        !validate_capture_path(
+            QStringLiteral("--capture-output"),
+            options->backend_output_capture_path,
+            &options->backend_output_capture_path,
+            out_error))
+    {
+        return false;
+    }
+
+    if (!options->transcript_capture_path.isEmpty() &&
+        !validate_capture_path(
+            QStringLiteral("--capture-transcript"),
+            options->transcript_capture_path,
+            &options->transcript_capture_path,
+            out_error))
+    {
+        return false;
+    }
+
+    if (!options->backend_output_capture_path.isEmpty() &&
+        !options->transcript_capture_path.isEmpty() &&
+        comparable_capture_path(options->backend_output_capture_path) ==
+            comparable_capture_path(options->transcript_capture_path))
+    {
+        *out_error = QStringLiteral(
+            "--capture-output and --capture-transcript must use different paths: %1")
+            .arg(options->backend_output_capture_path);
+        return false;
+    }
+
+    return true;
+}
+
+bool prepare_capture_file(
+    const QString& option_name,
+    const QString& path,
+    QString*       out_error)
+{
+    QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        *out_error = QStringLiteral("--capture-output could not open %1: %2")
-            .arg(file_info.absoluteFilePath(), file.errorString());
+        *out_error = QStringLiteral("%1 could not open %2: %3")
+            .arg(option_name, path, file.errorString());
         return false;
     }
 
@@ -926,6 +1039,12 @@ Parse_result parse_arguments(const QStringList& arguments)
 
         if (argument_is(argument, "--require-output")) {
             result.options.require_output = true;
+            ++index;
+            continue;
+        }
+
+        if (argument_is(argument, "--selection-trace")) {
+            result.options.selection_trace_enabled = true;
             ++index;
             continue;
         }
@@ -1022,6 +1141,61 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
+        if (argument_is(argument, "--capture-transcript")) {
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+            if (!take_option_value(arguments, index, &value, &result.error)) {
+                return result;
+            }
+            if (value.trimmed().isEmpty()) {
+                result.error = QStringLiteral("--capture-transcript requires a non-empty path");
+                return result;
+            }
+
+            result.options.transcript_capture_path = value;
+            continue;
+#else
+            result.error = QStringLiteral(
+                "--capture-transcript is unavailable because transcript capture/replay is disabled in this build");
+            return result;
+#endif
+        }
+
+        if (argument_is(argument, "--transcript-snapshot-diagnostics")) {
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+            result.options.transcript_snapshot_diagnostics = true;
+            ++index;
+            continue;
+#else
+            result.error = QStringLiteral(
+                "--transcript-snapshot-diagnostics is unavailable because transcript capture/replay is disabled in this build");
+            return result;
+#endif
+        }
+
+        if (argument_is(argument, "--transcript-timing-diagnostics")) {
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+            result.options.transcript_timing_diagnostics = true;
+            ++index;
+            continue;
+#else
+            result.error = QStringLiteral(
+                "--transcript-timing-diagnostics is unavailable because transcript capture/replay is disabled in this build");
+            return result;
+#endif
+        }
+
+        if (argument_is(argument, "--wheel-trace")) {
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+            result.options.wheel_trace_enabled = true;
+            ++index;
+            continue;
+#else
+            result.error = QStringLiteral(
+                "--wheel-trace is unavailable because transcript capture/replay is disabled in this build");
+            return result;
+#endif
+        }
+
         if (argument_is(argument, "--profile-text")) {
 #if VNM_TERMINAL_PROFILING_ENABLED
             if (!take_option_value(arguments, index, &value, &result.error)) {
@@ -1055,6 +1229,33 @@ Parse_result parse_arguments(const QStringList& arguments)
             .arg(argument);
         return result;
     }
+
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+    if (result.options.wheel_trace_enabled &&
+        result.options.transcript_capture_path.isEmpty())
+    {
+        result.options.wheel_trace_enabled = false;
+        result.error = QStringLiteral(
+            "--wheel-trace requires --capture-transcript <path>");
+        return result;
+    }
+    if (result.options.transcript_timing_diagnostics &&
+        result.options.transcript_capture_path.isEmpty())
+    {
+        result.options.transcript_timing_diagnostics = false;
+        result.error = QStringLiteral(
+            "--transcript-timing-diagnostics requires --capture-transcript <path>");
+        return result;
+    }
+    if (result.options.transcript_snapshot_diagnostics &&
+        result.options.transcript_capture_path.isEmpty())
+    {
+        result.options.transcript_snapshot_diagnostics = false;
+        result.error = QStringLiteral(
+            "--transcript-snapshot-diagnostics requires --capture-transcript <path>");
+        return result;
+    }
+#endif
 
     if (explicit_command_separator) {
         if (result.options.command.isEmpty()) {
@@ -2146,9 +2347,23 @@ int main(int argc, char** argv)
     }
 
     App_options options = std::move(parse_result.options);
+    if (!validate_capture_paths(&options, &parse_result.error)) {
+        print_error(parse_result.error);
+        return k_exit_usage_error;
+    }
+
     if (!options.backend_output_capture_path.isEmpty() &&
-        !prepare_backend_output_capture_file(
+        !prepare_capture_file(
+            QStringLiteral("--capture-output"),
             options.backend_output_capture_path, &parse_result.error))
+    {
+        print_error(parse_result.error);
+        return k_exit_usage_error;
+    }
+    if (!options.transcript_capture_path.isEmpty() &&
+        !prepare_capture_file(
+            QStringLiteral("--capture-transcript"),
+            options.transcript_capture_path, &parse_result.error))
     {
         print_error(parse_result.error);
         return k_exit_usage_error;
@@ -2188,6 +2403,9 @@ int main(int argc, char** argv)
         ? new chrome::Terminal_window_chrome(window.contentItem())
         : nullptr;
     auto* surface = new VNM_TerminalSurface(window.contentItem());
+    term::VNM_TerminalSurface_render_bridge::set_selection_trace_enabled(
+        *surface,
+        options.selection_trace_enabled);
 #if VNM_TERMINAL_PROFILING_ENABLED
     std::unique_ptr<term::Hierarchical_profiler> gui_profiler;
     std::unique_ptr<term::Active_profiler_binding> gui_profiler_binding;
@@ -2213,6 +2431,7 @@ int main(int argc, char** argv)
         content_border->setZ(-1.0);
     }
     scrollbar->set_surface(surface);
+    scrollbar->set_wheel_trace_enabled(options.wheel_trace_enabled);
     surface->set_font_family(options.font_family);
     surface->set_font_size(options.font_size);
     surface->set_color_theme(options.theme);
@@ -2223,6 +2442,15 @@ int main(int argc, char** argv)
 #endif
     surface->set_alternate_screen_wheel_policy(options.alternate_screen_wheel_policy);
     surface->set_backend_output_capture_path(options.backend_output_capture_path);
+    surface->set_transcript_capture_path(options.transcript_capture_path);
+    surface->set_transcript_snapshot_diagnostics(options.transcript_snapshot_diagnostics);
+    surface->set_transcript_timing_diagnostics(options.transcript_timing_diagnostics);
+    surface->set_wheel_trace_enabled(options.wheel_trace_enabled);
+    install_wheel_delivery_indicator_filter(
+        *surface,
+        *scrollbar,
+        titlebar,
+        options.wheel_trace_enabled);
     const bool custom_titlebar_enabled = options.custom_titlebar;
     std::optional<Persisted_terminal_window_state> latest_restorable_window_state =
         restorable_terminal_window_state(window, *surface);

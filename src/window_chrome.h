@@ -7,6 +7,7 @@
 #include <QPointF>
 #include <QQuickPaintedItem>
 #include <QString>
+#include <QTimer>
 
 #include <optional>
 
@@ -39,6 +40,7 @@ public:
     void set_terminal_icon_name(const QString& terminal_icon_name);
     void set_window_active(bool active);
     void set_window_maximized(bool maximized);
+    void pulse_wheel_delivery_indicator();
 
     Window_chrome_title_content title_content() const;
     Window_chrome_button_states button_states() const;
@@ -73,10 +75,12 @@ private:
     QString                                    m_terminal_icon_name;
     bool                                       m_window_active    = true;
     bool                                       m_window_maximized = false;
+    bool                                       m_wheel_delivery_indicator_visible = false;
 
     std::optional<Window_chrome_button_role>   m_hovered_button;
     std::optional<Window_chrome_button_role>   m_pressed_button;
     QIcon                                      m_app_icon;
+    QTimer                                     m_wheel_delivery_indicator_timer;
 };
 
 class Terminal_content_border : public QQuickPaintedItem

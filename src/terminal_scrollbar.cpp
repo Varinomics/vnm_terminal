@@ -121,6 +121,16 @@ void scrollbar::Terminal_scrollbar::set_surface(VNM_TerminalSurface* surface)
     sync_from_surface();
 }
 
+bool scrollbar::Terminal_scrollbar::wheel_trace_enabled() const
+{
+    return m_wheel_trace_enabled;
+}
+
+void scrollbar::Terminal_scrollbar::set_wheel_trace_enabled(bool enabled)
+{
+    m_wheel_trace_enabled = enabled;
+}
+
 bool scrollbar::Terminal_scrollbar::scrollbar_visible() const
 {
     return
@@ -264,6 +274,15 @@ void scrollbar::Terminal_scrollbar::wheelEvent(QWheelEvent* event)
     }
 
     if (!scrollbar_visible()) {
+        record_wheel_trace_event(
+            *event,
+            QStringLiteral("local_scroll"),
+            QStringLiteral("scrollbar_hidden"),
+            false,
+            0,
+            0,
+            m_wheel_scroll_angle_remainder,
+            m_wheel_scroll_pixel_remainder);
         event->ignore();
         return;
     }
@@ -382,6 +401,15 @@ int scrollbar::Terminal_scrollbar::vertical_wheel_steps(
 bool scrollbar::Terminal_scrollbar::zoom_surface_from_wheel(QWheelEvent* event)
 {
     if (!has_vertical_wheel_delta(*event)) {
+        record_wheel_trace_event(
+            *event,
+            QStringLiteral("control_zoom"),
+            QStringLiteral("zero_vertical_delta"),
+            false,
+            0,
+            0,
+            m_wheel_zoom_angle_remainder,
+            m_wheel_zoom_pixel_remainder);
         return false;
     }
 
@@ -391,20 +419,50 @@ bool scrollbar::Terminal_scrollbar::zoom_surface_from_wheel(QWheelEvent* event)
         m_wheel_zoom_angle_remainder,
         m_wheel_zoom_pixel_remainder);
     if (steps == 0) {
+        record_wheel_trace_event(
+            *event,
+            QStringLiteral("control_zoom"),
+            QStringLiteral("sub_step_accumulated"),
+            true,
+            steps,
+            0,
+            m_wheel_zoom_angle_remainder,
+            m_wheel_zoom_pixel_remainder);
         return true;
     }
 
+    const qreal previous_font_size = m_surface->font_size();
     const qreal requested_font_size = std::clamp(
-        m_surface->font_size() + static_cast<qreal>(steps) * k_font_zoom_wheel_step,
+        previous_font_size + static_cast<qreal>(steps) * k_font_zoom_wheel_step,
         k_font_zoom_min_pixel_size,
         k_font_zoom_max_pixel_size);
     m_surface->set_font_size(requested_font_size);
+    record_wheel_trace_event(
+        *event,
+        QStringLiteral("control_zoom"),
+        previous_font_size == m_surface->font_size()
+            ? QStringLiteral("zoom_clamped_noop")
+            : QStringLiteral("zoom_applied"),
+        true,
+        steps,
+        0,
+        m_wheel_zoom_angle_remainder,
+        m_wheel_zoom_pixel_remainder);
     return true;
 }
 
 bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event)
 {
     if (!has_vertical_wheel_delta(*event)) {
+        record_wheel_trace_event(
+            *event,
+            QStringLiteral("local_scroll"),
+            QStringLiteral("zero_vertical_delta"),
+            false,
+            0,
+            0,
+            m_wheel_scroll_angle_remainder,
+            m_wheel_scroll_pixel_remainder);
         return false;
     }
 
@@ -416,6 +474,21 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
     {
         m_wheel_scroll_angle_remainder = 0.0;
         m_wheel_scroll_pixel_remainder = 0.0;
+        record_wheel_trace_event(
+            *event,
+            QStringLiteral("local_scroll"),
+            QStringLiteral("boundary_or_clamp"),
+            false,
+            0,
+            0,
+            m_wheel_scroll_angle_remainder,
+            m_wheel_scroll_pixel_remainder,
+            0,
+            0,
+            false,
+            raw_delta > 0
+                ? QStringLiteral("top_boundary")
+                : QStringLiteral("tail_boundary"));
         return false;
     }
 
@@ -428,15 +501,80 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
         m_wheel_scroll_angle_remainder,
         m_wheel_scroll_pixel_remainder);
     if (wheel_steps == 0) {
+        record_wheel_trace_event(
+            *event,
+            QStringLiteral("local_scroll"),
+            QStringLiteral("sub_step_accumulated"),
+            true,
+            wheel_steps,
+            0,
+            m_wheel_scroll_angle_remainder,
+            m_wheel_scroll_pixel_remainder);
         return true;
     }
 
     const int line_delta = event->angleDelta().y() != 0
         ? wheel_steps * k_scroll_lines_per_wheel_step
         : wheel_steps;
-    const bool moved = m_surface->scroll_viewport_lines(line_delta);
+    const VNM_TerminalSurface::wheel_scroll_diagnostic_result_t diagnostic =
+        m_surface->scroll_viewport_lines_with_diagnostics(line_delta);
     sync_from_surface();
-    return moved;
+    record_wheel_trace_event(
+        *event,
+        QStringLiteral("local_scroll"),
+        diagnostic.local_scroll_applied
+            ? QStringLiteral("local_scroll_applied")
+            : diagnostic.no_op_cause,
+        diagnostic.local_scroll_applied,
+        wheel_steps,
+        line_delta,
+        m_wheel_scroll_angle_remainder,
+        m_wheel_scroll_pixel_remainder,
+        diagnostic.backend_drain_calls,
+        diagnostic.backend_drain_elapsed_ns,
+        diagnostic.local_scroll_intent_recorded,
+        diagnostic.no_op_cause,
+        diagnostic.scroll_action,
+        diagnostic.applied_line_delta);
+    return diagnostic.local_scroll_applied;
+}
+
+void scrollbar::Terminal_scrollbar::record_wheel_trace_event(
+    const QWheelEvent& event,
+    const QString&     route,
+    const QString&     outcome,
+    bool               accepted,
+    int                wheel_steps,
+    int                effective_line_delta,
+    qreal              angle_remainder,
+    qreal              pixel_remainder,
+    int                backend_drain_calls,
+    qint64             backend_drain_elapsed_ns,
+    bool               local_scroll_intent_recorded,
+    const QString&     local_scroll_block_reason,
+    const QString&     scroll_action,
+    int                applied_line_delta) const
+{
+    if (!m_wheel_trace_enabled || m_surface == nullptr) {
+        return;
+    }
+
+    m_surface->record_wheel_trace_event(
+        QStringLiteral("app.scrollbar"),
+        event,
+        route,
+        outcome,
+        accepted,
+        wheel_steps,
+        effective_line_delta,
+        angle_remainder,
+        pixel_remainder,
+        backend_drain_calls,
+        backend_drain_elapsed_ns,
+        local_scroll_intent_recorded,
+        local_scroll_block_reason,
+        scroll_action,
+        applied_line_delta);
 }
 
 void scrollbar::Terminal_scrollbar::set_drag_active(bool active)

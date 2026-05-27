@@ -16,6 +16,12 @@ Clone `vnm_terminal_surface` beside this repository, or pass
 cmake -S . -B build -DBUILD_TESTING=ON
 ```
 
+Transcript capture/replay is sensitive debugging infrastructure and is compiled
+out by default. Enable it only for local diagnostic builds with
+`-DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON`. Distribution builds use
+`-DVNM_TERMINAL_DISTRIBUTION_BUILD=ON`, which is incompatible with transcript
+capture/replay.
+
 Build from an x64 MSVC Developer Command Prompt or another shell where the
 Visual Studio C++ environment has already been initialized:
 
@@ -29,9 +35,25 @@ cmake --build build --target vnm_terminal --config Release
 .\build\Release\vnm_terminal.exe
 ```
 
+On Windows, build the `vnm_terminal` target before launching the raw build
+artifact. The build copies the required Qt runtime DLLs beside
+`vnm_terminal.exe` and copies the platform plugin to `platforms\`. A stale build
+directory created before that post-build deployment step must be rebuilt before
+manual launch. Do not move the raw executable away from its neighboring DLLs and
+`platforms\` directory.
+
 The app starts the platform default shell when no explicit command follows
 `--`. On validated platforms it uses built-in window chrome by default; pass
 `--native-titlebar` to use the platform frame instead.
+
+Pass `--selection-trace` before `--` to write selection diagnostics to stderr.
+Diagnostic builds configured with
+`VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON` also accept
+`--capture-transcript <path>` and `--transcript-snapshot-diagnostics` for
+deterministic terminal replay diagnostics. Distribution builds omit those
+options. Transcripts are sensitive: they include launch argv, launch cwd,
+backend output bytes, typed and pasted input, resize, scroll, selection events,
+and any optional snapshot text diagnostics.
 
 Run a specific command by placing it after `--`:
 
@@ -59,14 +81,19 @@ build_portable.bat
 ```
 
 The script writes `dist\portable\` and `dist\vnm_terminal_v1.0.1_w64.zip`.
-Portable releases are built with `VNM_TERMINAL_ENABLE_PROFILING=OFF`.
+Portable releases are built with `VNM_TERMINAL_DISTRIBUTION_BUILD=ON`,
+`VNM_TERMINAL_ENABLE_PROFILING=OFF`, and transcript capture/replay disabled.
 They are packaged from the Qt MinGW kit and include the required Qt and MinGW
 runtime DLLs beside the real application in `vnm_terminal_runtime\`.
+Launch the portable distribution through `dist\portable\vnm_terminal.exe`.
+That top-level executable is a launcher; do not launch the raw
+`build_portable\vnm_terminal.exe` as a substitute for portable validation.
 
 ## macOS Bundle Build
 
 The macOS GitHub Actions workflow builds a Release `vnm_terminal.app` with
-`VNM_TERMINAL_ENABLE_PROFILING=OFF`, deploys its Qt runtime with `macdeployqt`,
+`VNM_TERMINAL_DISTRIBUTION_BUILD=ON`, `VNM_TERMINAL_ENABLE_PROFILING=OFF`, and
+transcript capture/replay disabled, deploys its Qt runtime with `macdeployqt`,
 ad-hoc signs the unsigned bundle, and uploads
 `vnm_terminal_v<version>_macos_x64_unnotarized.zip` as a workflow artifact.
 When a GitHub release is published, the workflow also attaches that ZIP to the

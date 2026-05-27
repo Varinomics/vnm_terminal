@@ -22,6 +22,9 @@ public:
     VNM_TerminalSurface* surface() const;
     void set_surface(VNM_TerminalSurface* surface);
 
+    bool wheel_trace_enabled() const;
+    void set_wheel_trace_enabled(bool enabled);
+
     bool scrollbar_visible() const;
     QRectF thumb_rect() const;
 
@@ -62,6 +65,22 @@ private:
     bool   scroll_surface_from_wheel(
         QWheelEvent*           event);
 
+    void   record_wheel_trace_event(
+        const QWheelEvent&     event,
+        const QString&         route,
+        const QString&         outcome,
+        bool                   accepted,
+        int                    wheel_steps,
+        int                    effective_line_delta,
+        qreal                  angle_remainder,
+        qreal                  pixel_remainder,
+        int                    backend_drain_calls = 0,
+        qint64                 backend_drain_elapsed_ns = 0,
+        bool                   local_scroll_intent_recorded = false,
+        const QString&         local_scroll_block_reason = {},
+        const QString&         scroll_action = {},
+        int                    applied_line_delta = 0) const;
+
     void   set_drag_active(
         bool                   active);
 
@@ -90,6 +109,7 @@ private:
     qreal                          m_wheel_zoom_pixel_remainder   = 0.0;
     bool                           m_drag_active                  = false;
     bool                           m_hovered                      = false;
+    bool                           m_wheel_trace_enabled          = false;
 };
 
 } // namespace vnm_terminal::terminal_app

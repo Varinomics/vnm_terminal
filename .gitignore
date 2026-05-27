@@ -1,4 +1,5 @@
 build/
+build_codex*/
 build_portable/
 dist/
 out/

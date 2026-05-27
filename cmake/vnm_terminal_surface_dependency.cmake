@@ -22,6 +22,16 @@ if(VNM_TERMINAL_SURFACE_SOURCE_DIR)
         CACHE BOOL
         ""
         FORCE)
+    set(VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY
+        "${VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY}"
+        CACHE BOOL
+        ""
+        FORCE)
+    set(VNM_TERMINAL_DISTRIBUTION_BUILD
+        "${VNM_TERMINAL_DISTRIBUTION_BUILD}"
+        CACHE BOOL
+        ""
+        FORCE)
     add_subdirectory(
         "${VNM_TERMINAL_SURFACE_SOURCE_DIR}"
         "${CMAKE_BINARY_DIR}/_deps/vnm_terminal_surface")
