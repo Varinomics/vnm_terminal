@@ -21,8 +21,9 @@ namespace chrome = vnm_terminal::terminal_app;
 
 namespace {
 
-constexpr qreal k_control_icon_size = 10.0;
-constexpr qreal k_restore_offset    = 3.0;
+constexpr qreal k_control_icon_size                  = 10.0;
+constexpr qreal k_restore_offset                     = 3.0;
+constexpr int   k_wheel_delivery_indicator_pulse_ms = 220;
 
 QRectF item_rect(const QQuickItem& item)
 {
@@ -145,6 +146,22 @@ void paint_close_icon(QPainter& painter, const QRectF& rect)
     painter.drawLine(rect.bottomLeft(), rect.topRight());
 }
 
+void paint_wheel_delivery_indicator(
+    QPainter&      painter,
+    const QRectF&  indicator_rect)
+{
+    if (indicator_rect.isEmpty()) {
+        return;
+    }
+
+    const qreal radius = std::min(indicator_rect.width(), indicator_rect.height()) / 2.0;
+    QPen outline(QColor(108, 74, 0, 210));
+    outline.setWidthF(1.0);
+    painter.setPen(outline);
+    painter.setBrush(QColor(255, 220, 42, 235));
+    painter.drawEllipse(indicator_rect.center(), radius, radius);
+}
+
 void paint_button(
     QPainter&                                      painter,
     const chrome::Window_chrome_button_geometry&   button,
@@ -207,6 +224,17 @@ chrome::Terminal_window_chrome::Terminal_window_chrome(QQuickItem* parent)
     setActiveFocusOnTab(false);
     setFocusPolicy(Qt::NoFocus);
     setFocus(false);
+
+    m_wheel_delivery_indicator_timer.setSingleShot(true);
+    m_wheel_delivery_indicator_timer.setInterval(k_wheel_delivery_indicator_pulse_ms);
+    QObject::connect(
+        &m_wheel_delivery_indicator_timer,
+        &QTimer::timeout,
+        this,
+        [this] {
+            m_wheel_delivery_indicator_visible = false;
+            update();
+        });
 }
 
 QString chrome::Terminal_window_chrome::terminal_title() const
@@ -267,6 +295,16 @@ void chrome::Terminal_window_chrome::set_window_maximized(bool maximized)
 
     m_window_maximized = maximized;
     update();
+}
+
+void chrome::Terminal_window_chrome::pulse_wheel_delivery_indicator()
+{
+    if (!m_wheel_delivery_indicator_visible) {
+        m_wheel_delivery_indicator_visible = true;
+        update();
+    }
+
+    m_wheel_delivery_indicator_timer.start();
 }
 
 chrome::Window_chrome_title_content chrome::Terminal_window_chrome::title_content() const
@@ -417,6 +455,10 @@ void chrome::Terminal_window_chrome::paint(QPainter* painter)
 
     for (const Window_chrome_button_geometry& button : layout.buttons) {
         paint_button(*painter, button, m_window_active, layout.window_maximized);
+    }
+
+    if (m_wheel_delivery_indicator_visible) {
+        paint_wheel_delivery_indicator(*painter, layout.wheel_delivery_indicator_rect);
     }
 
     painter->restore();

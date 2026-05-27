@@ -64,3 +64,52 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --output-on-failure
+
+  transcript-build-and-test:
+    name: Qt Quick Terminal Transcript (Linux)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+        with:
+          path: vnm_terminal
+
+      - name: Checkout surface
+        uses: actions/checkout@v4
+        with:
+          repository: Varinomics/vnm_terminal_surface
+          path: vnm_terminal_surface
+          ref: master
+          token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${LINUX_SYSTEM_DEPS}
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          version: '6.10.1'
+          arch: 'linux_gcc_64'
+          archives: 'icu qtbase qtdeclarative'
+          cache: 'true'
+
+      - name: Configure CMake
+        run: |
+          cmake -B vnm_terminal/build-transcript -S vnm_terminal \
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
+            -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
+            -DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON \
+            -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build vnm_terminal/build-transcript --config ${CMAKE_BUILD_TYPE} --parallel
+
+      - name: Run tests
+        working-directory: vnm_terminal/build-transcript
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --output-on-failure

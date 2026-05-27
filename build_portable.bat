@@ -103,6 +103,8 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
     -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
     -DVNM_TERMINAL_SURFACE_SOURCE_DIR="%VNM_TERMINAL_SURFACE_SOURCE_DIR%" ^
     -DVNM_TERMINAL_ENABLE_PROFILING=OFF ^
+    -DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=OFF ^
+    -DVNM_TERMINAL_DISTRIBUTION_BUILD=ON ^
     -DBUILD_TESTING=OFF ^
     -S "%~dp0." ^
     -B "%BUILD_DIR%"
@@ -203,7 +205,9 @@ for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH:m
     echo Surface commit:  %SURFACE_GIT_COMMIT%
     echo Version:         %PACKAGE_VERSION%
     echo Configuration:   %CONFIG%
+    echo Distribution:    ON
     echo Profiling:       OFF
+    echo Transcript:      OFF
     echo Toolchain:       MinGW ^(GCC^)
     echo Qt:              %QT_PREFIX%
 ) > "%RUNTIME_DIR%\vnm_terminal_build_info.txt"

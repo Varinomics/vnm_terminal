@@ -8,6 +8,18 @@ set(CMAKE_AUTOMOC ON)
 option(VNM_TERMINAL_ENABLE_PROFILING
     "Compile terminal surface profile scope instrumentation"
     OFF)
+option(VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY
+    "Build diagnostic transcript capture/replay support in the app and surface dependency"
+    OFF)
+option(VNM_TERMINAL_DISTRIBUTION_BUILD
+    "Configure a distribution build; diagnostic transcript capture/replay must stay disabled"
+    OFF)
+
+if(VNM_TERMINAL_DISTRIBUTION_BUILD AND VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
+    message(FATAL_ERROR
+        "VNM_TERMINAL_DISTRIBUTION_BUILD=ON requires "
+        "VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=OFF")
+endif()
 
 find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Quick)
 include(cmake/vnm_terminal_surface_dependency.cmake)
@@ -48,6 +60,7 @@ target_link_libraries(vnm_terminal PRIVATE
 
 target_compile_definitions(vnm_terminal PRIVATE
     VNM_TERMINAL_VERSION_STRING="${PROJECT_VERSION}"
+    VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED=$<BOOL:${VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY}>
 )
 
 if(MSVC)
@@ -82,10 +95,10 @@ if(WIN32)
         src/vnm_terminal.rc
     )
 
-    function(vnm_terminal_copy_qt_platform_plugin plugin_target)
+    function(vnm_terminal_copy_qt_plugin plugin_target plugin_subdir)
         if(NOT TARGET ${plugin_target})
             message(FATAL_ERROR
-                "Required Qt platform plugin target ${plugin_target} is missing")
+                "Required Qt plugin target ${plugin_target} is missing")
         endif()
 
         get_target_property(plugin_target_type ${plugin_target} TYPE)
@@ -98,19 +111,29 @@ if(WIN32)
         add_custom_command(TARGET vnm_terminal POST_BUILD
             COMMAND
                 "${CMAKE_COMMAND}" -E make_directory
-                "$<TARGET_FILE_DIR:vnm_terminal>/platforms"
+                "$<TARGET_FILE_DIR:vnm_terminal>/${plugin_subdir}"
             COMMAND
                 "${CMAKE_COMMAND}" -E copy_if_different
                 "$<TARGET_FILE:${plugin_target}>"
-                "$<TARGET_FILE_DIR:vnm_terminal>/platforms/$<TARGET_FILE_NAME:${plugin_target}>"
+                "$<TARGET_FILE_DIR:vnm_terminal>/${plugin_subdir}/$<TARGET_FILE_NAME:${plugin_target}>"
         )
     endfunction()
 
     find_package(Qt6Gui 6.7 REQUIRED COMPONENTS
+        QICOPlugin
         QWindowsIntegrationPlugin
     )
 
-    vnm_terminal_copy_qt_platform_plugin(Qt6::QWindowsIntegrationPlugin)
+    vnm_terminal_copy_qt_plugin(Qt6::QWindowsIntegrationPlugin platforms)
+    vnm_terminal_copy_qt_plugin(Qt6::QICOPlugin imageformats)
+
+    add_custom_command(TARGET vnm_terminal POST_BUILD
+        COMMAND
+            "${CMAKE_COMMAND}" -E copy_if_different
+            $<TARGET_RUNTIME_DLLS:vnm_terminal>
+            "$<TARGET_FILE_DIR:vnm_terminal>"
+        COMMAND_EXPAND_LISTS
+    )
 
     add_executable(vnm_terminal_portable_launcher WIN32
         src/portable_launcher_win.c

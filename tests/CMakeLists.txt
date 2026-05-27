@@ -172,6 +172,10 @@ target_link_libraries(vnm_terminal_custom_titlebar_integration PRIVATE
     Qt6::Quick
 )
 
+target_compile_definitions(vnm_terminal_custom_titlebar_integration PRIVATE
+    "VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED=$<BOOL:${VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY}>"
+)
+
 set_target_properties(vnm_terminal_custom_titlebar_integration PROPERTIES
     AUTOMOC OFF
 )
@@ -341,6 +345,124 @@ if(TARGET vnm_terminal_canvas_fixture)
         TIMEOUT 30
     )
 
+    if(VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
+        add_test(
+            NAME vnm_terminal_capture_transcript
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-Dcapture_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_transcript_$<CONFIG>.ndjson"
+                "-Dexpected_capture_regex=visible_rows"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_capture_file.cmake"
+                --
+                "${CMAKE_COMMAND}" -E env
+                ${vnm_terminal_qt_offscreen_environment}
+                ${vnm_terminal_qt_unscaled_environment}
+                "${vnm_terminal_qt_runtime_path}"
+                "$<TARGET_FILE:vnm_terminal>"
+                "--software-renderer"
+                "--window-size" "800x480"
+                "--capture-transcript" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_transcript_$<CONFIG>.ndjson"
+                "--transcript-snapshot-diagnostics"
+                "--timeout-ms" "10000"
+                "--require-output"
+                "--"
+                "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+                "--list"
+        )
+
+        set_tests_properties(vnm_terminal_capture_transcript PROPERTIES
+            TIMEOUT 30
+        )
+
+        add_test(
+            NAME vnm_terminal_rejects_duplicate_capture_paths
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-Dexpected_exit_code=2"
+                "-Dexpected_output_regex=--capture-output and --capture-transcript must use different paths"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+                --
+                "${CMAKE_COMMAND}" -E env
+                ${vnm_terminal_qt_offscreen_environment}
+                ${vnm_terminal_qt_unscaled_environment}
+                "${vnm_terminal_qt_runtime_path}"
+                "$<TARGET_FILE:vnm_terminal>"
+                "--software-renderer"
+                "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_duplicate_capture_$<CONFIG>.raw"
+                "--capture-transcript" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_duplicate_capture_$<CONFIG>.raw"
+        )
+
+        set_tests_properties(vnm_terminal_rejects_duplicate_capture_paths PROPERTIES
+            TIMEOUT 30
+        )
+
+        add_test(
+            NAME vnm_terminal_invalid_transcript_path_preserves_capture_output
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-Dpreserved_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_preserved_capture_$<CONFIG>.raw"
+                "-Dpreserved_text=preserve-output-sentinel"
+                "-Dexpected_exit_code=2"
+                "-Dexpected_output_regex=--capture-transcript parent directory does not exist"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_capture_path_failure_preserves_file.cmake"
+                --
+                "${CMAKE_COMMAND}" -E env
+                ${vnm_terminal_qt_offscreen_environment}
+                ${vnm_terminal_qt_unscaled_environment}
+                "${vnm_terminal_qt_runtime_path}"
+                "$<TARGET_FILE:vnm_terminal>"
+                "--software-renderer"
+                "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_preserved_capture_$<CONFIG>.raw"
+                "--capture-transcript" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_preserved_capture_$<CONFIG>.raw/transcript.ndjson"
+        )
+
+        set_tests_properties(vnm_terminal_invalid_transcript_path_preserves_capture_output PROPERTIES
+            TIMEOUT 30
+        )
+    else()
+        add_test(
+            NAME vnm_terminal_rejects_capture_transcript_when_disabled
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-Dexpected_exit_code=2"
+                "-Dexpected_output_regex=--capture-transcript is unavailable because transcript capture/replay is disabled in this build"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+                --
+                "${CMAKE_COMMAND}" -E env
+                ${vnm_terminal_qt_offscreen_environment}
+                ${vnm_terminal_qt_unscaled_environment}
+                "${vnm_terminal_qt_runtime_path}"
+                "$<TARGET_FILE:vnm_terminal>"
+                "--software-renderer"
+                "--capture-transcript" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_disabled_transcript_$<CONFIG>.ndjson"
+        )
+
+        set_tests_properties(vnm_terminal_rejects_capture_transcript_when_disabled PROPERTIES
+            TIMEOUT 30
+        )
+
+        add_test(
+            NAME vnm_terminal_rejects_transcript_snapshot_diagnostics_when_disabled
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-Dexpected_exit_code=2"
+                "-Dexpected_output_regex=--transcript-snapshot-diagnostics is unavailable because transcript capture/replay is disabled in this build"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+                --
+                "${CMAKE_COMMAND}" -E env
+                ${vnm_terminal_qt_offscreen_environment}
+                ${vnm_terminal_qt_unscaled_environment}
+                "${vnm_terminal_qt_runtime_path}"
+                "$<TARGET_FILE:vnm_terminal>"
+                "--software-renderer"
+                "--transcript-snapshot-diagnostics"
+        )
+
+        set_tests_properties(vnm_terminal_rejects_transcript_snapshot_diagnostics_when_disabled PROPERTIES
+            TIMEOUT 30
+        )
+    endif()
+
     add_test(
         NAME vnm_terminal_preserves_command_args
         COMMAND
@@ -501,6 +623,72 @@ if(vnm_terminal_custom_titlebar_supported)
     )
 endif()
 
+if(VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
+    add_test(
+        NAME vnm_terminal_help_mentions_transcript_capture
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=0"
+            "-Dexpected_output_regex=--capture-transcript <path> +write sensitive NDJSON replay transcript"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--software-renderer"
+            "--help"
+    )
+
+    set_tests_properties(vnm_terminal_help_mentions_transcript_capture PROPERTIES
+        TIMEOUT 30
+    )
+
+    add_test(
+        NAME vnm_terminal_help_mentions_transcript_snapshot_diagnostics
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=0"
+            "-Dexpected_output_regex=--transcript-snapshot-diagnostics +include visible row text/provenance snapshots"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--software-renderer"
+            "--help"
+    )
+
+    set_tests_properties(vnm_terminal_help_mentions_transcript_snapshot_diagnostics PROPERTIES
+        TIMEOUT 30
+    )
+else()
+    add_test(
+        NAME vnm_terminal_help_omits_transcript_capture
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=0"
+            "-Dforbidden_stdout_regex=--capture-transcript|--transcript-snapshot-diagnostics"
+            "-Drequire_empty_stderr=ON"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/terminal_app/expect_process_clean.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--software-renderer"
+            "--help"
+    )
+
+    set_tests_properties(vnm_terminal_help_omits_transcript_capture PROPERTIES
+        TIMEOUT 30
+    )
+endif()
+
 add_test(
     NAME vnm_terminal_help_mentions_mouse_selection
     COMMAND
@@ -540,6 +728,43 @@ add_test(
 )
 
 set_tests_properties(vnm_terminal_help_mentions_osc52_policy PROPERTIES
+    TIMEOUT 30
+)
+
+set(vnm_terminal_distribution_guard_configure_args
+    "-G" "${CMAKE_GENERATOR}"
+)
+
+if(NOT "${CMAKE_GENERATOR_PLATFORM}" STREQUAL "")
+    list(APPEND vnm_terminal_distribution_guard_configure_args
+        "-A" "${CMAKE_GENERATOR_PLATFORM}"
+    )
+endif()
+
+if(NOT "${CMAKE_GENERATOR_TOOLSET}" STREQUAL "")
+    list(APPEND vnm_terminal_distribution_guard_configure_args
+        "-T" "${CMAKE_GENERATOR_TOOLSET}"
+    )
+endif()
+
+add_test(
+    NAME vnm_terminal_rejects_distribution_transcript_build
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-Dexpected_exit_code=1"
+        "-Dexpected_output_regex=VNM_TERMINAL_DISTRIBUTION_BUILD=ON requires"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+        --
+        "${CMAKE_COMMAND}"
+            ${vnm_terminal_distribution_guard_configure_args}
+            -S "${PROJECT_SOURCE_DIR}"
+            -B "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_distribution_guard"
+            -DVNM_TERMINAL_DISTRIBUTION_BUILD=ON
+            -DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON
+            -DBUILD_TESTING=OFF
+)
+
+set_tests_properties(vnm_terminal_rejects_distribution_transcript_build PROPERTIES
     TIMEOUT 30
 )
 

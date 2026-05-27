@@ -759,6 +759,202 @@ bool test_parse_titlebar_options()
     return ok;
 }
 
+bool test_parse_selection_trace_option()
+{
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result trace_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--selection-trace"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--selection-trace"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(),
+        "selection trace default parse succeeds");
+    ok &= check(!default_result.options.selection_trace_enabled,
+        "selection trace defaults off");
+    ok &= check(trace_result.error.isEmpty(),
+        "selection-trace option parses before command separator");
+    ok &= check(trace_result.options.selection_trace_enabled,
+        "selection-trace option enables tracing before command separator");
+    ok &= check(command_result.error.isEmpty(),
+        "selection-trace command argument parses after command separator");
+    ok &= check(!command_result.options.selection_trace_enabled,
+        "selection-trace after command separator remains a command argument");
+    ok &= check(command_result.options.command == QStringList{QStringLiteral("--selection-trace")},
+        "selection-trace after command separator is preserved in command argv");
+    return ok;
+}
+
+bool test_parse_wheel_trace_option()
+{
+    Parse_result trace_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--wheel-trace"),
+        QStringLiteral("--capture-transcript"),
+        QStringLiteral("wheel.ndjson"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result missing_capture_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--wheel-trace"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--wheel-trace"),
+    });
+
+    bool ok = true;
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+    ok &= check(trace_result.error.isEmpty(),
+        "wheel-trace option parses with transcript capture");
+    ok &= check(trace_result.options.wheel_trace_enabled,
+        "wheel-trace option enables tracing when transcript capture is active");
+    ok &= check(trace_result.options.transcript_capture_path == QStringLiteral("wheel.ndjson"),
+        "wheel-trace keeps transcript capture path");
+    ok &= check(!missing_capture_result.error.isEmpty(),
+        "wheel-trace without transcript capture is rejected");
+    ok &= check(!missing_capture_result.options.wheel_trace_enabled,
+        "rejected wheel-trace does not remain enabled");
+#else
+    ok &= check(!trace_result.error.isEmpty(),
+        "wheel-trace option is rejected when transcript capture is disabled");
+    ok &= check(!trace_result.options.wheel_trace_enabled,
+        "disabled transcript build does not enable wheel tracing");
+#endif
+    ok &= check(command_result.error.isEmpty(),
+        "wheel-trace command argument parses after command separator");
+    ok &= check(!command_result.options.wheel_trace_enabled,
+        "wheel-trace after command separator remains a command argument");
+    ok &= check(command_result.options.command == QStringList{QStringLiteral("--wheel-trace")},
+        "wheel-trace after command separator is preserved in command argv");
+    return ok;
+}
+
+bool test_parse_transcript_snapshot_diagnostics_option()
+{
+    Parse_result snapshot_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--transcript-snapshot-diagnostics"),
+        QStringLiteral("--capture-transcript"),
+        QStringLiteral("snapshot.ndjson"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result missing_capture_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--transcript-snapshot-diagnostics"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--transcript-snapshot-diagnostics"),
+    });
+
+    bool ok = true;
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+    ok &= check(snapshot_result.error.isEmpty(),
+        "transcript-snapshot-diagnostics option parses with transcript capture");
+    ok &= check(snapshot_result.options.transcript_snapshot_diagnostics,
+        "transcript-snapshot-diagnostics option enables snapshot diagnostics");
+    ok &= check(snapshot_result.options.transcript_capture_path == QStringLiteral("snapshot.ndjson"),
+        "transcript-snapshot-diagnostics keeps transcript capture path");
+    ok &= check(!missing_capture_result.error.isEmpty(),
+        "transcript-snapshot-diagnostics without transcript capture is rejected");
+    ok &= check(!missing_capture_result.options.transcript_snapshot_diagnostics,
+        "rejected transcript-snapshot-diagnostics does not remain enabled");
+#else
+    ok &= check(!snapshot_result.error.isEmpty(),
+        "transcript-snapshot-diagnostics option is rejected when transcript capture is disabled");
+    ok &= check(!snapshot_result.options.transcript_snapshot_diagnostics,
+        "disabled transcript build does not enable transcript snapshot diagnostics");
+#endif
+    ok &= check(command_result.error.isEmpty(),
+        "transcript-snapshot-diagnostics command argument parses after command separator");
+    ok &= check(!command_result.options.transcript_snapshot_diagnostics,
+        "transcript-snapshot-diagnostics after command separator remains a command argument");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{QStringLiteral("--transcript-snapshot-diagnostics")},
+        "transcript-snapshot-diagnostics after command separator is preserved in command argv");
+    return ok;
+}
+
+bool test_parse_transcript_timing_diagnostics_option()
+{
+    Parse_result timing_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--transcript-timing-diagnostics"),
+        QStringLiteral("--capture-transcript"),
+        QStringLiteral("timing.ndjson"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result missing_capture_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--transcript-timing-diagnostics"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--transcript-timing-diagnostics"),
+    });
+
+    bool ok = true;
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+    ok &= check(timing_result.error.isEmpty(),
+        "transcript-timing-diagnostics option parses with transcript capture");
+    ok &= check(timing_result.options.transcript_timing_diagnostics,
+        "transcript-timing-diagnostics option enables timing diagnostics");
+    ok &= check(timing_result.options.transcript_capture_path == QStringLiteral("timing.ndjson"),
+        "transcript-timing-diagnostics keeps transcript capture path");
+    ok &= check(!missing_capture_result.error.isEmpty(),
+        "transcript-timing-diagnostics without transcript capture is rejected");
+    ok &= check(!missing_capture_result.options.transcript_timing_diagnostics,
+        "rejected transcript-timing-diagnostics does not remain enabled");
+#else
+    ok &= check(!timing_result.error.isEmpty(),
+        "transcript-timing-diagnostics option is rejected when transcript capture is disabled");
+    ok &= check(!timing_result.options.transcript_timing_diagnostics,
+        "disabled transcript build does not enable transcript timing diagnostics");
+#endif
+    ok &= check(command_result.error.isEmpty(),
+        "transcript-timing-diagnostics command argument parses after command separator");
+    ok &= check(!command_result.options.transcript_timing_diagnostics,
+        "transcript-timing-diagnostics after command separator remains a command argument");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{QStringLiteral("--transcript-timing-diagnostics")},
+        "transcript-timing-diagnostics after command separator is preserved in command argv");
+    return ok;
+}
+
 bool test_window_state_sync()
 {
     QQuickWindow window;
@@ -1140,6 +1336,10 @@ int main(int argc, char** argv)
     ok &= test_terminal_scrollbar_tracks_surface_viewport(app);
     ok &= test_title_sync_and_button_rect_offsets(app);
     ok &= test_parse_titlebar_options();
+    ok &= test_parse_selection_trace_option();
+    ok &= test_parse_wheel_trace_option();
+    ok &= test_parse_transcript_snapshot_diagnostics_option();
+    ok &= test_parse_transcript_timing_diagnostics_option();
     ok &= test_window_state_sync();
     ok &= test_focus_after_custom_titlebar_interactions(app);
     ok &= test_installed_filter_chain_order();

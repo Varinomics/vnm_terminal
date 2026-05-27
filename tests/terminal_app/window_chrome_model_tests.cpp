@@ -375,8 +375,12 @@ bool test_layout_rectangles_are_stable()
         "narrow icon rect");
     ok &= check_rect_equal(narrow.spinner_slot_rect, QRectF(30.0, 0.0, 18.0, 32.0),
         "narrow spinner slot rect");
-    ok &= check_rect_equal(narrow.title_text_rect, QRectF(56.0, 0.0, 158.0, 32.0),
+    ok &= check_rect_equal(narrow.title_text_rect, QRectF(56.0, 0.0, 143.0, 32.0),
         "narrow title text rect");
+    ok &= check_rect_equal(
+        narrow.wheel_delivery_indicator_rect,
+        QRectF(207.0, 12.5, 7.0, 7.0),
+        "narrow wheel delivery indicator rect");
     ok &= check_rect_equal(narrow.buttons[0].rect, QRectF(222.0, 0.0, 46.0, 32.0),
         "narrow minimize button rect");
     ok &= check_rect_equal(narrow.buttons[1].rect, QRectF(268.0, 0.0, 46.0, 32.0),
@@ -419,6 +423,10 @@ bool test_layout_rectangles_are_stable()
         wide.title_text_rect.width(),
         narrow.title_text_rect.width() + 160.0,
         "title width absorbs window width delta");
+    ok &= check_nearly_equal(
+        wide.wheel_delivery_indicator_rect.x(),
+        narrow.wheel_delivery_indicator_rect.x() + 160.0,
+        "indicator slot stays right anchored across widths");
     ok &= check_nearly_equal(wide.buttons[0].rect.x(), narrow.buttons[0].rect.x() + 160.0,
         "button group stays right anchored across widths");
 
@@ -436,6 +444,10 @@ bool test_layout_rectangles_are_stable()
         "button states do not move spinner slot");
     ok &= check_rect_equal(active.title_text_rect, narrow.title_text_rect,
         "button states do not move title text rect");
+    ok &= check_rect_equal(
+        active.wheel_delivery_indicator_rect,
+        narrow.wheel_delivery_indicator_rect,
+        "button states do not move wheel delivery indicator rect");
     ok &= check_button_rects_equal(active, narrow, "button states preserve button rectangles");
     ok &= check_button_state_equal(
         active.buttons[0].state,
@@ -464,6 +476,9 @@ bool test_layout_metrics_and_narrow_sizes()
     metrics.spinner_slot_width = 24.0;
     metrics.title_gap          = 3.0;
     metrics.title_button_gap   = 7.0;
+    metrics.wheel_delivery_indicator_size       = 5.0;
+    metrics.wheel_delivery_indicator_title_gap  = 4.0;
+    metrics.wheel_delivery_indicator_button_gap = 6.0;
     metrics.button_width       = 40.0;
 
     const chrome::Window_chrome_layout custom =
@@ -474,8 +489,12 @@ bool test_layout_metrics_and_narrow_sizes()
         "custom metrics icon rect");
     ok &= check_rect_equal(custom.spinner_slot_rect, QRectF(29.0, 0.0, 24.0, 30.0),
         "custom metrics spinner slot rect");
-    ok &= check_rect_equal(custom.title_text_rect, QRectF(56.0, 0.0, 117.0, 30.0),
+    ok &= check_rect_equal(custom.title_text_rect, QRectF(56.0, 0.0, 109.0, 30.0),
         "custom metrics title rect");
+    ok &= check_rect_equal(
+        custom.wheel_delivery_indicator_rect,
+        QRectF(169.0, 12.5, 5.0, 5.0),
+        "custom metrics wheel delivery indicator rect");
     ok &= check_rect_equal(custom.buttons[0].rect, QRectF(180.0, 0.0, 40.0, 30.0),
         "custom metrics minimize rect");
 
@@ -489,8 +508,12 @@ bool test_layout_metrics_and_narrow_sizes()
         "short titlebar preserves spinner slot height");
     ok &= check_rect_equal(
         short_titlebar.title_text_rect,
-        QRectF(52.0, 0.0, 162.0, 12.0),
+        QRectF(52.0, 0.0, 147.0, 12.0),
         "short titlebar title rect follows clamped icon width");
+    ok &= check_rect_equal(
+        short_titlebar.wheel_delivery_indicator_rect,
+        QRectF(207.0, 2.5, 7.0, 7.0),
+        "short titlebar wheel delivery indicator rect follows clamped titlebar height");
 
     const chrome::Window_chrome_layout zero =
         chrome::calculate_window_chrome_layout(QSizeF(0.0, 0.0));
@@ -498,6 +521,8 @@ bool test_layout_metrics_and_narrow_sizes()
         "zero titlebar icon rect");
     ok &= check_rect_equal(zero.title_text_rect, QRectF(40.0, 0.0, 0.0, 0.0),
         "zero titlebar title rect");
+    ok &= check_rect_equal(zero.wheel_delivery_indicator_rect, QRectF(),
+        "zero titlebar suppresses wheel delivery indicator rect");
     ok &= check_nearly_equal(zero.buttons[0].rect.x(), 0.0,
         "zero titlebar clamps button group start");
 
@@ -513,6 +538,8 @@ bool test_layout_metrics_and_narrow_sizes()
         "narrow titlebar keeps normal title x position");
     ok &= check_nearly_equal(narrow.title_text_rect.width(), 0.0,
         "narrow titlebar clamps title width");
+    ok &= check_rect_equal(narrow.wheel_delivery_indicator_rect, QRectF(),
+        "narrow titlebar suppresses wheel delivery indicator rect");
 
     return ok;
 }
@@ -609,7 +636,7 @@ bool test_elision_uses_display_title_and_layout()
     const chrome::Window_chrome_model fitted = chrome::make_window_chrome_model(
         marker + QStringLiteral("Busy"),
         {},
-        QSizeF(244.0, 32.0));
+        QSizeF(264.0, 32.0));
 
     bool ok = true;
     ok &= check(chrome::title_capacity_code_units(fitted.layout, 10.0) == 4,
@@ -622,7 +649,7 @@ bool test_elision_uses_display_title_and_layout()
     const chrome::Window_chrome_model elided = chrome::make_window_chrome_model(
         marker + QStringLiteral("Building"),
         {},
-        QSizeF(244.0, 32.0));
+        QSizeF(264.0, 32.0));
     ok &= check_qstring_equal(
         chrome::elide_window_chrome_title(elided.title, elided.layout, 10.0),
         QStringLiteral("Bui") + ellipsis_text(),
