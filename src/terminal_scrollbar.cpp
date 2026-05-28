@@ -217,13 +217,32 @@ void scrollbar::Terminal_scrollbar::mousePressEvent(QMouseEvent* event)
     }
 
     const QRectF thumb = thumb_rect();
-    const qreal grab_offset = thumb.contains(event->position())
-        ? event->position().y() - thumb.top()
-        : thumb.height() / 2.0;
+    const bool  thumb_pressed = thumb.contains(event->position());
+    if (thumb_pressed) {
+        set_drag_active(true);
+        m_drag_grab_offset_y = std::clamp(
+            event->position().y() - thumb.top(),
+            0.0,
+            thumb.height());
+        (void)apply_offset_from_position(
+            event->position().y(),
+            m_drag_grab_offset_y,
+            QStringLiteral("app.scrollbar.thumb"));
+        event->accept();
+        return;
+    }
 
-    set_drag_active(true);
-    m_drag_grab_offset_y = std::clamp(grab_offset, 0.0, thumb.height());
-    (void)apply_offset_from_position(event->position().y(), m_drag_grab_offset_y);
+    set_drag_active(false);
+    if ((event->modifiers() & Qt::ControlModifier) != 0) {
+        (void)apply_offset_from_position(
+            event->position().y(),
+            thumb.height() / 2.0,
+            QStringLiteral("app.scrollbar.track"));
+    }
+    else {
+        (void)scroll_page_from_track_position(event->position().y());
+    }
+
     event->accept();
 }
 
@@ -234,7 +253,10 @@ void scrollbar::Terminal_scrollbar::mouseMoveEvent(QMouseEvent* event)
         return;
     }
 
-    (void)apply_offset_from_position(event->position().y(), m_drag_grab_offset_y);
+    (void)apply_offset_from_position(
+        event->position().y(),
+        m_drag_grab_offset_y,
+        QStringLiteral("app.scrollbar.thumb"));
     event->accept();
 }
 
@@ -245,7 +267,10 @@ void scrollbar::Terminal_scrollbar::mouseReleaseEvent(QMouseEvent* event)
         return;
     }
 
-    (void)apply_offset_from_position(event->position().y(), m_drag_grab_offset_y);
+    (void)apply_offset_from_position(
+        event->position().y(),
+        m_drag_grab_offset_y,
+        QStringLiteral("app.scrollbar.thumb"));
     set_drag_active(false);
     event->accept();
 }
@@ -351,16 +376,46 @@ int scrollbar::Terminal_scrollbar::offset_from_thumb_top(qreal thumb_top) const
 
 bool scrollbar::Terminal_scrollbar::apply_offset_from_position(
     qreal              position_y,
-    qreal              grab_offset_y)
+    qreal              grab_offset_y,
+    const QString&     source)
 {
     if (m_surface == nullptr) {
         return false;
     }
 
-    const int  target_offset = offset_from_thumb_top(position_y - grab_offset_y);
-    const bool moved         = m_surface->scroll_to_offset_from_tail(target_offset);
+    const int target_offset = offset_from_thumb_top(position_y - grab_offset_y);
+    const VNM_TerminalSurface::wheel_scroll_diagnostic_result_t diagnostic =
+        m_surface->scroll_to_offset_from_tail_with_diagnostics(target_offset, source);
     sync_from_surface();
-    return moved;
+    return diagnostic.event_accepted;
+}
+
+bool scrollbar::Terminal_scrollbar::scroll_page_from_track_position(qreal position_y)
+{
+    if (m_surface == nullptr || !scrollbar_visible()) {
+        return false;
+    }
+
+    const QRectF thumb = thumb_rect();
+    int line_delta = 0;
+    if (position_y < thumb.top()) {
+        line_delta = std::max(1, m_visible_rows);
+    }
+    else {
+        if (position_y > thumb.bottom()) {
+            line_delta = -std::max(1, m_visible_rows);
+        }
+        else {
+            return false;
+        }
+    }
+
+    const VNM_TerminalSurface::wheel_scroll_diagnostic_result_t diagnostic =
+        m_surface->scroll_viewport_lines_with_diagnostics(
+            line_delta,
+            QStringLiteral("app.scrollbar.page"));
+    sync_from_surface();
+    return diagnostic.event_accepted;
 }
 
 int scrollbar::Terminal_scrollbar::vertical_wheel_steps(
@@ -469,32 +524,12 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
     const int raw_delta = event->angleDelta().y() != 0
         ? event->angleDelta().y()
         : event->pixelDelta().y();
-    if ((raw_delta > 0 && m_offset_from_tail >= m_scrollback_rows) ||
-        (raw_delta < 0 && m_offset_from_tail <= 0))
-    {
-        m_wheel_scroll_angle_remainder = 0.0;
-        m_wheel_scroll_pixel_remainder = 0.0;
-        record_wheel_trace_event(
-            *event,
-            QStringLiteral("local_scroll"),
-            QStringLiteral("boundary_or_clamp"),
-            false,
-            0,
-            0,
-            m_wheel_scroll_angle_remainder,
-            m_wheel_scroll_pixel_remainder,
-            0,
-            0,
-            false,
-            raw_delta > 0
-                ? QStringLiteral("top_boundary")
-                : QStringLiteral("tail_boundary"));
-        return false;
-    }
-
     const qreal pixel_step_size = m_visible_rows > 0
         ? std::max<qreal>(1.0, height() / static_cast<qreal>(m_visible_rows))
         : 1.0;
+    const bool boundary_before_surface =
+        (raw_delta > 0 && m_offset_from_tail >= m_scrollback_rows) ||
+        (raw_delta < 0 && m_offset_from_tail <= 0);
     const int wheel_steps = vertical_wheel_steps(
         *event,
         pixel_step_size,
@@ -517,15 +552,32 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
         ? wheel_steps * k_scroll_lines_per_wheel_step
         : wheel_steps;
     const VNM_TerminalSurface::wheel_scroll_diagnostic_result_t diagnostic =
-        m_surface->scroll_viewport_lines_with_diagnostics(line_delta);
+        m_surface->scroll_viewport_lines_with_diagnostics(
+            line_delta,
+            QStringLiteral("app.scrollbar.wheel"));
     sync_from_surface();
+    if (
+        !diagnostic.event_accepted &&
+        (boundary_before_surface || diagnostic.no_op_cause == QStringLiteral("boundary_or_clamp"))
+    )
+    {
+        m_wheel_scroll_angle_remainder = 0.0;
+        m_wheel_scroll_pixel_remainder = 0.0;
+    }
+
+    const QString outcome = diagnostic.deferred_intent_recorded
+        ? QStringLiteral("deferred_intent_recorded")
+        : diagnostic.visible_scroll_applied
+        ? QStringLiteral("visible_scroll_applied")
+        : diagnostic.local_scroll_applied
+        ? QStringLiteral("local_scroll_applied")
+        : diagnostic.no_op_cause;
+
     record_wheel_trace_event(
         *event,
         QStringLiteral("local_scroll"),
-        diagnostic.local_scroll_applied
-            ? QStringLiteral("local_scroll_applied")
-            : diagnostic.no_op_cause,
-        diagnostic.local_scroll_applied,
+        outcome,
+        diagnostic.event_accepted,
         wheel_steps,
         line_delta,
         m_wheel_scroll_angle_remainder,
@@ -535,8 +587,9 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
         diagnostic.local_scroll_intent_recorded,
         diagnostic.no_op_cause,
         diagnostic.scroll_action,
-        diagnostic.applied_line_delta);
-    return diagnostic.local_scroll_applied;
+        diagnostic.applied_line_delta,
+        diagnostic.deferred_intent_recorded);
+    return diagnostic.event_accepted;
 }
 
 void scrollbar::Terminal_scrollbar::record_wheel_trace_event(
@@ -553,14 +606,15 @@ void scrollbar::Terminal_scrollbar::record_wheel_trace_event(
     bool               local_scroll_intent_recorded,
     const QString&     local_scroll_block_reason,
     const QString&     scroll_action,
-    int                applied_line_delta) const
+    int                applied_line_delta,
+    bool               deferred_intent_recorded) const
 {
     if (!m_wheel_trace_enabled || m_surface == nullptr) {
         return;
     }
 
     m_surface->record_wheel_trace_event(
-        QStringLiteral("app.scrollbar"),
+        QStringLiteral("app.scrollbar.wheel"),
         event,
         route,
         outcome,
@@ -574,7 +628,8 @@ void scrollbar::Terminal_scrollbar::record_wheel_trace_event(
         local_scroll_intent_recorded,
         local_scroll_block_reason,
         scroll_action,
-        applied_line_delta);
+        applied_line_delta,
+        deferred_intent_recorded);
 }
 
 void scrollbar::Terminal_scrollbar::set_drag_active(bool active)

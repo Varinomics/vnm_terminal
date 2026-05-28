@@ -3,6 +3,7 @@
 #undef VNM_TERMINAL_APP_NO_MAIN
 
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
+#include "vnm_terminal/internal/terminal_transcript.h"
 #include "helpers/test_check.h"
 
 #include <QByteArray>
@@ -10,15 +11,18 @@
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QGuiApplication>
+#include <QJsonObject>
 #include <QMouseEvent>
 #include <QPointF>
 #include <QQuickItem>
+#include <QTemporaryDir>
 #include <QWheelEvent>
 
 #include <cmath>
 #include <initializer_list>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -177,6 +181,7 @@ bool send_item_mouse_event(
     const QPointF&         point,
     Qt::MouseButton        button,
     Qt::MouseButtons       buttons,
+    Qt::KeyboardModifiers  modifiers,
     bool                   expected_accepted,
     const std::string&     message)
 {
@@ -187,10 +192,100 @@ bool send_item_mouse_event(
         point,
         button,
         buttons,
-        Qt::NoModifier);
+        modifiers);
     event.ignore();
     QCoreApplication::sendEvent(&item, &event);
     return check(event.isAccepted() == expected_accepted, message);
+}
+
+bool send_item_mouse_event(
+    QQuickItem&            item,
+    QEvent::Type           type,
+    const QPointF&         point,
+    Qt::MouseButton        button,
+    Qt::MouseButtons       buttons,
+    bool                   expected_accepted,
+    const std::string&     message)
+{
+    return send_item_mouse_event(
+        item,
+        type,
+        point,
+        button,
+        buttons,
+        Qt::NoModifier,
+        expected_accepted,
+        message);
+}
+
+bool transcript_has_source_event(
+    const std::vector<term::Terminal_transcript_event>& events,
+    const QString&                                      kind,
+    const QString&                                      source)
+{
+    for (const term::Terminal_transcript_event& event : events) {
+        if (event.kind == kind &&
+            event.object.value(QStringLiteral("source")).toString() == source)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool transcript_has_deferred_app_wheel_trace(
+    const std::vector<term::Terminal_transcript_event>& events)
+{
+    for (const term::Terminal_transcript_event& event : events) {
+        if (event.kind != QStringLiteral("surface.wheel_trace")) {
+            continue;
+        }
+
+        const QJsonObject& object = event.object;
+        if (object.value(QStringLiteral("source")).toString() ==
+                QStringLiteral("app.scrollbar.wheel") &&
+            object.value(QStringLiteral("outcome")).toString() ==
+                QStringLiteral("deferred_intent_recorded") &&
+            object.value(QStringLiteral("deferred_intent_recorded")).toBool() &&
+            !object.value(QStringLiteral("local_scroll_applied")).toBool(true) &&
+            !object.value(QStringLiteral("visible_scroll_applied")).toBool(true))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool transcript_has_deferred_scroll_event(
+    const std::vector<term::Terminal_transcript_event>& events,
+    const QString&                                      source)
+{
+    for (const term::Terminal_transcript_event& event : events) {
+        if (event.kind != QStringLiteral("surface.scroll")) {
+            continue;
+        }
+
+        const QJsonObject& object = event.object;
+        if (object.value(QStringLiteral("source")).toString() == source &&
+            object.value(QStringLiteral("action")).toString() ==
+                QStringLiteral("deferred_intent_recorded"))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool rect_geometry_changed(const QRectF& before, const QRectF& after)
+{
+    return
+        !nearly_equal(before.x(),      after.x())     ||
+        !nearly_equal(before.y(),      after.y())     ||
+        !nearly_equal(before.width(),  after.width()) ||
+        !nearly_equal(before.height(), after.height());
 }
 
 bool check_mouse_filter_result(
@@ -358,6 +453,13 @@ public:
     term::Terminal_backend_result terminate() override
     {
         return finish(term::Terminal_exit_reason::TERMINATED, 0);
+    }
+
+    void emit_output(QByteArray bytes)
+    {
+        if (m_running) {
+            m_callbacks.output_received(std::move(bytes));
+        }
     }
 
 private:
@@ -591,8 +693,8 @@ bool test_terminal_scrollbar_tracks_surface_viewport(QGuiApplication& app)
         QPointF(scrollbar.width() / 2.0, 4.0),
         Qt::LeftButton,
         Qt::NoButton,
-        true,
-        "scrollbar track release is accepted");
+        false,
+        "scrollbar track page release is ignored after non-drag press");
     ok &= check(surface.scroll_to_offset_from_tail(0),
         "scrollbar boundary wheel test returns to tail");
     ok &= send_item_wheel_event(
@@ -609,15 +711,15 @@ bool test_terminal_scrollbar_tracks_surface_viewport(QGuiApplication& app)
         Qt::NoModifier,
         0,
         -40,
-        false,
-        "scrollbar boundary opposite wheel fragment is ignored");
+        true,
+        "scrollbar boundary opposite wheel fragment is consumed");
     ok &= send_item_wheel_event(
         scrollbar,
         Qt::NoModifier,
         0,
         80,
         true,
-        "scrollbar boundary stale remainder is cleared");
+        "scrollbar boundary opposite fragment cancels stale remainder");
     ok &= check(surface.viewport_offset_from_tail() == 0,
         "scrollbar boundary stale remainder does not accelerate next scroll");
     ok &= send_item_wheel_event(
@@ -629,6 +731,286 @@ bool test_terminal_scrollbar_tracks_surface_viewport(QGuiApplication& app)
         "scrollbar boundary remainder does not delay opposite scroll");
     ok &= check(surface.viewport_offset_from_tail() == 3,
         "scrollbar opposite scroll starts from a clean boundary remainder");
+
+    return ok;
+}
+
+bool test_terminal_scrollbar_immediate_public_projection_routes(QGuiApplication& app)
+{
+    bool ok = true;
+
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+    QTemporaryDir transcript_dir;
+    ok &= check(transcript_dir.isValid(), "scrollbar immediate transcript temp dir is valid");
+    if (!transcript_dir.isValid()) {
+        return ok;
+    }
+    const QString transcript_path =
+        transcript_dir.filePath(QStringLiteral("scrollbar_immediate_routes.ndjson"));
+#endif
+
+    {
+        QQuickWindow window;
+        window.resize(360, 240);
+        window.show();
+
+        VNM_TerminalSurface surface(window.contentItem());
+        chrome_test::Terminal_scrollbar scrollbar(window.contentItem());
+        surface.setSize(QSizeF(348.0, 200.0));
+        surface.set_scrollback_limit(200);
+        surface.set_synchronized_output_scroll_policy(
+            VNM_TerminalSurface::Synchronized_output_scroll_policy::
+                IMMEDIATE_PUBLIC_PROJECTION);
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+        surface.set_transcript_capture_path(transcript_path);
+        surface.set_wheel_trace_enabled(true);
+        scrollbar.set_wheel_trace_enabled(true);
+#endif
+        scrollbar.setSize(QSizeF(12.0, 200.0));
+        scrollbar.set_surface(&surface);
+
+        auto backend = std::make_unique<Metadata_seed_backend>(numbered_scroll_lines(80));
+        Metadata_seed_backend* backend_ptr = backend.get();
+        const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+            surface,
+            std::move(backend),
+            {QStringLiteral("scrollbar-immediate-routes")});
+        term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+        pump_events(app);
+
+        ok &= check(started, "scrollbar immediate route backend starts");
+        ok &= check(backend_ptr != nullptr, "scrollbar immediate route backend remains observable");
+        if (!started || backend_ptr == nullptr) {
+            return ok;
+        }
+        ok &= check(scrollbar.scrollbar_visible(),
+            "scrollbar immediate route scrollbar is visible");
+
+        backend_ptr->emit_output(QByteArrayLiteral("\x1b[?2026hheld"));
+        term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+        pump_events(app);
+
+        ok &= send_item_wheel_event(
+            scrollbar,
+            Qt::NoModifier,
+            0,
+            120,
+            true,
+            "scrollbar immediate wheel route is accepted");
+        ok &= check(surface.viewport_offset_from_tail() > 0,
+            "scrollbar immediate wheel route moves public projection");
+        const std::shared_ptr<const term::Terminal_render_snapshot> wheel_snapshot =
+            term::VNM_TerminalSurface_render_bridge::render_snapshot(surface);
+        ok &= check(wheel_snapshot != nullptr &&
+            wheel_snapshot->basis == term::Terminal_render_snapshot_basis::PUBLIC_PROJECTION &&
+            wheel_snapshot->purpose == term::Terminal_render_snapshot_purpose::SCROLL,
+            "scrollbar immediate wheel route publishes public projection scroll");
+
+        const int page_offset_before = surface.viewport_offset_from_tail();
+        const QRectF page_thumb_before = scrollbar.thumb_rect();
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseButtonPress,
+            QPointF(scrollbar.width() / 2.0, 4.0),
+            Qt::LeftButton,
+            Qt::LeftButton,
+            true,
+            "scrollbar immediate page route press is accepted");
+        const int page_offset_after = surface.viewport_offset_from_tail();
+        ok &= check(page_offset_after > page_offset_before,
+            "scrollbar immediate page route increases viewport offset");
+        ok &= check(rect_geometry_changed(page_thumb_before, scrollbar.thumb_rect()),
+            "scrollbar immediate page route changes thumb geometry");
+
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseButtonPress,
+            QPointF(scrollbar.width() / 2.0, scrollbar.height() - 4.0),
+            Qt::LeftButton,
+            Qt::LeftButton,
+            Qt::ControlModifier,
+            true,
+            "scrollbar immediate Ctrl-track route press is accepted");
+        ok &= check(surface.viewport_offset_from_tail() == 0,
+            "scrollbar immediate Ctrl-track route jumps to tail");
+
+        const QRectF thumb_before_drag = scrollbar.thumb_rect();
+        ok &= check(!thumb_before_drag.isEmpty(),
+            "scrollbar immediate thumb route has a thumb to drag");
+        const int thumb_offset_before = surface.viewport_offset_from_tail();
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseButtonPress,
+            thumb_before_drag.center(),
+            Qt::LeftButton,
+            Qt::LeftButton,
+            true,
+            "scrollbar immediate thumb press is accepted");
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseMove,
+            thumb_before_drag.center() - QPointF(0.0, 40.0),
+            Qt::NoButton,
+            Qt::LeftButton,
+            true,
+            "scrollbar immediate thumb drag move is accepted");
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseButtonRelease,
+            thumb_before_drag.center() - QPointF(0.0, 40.0),
+            Qt::LeftButton,
+            Qt::NoButton,
+            true,
+            "scrollbar immediate thumb release is accepted");
+        ok &= check(surface.viewport_offset_from_tail() != thumb_offset_before,
+            "scrollbar immediate thumb route changes viewport offset");
+        ok &= check(rect_geometry_changed(thumb_before_drag, scrollbar.thumb_rect()),
+            "scrollbar immediate thumb route changes thumb geometry");
+
+        ok &= check(surface.scroll_to_offset_from_tail(surface.scrollback_rows()),
+            "scrollbar immediate invalidation setup moves frozen public state to top boundary");
+        pump_events(app);
+
+        const int held_scrollback_rows = surface.scrollback_rows();
+        const int held_visible_rows = surface.viewport_visible_rows();
+        const int held_offset = surface.viewport_offset_from_tail();
+        const bool held_at_tail = surface.viewport_at_tail();
+        const QRectF held_thumb = scrollbar.thumb_rect();
+        ok &= check(held_offset == held_scrollback_rows,
+            "scrollbar immediate invalidation setup freezes at top boundary");
+        backend_ptr->emit_output(numbered_scroll_lines(5));
+        term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+        pump_events(app);
+        ok &= check(surface.scrollback_rows() == held_scrollback_rows,
+            "scrollbar immediate hidden growth freezes public scrollback range");
+        ok &= check_rect_equal(
+            scrollbar.thumb_rect(),
+            held_thumb,
+            "scrollbar immediate hidden growth freezes thumb geometry");
+
+        term::VNM_TerminalSurface_render_bridge::invalidate_public_projection_for_testing(
+            surface,
+            term::Terminal_public_projection_disable_reason::PROJECTION_INVALIDATED);
+        for (int i = 0; i < 3; ++i) {
+            ok &= send_item_wheel_event(
+                scrollbar,
+                Qt::NoModifier,
+                0,
+                40,
+                true,
+                "scrollbar immediate invalidated high-resolution wheel is accepted");
+        }
+        ok &= check(surface.scrollback_rows() == held_scrollback_rows,
+            "scrollbar immediate invalidated wheel keeps public range frozen");
+        ok &= check(surface.viewport_visible_rows() == held_visible_rows,
+            "scrollbar immediate invalidated wheel keeps public visible rows frozen");
+        ok &= check(surface.viewport_offset_from_tail() == held_offset,
+            "scrollbar immediate invalidated wheel keeps public offset frozen");
+        ok &= check(surface.viewport_at_tail() == held_at_tail,
+            "scrollbar immediate invalidated wheel keeps public at-tail flag frozen");
+        ok &= check_rect_equal(
+            scrollbar.thumb_rect(),
+            held_thumb,
+            "scrollbar immediate invalidated wheel keeps thumb geometry frozen");
+
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseButtonPress,
+            QPointF(scrollbar.width() / 2.0, scrollbar.height() - 4.0),
+            Qt::LeftButton,
+            Qt::LeftButton,
+            true,
+            "scrollbar immediate invalidated page route press is accepted");
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseButtonPress,
+            QPointF(scrollbar.width() / 2.0, scrollbar.height() - 4.0),
+            Qt::LeftButton,
+            Qt::LeftButton,
+            Qt::ControlModifier,
+            true,
+            "scrollbar immediate invalidated Ctrl-track route press is accepted");
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseButtonPress,
+            held_thumb.center(),
+            Qt::LeftButton,
+            Qt::LeftButton,
+            true,
+            "scrollbar immediate invalidated thumb press is accepted");
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseMove,
+            held_thumb.center() + QPointF(0.0, 40.0),
+            Qt::NoButton,
+            Qt::LeftButton,
+            true,
+            "scrollbar immediate invalidated thumb drag move is accepted");
+        ok &= send_item_mouse_event(
+            scrollbar,
+            QEvent::MouseButtonRelease,
+            held_thumb.center() + QPointF(0.0, 40.0),
+            Qt::LeftButton,
+            Qt::NoButton,
+            true,
+            "scrollbar immediate invalidated thumb release is accepted");
+        ok &= check(surface.scrollback_rows() == held_scrollback_rows &&
+            surface.viewport_visible_rows() == held_visible_rows &&
+            surface.viewport_offset_from_tail() == held_offset &&
+            surface.viewport_at_tail() == held_at_tail,
+            "scrollbar immediate invalidated app routes keep public viewport frozen");
+        ok &= check_rect_equal(
+            scrollbar.thumb_rect(),
+            held_thumb,
+            "scrollbar immediate invalidated app routes keep thumb geometry frozen");
+
+        backend_ptr->emit_output(QByteArrayLiteral("\x1b[?2026l"));
+        term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+        pump_events(app);
+        const QRectF released_thumb = scrollbar.thumb_rect();
+        ok &= check(surface.scrollback_rows() > held_scrollback_rows,
+            "scrollbar immediate release updates public scrollback range");
+        ok &= check(rect_geometry_changed(held_thumb, released_thumb),
+            "scrollbar immediate release updates thumb geometry");
+    }
+
+#if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
+    QString error;
+    const std::optional<std::vector<term::Terminal_transcript_event>> events =
+        term::read_terminal_transcript(transcript_path, &error);
+    ok &= check(events.has_value(), "scrollbar immediate route transcript parses");
+    if (!events.has_value()) {
+        std::cerr << error.toStdString() << '\n';
+        return ok;
+    }
+
+    const QStringList sources = {
+        QStringLiteral("app.scrollbar.wheel"),
+        QStringLiteral("app.scrollbar.page"),
+        QStringLiteral("app.scrollbar.track"),
+        QStringLiteral("app.scrollbar.thumb"),
+    };
+    for (const QString& source : sources) {
+        const std::string route_name = source.toStdString();
+        ok &= check(transcript_has_source_event(
+            *events,
+            QStringLiteral("surface.scroll_intent"),
+            source),
+            "scrollbar immediate route records scroll intent source: " + route_name);
+        ok &= check(transcript_has_source_event(
+            *events,
+            QStringLiteral("surface.scroll"),
+            source),
+            "scrollbar immediate route records scroll source: " + route_name);
+    }
+    for (const QString& source : sources) {
+        const std::string route_name = source.toStdString();
+        ok &= check(transcript_has_deferred_scroll_event(*events, source),
+            "scrollbar immediate invalidated route records deferred scroll action: " + route_name);
+    }
+    ok &= check(transcript_has_deferred_app_wheel_trace(*events),
+        "scrollbar immediate invalidated wheel trace separates deferred intent from visible scroll");
+#endif
 
     return ok;
 }
@@ -846,6 +1228,137 @@ bool test_parse_wheel_trace_option()
         "wheel-trace after command separator remains a command argument");
     ok &= check(command_result.options.command == QStringList{QStringLiteral("--wheel-trace")},
         "wheel-trace after command separator is preserved in command argv");
+    return ok;
+}
+
+bool test_parse_synchronized_output_scroll_policy_option()
+{
+    using Synchronized_output_scroll_policy =
+        VNM_TerminalSurface::Synchronized_output_scroll_policy;
+
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result defer_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--synchronized-output-scroll-policy=defer"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result immediate_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--synchronized-output-scroll-policy=immediate-public"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result mixed_case_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--synchronized-output-scroll-policy=ImMeDiAtE-PuBlIc"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result invalid_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--synchronized-output-scroll-policy=hidden-live"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result empty_value_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--synchronized-output-scroll-policy="),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result missing_value_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--synchronized-output-scroll-policy"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--synchronized-output-scroll-policy=immediate-public"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(),
+        "synchronized-output scroll policy default parse succeeds");
+    ok &= check(
+        default_result.options.synchronized_output_scroll_policy ==
+            Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION,
+        "synchronized-output scroll policy defaults to deferred publication");
+    ok &= check(defer_result.error.isEmpty(),
+        "synchronized-output scroll policy defer value parses");
+    ok &= check(
+        defer_result.options.synchronized_output_scroll_policy ==
+            Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION,
+        "synchronized-output scroll policy defer value selects deferred publication");
+    ok &= check(immediate_result.error.isEmpty(),
+        "synchronized-output scroll policy immediate-public value parses");
+    ok &= check(
+        immediate_result.options.synchronized_output_scroll_policy ==
+            Synchronized_output_scroll_policy::IMMEDIATE_PUBLIC_PROJECTION,
+        "synchronized-output scroll policy immediate-public value selects immediate projection");
+    ok &= check(mixed_case_result.error.isEmpty(),
+        "synchronized-output scroll policy mixed-case value parses");
+    ok &= check(
+        mixed_case_result.options.synchronized_output_scroll_policy ==
+            Synchronized_output_scroll_policy::IMMEDIATE_PUBLIC_PROJECTION,
+        "synchronized-output scroll policy mixed-case value selects immediate projection");
+    ok &= check(!invalid_result.error.isEmpty(),
+        "synchronized-output scroll policy rejects invalid values");
+    ok &= check(
+        invalid_result.options.synchronized_output_scroll_policy ==
+            Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION,
+        "rejected synchronized-output scroll policy keeps deferred default");
+    ok &= check(!empty_value_result.error.isEmpty(),
+        "synchronized-output scroll policy rejects empty values");
+    ok &= check(
+        empty_value_result.options.synchronized_output_scroll_policy ==
+            Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION,
+        "empty synchronized-output scroll policy keeps deferred default");
+    ok &= check(!missing_value_result.error.isEmpty(),
+        "synchronized-output scroll policy rejects missing values");
+    ok &= check(command_result.error.isEmpty(),
+        "synchronized-output scroll policy command argument parses after command separator");
+    ok &= check(
+        command_result.options.synchronized_output_scroll_policy ==
+            Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION,
+        "synchronized-output scroll policy after command separator leaves default");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{QStringLiteral("--synchronized-output-scroll-policy=immediate-public")},
+        "synchronized-output scroll policy after command separator is preserved in command argv");
+
+    VNM_TerminalSurface default_surface;
+    apply_synchronized_output_scroll_policy_option(default_surface, default_result.options);
+    ok &= check(
+        default_surface.synchronized_output_scroll_policy() ==
+            Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION,
+        "synchronized-output scroll policy default reaches surface config");
+
+    VNM_TerminalSurface surface;
+    apply_synchronized_output_scroll_policy_option(surface, immediate_result.options);
+    ok &= check(
+        surface.synchronized_output_scroll_policy() ==
+            Synchronized_output_scroll_policy::IMMEDIATE_PUBLIC_PROJECTION,
+        "synchronized-output scroll policy immediate value reaches surface config");
+    apply_synchronized_output_scroll_policy_option(surface, defer_result.options);
+    ok &= check(
+        surface.synchronized_output_scroll_policy() ==
+            Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION,
+        "synchronized-output scroll policy defer value reaches surface config");
+
     return ok;
 }
 
@@ -1334,10 +1847,12 @@ int main(int argc, char** argv)
     bool ok = true;
     ok &= test_custom_titlebar_geometry();
     ok &= test_terminal_scrollbar_tracks_surface_viewport(app);
+    ok &= test_terminal_scrollbar_immediate_public_projection_routes(app);
     ok &= test_title_sync_and_button_rect_offsets(app);
     ok &= test_parse_titlebar_options();
     ok &= test_parse_selection_trace_option();
     ok &= test_parse_wheel_trace_option();
+    ok &= test_parse_synchronized_output_scroll_policy_option();
     ok &= test_parse_transcript_snapshot_diagnostics_option();
     ok &= test_parse_transcript_timing_diagnostics_option();
     ok &= test_window_state_sync();

@@ -55,6 +55,37 @@ options. Transcripts are sensitive: they include launch argv, launch cwd,
 backend output bytes, typed and pasted input, resize, scroll, selection events,
 and any optional snapshot text diagnostics.
 
+Synchronized-output scrolling is deferred until content publication by default.
+Pass `--synchronized-output-scroll-policy=immediate-public` before `--` to
+opt in to immediate public-projection scrolling during DEC synchronized-output
+holds. Pass `--synchronized-output-scroll-policy=defer` to request the default
+policy explicitly. Policy values are case-insensitive.
+
+Manual validation for immediate public scrolling should use an app build whose
+post-build deployment step has copied the Qt DLLs and `platforms\` plugin
+beside `vnm_terminal.exe`. Diagnostic trace validation also requires a local
+build configured with `VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON`; those
+transcript and wheel-trace flags are not present in distribution builds.
+
+```powershell
+.\tools\synchronized_output_scroll_policy_repro.ps1 `
+    -TerminalExe .\build\Release\vnm_terminal.exe `
+    -Policy immediate-public `
+    -CaptureTranscript .\build\sync-scroll.ndjson `
+    -WheelTrace `
+    -TranscriptSnapshotDiagnostics
+```
+
+The launcher validates that the selected app has the Qt runtime DLLs and
+`platforms\qwindows.dll` plugin deployed beside it, or that it is a portable
+launcher with that deployed layout under `vnm_terminal_runtime\`. It then passes
+the policy and diagnostic flags to the app and runs the deterministic payload in
+`-PayloadOnly` mode as the child process. During the repro, scroll the terminal
+while the script is inside the hold. The transcript should show an immediate
+effective policy for the hold, a `PUBLIC_PROJECTION` scroll snapshot before
+release, no hidden sentinel rows or metadata before release, a release
+reconciliation result, and the post-release suffix only after release.
+
 Run a specific command by placing it after `--`:
 
 ```powershell

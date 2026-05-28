@@ -554,6 +554,54 @@ if(TARGET vnm_terminal_canvas_fixture)
     set_tests_properties(vnm_terminal_rejects_bad_alternate_wheel PROPERTIES
         TIMEOUT 30
     )
+
+    add_test(
+        NAME vnm_terminal_rejects_bad_synchronized_output_scroll_policy
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=2"
+            "-Dexpected_output_regex=--synchronized-output-scroll-policy supports only defer or immediate-public"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--software-renderer"
+            "--synchronized-output-scroll-policy=hidden-live"
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--list"
+    )
+
+    set_tests_properties(vnm_terminal_rejects_bad_synchronized_output_scroll_policy PROPERTIES
+        TIMEOUT 30
+    )
+
+    add_test(
+        NAME vnm_terminal_rejects_empty_synchronized_output_scroll_policy
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=2"
+            "-Dexpected_output_regex=--synchronized-output-scroll-policy supports only defer or immediate-public"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--software-renderer"
+            "--synchronized-output-scroll-policy="
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--list"
+    )
+
+    set_tests_properties(vnm_terminal_rejects_empty_synchronized_output_scroll_policy PROPERTIES
+        TIMEOUT 30
+    )
 endif()
 
 add_test(
@@ -574,6 +622,47 @@ add_test(
 )
 
 set_tests_properties(vnm_terminal_help_mentions_alternate_wheel_default PROPERTIES
+    TIMEOUT 30
+)
+
+add_test(
+    NAME vnm_terminal_help_mentions_synchronized_output_scroll_policy
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-Dexpected_exit_code=0"
+        "-Dexpected_output_regex=--synchronized-output-scroll-policy=<policy>"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+        --
+        "${CMAKE_COMMAND}" -E env
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
+        "${vnm_terminal_qt_runtime_path}"
+        "$<TARGET_FILE:vnm_terminal>"
+        "--software-renderer"
+        "--help"
+)
+
+add_test(
+    NAME vnm_terminal_help_describes_synchronized_output_scroll_policy_values
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-Dexpected_exit_code=0"
+        "-Dexpected_output_regex=DEC synchronized-output scroll: defer\\(default\\) or immediate-public \\(case-insensitive\\)"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+        --
+        "${CMAKE_COMMAND}" -E env
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
+        "${vnm_terminal_qt_runtime_path}"
+        "$<TARGET_FILE:vnm_terminal>"
+        "--software-renderer"
+        "--help"
+)
+
+set_tests_properties(
+    vnm_terminal_help_mentions_synchronized_output_scroll_policy
+    vnm_terminal_help_describes_synchronized_output_scroll_policy_values
+    PROPERTIES
     TIMEOUT 30
 )
 

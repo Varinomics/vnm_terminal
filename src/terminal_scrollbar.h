@@ -51,7 +51,11 @@ private:
 
     bool   apply_offset_from_position(
         qreal                  position_y,
-        qreal                  grab_offset_y);
+        qreal                  grab_offset_y,
+        const QString&         source);
+
+    bool   scroll_page_from_track_position(
+        qreal                  position_y);
 
     int    vertical_wheel_steps(
         const QWheelEvent&     event,
@@ -79,7 +83,8 @@ private:
         bool                   local_scroll_intent_recorded = false,
         const QString&         local_scroll_block_reason = {},
         const QString&         scroll_action = {},
-        int                    applied_line_delta = 0) const;
+        int                    applied_line_delta = 0,
+        bool                   deferred_intent_recorded = false) const;
 
     void   set_drag_active(
         bool                   active);
