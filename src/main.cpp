@@ -114,6 +114,8 @@ struct App_options
     std::optional<QPoint> window_position;
     VNM_TerminalSurface::Alternate_screen_wheel_policy alternate_screen_wheel_policy =
         VNM_TerminalSurface::Alternate_screen_wheel_policy::MOUSE_REPORTING_FIRST;
+    VNM_TerminalSurface::Synchronized_output_scroll_policy synchronized_output_scroll_policy =
+        VNM_TerminalSurface::Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION;
     std::optional<int> timeout_ms;
     bool               shell_requested                    = false;
     bool               keep_open_after_process_exits      = false;
@@ -580,6 +582,14 @@ void apply_terminal_shell_geometry(
     scrollbar.setSize(geometry.scrollbar_rect.size());
 }
 
+void apply_synchronized_output_scroll_policy_option(
+    VNM_TerminalSurface& surface,
+    const App_options&   options)
+{
+    surface.set_synchronized_output_scroll_policy(
+        options.synchronized_output_scroll_policy);
+}
+
 bool resize_window_for_text_area_request(
     QQuickWindow&                  window,
     const VNM_TerminalSurface&     surface,
@@ -718,6 +728,9 @@ void print_usage()
         << "  --native-titlebar               use the platform titlebar instead of built-in chrome\n"
 #endif
         << "  --alternate-wheel <mode>        alternate-screen wheel: mouse(default), cursor, or page\n"
+        << "  --synchronized-output-scroll-policy=<policy>\n"
+        << "                                  DEC synchronized-output scroll: defer(default) "
+        << "or immediate-public (case-insensitive)\n"
         << "  --capture-output <path>         write raw backend output bytes to a file\n"
 #if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
         << "  --capture-transcript <path>     write sensitive NDJSON replay transcript\n"
@@ -877,6 +890,50 @@ bool parse_alternate_wheel_policy(
 
     *out_error = QStringLiteral("--alternate-wheel supports only page, cursor, or mouse");
     return false;
+}
+
+bool parse_synchronized_output_scroll_policy(
+    const QString&         value,
+    VNM_TerminalSurface::Synchronized_output_scroll_policy*
+                           out_policy,
+    QString*               out_error)
+{
+    const QString normalized = value.trimmed().toLower();
+    if (normalized == QStringLiteral("defer")) {
+        *out_policy = VNM_TerminalSurface::Synchronized_output_scroll_policy::
+            DEFER_UNTIL_CONTENT_PUBLICATION;
+        return true;
+    }
+    if (normalized == QStringLiteral("immediate-public")) {
+        *out_policy = VNM_TerminalSurface::Synchronized_output_scroll_policy::
+            IMMEDIATE_PUBLIC_PROJECTION;
+        return true;
+    }
+
+    *out_error = QStringLiteral(
+        "--synchronized-output-scroll-policy supports only defer or immediate-public");
+    return false;
+}
+
+bool take_synchronized_output_scroll_policy_value(
+    const QString&  argument,
+    QString*        out_value,
+    QString*        out_error)
+{
+    if (argument_is(argument, "--synchronized-output-scroll-policy")) {
+        *out_error = QStringLiteral(
+            "--synchronized-output-scroll-policy requires =defer or =immediate-public");
+        return false;
+    }
+
+    const QString prefix =
+        QStringLiteral("--synchronized-output-scroll-policy=");
+    if (!argument.startsWith(prefix)) {
+        return false;
+    }
+
+    *out_value = argument.mid(prefix.size());
+    return true;
 }
 
 QString comparable_capture_path(QString path)
@@ -1126,6 +1183,22 @@ Parse_result parse_arguments(const QStringList& arguments)
             }
 
             continue;
+        }
+
+        if (take_synchronized_output_scroll_policy_value(
+                argument, &value, &result.error))
+        {
+            if (!parse_synchronized_output_scroll_policy(
+                    value, &result.options.synchronized_output_scroll_policy, &result.error))
+            {
+                return result;
+            }
+
+            ++index;
+            continue;
+        }
+        if (!result.error.isEmpty()) {
+            return result;
         }
 
         if (argument_is(argument, "--capture-output")) {
@@ -2441,6 +2514,7 @@ int main(int argc, char** argv)
     surface->set_copy_shortcut_policy(VNM_TerminalSurface::Copy_shortcut_policy::TERMINAL_INPUT);
 #endif
     surface->set_alternate_screen_wheel_policy(options.alternate_screen_wheel_policy);
+    apply_synchronized_output_scroll_policy_option(*surface, options);
     surface->set_backend_output_capture_path(options.backend_output_capture_path);
     surface->set_transcript_capture_path(options.transcript_capture_path);
     surface->set_transcript_snapshot_diagnostics(options.transcript_snapshot_diagnostics);
