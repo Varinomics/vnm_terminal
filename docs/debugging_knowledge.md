@@ -83,3 +83,11 @@ compaction or future agent sessions.
 - Do not add pattern-matching, data-driven, or test-tailored fixes.
 - A passing similar test is only narrowing evidence; it is not proof that the
   reported bug is fixed or absent.
+
+## Rejected experiment: visible nested ConPTY tee for Codex
+
+A standalone visible ConPTY tee was built and tested as a possible reference path for Codex interaction behavior. It passed a simple `cmd.exe` smoke test, but failed for the intended Codex use case: the session did not behave like normal Codex, right-click paste did not work, and mouse-wheel scrolling did not work.
+
+The reason is architectural: the visible tee creates a nested ConPTY topology, so terminal modes and host UI policies for bracketed paste, mouse tracking, wheel events, focus, alternate screen, synchronized output, scrollback, and selection are not equivalent to either native Windows Terminal or `vnm_terminal`.
+
+Do not use a visible nested ConPTY tee as evidence for Codex mouse, wheel, paste, selection, scrollback, or visual redraw behavior. Debug those issues inside `vnm_terminal`, at the real UI and ConPTY boundaries.
