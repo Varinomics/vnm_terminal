@@ -1362,6 +1362,67 @@ bool test_parse_synchronized_output_scroll_policy_option()
     return ok;
 }
 
+bool test_parse_disable_primary_repaint_recovery_option()
+{
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result disabled_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--disable-primary-repaint-recovery"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--disable-primary-repaint-recovery"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(),
+        "primary repaint recovery default parse succeeds");
+    ok &= check(
+        !default_result.options.primary_repaint_recovery_enabled.has_value(),
+        "primary repaint recovery default leaves surface platform policy unchanged");
+    ok &= check(disabled_result.error.isEmpty(),
+        "primary repaint recovery disable flag parses");
+    ok &= check(
+        disabled_result.options.primary_repaint_recovery_enabled.has_value() &&
+            !*disabled_result.options.primary_repaint_recovery_enabled,
+        "primary repaint recovery disable flag selects disabled policy");
+    ok &= check(
+        disabled_result.options.command == QStringList{QStringLiteral("fixture-command")},
+        "primary repaint recovery disable flag does not consume command argv");
+    ok &= check(command_result.error.isEmpty(),
+        "primary repaint recovery flag after command separator parses as command argv");
+    ok &= check(
+        !command_result.options.primary_repaint_recovery_enabled.has_value(),
+        "primary repaint recovery flag after command separator leaves default");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{QStringLiteral("--disable-primary-repaint-recovery")},
+        "primary repaint recovery flag after command separator is preserved in command argv");
+
+    VNM_TerminalSurface default_surface;
+    const bool surface_default = default_surface.primary_repaint_recovery_enabled();
+    apply_primary_repaint_recovery_option(default_surface, default_result.options);
+    ok &= check(
+        default_surface.primary_repaint_recovery_enabled() == surface_default,
+        "primary repaint recovery default keeps surface config");
+
+    VNM_TerminalSurface disabled_surface;
+    apply_primary_repaint_recovery_option(disabled_surface, disabled_result.options);
+    ok &= check(!disabled_surface.primary_repaint_recovery_enabled(),
+        "primary repaint recovery disable flag reaches surface config");
+
+    return ok;
+}
+
 bool test_parse_transcript_snapshot_diagnostics_option()
 {
     Parse_result snapshot_result = parse_arguments({
@@ -1853,6 +1914,7 @@ int main(int argc, char** argv)
     ok &= test_parse_selection_trace_option();
     ok &= test_parse_wheel_trace_option();
     ok &= test_parse_synchronized_output_scroll_policy_option();
+    ok &= test_parse_disable_primary_repaint_recovery_option();
     ok &= test_parse_transcript_snapshot_diagnostics_option();
     ok &= test_parse_transcript_timing_diagnostics_option();
     ok &= test_window_state_sync();
