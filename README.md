@@ -55,6 +55,10 @@ options. Transcripts are sensitive: they include launch argv, launch cwd,
 backend output bytes, typed and pasted input, resize, scroll, selection events,
 and any optional snapshot text diagnostics.
 
+Pass `--disable-primary-repaint-recovery` before `--` to disable primary repaint
+scrollback recovery for the launched session. It is enabled by default on
+Windows and disabled by default elsewhere.
+
 Synchronized-output scrolling is deferred until content publication by default.
 Pass `--synchronized-output-scroll-policy=immediate-public` before `--` to
 opt in to immediate public-projection scrolling during DEC synchronized-output

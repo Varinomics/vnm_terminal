@@ -125,6 +125,7 @@ struct App_options
     bool               transcript_snapshot_diagnostics    = false;
     bool               transcript_timing_diagnostics      = false;
     bool               wheel_trace_enabled                 = false;
+    std::optional<bool> primary_repaint_recovery_enabled;
     bool               font_size_explicit                 = false;
     bool               window_size_explicit               = false;
     bool               restore_maximized_window_state     = false;
@@ -590,6 +591,16 @@ void apply_synchronized_output_scroll_policy_option(
         options.synchronized_output_scroll_policy);
 }
 
+void apply_primary_repaint_recovery_option(
+    VNM_TerminalSurface& surface,
+    const App_options&   options)
+{
+    if (options.primary_repaint_recovery_enabled.has_value()) {
+        surface.set_primary_repaint_recovery_enabled(
+            *options.primary_repaint_recovery_enabled);
+    }
+}
+
 bool resize_window_for_text_area_request(
     QQuickWindow&                  window,
     const VNM_TerminalSurface&     surface,
@@ -731,6 +742,9 @@ void print_usage()
         << "  --synchronized-output-scroll-policy=<policy>\n"
         << "                                  DEC synchronized-output scroll: defer(default) "
         << "or immediate-public (case-insensitive)\n"
+        << "  --disable-primary-repaint-recovery\n"
+        << "                                  disable primary repaint scrollback recovery "
+        << "when enabled\n"
         << "  --capture-output <path>         write raw backend output bytes to a file\n"
 #if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
         << "  --capture-transcript <path>     write sensitive NDJSON replay transcript\n"
@@ -1096,6 +1110,12 @@ Parse_result parse_arguments(const QStringList& arguments)
 
         if (argument_is(argument, "--require-output")) {
             result.options.require_output = true;
+            ++index;
+            continue;
+        }
+
+        if (argument_is(argument, "--disable-primary-repaint-recovery")) {
+            result.options.primary_repaint_recovery_enabled = false;
             ++index;
             continue;
         }
@@ -2515,6 +2535,7 @@ int main(int argc, char** argv)
 #endif
     surface->set_alternate_screen_wheel_policy(options.alternate_screen_wheel_policy);
     apply_synchronized_output_scroll_policy_option(*surface, options);
+    apply_primary_repaint_recovery_option(*surface, options);
     surface->set_backend_output_capture_path(options.backend_output_capture_path);
     surface->set_transcript_capture_path(options.transcript_capture_path);
     surface->set_transcript_snapshot_diagnostics(options.transcript_snapshot_diagnostics);

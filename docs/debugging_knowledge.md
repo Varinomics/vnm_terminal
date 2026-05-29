@@ -29,14 +29,16 @@ compaction or future agent sessions.
 - Therefore, Codex history scrolling is not the same mechanism as ordinary
   terminal scrollback. Codex mostly repaints a primary-buffer TUI screen.
 - The old `recover_scrollback_from_primary_repaints` path synthesized scrollback
-  from repaint patterns. It was rejected as heuristic/data-driven and removed
-  from `vnm_terminal_surface` in commit `d1d0637`.
-- Do not reintroduce repaint-pattern inference, row-content matching, action
-  budgets, or Codex/Markdown-specific branches to reconstruct scrollback.
-- If Codex-style repaint history is required, design it as an explicit,
-  non-heuristic TUI snapshot/history mechanism with structural blank-row
-  preservation. Do not pretend it is protocol scrollback unless the terminal
-  stream actually scrolls.
+  from repaint patterns. It was removed from `vnm_terminal_surface` in commit
+  `d1d0637`, then intentionally restored in the primary-backing Phase R work as
+  an optional recovery policy on top of the canonical backing model.
+- Repaint recovery is not canonical protocol scrollback and must not be used as
+  storage evidence for core backing, viewport, resize, selection, or publication
+  correctness. Ordinary scrollback must remain feasible with recovery disabled.
+- The app flag `--disable-primary-repaint-recovery` disables this optional
+  policy for the launched session. New recovery changes need explicit provenance,
+  regression tests, and review against the Phase R plan; do not add ad hoc
+  Codex/Markdown-specific branches.
 
 ## Capture and replay facts
 
