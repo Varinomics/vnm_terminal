@@ -1604,6 +1604,30 @@ void append_renderer_frame_stats_text(
         static_cast<std::uint64_t>(stats.packed_pass_input_cells));
     append_profile_counter(
         stream,
+        "frame_packed_pass_cells_scanned",
+        static_cast<std::uint64_t>(stats.packed_pass_cells_scanned));
+    append_profile_counter(
+        stream,
+        "frame_packed_text_sidecars_enabled",
+        static_cast<std::uint64_t>(stats.packed_text_sidecars_enabled));
+    append_profile_counter(
+        stream,
+        "frame_packed_text_sidecars_disabled",
+        static_cast<std::uint64_t>(stats.packed_text_sidecars_disabled));
+    append_profile_counter(
+        stream,
+        "frame_packed_text_disabled_cells_skipped",
+        static_cast<std::uint64_t>(stats.packed_text_disabled_cells_skipped));
+    append_profile_counter(
+        stream,
+        "frame_packed_graphic_candidates_classified",
+        static_cast<std::uint64_t>(stats.packed_graphic_candidates_classified));
+    append_profile_counter(
+        stream,
+        "frame_packed_cells_appended",
+        static_cast<std::uint64_t>(stats.packed_cells_appended));
+    append_profile_counter(
+        stream,
         "frame_dirty_row_lookup_count",
         static_cast<std::uint64_t>(stats.dirty_row_lookup_count));
     append_profile_counter(
