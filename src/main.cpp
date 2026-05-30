@@ -1624,6 +1624,18 @@ void append_renderer_frame_stats_text(
         static_cast<std::uint64_t>(stats.packed_graphic_candidates_classified));
     append_profile_counter(
         stream,
+        "frame_packed_graphic_cells_inlined",
+        static_cast<std::uint64_t>(stats.packed_graphic_cells_inlined));
+    append_profile_counter(
+        stream,
+        "frame_packed_data_passes_skipped",
+        static_cast<std::uint64_t>(stats.packed_data_passes_skipped));
+    append_profile_counter(
+        stream,
+        "frame_packed_inline_fallbacks",
+        static_cast<std::uint64_t>(stats.packed_inline_fallbacks));
+    append_profile_counter(
+        stream,
         "frame_packed_cells_appended",
         static_cast<std::uint64_t>(stats.packed_cells_appended));
     append_profile_counter(
