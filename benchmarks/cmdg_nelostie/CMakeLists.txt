@@ -3,9 +3,11 @@ set(VNM_TERMINAL_CMDG_NELOSTIE_EXE "" CACHE FILEPATH
 set(VNM_TERMINAL_CMDG_NELOSTIE_WORKING_DIR "" CACHE PATH
     "Working directory for CMDG.exe. Defaults to the executable directory.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_SOURCE_DIR
-    "${PROJECT_SOURCE_DIR}/third_party/CMDG"
+    "${PROJECT_SOURCE_DIR}/THIRD_PARTY/CMDG"
     CACHE PATH
     "Source checkout for the vendored CMDG AssemblyWinter2025/Nelostie benchmark workload.")
+set(VNM_TERMINAL_CMDG_NELOSTIE_PROFILE_TEXT "" CACHE FILEPATH
+    "Optional profile text output path for the CMDG Nelostie benchmark.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_TIMEOUT_SECONDS "180" CACHE STRING
     "Timeout for the CMDG Nelostie benchmark.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_FRAMES "300" CACHE STRING
@@ -38,6 +40,14 @@ if(vnm_terminal_cmdg_nelostie_exe STREQUAL "" AND
 endif()
 
 if(vnm_terminal_cmdg_nelostie_exe)
+    set(vnm_terminal_cmdg_nelostie_profile_text
+        "${VNM_TERMINAL_CMDG_NELOSTIE_PROFILE_TEXT}")
+    if(vnm_terminal_cmdg_nelostie_profile_text STREQUAL "" AND
+        VNM_TERMINAL_ENABLE_PROFILING)
+        set(vnm_terminal_cmdg_nelostie_profile_text
+            "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_cmdg_nelostie_profile.txt")
+    endif()
+
     if(VNM_TERMINAL_CMDG_NELOSTIE_WORKING_DIR STREQUAL "")
         get_filename_component(
             vnm_terminal_cmdg_nelostie_working_dir
@@ -58,6 +68,7 @@ if(vnm_terminal_cmdg_nelostie_exe)
             "-Dcmdg_source_dir=${VNM_TERMINAL_CMDG_NELOSTIE_SOURCE_DIR}"
             "-Dbuild_cmdg=$<BOOL:${vnm_terminal_cmdg_nelostie_build_from_source}>"
             "-Doutput_dir=${CMAKE_CURRENT_BINARY_DIR}"
+            "-Dprofile_text=${vnm_terminal_cmdg_nelostie_profile_text}"
             "-Dtimeout_seconds=${VNM_TERMINAL_CMDG_NELOSTIE_TIMEOUT_SECONDS}"
             "-Dframe_limit=${VNM_TERMINAL_CMDG_NELOSTIE_FRAMES}"
             "-Dwindow_size=${VNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE}"

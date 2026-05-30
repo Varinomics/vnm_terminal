@@ -30,6 +30,9 @@ file(MAKE_DIRECTORY "${output_dir}")
 set(terminal_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_terminal_metrics.json")
 set(cmdg_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_cmdg_metrics.json")
 file(REMOVE "${terminal_metrics}" "${cmdg_metrics}")
+if(profile_text)
+    file(REMOVE "${profile_text}")
+endif()
 
 math(EXPR timeout_ms "${timeout_seconds} * 1000")
 
@@ -40,6 +43,10 @@ set(terminal_arguments
     "--timeout-ms" "${timeout_ms}"
     "--require-output"
     "--cwd" "${cmdg_working_dir}")
+
+if(profile_text)
+    list(APPEND terminal_arguments "--profile-text" "${profile_text}")
+endif()
 
 if(software_renderer)
     list(APPEND terminal_arguments "--software-renderer")
@@ -93,6 +100,10 @@ if(NOT EXISTS "${cmdg_metrics}")
     message(FATAL_ERROR "CMDG metrics JSON was not written: ${cmdg_metrics}")
 endif()
 
+if(profile_text AND NOT EXISTS "${profile_text}")
+    message(FATAL_ERROR "terminal profile text was not written: ${profile_text}")
+endif()
+
 file(READ "${terminal_metrics}" terminal_metrics_text)
 file(READ "${cmdg_metrics}" cmdg_metrics_text)
 
@@ -127,3 +138,6 @@ endif()
 
 message(STATUS "terminal metrics: ${terminal_metrics}")
 message(STATUS "CMDG metrics: ${cmdg_metrics}")
+if(profile_text)
+    message(STATUS "terminal profile: ${profile_text}")
+endif()
