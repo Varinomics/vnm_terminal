@@ -2132,6 +2132,14 @@ void append_renderer_stats_text(
         static_cast<std::uint64_t>(stats.text_resource_descriptor_reuses));
     append_profile_counter(
         stream,
+        "text_resource_descriptor_builds",
+        static_cast<std::uint64_t>(stats.text_resource_descriptor_builds));
+    append_profile_counter(
+        stream,
+        "text_resource_descriptor_clean_reuse_skips",
+        static_cast<std::uint64_t>(stats.text_resource_descriptor_clean_reuse_skips));
+    append_profile_counter(
+        stream,
         "text_key_builds",
         static_cast<std::uint64_t>(stats.text_key_builds));
     append_profile_counter(
@@ -2186,6 +2194,30 @@ void append_renderer_stats_text(
         stream,
         "text_clean_rows_rebuilt",
         static_cast<std::uint64_t>(stats.text_clean_rows_rebuilt));
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_without_old_slot",
+        static_cast<std::uint64_t>(stats.text_dirty_rebuilds_without_old_slot));
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_frame_key_mismatch",
+        static_cast<std::uint64_t>(stats.text_dirty_rebuilds_with_frame_key_mismatch));
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_descriptor_ineligible",
+        static_cast<std::uint64_t>(stats.text_dirty_rebuilds_with_descriptor_ineligible));
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_old_descriptor_missing",
+        static_cast<std::uint64_t>(stats.text_dirty_rebuilds_with_old_descriptor_missing));
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_descriptor_mismatch",
+        static_cast<std::uint64_t>(stats.text_dirty_rebuilds_with_descriptor_mismatch));
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_key_mismatch",
+        static_cast<std::uint64_t>(stats.text_dirty_rebuilds_with_key_mismatch));
     append_profile_counter(
         stream,
         "rect_resource_rects_before_coalescing",
@@ -2366,6 +2398,14 @@ void append_cumulative_renderer_stats_text(
         stream,
         "text_resource_descriptor_reuses",
         stats.text_resource_descriptor_reuses);
+    append_profile_counter(
+        stream,
+        "text_resource_descriptor_builds",
+        stats.text_resource_descriptor_builds);
+    append_profile_counter(
+        stream,
+        "text_resource_descriptor_clean_reuse_skips",
+        stats.text_resource_descriptor_clean_reuse_skips);
     append_profile_counter(stream, "text_key_builds",       stats.text_key_builds);
     append_profile_counter(stream, "text_dirty_row_ranges", stats.text_dirty_row_ranges);
     append_profile_counter(stream, "text_dirty_rows",       stats.text_dirty_rows);
@@ -2410,6 +2450,30 @@ void append_cumulative_renderer_stats_text(
         stream,
         "text_clean_rows_rebuilt",
         stats.text_clean_rows_rebuilt);
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_without_old_slot",
+        stats.text_dirty_rebuilds_without_old_slot);
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_frame_key_mismatch",
+        stats.text_dirty_rebuilds_with_frame_key_mismatch);
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_descriptor_ineligible",
+        stats.text_dirty_rebuilds_with_descriptor_ineligible);
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_old_descriptor_missing",
+        stats.text_dirty_rebuilds_with_old_descriptor_missing);
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_descriptor_mismatch",
+        stats.text_dirty_rebuilds_with_descriptor_mismatch);
+    append_profile_counter(
+        stream,
+        "text_dirty_rebuilds_with_key_mismatch",
+        stats.text_dirty_rebuilds_with_key_mismatch);
     append_profile_counter(
         stream,
         "rect_resource_rects_before_coalescing",
