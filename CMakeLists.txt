@@ -14,6 +14,9 @@ option(VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY
 option(VNM_TERMINAL_DISTRIBUTION_BUILD
     "Configure a distribution build; diagnostic transcript capture/replay must stay disabled"
     OFF)
+option(VNM_TERMINAL_APP_BUILD_BENCHMARKS
+    "Build opt-in vnm_terminal benchmark runners"
+    OFF)
 
 if(VNM_TERMINAL_DISTRIBUTION_BUILD AND VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
     message(FATAL_ERROR
@@ -151,6 +154,10 @@ if(WIN32)
 endif()
 
 include(CTest)
+
+if(VNM_TERMINAL_APP_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
 
 if(BUILD_TESTING)
     add_subdirectory(tests)
