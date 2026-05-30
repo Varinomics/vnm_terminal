@@ -14,12 +14,15 @@
 #include <QColor>
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEvent>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QIODevice>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QMetaEnum>
 #include <QObject>
@@ -107,6 +110,7 @@ struct App_options
     QString            backend_output_capture_path;
     QString            transcript_capture_path;
     QString            profile_text_path;
+    QString            metrics_json_path;
     QString            font_family = term::vnm_terminal_default_monospace_font_family();
     qreal              font_size   = term::k_vnm_terminal_default_font_pixel_size;
     QString            theme       = QStringLiteral("default");
@@ -757,6 +761,7 @@ void print_usage()
         << "                                  disable primary repaint scrollback recovery "
         << "when enabled\n"
         << "  --capture-output <path>         write raw backend output bytes to a file\n"
+        << "  --metrics-json <path>           write lightweight terminal runtime metrics\n"
 #if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
         << "  --capture-transcript <path>     write sensitive NDJSON replay transcript\n"
         << "  --transcript-snapshot-diagnostics include visible row text/provenance snapshots\n"
@@ -1036,6 +1041,28 @@ bool validate_capture_paths(App_options* options, QString* out_error)
         return false;
     }
 
+    if (!options->metrics_json_path.isEmpty() &&
+        !validate_capture_path(
+            QStringLiteral("--metrics-json"),
+            options->metrics_json_path,
+            &options->metrics_json_path,
+            out_error))
+    {
+        return false;
+    }
+
+#if VNM_TERMINAL_PROFILING_ENABLED
+    if (!options->profile_text_path.isEmpty() &&
+        !validate_capture_path(
+            QStringLiteral("--profile-text"),
+            options->profile_text_path,
+            &options->profile_text_path,
+            out_error))
+    {
+        return false;
+    }
+#endif
+
     if (!options->backend_output_capture_path.isEmpty() &&
         !options->transcript_capture_path.isEmpty() &&
         comparable_capture_path(options->backend_output_capture_path) ==
@@ -1046,6 +1073,41 @@ bool validate_capture_paths(App_options* options, QString* out_error)
             .arg(options->backend_output_capture_path);
         return false;
     }
+
+    if (!options->backend_output_capture_path.isEmpty() &&
+        !options->metrics_json_path.isEmpty() &&
+        comparable_capture_path(options->backend_output_capture_path) ==
+            comparable_capture_path(options->metrics_json_path))
+    {
+        *out_error = QStringLiteral(
+            "--capture-output and --metrics-json must use different paths: %1")
+            .arg(options->backend_output_capture_path);
+        return false;
+    }
+
+    if (!options->transcript_capture_path.isEmpty() &&
+        !options->metrics_json_path.isEmpty() &&
+        comparable_capture_path(options->transcript_capture_path) ==
+            comparable_capture_path(options->metrics_json_path))
+    {
+        *out_error = QStringLiteral(
+            "--capture-transcript and --metrics-json must use different paths: %1")
+            .arg(options->transcript_capture_path);
+        return false;
+    }
+
+#if VNM_TERMINAL_PROFILING_ENABLED
+    if (!options->profile_text_path.isEmpty() &&
+        !options->metrics_json_path.isEmpty() &&
+        comparable_capture_path(options->profile_text_path) ==
+            comparable_capture_path(options->metrics_json_path))
+    {
+        *out_error = QStringLiteral(
+            "--profile-text and --metrics-json must use different paths: %1")
+            .arg(options->profile_text_path);
+        return false;
+    }
+#endif
 
     return true;
 }
@@ -1343,6 +1405,19 @@ Parse_result parse_arguments(const QStringList& arguments)
                 "--profile-text requires VNM_TERMINAL_ENABLE_PROFILING=ON");
             return result;
 #endif
+        }
+
+        if (argument_is(argument, "--metrics-json")) {
+            if (!take_option_value(arguments, index, &value, &result.error)) {
+                return result;
+            }
+            if (value.trimmed().isEmpty()) {
+                result.error = QStringLiteral("--metrics-json requires a non-empty path");
+                return result;
+            }
+
+            result.options.metrics_json_path = value;
+            continue;
         }
 
         if (argument_is(argument, "--timeout-ms")) {
@@ -2738,6 +2813,99 @@ bool write_profile_text(
 }
 #endif
 
+template<typename Frame_stats>
+void insert_renderer_frame_stats(
+    QJsonObject&        object,
+    const Frame_stats&  stats)
+{
+    object.insert(QStringLiteral("visible_rows"),
+        QString::number(static_cast<qulonglong>(stats.visible_rows)));
+    object.insert(QStringLiteral("dirty_rows"),
+        QString::number(static_cast<qulonglong>(stats.dirty_rows)));
+    object.insert(QStringLiteral("full_dirty_rows"),
+        QString::number(static_cast<qulonglong>(stats.full_dirty_rows)));
+    object.insert(QStringLiteral("cells_considered"),
+        QString::number(static_cast<qulonglong>(stats.cells_considered)));
+    object.insert(QStringLiteral("cells_rendered"),
+        QString::number(static_cast<qulonglong>(stats.cells_rendered)));
+    object.insert(QStringLiteral("text_runs_emitted"),
+        QString::number(static_cast<qulonglong>(stats.text_runs_emitted)));
+    object.insert(QStringLiteral("graphic_rects_emitted"),
+        QString::number(static_cast<qulonglong>(stats.graphic_rects_emitted)));
+    object.insert(QStringLiteral("graphic_arcs_emitted"),
+        QString::number(static_cast<qulonglong>(stats.graphic_arcs_emitted)));
+    object.insert(QStringLiteral("dirty_row_lookup_count"),
+        QString::number(static_cast<qulonglong>(stats.dirty_row_lookup_count)));
+}
+
+QJsonObject terminal_metrics_json(
+    const VNM_TerminalSurface&  surface,
+    const Runtime_state&        state,
+    qint64                      elapsed_ms,
+    int                         app_result)
+{
+    const term::terminal_renderer_cumulative_stats_t cumulative_stats =
+        term::VNM_TerminalSurface_render_bridge::cumulative_renderer_stats(surface);
+
+    QJsonObject frame;
+    insert_renderer_frame_stats(frame, cumulative_stats.frame);
+
+    QJsonObject renderer;
+    renderer.insert(QStringLiteral("frames_published"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.frames_published)));
+    renderer.insert(QStringLiteral("paint_completed_frames"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.paint_completed_frames)));
+    renderer.insert(QStringLiteral("root_reused_frames"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.root_reused_frames)));
+    renderer.insert(QStringLiteral("frame"), frame);
+
+    QJsonObject root;
+    root.insert(QStringLiteral("schema"), QStringLiteral("vnm_terminal_runtime_metrics_v1"));
+    root.insert(QStringLiteral("elapsed_ms"), elapsed_ms);
+    root.insert(QStringLiteral("app_result"), app_result);
+    root.insert(QStringLiteral("process_exit_code"), state.process_exit_code);
+    root.insert(QStringLiteral("process_exit_reason"), enum_key(state.process_exit_reason));
+    root.insert(QStringLiteral("backend_error_count"), state.backend_error_count);
+    root.insert(QStringLiteral("output_seen"), state.output_seen);
+    root.insert(QStringLiteral("process_exited"), state.process_exited);
+    root.insert(QStringLiteral("timeout_expired"), state.timeout_expired);
+    root.insert(QStringLiteral("paint_frames_per_second"),
+        elapsed_ms > 0
+            ? static_cast<double>(cumulative_stats.paint_completed_frames) * 1000.0 /
+                static_cast<double>(elapsed_ms)
+            : 0.0);
+    root.insert(QStringLiteral("renderer"), renderer);
+
+    return root;
+}
+
+bool write_metrics_json(
+    const QString&              path,
+    const VNM_TerminalSurface&  surface,
+    const Runtime_state&        state,
+    qint64                      elapsed_ms,
+    int                         app_result,
+    QString*                    out_error)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        *out_error = QStringLiteral("could not write metrics JSON %1: %2")
+            .arg(path, file.errorString());
+        return false;
+    }
+
+    const QByteArray json = QJsonDocument(
+        terminal_metrics_json(surface, state, elapsed_ms, app_result))
+            .toJson(QJsonDocument::Indented);
+    if (file.write(json) != json.size()) {
+        *out_error = QStringLiteral("could not write metrics JSON %1: %2")
+            .arg(path, file.errorString());
+        return false;
+    }
+
+    return true;
+}
+
 }
 
 #ifndef VNM_TERMINAL_APP_NO_MAIN
@@ -2790,6 +2958,14 @@ int main(int argc, char** argv)
         !prepare_capture_file(
             QStringLiteral("--capture-transcript"),
             options.transcript_capture_path, &parse_result.error))
+    {
+        print_error(parse_result.error);
+        return k_exit_usage_error;
+    }
+    if (!options.metrics_json_path.isEmpty() &&
+        !prepare_capture_file(
+            QStringLiteral("--metrics-json"),
+            options.metrics_json_path, &parse_result.error))
     {
         print_error(parse_result.error);
         return k_exit_usage_error;
@@ -3173,6 +3349,8 @@ int main(int argc, char** argv)
         }
     });
 
+    QElapsedTimer app_elapsed_timer;
+    app_elapsed_timer.start();
     int app_result = app.exec();
 #if VNM_TERMINAL_PROFILING_ENABLED
     if (!options.profile_text_path.isEmpty() && gui_profiler != nullptr) {
@@ -3187,6 +3365,23 @@ int main(int argc, char** argv)
         }
     }
 #endif
+
+    if (!options.metrics_json_path.isEmpty()) {
+        QString metrics_error;
+        if (!write_metrics_json(
+                options.metrics_json_path,
+                *surface,
+                state,
+                app_elapsed_timer.elapsed(),
+                app_result,
+                &metrics_error))
+        {
+            print_error(metrics_error);
+            if (app_result == 0) {
+                app_result = k_exit_usage_error;
+            }
+        }
+    }
 
     if (app_result == 0 && options.require_output && !state.output_seen) {
         print_error(QStringLiteral("required terminal output activity was not observed"));
