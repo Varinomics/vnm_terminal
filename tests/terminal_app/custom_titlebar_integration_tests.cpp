@@ -1423,6 +1423,85 @@ bool test_parse_disable_primary_repaint_recovery_option()
     return ok;
 }
 
+bool test_parse_scrollback_limit_option()
+{
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result limit_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--scrollback-limit"),
+        QStringLiteral("200"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result zero_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--scrollback-limit"),
+        QStringLiteral("0"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result invalid_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--scrollback-limit"),
+        QStringLiteral("-1"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--scrollback-limit"),
+        QStringLiteral("200"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(), "scrollback limit default parse succeeds");
+    ok &= check(!default_result.options.scrollback_limit.has_value(),
+        "scrollback limit default leaves surface policy unchanged");
+    ok &= check(limit_result.error.isEmpty(), "scrollback limit option parses");
+    ok &= check(
+        limit_result.options.scrollback_limit.has_value() &&
+            *limit_result.options.scrollback_limit == 200,
+        "scrollback limit option selects requested row count");
+    ok &= check(
+        limit_result.options.command == QStringList{QStringLiteral("fixture-command")},
+        "scrollback limit option does not consume command argv");
+    ok &= check(zero_result.error.isEmpty(), "scrollback limit accepts zero");
+    ok &= check(
+        zero_result.options.scrollback_limit.has_value() &&
+            *zero_result.options.scrollback_limit == 0,
+        "scrollback limit zero disables retained rows");
+    ok &= check(!invalid_result.error.isEmpty(),
+        "scrollback limit rejects negative values");
+    ok &= check(command_result.error.isEmpty(),
+        "scrollback limit after command separator parses as command argv");
+    ok &= check(!command_result.options.scrollback_limit.has_value(),
+        "scrollback limit after command separator leaves default");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{QStringLiteral("--scrollback-limit"), QStringLiteral("200")},
+        "scrollback limit after command separator is preserved in command argv");
+
+    VNM_TerminalSurface default_surface;
+    const int surface_default = default_surface.scrollback_limit();
+    apply_scrollback_limit_option(default_surface, default_result.options);
+    ok &= check(default_surface.scrollback_limit() == surface_default,
+        "scrollback limit default keeps surface config");
+
+    VNM_TerminalSurface limited_surface;
+    apply_scrollback_limit_option(limited_surface, limit_result.options);
+    ok &= check(limited_surface.scrollback_limit() == 200,
+        "scrollback limit option reaches surface config");
+
+    return ok;
+}
+
 bool test_parse_transcript_snapshot_diagnostics_option()
 {
     Parse_result snapshot_result = parse_arguments({
@@ -1915,6 +1994,7 @@ int main(int argc, char** argv)
     ok &= test_parse_wheel_trace_option();
     ok &= test_parse_synchronized_output_scroll_policy_option();
     ok &= test_parse_disable_primary_repaint_recovery_option();
+    ok &= test_parse_scrollback_limit_option();
     ok &= test_parse_transcript_snapshot_diagnostics_option();
     ok &= test_parse_transcript_timing_diagnostics_option();
     ok &= test_window_state_sync();

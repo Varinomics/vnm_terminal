@@ -117,6 +117,7 @@ struct App_options
     VNM_TerminalSurface::Synchronized_output_scroll_policy synchronized_output_scroll_policy =
         VNM_TerminalSurface::Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION;
     std::optional<int> timeout_ms;
+    std::optional<int> scrollback_limit;
     bool               shell_requested                    = false;
     bool               keep_open_after_process_exits      = false;
     bool               require_output                     = false;
@@ -601,6 +602,15 @@ void apply_primary_repaint_recovery_option(
     }
 }
 
+void apply_scrollback_limit_option(
+    VNM_TerminalSurface& surface,
+    const App_options&   options)
+{
+    if (options.scrollback_limit.has_value()) {
+        surface.set_scrollback_limit(*options.scrollback_limit);
+    }
+}
+
 bool resize_window_for_text_area_request(
     QQuickWindow&                  window,
     const VNM_TerminalSurface&     surface,
@@ -734,6 +744,7 @@ void print_usage()
         << "  --font-family <family>          terminal font family\n"
         << "  --font-size <pixels>            terminal font size in pixels\n"
         << "  --theme <name>                  terminal color theme\n"
+        << "  --scrollback-limit <rows>       maximum retained scrollback rows\n"
         << "  --window-size <width>x<height>  window size in logical pixels\n"
 #if defined(_WIN32) || defined(__linux__)
         << "  --native-titlebar               use the platform titlebar instead of built-in chrome\n"
@@ -878,6 +889,22 @@ bool parse_timeout_ms(
     }
 
     *out_timeout_ms = static_cast<int>(timeout_ms);
+    return true;
+}
+
+bool parse_scrollback_limit(
+    const QString&         value,
+    std::optional<int>*    out_scrollback_limit,
+    QString*               out_error)
+{
+    bool ok = false;
+    const qlonglong limit = value.toLongLong(&ok);
+    if (!ok || limit < 0 || limit > static_cast<qlonglong>(std::numeric_limits<int>::max())) {
+        *out_error = QStringLiteral("--scrollback-limit requires a non-negative integer");
+        return false;
+    }
+
+    *out_scrollback_limit = static_cast<int>(limit);
     return true;
 }
 
@@ -1191,6 +1218,16 @@ Parse_result parse_arguments(const QStringList& arguments)
 
             result.options.window_size = *window_size;
             result.options.window_size_explicit = true;
+            continue;
+        }
+
+        if (argument_is(argument, "--scrollback-limit")) {
+            if (!take_option_value(arguments, index, &value, &result.error) ||
+                !parse_scrollback_limit(value, &result.options.scrollback_limit, &result.error))
+            {
+                return result;
+            }
+
             continue;
         }
 
@@ -1547,6 +1584,30 @@ void append_renderer_frame_stats_text(
 {
     append_profile_counter(
         stream,
+        "frame_visible_rows",
+        static_cast<std::uint64_t>(stats.visible_rows));
+    append_profile_counter(
+        stream,
+        "frame_dirty_rows",
+        static_cast<std::uint64_t>(stats.dirty_rows));
+    append_profile_counter(
+        stream,
+        "frame_full_dirty_rows",
+        static_cast<std::uint64_t>(stats.full_dirty_rows));
+    append_profile_counter(
+        stream,
+        "frame_cell_pass_input_cells",
+        static_cast<std::uint64_t>(stats.cell_pass_input_cells));
+    append_profile_counter(
+        stream,
+        "frame_packed_pass_input_cells",
+        static_cast<std::uint64_t>(stats.packed_pass_input_cells));
+    append_profile_counter(
+        stream,
+        "frame_dirty_row_lookup_count",
+        static_cast<std::uint64_t>(stats.dirty_row_lookup_count));
+    append_profile_counter(
+        stream,
         "frame_cells_considered",
         static_cast<std::uint64_t>(stats.cells_considered));
     append_profile_counter(
@@ -1868,6 +1929,122 @@ void append_dirty_row_timeline_text(
     }
 }
 
+void append_model_profile_stats_text(
+    QTextStream&                                      stream,
+    const term::Terminal_screen_model_profile_stats&  stats)
+{
+    stream << "model_profile_stats\n";
+    stream << "  enabled=" << (stats.enabled ? "true" : "false") << '\n';
+    append_profile_counter(stream, "print_text_calls", stats.print_text_calls);
+    append_profile_counter(stream, "printable_ascii_span_calls", stats.printable_ascii_span_calls);
+    append_profile_counter(stream, "printable_ascii_span_characters", stats.printable_ascii_span_characters);
+    append_profile_counter(stream, "printable_ascii_cells_written", stats.printable_ascii_cells_written);
+    append_profile_counter(
+        stream,
+        "max_printable_ascii_span_characters",
+        stats.max_printable_ascii_span_characters);
+    append_profile_counter(stream, "printable_ascii_row_copies", stats.printable_ascii_row_copies);
+    append_profile_counter(stream, "printable_ascii_row_copy_cells", stats.printable_ascii_row_copy_cells);
+    append_profile_counter(
+        stream,
+        "printable_ascii_local_cells_inspected",
+        stats.printable_ascii_local_cells_inspected);
+    append_profile_counter(
+        stream,
+        "scalar_span_local_cells_inspected",
+        stats.scalar_span_local_cells_inspected);
+    append_profile_counter(
+        stream,
+        "row_content_generation_comparisons",
+        stats.row_content_generation_comparisons);
+    append_profile_counter(
+        stream,
+        "row_content_generation_comparison_cells",
+        stats.row_content_generation_comparison_cells);
+    append_profile_counter(stream, "row_content_generation_advances", stats.row_content_generation_advances);
+    append_profile_counter(
+        stream,
+        "wide_boundary_repairs_from_text_writes",
+        stats.wide_boundary_repairs_from_text_writes);
+    append_profile_counter(stream, "dirty_marks_from_text_writes", stats.dirty_marks_from_text_writes);
+    append_profile_counter(stream, "line_wraps_from_text_writes", stats.line_wraps_from_text_writes);
+    append_profile_counter(
+        stream,
+        "scrollback_appends_from_text_writes",
+        stats.scrollback_appends_from_text_writes);
+    append_profile_counter(stream, "render_snapshot_requests", stats.render_snapshot_requests);
+    append_profile_counter(stream, "render_snapshots_constructed", stats.render_snapshots_constructed);
+    append_profile_counter(stream, "render_snapshot_rows_visited", stats.render_snapshot_rows_visited);
+    append_profile_counter(
+        stream,
+        "render_snapshot_rows_materialized",
+        stats.render_snapshot_rows_materialized);
+    append_profile_counter(stream, "render_snapshot_cells_scanned", stats.render_snapshot_cells_scanned);
+    append_profile_counter(stream, "render_snapshot_cells_emitted", stats.render_snapshot_cells_emitted);
+    append_profile_counter(
+        stream,
+        "render_snapshot_dirty_rows_requested",
+        stats.render_snapshot_dirty_rows_requested);
+    append_profile_counter(
+        stream,
+        "render_snapshot_dirty_rows_visible",
+        stats.render_snapshot_dirty_rows_visible);
+    append_profile_counter(
+        stream,
+        "render_snapshot_full_repaint_fallbacks",
+        stats.render_snapshot_full_repaint_fallbacks);
+    append_profile_counter(
+        stream,
+        "render_snapshot_viewport_fallbacks",
+        stats.render_snapshot_viewport_fallbacks);
+    append_profile_counter(
+        stream,
+        "render_snapshot_zero_dirty_publications",
+        stats.render_snapshot_zero_dirty_publications);
+    append_profile_counter(
+        stream,
+        "max_render_snapshot_rows_visited",
+        stats.max_render_snapshot_rows_visited);
+    append_profile_counter(
+        stream,
+        "max_render_snapshot_cells_emitted",
+        stats.max_render_snapshot_cells_emitted);
+}
+
+void append_session_profile_stats_text(
+    QTextStream&                              stream,
+    const term::Terminal_session_profile_stats& stats)
+{
+    stream << "session_profile_stats\n";
+    stream << "  enabled=" << (stats.enabled ? "true" : "false") << '\n';
+    append_profile_counter(stream, "render_snapshot_requests", stats.render_snapshot_requests);
+    append_profile_counter(stream, "render_snapshots_constructed", stats.render_snapshots_constructed);
+    append_profile_counter(stream, "render_snapshot_publications", stats.render_snapshot_publications);
+    append_profile_counter(stream, "content_snapshot_publications", stats.content_snapshot_publications);
+    append_profile_counter(stream, "selection_snapshot_publications", stats.selection_snapshot_publications);
+    append_profile_counter(stream, "geometry_snapshot_publications", stats.geometry_snapshot_publications);
+    append_profile_counter(
+        stream,
+        "public_projection_scroll_requests",
+        stats.public_projection_scroll_requests);
+    append_profile_counter(
+        stream,
+        "public_projection_scroll_publications",
+        stats.public_projection_scroll_publications);
+    append_profile_counter(stream, "dirty_coalescing_attempts", stats.dirty_coalescing_attempts);
+    append_profile_counter(stream, "dirty_coalescing_applied", stats.dirty_coalescing_applied);
+    append_profile_counter(stream, "zero_dirty_snapshot_publications", stats.zero_dirty_snapshot_publications);
+    append_profile_counter(
+        stream,
+        "snapshots_superseded_before_render",
+        stats.snapshots_superseded_before_render);
+    append_profile_counter(stream, "snapshots_marked_rendered", stats.snapshots_marked_rendered);
+    append_profile_counter(
+        stream,
+        "max_unrendered_snapshot_generations",
+        stats.max_unrendered_snapshot_generations);
+}
+
 void append_renderer_stats_text(
     QTextStream&                           stream,
     const term::terminal_renderer_stats_t& stats)
@@ -1955,12 +2132,36 @@ void append_renderer_stats_text(
         static_cast<std::uint64_t>(stats.text_coalescing_enabled_groups));
     append_profile_counter(
         stream,
+        "text_resource_rows_with_runs",
+        static_cast<std::uint64_t>(stats.text_resource_rows_with_runs));
+    append_profile_counter(
+        stream,
+        "text_resource_max_runs_after_coalescing_per_row",
+        static_cast<std::uint64_t>(stats.text_resource_max_runs_after_coalescing_per_row));
+    append_profile_counter(
+        stream,
         "text_resource_runs_before_coalescing",
         static_cast<std::uint64_t>(stats.text_resource_runs_before_coalescing));
     append_profile_counter(
         stream,
         "text_resource_runs_after_coalescing",
         static_cast<std::uint64_t>(stats.text_resource_runs_after_coalescing));
+    append_profile_counter(
+        stream,
+        "text_dirty_descriptor_identical_rows",
+        static_cast<std::uint64_t>(stats.text_dirty_descriptor_identical_rows));
+    append_profile_counter(
+        stream,
+        "text_key_match_reuses",
+        static_cast<std::uint64_t>(stats.text_key_match_reuses));
+    append_profile_counter(
+        stream,
+        "text_dirty_rows_rebuilt",
+        static_cast<std::uint64_t>(stats.text_dirty_rows_rebuilt));
+    append_profile_counter(
+        stream,
+        "text_clean_rows_rebuilt",
+        static_cast<std::uint64_t>(stats.text_clean_rows_rebuilt));
     append_profile_counter(
         stream,
         "rect_resource_rects_before_coalescing",
@@ -2155,12 +2356,36 @@ void append_cumulative_renderer_stats_text(
         stats.text_coalescing_enabled_groups);
     append_profile_counter(
         stream,
+        "text_resource_rows_with_runs",
+        stats.text_resource_rows_with_runs);
+    append_profile_counter(
+        stream,
+        "text_resource_max_runs_after_coalescing_per_row",
+        stats.text_resource_max_runs_after_coalescing_per_row);
+    append_profile_counter(
+        stream,
         "text_resource_runs_before_coalescing",
         stats.text_resource_runs_before_coalescing);
     append_profile_counter(
         stream,
         "text_resource_runs_after_coalescing",
         stats.text_resource_runs_after_coalescing);
+    append_profile_counter(
+        stream,
+        "text_dirty_descriptor_identical_rows",
+        stats.text_dirty_descriptor_identical_rows);
+    append_profile_counter(
+        stream,
+        "text_key_match_reuses",
+        stats.text_key_match_reuses);
+    append_profile_counter(
+        stream,
+        "text_dirty_rows_rebuilt",
+        stats.text_dirty_rows_rebuilt);
+    append_profile_counter(
+        stream,
+        "text_clean_rows_rebuilt",
+        stats.text_clean_rows_rebuilt);
     append_profile_counter(
         stream,
         "rect_resource_rects_before_coalescing",
@@ -2350,8 +2575,12 @@ bool write_profile_text(
         term::VNM_TerminalSurface_render_bridge::dirty_row_stats(surface);
     const term::Terminal_screen_model_dirty_row_timeline dirty_row_timeline =
         term::VNM_TerminalSurface_render_bridge::dirty_row_timeline(surface);
-    const term::terminal_renderer_stats_t renderer_stats = term::VNM_TerminalSurface_render_bridge::last_renderer_stats(
-        surface);
+    const term::Terminal_screen_model_profile_stats model_profile_stats =
+        term::VNM_TerminalSurface_render_bridge::model_profile_stats(surface);
+    const term::Terminal_session_profile_stats session_profile_stats =
+        term::VNM_TerminalSurface_render_bridge::session_profile_stats(surface);
+    const term::terminal_renderer_stats_t renderer_stats =
+        term::VNM_TerminalSurface_render_bridge::last_renderer_stats(surface);
     const term::terminal_renderer_cumulative_stats_t cumulative_renderer_stats =
         term::VNM_TerminalSurface_render_bridge::cumulative_renderer_stats(surface);
     const term::Profile_timeline_snapshot gui_timeline = gui_profiler.timeline_snapshot();
@@ -2366,6 +2595,10 @@ bool write_profile_text(
     append_dirty_row_stats_text(stream, dirty_row_stats);
     stream << '\n';
     append_dirty_row_timeline_text(stream, dirty_row_timeline);
+    stream << '\n';
+    append_model_profile_stats_text(stream, model_profile_stats);
+    stream << '\n';
+    append_session_profile_stats_text(stream, session_profile_stats);
     stream << '\n';
     append_renderer_stats_text(stream, renderer_stats);
     stream << '\n';
@@ -2530,6 +2763,7 @@ int main(int argc, char** argv)
     surface->set_color_theme(options.theme);
     surface->set_wheel_event_policy(
         VNM_TerminalSurface::Wheel_event_policy::LOCAL_SCROLLBACK_FIRST);
+    apply_scrollback_limit_option(*surface, options);
 #if defined(Q_OS_MACOS)
     surface->set_copy_shortcut_policy(VNM_TerminalSurface::Copy_shortcut_policy::TERMINAL_INPUT);
 #endif
