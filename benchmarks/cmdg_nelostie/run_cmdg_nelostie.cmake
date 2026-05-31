@@ -1,3 +1,51 @@
+function(vnm_terminal_read_json_field out_value json_text source_path)
+    set(json_path ${ARGN})
+    string(JSON value ERROR_VARIABLE json_error GET "${json_text}" ${json_path})
+    if(NOT json_error STREQUAL "NOTFOUND")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "${source_path} is missing JSON field '${json_path_text}': ${json_error}")
+    endif()
+    set(${out_value} "${value}" PARENT_SCOPE)
+endfunction()
+
+if(NOT DEFINED scene OR scene STREQUAL "")
+    set(scene "AssemblyWinter2025")
+endif()
+
+if(NOT scene MATCHES "^[A-Za-z][A-Za-z0-9_]*$")
+    message(FATAL_ERROR "CMDG scene name is invalid: ${scene}")
+endif()
+
+if(NOT DEFINED run_id OR run_id STREQUAL "")
+    set(run_id "nelostie")
+    set(use_legacy_output_names ON)
+else()
+    set(use_legacy_output_names OFF)
+endif()
+
+if(NOT run_id MATCHES "^[A-Za-z0-9_]+$")
+    message(FATAL_ERROR "CMDG benchmark run id is invalid: ${run_id}")
+endif()
+
+if(NOT DEFINED output_dir OR output_dir STREQUAL "")
+    message(FATAL_ERROR "CMDG benchmark output_dir was not provided")
+endif()
+
+if(NOT DEFINED frame_limit OR
+    NOT frame_limit MATCHES "^[1-9][0-9]*$")
+    message(FATAL_ERROR "CMDG benchmark frame_limit must be a positive integer")
+endif()
+
+if(NOT DEFINED timeout_seconds OR
+    NOT timeout_seconds MATCHES "^[1-9][0-9]*$")
+    message(FATAL_ERROR "CMDG benchmark timeout_seconds must be a positive integer")
+endif()
+
+if(NOT DEFINED build_lock_path OR build_lock_path STREQUAL "")
+    set(build_lock_path "${output_dir}/cmdg_build.lock")
+endif()
+
 if(NOT EXISTS "${terminal_exe}")
     message(FATAL_ERROR "vnm_terminal executable does not exist: ${terminal_exe}")
 endif()
@@ -6,6 +54,12 @@ if(build_cmdg)
     if(NOT IS_DIRECTORY "${cmdg_source_dir}")
         message(FATAL_ERROR "CMDG source directory does not exist: ${cmdg_source_dir}")
     endif()
+
+    get_filename_component(build_lock_dir "${build_lock_path}" DIRECTORY)
+    if(build_lock_dir)
+        file(MAKE_DIRECTORY "${build_lock_dir}")
+    endif()
+    file(LOCK "${build_lock_path}" GUARD PROCESS TIMEOUT 600)
 
     execute_process(
         COMMAND dotnet build "${cmdg_source_dir}/CMDG/CMDG.csproj" -c Release
@@ -27,8 +81,13 @@ if(NOT IS_DIRECTORY "${cmdg_working_dir}")
 endif()
 
 file(MAKE_DIRECTORY "${output_dir}")
-set(terminal_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_terminal_metrics.json")
-set(cmdg_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_cmdg_metrics.json")
+if(use_legacy_output_names)
+    set(terminal_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_terminal_metrics.json")
+    set(cmdg_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_cmdg_metrics.json")
+else()
+    set(terminal_metrics "${output_dir}/vnm_terminal_cmdg_${run_id}_terminal_metrics.json")
+    set(cmdg_metrics "${output_dir}/vnm_terminal_cmdg_${run_id}_cmdg_metrics.json")
+endif()
 file(REMOVE "${terminal_metrics}" "${cmdg_metrics}")
 if(profile_text)
     file(REMOVE "${profile_text}")
@@ -65,7 +124,7 @@ else()
 endif()
 
 set(ENV{CMDG_BENCHMARK} "1")
-set(ENV{CMDG_SCENE} "AssemblyWinter2025")
+set(ENV{CMDG_SCENE} "${scene}")
 set(ENV{CMDG_DISABLE_AUDIO} "1")
 set(ENV{CMDG_ADJUST_SCREEN} "0")
 set(ENV{CMDG_SPLASH_SCREEN} "0")
@@ -89,7 +148,8 @@ execute_process(
 )
 
 if(NOT result EQUAL 0)
-    message(FATAL_ERROR "CMDG Nelostie benchmark failed with exit code ${result}")
+    message(FATAL_ERROR
+        "CMDG benchmark scene ${scene} (${run_id}) failed with exit code ${result}")
 endif()
 
 if(NOT EXISTS "${terminal_metrics}")
@@ -107,35 +167,50 @@ endif()
 file(READ "${terminal_metrics}" terminal_metrics_text)
 file(READ "${cmdg_metrics}" cmdg_metrics_text)
 
-if(NOT terminal_metrics_text MATCHES "\"paint_completed_frames\"")
-    message(FATAL_ERROR "terminal metrics JSON does not contain paint_completed_frames")
+vnm_terminal_read_json_field(terminal_backend_error_count
+    "${terminal_metrics_text}" "${terminal_metrics}" backend_error_count)
+vnm_terminal_read_json_field(terminal_timeout_expired
+    "${terminal_metrics_text}" "${terminal_metrics}" timeout_expired)
+vnm_terminal_read_json_field(terminal_paint_completed_frames
+    "${terminal_metrics_text}" "${terminal_metrics}" renderer paint_completed_frames)
+
+if(NOT terminal_backend_error_count STREQUAL "0")
+    message(FATAL_ERROR
+        "terminal metrics JSON reports backend_error_count=${terminal_backend_error_count}")
 endif()
 
-if(NOT cmdg_metrics_text MATCHES "\"scene_frames\"")
-    message(FATAL_ERROR "CMDG metrics JSON does not contain scene_frames")
-endif()
-
-if(NOT terminal_metrics_text MATCHES "\"backend_error_count\"[ \r\n]*:[ \r\n]*0")
-    message(FATAL_ERROR "terminal metrics JSON reports backend errors")
-endif()
-
-if(NOT terminal_metrics_text MATCHES "\"timeout_expired\"[ \r\n]*:[ \r\n]*false")
+if(terminal_timeout_expired)
     message(FATAL_ERROR "terminal metrics JSON reports a timeout")
 endif()
 
-if(NOT terminal_metrics_text MATCHES "\"paint_completed_frames\"[ \r\n]*:[ \r\n]*\"?[1-9][0-9]*\"?")
+if(NOT terminal_paint_completed_frames MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR "terminal metrics JSON reports no painted frames")
 endif()
 
-if(NOT cmdg_metrics_text MATCHES "\"exit_reason\"[ \r\n]*:[ \r\n]*\"frame_limit\"")
-    message(FATAL_ERROR "CMDG metrics JSON did not exit via frame_limit")
-endif()
+vnm_terminal_read_json_field(cmdg_scene
+    "${cmdg_metrics_text}" "${cmdg_metrics}" scene)
+vnm_terminal_read_json_field(cmdg_exit_reason
+    "${cmdg_metrics_text}" "${cmdg_metrics}" exit_reason)
+vnm_terminal_read_json_field(cmdg_scene_frames
+    "${cmdg_metrics_text}" "${cmdg_metrics}" scene_frames)
 
-if(NOT cmdg_metrics_text MATCHES "\"scene_frames\"[ \r\n]*:[ \r\n]*${frame_limit}")
+if(NOT cmdg_scene STREQUAL "${scene}")
     message(FATAL_ERROR
-        "CMDG metrics JSON does not report the expected frame limit ${frame_limit}")
+        "CMDG metrics JSON reports scene '${cmdg_scene}', expected '${scene}'")
 endif()
 
+if(NOT cmdg_exit_reason STREQUAL "frame_limit")
+    message(FATAL_ERROR
+        "CMDG metrics JSON reports exit_reason='${cmdg_exit_reason}', expected 'frame_limit'")
+endif()
+
+if(NOT cmdg_scene_frames STREQUAL "${frame_limit}")
+    message(FATAL_ERROR
+        "CMDG metrics JSON reports scene_frames=${cmdg_scene_frames}, "
+        "expected ${frame_limit}")
+endif()
+
+message(STATUS "CMDG scene: ${scene} (${run_id})")
 message(STATUS "terminal metrics: ${terminal_metrics}")
 message(STATUS "CMDG metrics: ${cmdg_metrics}")
 if(profile_text)

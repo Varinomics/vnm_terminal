@@ -2,6 +2,14 @@ using System.Diagnostics;
 
 namespace CMDG
 {
+    internal sealed class BenchmarkFrameLimitReachedException : Exception
+    {
+        public BenchmarkFrameLimitReachedException()
+            : base("CMDG benchmark frame limit reached.")
+        {
+        }
+    }
+
     internal class SceneControl
     {
         private static Stopwatch deltaTimeStopwatch = new();
@@ -30,10 +38,10 @@ namespace CMDG
                 ElapsedTime += DeltaTime;
                 Framebuffer.CalcFrameTime = (int)(FixedDeltaTime * 1000);
                 Framebuffer.CalcFrameWaitTime = 0;
-                
+
                 // Save after updating timing (so timing stays consistent)
                 Framebuffer.SaveFrameDirectlyFromBackBuffer();
-                BenchmarkTelemetry.RecordSceneFrame(
+                RecordBenchmarkSceneFrame(
                     ElapsedTime,
                     Framebuffer.CalcFrameTime,
                     Framebuffer.CalcFrameWaitTime);
@@ -60,10 +68,22 @@ namespace CMDG
                 Framebuffer.CalcFrameWaitTime = calcWaitTime;
                 DeltaTime = deltaTimeStopwatch.Elapsed.TotalSeconds;
                 ElapsedTime += DeltaTime;
-                BenchmarkTelemetry.RecordSceneFrame(
+                RecordBenchmarkSceneFrame(
                     ElapsedTime,
                     Framebuffer.CalcFrameTime,
                     Framebuffer.CalcFrameWaitTime);
+            }
+        }
+
+        private static void RecordBenchmarkSceneFrame(
+            double sceneElapsedSeconds,
+            int calcMs,
+            int waitMs)
+        {
+            BenchmarkTelemetry.RecordSceneFrame(sceneElapsedSeconds, calcMs, waitMs);
+            if (BenchmarkTelemetry.FrameLimitReached)
+            {
+                throw new BenchmarkFrameLimitReachedException();
             }
         }
     }
