@@ -2936,6 +2936,16 @@ void insert_renderer_frame_stats(
         QString::number(static_cast<qulonglong>(stats.dirty_rows)));
     object.insert(QStringLiteral("full_dirty_rows"),
         QString::number(static_cast<qulonglong>(stats.full_dirty_rows)));
+    object.insert(QStringLiteral("cell_pass_input_cells"),
+        QString::number(static_cast<qulonglong>(stats.cell_pass_input_cells)));
+    object.insert(QStringLiteral("cell_pass_classification_calls"),
+        QString::number(static_cast<qulonglong>(stats.cell_pass_classification_calls)));
+    object.insert(QStringLiteral("packed_pass_input_cells"),
+        QString::number(static_cast<qulonglong>(stats.packed_pass_input_cells)));
+    object.insert(QStringLiteral("packed_pass_cells_scanned"),
+        QString::number(static_cast<qulonglong>(stats.packed_pass_cells_scanned)));
+    object.insert(QStringLiteral("packed_pass_classification_calls"),
+        QString::number(static_cast<qulonglong>(stats.packed_pass_classification_calls)));
     object.insert(QStringLiteral("cells_considered"),
         QString::number(static_cast<qulonglong>(stats.cells_considered)));
     object.insert(QStringLiteral("cells_rendered"),
@@ -2969,6 +2979,26 @@ QJsonObject terminal_metrics_json(
         QString::number(static_cast<qulonglong>(cumulative_stats.paint_completed_frames)));
     renderer.insert(QStringLiteral("root_reused_frames"),
         QString::number(static_cast<qulonglong>(cumulative_stats.root_reused_frames)));
+    renderer.insert(QStringLiteral("text_content_rebuilds"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.text_content_rebuilds)));
+    renderer.insert(QStringLiteral("text_content_reused"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.text_content_reused)));
+    renderer.insert(QStringLiteral("text_resource_descriptor_reuses"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.text_resource_descriptor_reuses)));
+    renderer.insert(QStringLiteral("text_key_match_reuses"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.text_key_match_reuses)));
+    renderer.insert(QStringLiteral("text_key_builds"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.text_key_builds)));
+    renderer.insert(QStringLiteral("cache_key_builds"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.cache_key_builds)));
+    renderer.insert(QStringLiteral("text_dirty_row_ranges"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.text_dirty_row_ranges)));
+    renderer.insert(QStringLiteral("text_dirty_rows"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.text_dirty_rows)));
+    renderer.insert(QStringLiteral("text_resource_dirty_row_probes"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.text_resource_dirty_row_probes)));
+    renderer.insert(QStringLiteral("text_cache_entries_replaced"),
+        QString::number(static_cast<qulonglong>(cumulative_stats.text_cache_entries_replaced)));
     renderer.insert(QStringLiteral("frame"), frame);
 
     QJsonObject root;
