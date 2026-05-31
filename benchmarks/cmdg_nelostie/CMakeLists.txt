@@ -26,6 +26,8 @@ set(VNM_TERMINAL_CMDG_NELOSTIE_FRAMES "300" CACHE STRING
     "Number of CMDG scene frames to run before exiting.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE "1920x1080" CACHE STRING
     "vnm_terminal window size for the CMDG Nelostie benchmark.")
+set(VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE "10" CACHE STRING
+    "vnm_terminal font pixel size for CMDG benchmark runs.")
 option(VNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER
     "Run the CMDG Nelostie benchmark with the Qt software renderer."
     OFF)
@@ -79,6 +81,12 @@ endif()
 if(NOT VNM_TERMINAL_CMDG_NELOSTIE_TIMEOUT_SECONDS MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR
         "VNM_TERMINAL_CMDG_NELOSTIE_TIMEOUT_SECONDS must be a positive integer")
+endif()
+
+if(NOT VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE MATCHES "^[0-9]+(\\.[0-9]+)?$" OR
+    VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE MATCHES "^0+(\\.0+)?$")
+    message(FATAL_ERROR
+        "VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE must be a positive pixel size")
 endif()
 
 set(vnm_terminal_cmdg_seen_scenes)
@@ -187,6 +195,7 @@ if(vnm_terminal_cmdg_nelostie_exe)
                     "-Dtimeout_seconds=${VNM_TERMINAL_CMDG_NELOSTIE_TIMEOUT_SECONDS}"
                     "-Dframe_limit=${VNM_TERMINAL_CMDG_NELOSTIE_FRAMES}"
                     "-Dwindow_size=${VNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE}"
+                    "-Dfont_size=${VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE}"
                     "-Dqt_bin_dir=$<TARGET_FILE_DIR:Qt6::Core>"
                     "-Doffscreen_plugin_dir=${vnm_terminal_cmdg_offscreen_plugin_dir}"
                     "-Dsoftware_renderer=$<BOOL:${VNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER}>"
