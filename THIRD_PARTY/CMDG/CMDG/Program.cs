@@ -31,7 +31,7 @@ if (sceneType == null || runMethod == null)
 bool sceneIsRunning = true;
 Thread sceneThread = new Thread(() =>
 {
-    while (sceneIsRunning)
+    while (sceneIsRunning && !BenchmarkTelemetry.FrameLimitReached)
     {
         try
         {
@@ -41,6 +41,15 @@ Thread sceneThread = new Thread(() =>
                 sceneIsRunning = false;
             }
         }
+        catch (TargetInvocationException ex)
+            when (ex.InnerException is BenchmarkFrameLimitReachedException)
+        {
+            sceneIsRunning = false;
+        }
+        catch (BenchmarkFrameLimitReachedException)
+        {
+            sceneIsRunning = false;
+        }
         catch (Exception ex)
         {
             LogError($"Error running scene {sceneName}: {ex.InnerException?.Message ?? ex.Message}");
@@ -48,6 +57,7 @@ Thread sceneThread = new Thread(() =>
         }
     }
 });
+sceneThread.IsBackground = true;
 sceneThread.Start();
 
 
@@ -85,8 +95,13 @@ while (true)
         }
     }
 
+    if (BenchmarkTelemetry.FrameLimitReached)
+    {
+        sceneIsRunning = false;
+    }
+
     // Check if the scene has set an exit condition
-    if (checkForExitMethod != null)
+    if (sceneIsRunning && checkForExitMethod != null)
     {
         try
         {
