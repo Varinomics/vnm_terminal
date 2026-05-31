@@ -42,6 +42,15 @@ if(NOT DEFINED timeout_seconds OR
     message(FATAL_ERROR "CMDG benchmark timeout_seconds must be a positive integer")
 endif()
 
+if(NOT DEFINED font_size OR font_size STREQUAL "")
+    set(font_size "10")
+endif()
+
+if(NOT font_size MATCHES "^[0-9]+(\\.[0-9]+)?$" OR
+    font_size MATCHES "^0+(\\.0+)?$")
+    message(FATAL_ERROR "CMDG benchmark font_size must be a positive pixel size")
+endif()
+
 if(NOT DEFINED build_lock_path OR build_lock_path STREQUAL "")
     set(build_lock_path "${output_dir}/cmdg_build.lock")
 endif()
@@ -98,6 +107,7 @@ math(EXPR timeout_ms "${timeout_seconds} * 1000")
 set(terminal_arguments
     "${terminal_exe}"
     "--metrics-json" "${terminal_metrics}"
+    "--font-size" "${font_size}"
     "--window-size" "${window_size}"
     "--timeout-ms" "${timeout_ms}"
     "--require-output"

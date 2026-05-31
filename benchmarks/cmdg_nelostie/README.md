@@ -27,6 +27,7 @@ cmake -S C:\plms\varinomics\vnm_terminal `
   -DVNM_TERMINAL_ENABLE_PROFILING=OFF `
   -DVNM_TERMINAL_APP_BUILD_BENCHMARKS=ON `
   -DVNM_TERMINAL_CMDG_NELOSTIE_FRAMES=180 `
+  -DVNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE=10 `
   -DVNM_TERMINAL_CMDG_SCENES="AssemblyWinter2025;Example2D;Plasma" `
   -DVNM_TERMINAL_CMDG_REPEAT_COUNT=2 `
   -DVNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN=ON `
@@ -43,6 +44,12 @@ The default suite is a small autonomous scene mix:
 `QuickHello` and `ContentWiggler` are supported for explicit runs but are not
 defaults because they depend on pre-existing console content or scene-specific
 assumptions.
+
+The default benchmark window is `1920x1080` with font size `10`. Keep that
+font size unless the window size is adjusted to preserve at least the CMDG
+`310x75` framebuffer plus border/status rows. A larger font can reduce the
+terminal below CMDG's framebuffer width and cause line wrapping, which makes
+the demos render incorrectly and invalidates the profile.
 
 Run the full configured suite:
 
