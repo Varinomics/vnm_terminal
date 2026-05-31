@@ -1,7 +1,9 @@
 build/
+build_*/
 build_codex*/
 build_portable/
 dist/
+artifacts/
 out/
 more_tests/
 CMakeUserPresets.json
