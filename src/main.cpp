@@ -1628,6 +1628,28 @@ int app_status_after_process_exit(
     return 0;
 }
 
+template<typename Stats>
+std::uint64_t renderer_text_resource_dirty_row_metric_value(const Stats& stats)
+{
+    if constexpr (requires { stats.text_resource_dirty_row_lookups; }) {
+        return static_cast<std::uint64_t>(stats.text_resource_dirty_row_lookups);
+    }
+    else {
+        return static_cast<std::uint64_t>(stats.text_resource_dirty_row_probes);
+    }
+}
+
+template<typename Stats>
+const char* renderer_text_resource_dirty_row_metric_name(const Stats&)
+{
+    if constexpr (requires(Stats stats) { stats.text_resource_dirty_row_lookups; }) {
+        return "text_resource_dirty_row_lookups";
+    }
+    else {
+        return "text_resource_dirty_row_probes";
+    }
+}
+
 #if VNM_TERMINAL_PROFILING_ENABLED
 qint64 profile_nanoseconds(std::chrono::nanoseconds duration)
 {
@@ -2995,8 +3017,12 @@ QJsonObject terminal_metrics_json(
         QString::number(static_cast<qulonglong>(cumulative_stats.text_dirty_row_ranges)));
     renderer.insert(QStringLiteral("text_dirty_rows"),
         QString::number(static_cast<qulonglong>(cumulative_stats.text_dirty_rows)));
-    renderer.insert(QStringLiteral("text_resource_dirty_row_probes"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.text_resource_dirty_row_probes)));
+    renderer.insert(
+        QString::fromLatin1(
+            renderer_text_resource_dirty_row_metric_name(cumulative_stats)),
+        QString::number(
+            static_cast<qulonglong>(
+                renderer_text_resource_dirty_row_metric_value(cumulative_stats))));
     renderer.insert(QStringLiteral("text_cache_entries_replaced"),
         QString::number(static_cast<qulonglong>(cumulative_stats.text_cache_entries_replaced)));
     renderer.insert(QStringLiteral("frame"), frame);
