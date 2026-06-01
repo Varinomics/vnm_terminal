@@ -2094,8 +2094,6 @@ void append_model_profile_stats_text(
         stream,
         "max_printable_ascii_span_characters",
         stats.max_printable_ascii_span_characters);
-    append_profile_counter(stream, "printable_ascii_row_copies", stats.printable_ascii_row_copies);
-    append_profile_counter(stream, "printable_ascii_row_copy_cells", stats.printable_ascii_row_copy_cells);
     append_profile_counter(
         stream,
         "printable_ascii_local_cells_inspected",
