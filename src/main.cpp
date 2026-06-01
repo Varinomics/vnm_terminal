@@ -2324,6 +2324,10 @@ void append_text_layout_stats_text(
         static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_attempted));
     append_profile_counter(
         stream,
+        "text_ascii_replacement_runs_trusted_fast_path",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_trusted_fast_path));
+    append_profile_counter(
+        stream,
         "text_ascii_replacement_runs_succeeded",
         static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_succeeded));
     append_profile_counter(
@@ -2434,6 +2438,11 @@ void append_text_layout_stats_text(
         stream,
         "text_ascii_replacement_code_units_attempted",
         static_cast<std::uint64_t>(stats.text_ascii_replacement_code_units_attempted));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_code_units_trusted_fast_path",
+        static_cast<std::uint64_t>(
+            stats.text_ascii_replacement_code_units_trusted_fast_path));
     append_profile_counter(
         stream,
         "text_ascii_replacement_code_units_succeeded",
@@ -3530,6 +3539,10 @@ void insert_text_layout_stats_json(
         stats.text_ascii_replacement_runs_attempted);
     insert_json_counter(
         object,
+        "text_ascii_replacement_runs_trusted_fast_path",
+        stats.text_ascii_replacement_runs_trusted_fast_path);
+    insert_json_counter(
+        object,
         "text_ascii_replacement_runs_succeeded",
         stats.text_ascii_replacement_runs_succeeded);
     insert_json_counter(
@@ -3633,6 +3646,10 @@ void insert_text_layout_stats_json(
         object,
         "text_ascii_replacement_code_units_attempted",
         stats.text_ascii_replacement_code_units_attempted);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_code_units_trusted_fast_path",
+        stats.text_ascii_replacement_code_units_trusted_fast_path);
     insert_json_counter(
         object,
         "text_ascii_replacement_code_units_succeeded",
