@@ -28,18 +28,24 @@ if(NOT run_id MATCHES "^[A-Za-z0-9_]+$")
     message(FATAL_ERROR "CMDG benchmark run id is invalid: ${run_id}")
 endif()
 
-if(NOT DEFINED output_dir OR output_dir STREQUAL "")
-    message(FATAL_ERROR "CMDG benchmark output_dir was not provided")
+if(NOT DEFINED build_only)
+    set(build_only OFF)
 endif()
 
-if(NOT DEFINED frame_limit OR
-    NOT frame_limit MATCHES "^[1-9][0-9]*$")
-    message(FATAL_ERROR "CMDG benchmark frame_limit must be a positive integer")
-endif()
+if(NOT build_only)
+    if(NOT DEFINED output_dir OR output_dir STREQUAL "")
+        message(FATAL_ERROR "CMDG benchmark output_dir was not provided")
+    endif()
 
-if(NOT DEFINED timeout_seconds OR
-    NOT timeout_seconds MATCHES "^[1-9][0-9]*$")
-    message(FATAL_ERROR "CMDG benchmark timeout_seconds must be a positive integer")
+    if(NOT DEFINED frame_limit OR
+        NOT frame_limit MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "CMDG benchmark frame_limit must be a positive integer")
+    endif()
+
+    if(NOT DEFINED timeout_seconds OR
+        NOT timeout_seconds MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "CMDG benchmark timeout_seconds must be a positive integer")
+    endif()
 endif()
 
 if(NOT DEFINED font_size OR font_size STREQUAL "")
@@ -59,7 +65,7 @@ if(NOT DEFINED build_lock_path OR build_lock_path STREQUAL "")
     set(build_lock_path "${output_dir}/cmdg_build.lock")
 endif()
 
-if(NOT EXISTS "${terminal_exe}")
+if(NOT build_only AND NOT EXISTS "${terminal_exe}")
     message(FATAL_ERROR "vnm_terminal executable does not exist: ${terminal_exe}")
 endif()
 
@@ -87,6 +93,11 @@ endif()
 
 if(NOT EXISTS "${cmdg_exe}")
     message(FATAL_ERROR "CMDG executable does not exist: ${cmdg_exe}")
+endif()
+
+if(build_only)
+    message(STATUS "CMDG build ready: ${cmdg_exe}")
+    return()
 endif()
 
 if(NOT IS_DIRECTORY "${cmdg_working_dir}")

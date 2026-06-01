@@ -345,6 +345,69 @@ if(TARGET vnm_terminal_canvas_fixture)
         TIMEOUT 30
     )
 
+    add_test(
+        NAME vnm_terminal_metrics_json_smoke
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dmetrics_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_json_$<CONFIG>.json"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_metrics_json.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            "--unset=VNM_TERMINAL_STAGE42_MODEL_ASCII_DIRECT_PRINT"
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "VNM_TERMINAL_STAGE42_RENDER_CELL_ROW_CACHE=0"
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--software-renderer"
+            "--window-size" "800x480"
+            "--font-size" "10"
+            "--metrics-json" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_json_$<CONFIG>.json"
+            "--timeout-ms" "10000"
+            "--require-output"
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--list"
+    )
+
+    set_tests_properties(vnm_terminal_metrics_json_smoke PROPERTIES
+        TIMEOUT 30
+    )
+
+    if(VNM_TERMINAL_ENABLE_PROFILING)
+        add_test(
+            NAME vnm_terminal_metrics_profile_text_smoke
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-Dmetrics_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_profile_text_$<CONFIG>.json"
+                "-Dprofile_text_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_profile_text_$<CONFIG>.txt"
+                "-Dexpected_profile_text_requested=ON"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_metrics_json.cmake"
+                --
+                "${CMAKE_COMMAND}" -E env
+                "--unset=VNM_TERMINAL_STAGE42_MODEL_ASCII_DIRECT_PRINT"
+                ${vnm_terminal_qt_offscreen_environment}
+                ${vnm_terminal_qt_unscaled_environment}
+                "VNM_TERMINAL_STAGE42_RENDER_CELL_ROW_CACHE=0"
+                "${vnm_terminal_qt_runtime_path}"
+                "$<TARGET_FILE:vnm_terminal>"
+                "--software-renderer"
+                "--window-size" "800x480"
+                "--font-size" "10"
+                "--metrics-json" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_profile_text_$<CONFIG>.json"
+                "--profile-text" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_profile_text_$<CONFIG>.txt"
+                "--timeout-ms" "10000"
+                "--require-output"
+                "--"
+                "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+                "--list"
+        )
+
+        set_tests_properties(vnm_terminal_metrics_profile_text_smoke PROPERTIES
+            TIMEOUT 30
+        )
+    endif()
+
     if(VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
         add_test(
             NAME vnm_terminal_capture_transcript

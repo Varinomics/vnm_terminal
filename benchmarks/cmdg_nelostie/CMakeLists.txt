@@ -8,20 +8,35 @@ set(VNM_TERMINAL_CMDG_NELOSTIE_SOURCE_DIR
     "Source checkout for the vendored CMDG AssemblyWinter2025/Nelostie benchmark workload.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_PROFILE_TEXT "" CACHE FILEPATH
     "Optional profile text output path for the CMDG Nelostie benchmark.")
+option(VNM_TERMINAL_CMDG_NELOSTIE_WRITE_PROFILE_TEXT
+    "Write per-run vnm_terminal profile text for CMDG benchmark runs."
+    OFF)
+set(vnm_terminal_cmdg_profile_default_scenes "AssemblyWinter2025")
+set(vnm_terminal_cmdg_full_default_scenes
+    "AssemblyWinter2025;Example2D;Plasma;JuliaSetTest;ParticleVortex;Example3D")
 if(VNM_TERMINAL_CMDG_NELOSTIE_PROFILE_TEXT)
-    set(vnm_terminal_cmdg_default_scenes "AssemblyWinter2025")
+    set(vnm_terminal_cmdg_default_scenes "${vnm_terminal_cmdg_profile_default_scenes}")
 else()
-    set(vnm_terminal_cmdg_default_scenes
-        "AssemblyWinter2025;Example2D;Plasma;JuliaSetTest;ParticleVortex;Example3D")
+    set(vnm_terminal_cmdg_default_scenes "${vnm_terminal_cmdg_full_default_scenes}")
 endif()
 set(VNM_TERMINAL_CMDG_SCENES
     "${vnm_terminal_cmdg_default_scenes}"
     CACHE STRING
     "Semicolon-separated CMDG scenes for the benchmark suite.")
+if(VNM_TERMINAL_CMDG_NELOSTIE_PROFILE_TEXT AND
+    VNM_TERMINAL_CMDG_SCENES STREQUAL vnm_terminal_cmdg_full_default_scenes)
+    set(VNM_TERMINAL_CMDG_SCENES
+        "${vnm_terminal_cmdg_profile_default_scenes}"
+        CACHE STRING
+        "Semicolon-separated CMDG scenes for the benchmark suite."
+        FORCE)
+endif()
 set(VNM_TERMINAL_CMDG_REPEAT_COUNT "1" CACHE STRING
     "Number of times to run each configured CMDG benchmark scene.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_TIMEOUT_SECONDS "180" CACHE STRING
     "Timeout for the CMDG Nelostie benchmark.")
+set(VNM_TERMINAL_CMDG_NELOSTIE_BUILD_TIMEOUT_SECONDS "600" CACHE STRING
+    "Timeout for the one-time CMDG source build fixture.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_FRAMES "300" CACHE STRING
     "Number of CMDG scene frames to run before exiting.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE "1920x1080" CACHE STRING
@@ -129,6 +144,13 @@ if(VNM_TERMINAL_CMDG_NELOSTIE_PROFILE_TEXT AND
         "cannot be used with multiple CMDG scenes or repeats")
 endif()
 
+if((VNM_TERMINAL_CMDG_NELOSTIE_PROFILE_TEXT OR
+    VNM_TERMINAL_CMDG_NELOSTIE_WRITE_PROFILE_TEXT) AND
+    NOT VNM_TERMINAL_ENABLE_PROFILING)
+    message(FATAL_ERROR
+        "CMDG profile text output requires VNM_TERMINAL_ENABLE_PROFILING=ON")
+endif()
+
 set(vnm_terminal_cmdg_nelostie_exe "${VNM_TERMINAL_CMDG_NELOSTIE_EXE}")
 set(vnm_terminal_cmdg_nelostie_build_from_source OFF)
 
@@ -142,6 +164,28 @@ endif()
 if(vnm_terminal_cmdg_nelostie_exe)
     set(vnm_terminal_cmdg_nelostie_profile_text
         "${VNM_TERMINAL_CMDG_NELOSTIE_PROFILE_TEXT}")
+
+    set(vnm_terminal_cmdg_build_fixture "")
+    if(vnm_terminal_cmdg_nelostie_build_from_source)
+        set(vnm_terminal_cmdg_build_fixture vnm_terminal_cmdg_nelostie_built)
+        add_test(
+            NAME vnm_terminal_cmdg_nelostie_build
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-Dcmdg_exe=${vnm_terminal_cmdg_nelostie_exe}"
+                "-Dcmdg_source_dir=${VNM_TERMINAL_CMDG_NELOSTIE_SOURCE_DIR}"
+                "-Dbuild_cmdg=1"
+                "-Dbuild_only=1"
+                "-Dbuild_lock_path=${CMAKE_CURRENT_BINARY_DIR}/cmdg_build.lock"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/run_cmdg_nelostie.cmake"
+        )
+        set_tests_properties(vnm_terminal_cmdg_nelostie_build PROPERTIES
+            LABELS "benchmark;cmdg;cmdg_suite;cmdg_setup"
+            RUN_SERIAL TRUE
+            FIXTURES_SETUP "${vnm_terminal_cmdg_build_fixture}"
+            TIMEOUT "${VNM_TERMINAL_CMDG_NELOSTIE_BUILD_TIMEOUT_SECONDS}"
+        )
+    endif()
 
     if(VNM_TERMINAL_CMDG_NELOSTIE_WORKING_DIR STREQUAL "")
         get_filename_component(
@@ -174,7 +218,7 @@ if(vnm_terminal_cmdg_nelostie_exe)
             if(vnm_terminal_cmdg_nelostie_profile_text)
                 set(vnm_terminal_cmdg_profile_text
                     "${vnm_terminal_cmdg_nelostie_profile_text}")
-            elseif(VNM_TERMINAL_ENABLE_PROFILING)
+            elseif(VNM_TERMINAL_CMDG_NELOSTIE_WRITE_PROFILE_TEXT)
                 set(vnm_terminal_cmdg_profile_text
                     "${vnm_terminal_cmdg_output_dir}/vnm_terminal_cmdg_${vnm_terminal_cmdg_run_id}_profile.txt")
             else()
@@ -189,7 +233,7 @@ if(vnm_terminal_cmdg_nelostie_exe)
                     "-Dcmdg_exe=${vnm_terminal_cmdg_nelostie_exe}"
                     "-Dcmdg_working_dir=${vnm_terminal_cmdg_nelostie_working_dir}"
                     "-Dcmdg_source_dir=${VNM_TERMINAL_CMDG_NELOSTIE_SOURCE_DIR}"
-                    "-Dbuild_cmdg=$<BOOL:${vnm_terminal_cmdg_nelostie_build_from_source}>"
+                    "-Dbuild_cmdg=0"
                     "-Dbuild_lock_path=${CMAKE_CURRENT_BINARY_DIR}/cmdg_build.lock"
                     "-Dscene=${vnm_terminal_cmdg_scene}"
                     "-Drun_id=${vnm_terminal_cmdg_run_id}"
@@ -218,6 +262,11 @@ if(vnm_terminal_cmdg_nelostie_exe)
                 RUN_SERIAL TRUE
                 TIMEOUT "${vnm_terminal_cmdg_nelostie_ctest_timeout}"
             )
+            if(vnm_terminal_cmdg_build_fixture)
+                set_tests_properties(${vnm_terminal_cmdg_test_name} PROPERTIES
+                    FIXTURES_REQUIRED "${vnm_terminal_cmdg_build_fixture}"
+                )
+            endif()
         endforeach()
     endforeach()
 endif()
