@@ -2197,6 +2197,167 @@ void append_session_profile_stats_text(
 }
 
 template<typename Renderer_stats>
+void append_text_layout_stats_text(
+    QTextStream&           stream,
+    const Renderer_stats&  stats)
+{
+    append_profile_counter(
+        stream,
+        "qt_text_layout_calls",
+        static_cast<std::uint64_t>(stats.qt_text_layout_calls));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_single_code_unit",
+        static_cast<std::uint64_t>(stats.text_layout_runs_single_code_unit));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_multi_code_unit",
+        static_cast<std::uint64_t>(stats.text_layout_runs_multi_code_unit));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_all_space",
+        static_cast<std::uint64_t>(stats.text_layout_runs_all_space));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_printable_ascii",
+        static_cast<std::uint64_t>(stats.text_layout_runs_printable_ascii));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_printable_ascii_with_space",
+        static_cast<std::uint64_t>(stats.text_layout_runs_printable_ascii_with_space));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_other_ascii",
+        static_cast<std::uint64_t>(stats.text_layout_runs_other_ascii));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_non_ascii",
+        static_cast<std::uint64_t>(stats.text_layout_runs_non_ascii));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_clipped",
+        static_cast<std::uint64_t>(stats.text_layout_runs_clipped));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_ascii_layout_font",
+        static_cast<std::uint64_t>(stats.text_layout_runs_ascii_layout_font));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_force_blended_order",
+        static_cast<std::uint64_t>(stats.text_layout_runs_force_blended_order));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_with_hyperlink",
+        static_cast<std::uint64_t>(stats.text_layout_runs_with_hyperlink));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_with_decoration",
+        static_cast<std::uint64_t>(stats.text_layout_runs_with_decoration));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_mixed_ascii_non_ascii",
+        static_cast<std::uint64_t>(stats.text_layout_runs_mixed_ascii_non_ascii));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_pure_non_ascii",
+        static_cast<std::uint64_t>(stats.text_layout_runs_pure_non_ascii));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_plain_unclipped",
+        static_cast<std::uint64_t>(stats.text_layout_runs_plain_unclipped));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_plain_unclipped_ascii_font",
+        static_cast<std::uint64_t>(stats.text_layout_runs_plain_unclipped_ascii_font));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_all_space_plain_unclipped",
+        static_cast<std::uint64_t>(stats.text_layout_runs_all_space_plain_unclipped));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_printable_ascii_plain_unclipped",
+        static_cast<std::uint64_t>(stats.text_layout_runs_printable_ascii_plain_unclipped));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_non_ascii_plain_unclipped",
+        static_cast<std::uint64_t>(stats.text_layout_runs_non_ascii_plain_unclipped));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_mixed_ascii_non_ascii_plain_unclipped",
+        static_cast<std::uint64_t>(
+            stats.text_layout_runs_mixed_ascii_non_ascii_plain_unclipped));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_pure_non_ascii_plain_unclipped",
+        static_cast<std::uint64_t>(stats.text_layout_runs_pure_non_ascii_plain_unclipped));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_fast_space_candidate",
+        static_cast<std::uint64_t>(stats.text_layout_runs_fast_space_candidate));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_fast_ascii_candidate",
+        static_cast<std::uint64_t>(stats.text_layout_runs_fast_ascii_candidate));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_fast_ascii_no_space_candidate",
+        static_cast<std::uint64_t>(stats.text_layout_runs_fast_ascii_no_space_candidate));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_fast_ascii_single_candidate",
+        static_cast<std::uint64_t>(stats.text_layout_runs_fast_ascii_single_candidate));
+    append_profile_counter(
+        stream,
+        "text_layout_runs_fast_ascii_multi_candidate",
+        static_cast<std::uint64_t>(stats.text_layout_runs_fast_ascii_multi_candidate));
+    append_profile_counter(
+        stream,
+        "text_layout_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_space_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_space_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_printable_ascii_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_printable_ascii_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_other_ascii_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_other_ascii_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_non_ascii_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_non_ascii_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_plain_unclipped_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_plain_unclipped_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_all_space_plain_unclipped_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_all_space_plain_unclipped_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_printable_ascii_plain_unclipped_code_units",
+        static_cast<std::uint64_t>(
+            stats.text_layout_printable_ascii_plain_unclipped_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_non_ascii_plain_unclipped_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_non_ascii_plain_unclipped_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_fast_space_candidate_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_fast_space_candidate_code_units));
+    append_profile_counter(
+        stream,
+        "text_layout_fast_ascii_candidate_code_units",
+        static_cast<std::uint64_t>(stats.text_layout_fast_ascii_candidate_code_units));
+}
+
+template<typename Renderer_stats>
 void append_renderer_stats_text(
     QTextStream&                 stream,
     const Renderer_stats&        stats)
@@ -2238,6 +2399,7 @@ void append_renderer_stats_text(
         stream,
         "text_cache_entry_max_child_nodes_cleared",
         static_cast<std::uint64_t>(stats.text_cache_entry_max_child_nodes_cleared));
+    append_text_layout_stats_text(stream, stats);
     append_profile_counter(
         stream,
         "text_groups_considered",
@@ -2565,6 +2727,7 @@ void append_cumulative_renderer_stats_text(
         stream,
         "text_cache_entry_max_child_nodes_cleared",
         stats.text_cache_entry_max_child_nodes_cleared);
+    append_text_layout_stats_text(stream, stats);
     append_profile_counter(stream, "text_groups_considered", stats.text_groups_considered);
     append_profile_counter(stream, "text_groups_dirty",      stats.text_groups_dirty);
     append_profile_counter(stream, "text_groups_clean",      stats.text_groups_clean);
@@ -3157,6 +3320,158 @@ void insert_renderer_frame_stats(
     object.insert(QStringLiteral("simple_content"), simple_content);
 }
 
+void insert_text_layout_stats_json(
+    QJsonObject&                                      object,
+    const term::terminal_renderer_cumulative_stats_t& stats)
+{
+    insert_json_counter(object, "qt_text_layout_calls", stats.qt_text_layout_calls);
+    insert_json_counter(
+        object,
+        "text_layout_runs_single_code_unit",
+        stats.text_layout_runs_single_code_unit);
+    insert_json_counter(
+        object,
+        "text_layout_runs_multi_code_unit",
+        stats.text_layout_runs_multi_code_unit);
+    insert_json_counter(
+        object,
+        "text_layout_runs_all_space",
+        stats.text_layout_runs_all_space);
+    insert_json_counter(
+        object,
+        "text_layout_runs_printable_ascii",
+        stats.text_layout_runs_printable_ascii);
+    insert_json_counter(
+        object,
+        "text_layout_runs_printable_ascii_with_space",
+        stats.text_layout_runs_printable_ascii_with_space);
+    insert_json_counter(
+        object,
+        "text_layout_runs_other_ascii",
+        stats.text_layout_runs_other_ascii);
+    insert_json_counter(
+        object,
+        "text_layout_runs_non_ascii",
+        stats.text_layout_runs_non_ascii);
+    insert_json_counter(
+        object,
+        "text_layout_runs_clipped",
+        stats.text_layout_runs_clipped);
+    insert_json_counter(
+        object,
+        "text_layout_runs_ascii_layout_font",
+        stats.text_layout_runs_ascii_layout_font);
+    insert_json_counter(
+        object,
+        "text_layout_runs_force_blended_order",
+        stats.text_layout_runs_force_blended_order);
+    insert_json_counter(
+        object,
+        "text_layout_runs_with_hyperlink",
+        stats.text_layout_runs_with_hyperlink);
+    insert_json_counter(
+        object,
+        "text_layout_runs_with_decoration",
+        stats.text_layout_runs_with_decoration);
+    insert_json_counter(
+        object,
+        "text_layout_runs_mixed_ascii_non_ascii",
+        stats.text_layout_runs_mixed_ascii_non_ascii);
+    insert_json_counter(
+        object,
+        "text_layout_runs_pure_non_ascii",
+        stats.text_layout_runs_pure_non_ascii);
+    insert_json_counter(
+        object,
+        "text_layout_runs_plain_unclipped",
+        stats.text_layout_runs_plain_unclipped);
+    insert_json_counter(
+        object,
+        "text_layout_runs_plain_unclipped_ascii_font",
+        stats.text_layout_runs_plain_unclipped_ascii_font);
+    insert_json_counter(
+        object,
+        "text_layout_runs_all_space_plain_unclipped",
+        stats.text_layout_runs_all_space_plain_unclipped);
+    insert_json_counter(
+        object,
+        "text_layout_runs_printable_ascii_plain_unclipped",
+        stats.text_layout_runs_printable_ascii_plain_unclipped);
+    insert_json_counter(
+        object,
+        "text_layout_runs_non_ascii_plain_unclipped",
+        stats.text_layout_runs_non_ascii_plain_unclipped);
+    insert_json_counter(
+        object,
+        "text_layout_runs_mixed_ascii_non_ascii_plain_unclipped",
+        stats.text_layout_runs_mixed_ascii_non_ascii_plain_unclipped);
+    insert_json_counter(
+        object,
+        "text_layout_runs_pure_non_ascii_plain_unclipped",
+        stats.text_layout_runs_pure_non_ascii_plain_unclipped);
+    insert_json_counter(
+        object,
+        "text_layout_runs_fast_space_candidate",
+        stats.text_layout_runs_fast_space_candidate);
+    insert_json_counter(
+        object,
+        "text_layout_runs_fast_ascii_candidate",
+        stats.text_layout_runs_fast_ascii_candidate);
+    insert_json_counter(
+        object,
+        "text_layout_runs_fast_ascii_no_space_candidate",
+        stats.text_layout_runs_fast_ascii_no_space_candidate);
+    insert_json_counter(
+        object,
+        "text_layout_runs_fast_ascii_single_candidate",
+        stats.text_layout_runs_fast_ascii_single_candidate);
+    insert_json_counter(
+        object,
+        "text_layout_runs_fast_ascii_multi_candidate",
+        stats.text_layout_runs_fast_ascii_multi_candidate);
+    insert_json_counter(object, "text_layout_code_units", stats.text_layout_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_space_code_units",
+        stats.text_layout_space_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_printable_ascii_code_units",
+        stats.text_layout_printable_ascii_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_other_ascii_code_units",
+        stats.text_layout_other_ascii_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_non_ascii_code_units",
+        stats.text_layout_non_ascii_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_plain_unclipped_code_units",
+        stats.text_layout_plain_unclipped_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_all_space_plain_unclipped_code_units",
+        stats.text_layout_all_space_plain_unclipped_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_printable_ascii_plain_unclipped_code_units",
+        stats.text_layout_printable_ascii_plain_unclipped_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_non_ascii_plain_unclipped_code_units",
+        stats.text_layout_non_ascii_plain_unclipped_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_fast_space_candidate_code_units",
+        stats.text_layout_fast_space_candidate_code_units);
+    insert_json_counter(
+        object,
+        "text_layout_fast_ascii_candidate_code_units",
+        stats.text_layout_fast_ascii_candidate_code_units);
+}
+
 QJsonObject terminal_metrics_json(
     const VNM_TerminalSurface&  surface,
     const Runtime_state&        state,
@@ -3206,7 +3521,7 @@ QJsonObject terminal_metrics_json(
         "route_graphic_geometry_cells",
         cumulative_stats.route_graphic_geometry_cells);
     insert_json_counter(renderer, "route_fallback_cells", cumulative_stats.route_fallback_cells);
-    insert_json_counter(renderer, "qt_text_layout_calls", cumulative_stats.qt_text_layout_calls);
+    insert_text_layout_stats_json(renderer, cumulative_stats);
     insert_json_counter(renderer, "qsg_nodes_created", cumulative_stats.qsg_nodes_created);
     insert_json_counter(renderer, "qsg_nodes_replaced", cumulative_stats.qsg_nodes_replaced);
     insert_json_counter(renderer, "qsg_nodes_destroyed", cumulative_stats.qsg_nodes_destroyed);
