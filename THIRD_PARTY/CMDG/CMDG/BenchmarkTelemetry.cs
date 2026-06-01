@@ -86,6 +86,7 @@ public static class BenchmarkTelemetry
         var json = new StringBuilder(1024);
         json.AppendLine("{");
         AppendJsonString(json, "scene", Config.SceneName, true);
+        AppendJsonBoolean(json, "hide_cursor", Config.BenchmarkHideCursor, true);
         AppendJsonString(json, "exit_reason", exitReason, true);
         AppendJsonNumber(json, "exit_code", exitCode, true);
         AppendJsonNumber(json, "elapsed_ms", Elapsed.Elapsed.TotalMilliseconds, true);
@@ -121,6 +122,13 @@ public static class BenchmarkTelemetry
     private static void AppendJsonNumber(StringBuilder json, string name, long value, bool comma)
     {
         json.Append("  \"").Append(name).Append("\": ").Append(value);
+        json.AppendLine(comma ? "," : "");
+    }
+
+    private static void AppendJsonBoolean(StringBuilder json, string name, bool value, bool comma)
+    {
+        json.Append("  \"").Append(name).Append("\": ");
+        json.Append(value ? "true" : "false");
         json.AppendLine(comma ? "," : "");
     }
 

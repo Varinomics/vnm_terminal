@@ -51,6 +51,10 @@ if(NOT font_size MATCHES "^[0-9]+(\\.[0-9]+)?$" OR
     message(FATAL_ERROR "CMDG benchmark font_size must be a positive pixel size")
 endif()
 
+if(NOT DEFINED hide_cursor)
+    set(hide_cursor OFF)
+endif()
+
 if(NOT DEFINED build_lock_path OR build_lock_path STREQUAL "")
     set(build_lock_path "${output_dir}/cmdg_build.lock")
 endif()
@@ -140,6 +144,7 @@ set(ENV{CMDG_ADJUST_SCREEN} "0")
 set(ENV{CMDG_SPLASH_SCREEN} "0")
 set(ENV{CMDG_BENCHMARK_FRAME_LIMIT} "${frame_limit}")
 set(ENV{CMDG_BENCHMARK_METRICS} "${cmdg_metrics}")
+set(ENV{CMDG_BENCHMARK_HIDE_CURSOR} "${hide_cursor}")
 
 if(offscreen)
     set(ENV{QT_QPA_PLATFORM} "offscreen")
@@ -201,6 +206,8 @@ vnm_terminal_read_json_field(cmdg_scene
     "${cmdg_metrics_text}" "${cmdg_metrics}" scene)
 vnm_terminal_read_json_field(cmdg_exit_reason
     "${cmdg_metrics_text}" "${cmdg_metrics}" exit_reason)
+vnm_terminal_read_json_field(cmdg_hide_cursor
+    "${cmdg_metrics_text}" "${cmdg_metrics}" hide_cursor)
 vnm_terminal_read_json_field(cmdg_scene_frames
     "${cmdg_metrics_text}" "${cmdg_metrics}" scene_frames)
 
@@ -212,6 +219,16 @@ endif()
 if(NOT cmdg_exit_reason STREQUAL "frame_limit")
     message(FATAL_ERROR
         "CMDG metrics JSON reports exit_reason='${cmdg_exit_reason}', expected 'frame_limit'")
+endif()
+
+if(hide_cursor)
+    if(NOT cmdg_hide_cursor)
+        message(FATAL_ERROR
+            "CMDG metrics JSON reports hide_cursor='${cmdg_hide_cursor}', expected true")
+    endif()
+elseif(cmdg_hide_cursor)
+    message(FATAL_ERROR
+        "CMDG metrics JSON reports hide_cursor='${cmdg_hide_cursor}', expected false")
 endif()
 
 if(NOT cmdg_scene_frames STREQUAL "${frame_limit}")

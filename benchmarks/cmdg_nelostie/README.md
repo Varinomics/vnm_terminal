@@ -31,7 +31,8 @@ cmake -S C:\plms\varinomics\vnm_terminal `
   -DVNM_TERMINAL_CMDG_SCENES="AssemblyWinter2025;Example2D;Plasma" `
   -DVNM_TERMINAL_CMDG_REPEAT_COUNT=2 `
   -DVNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN=ON `
-  -DVNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER=ON
+  -DVNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER=ON `
+  -DVNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR=ON
 ```
 
 By default the runner builds `THIRD_PARTY/CMDG/CMDG/CMDG.csproj` in Release
@@ -50,6 +51,12 @@ font size unless the window size is adjusted to preserve at least the CMDG
 `310x75` framebuffer plus border/status rows. A larger font can reduce the
 terminal below CMDG's framebuffer width and cause line wrapping, which makes
 the demos render incorrectly and invalidates the profile.
+
+The runner hides the CMDG terminal cursor by default
+(`VNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR=ON`). This keeps the benchmark from
+measuring caret overlay movement as part of the scene workload. Set it to `OFF`
+only when intentionally comparing against older captures that included cursor
+painting.
 
 Run the full configured suite:
 

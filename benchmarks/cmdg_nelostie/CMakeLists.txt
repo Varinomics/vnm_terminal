@@ -34,6 +34,9 @@ option(VNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER
 option(VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN
     "Run the CMDG Nelostie benchmark with the Qt offscreen platform."
     OFF)
+option(VNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR
+    "Ask CMDG to hide the terminal cursor during benchmark scene frames."
+    ON)
 
 if(VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN)
     find_package(Qt6Gui 6.7 REQUIRED COMPONENTS QOffscreenIntegrationPlugin)
@@ -196,6 +199,7 @@ if(vnm_terminal_cmdg_nelostie_exe)
                     "-Dframe_limit=${VNM_TERMINAL_CMDG_NELOSTIE_FRAMES}"
                     "-Dwindow_size=${VNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE}"
                     "-Dfont_size=${VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE}"
+                    "-Dhide_cursor=$<BOOL:${VNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR}>"
                     "-Dqt_bin_dir=$<TARGET_FILE_DIR:Qt6::Core>"
                     "-Doffscreen_plugin_dir=${vnm_terminal_cmdg_offscreen_plugin_dir}"
                     "-Dsoftware_renderer=$<BOOL:${VNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER}>"

@@ -10,6 +10,8 @@ string sceneName = Config.SceneName;
 Util.Initialize();
 // Reset terminal colors to default (white on black) in case a previous run left them changed
 Util.ResetConsoleColors();
+SetBenchmarkCursorVisible(false);
+AppDomain.CurrentDomain.ProcessExit += (_, _) => SetBenchmarkCursorVisible(true);
 if (Config.AdjustScreen) AdjustScreen.Run();
 Util.DrawBorder();
 if (Config.SplashScreen) SplashScreen.ShowSplashScreen();
@@ -25,6 +27,7 @@ if (sceneType == null || runMethod == null)
 {
     Console.Clear();
     Console.WriteLine($"Error: Scene {sceneName} not found or missing Run() method.");
+    SetBenchmarkCursorVisible(true);
     BenchmarkTelemetry.WriteSummary(1, "scene_not_found");
     Environment.Exit(1);
 }
@@ -150,6 +153,7 @@ while (true)
             SplashScreen.ShowEndScreen();
         }
         Util.ResetConsoleColors();
+        SetBenchmarkCursorVisible(true);
         BenchmarkTelemetry.WriteSummary(0, BenchmarkTelemetry.ExitReason);
         Environment.Exit(0);
     }
@@ -163,4 +167,15 @@ static void LogError(string message)
     {
         writer.WriteLine($"{DateTime.Now}: {message}");
     }
+}
+
+static void SetBenchmarkCursorVisible(bool visible)
+{
+    if (!Config.BenchmarkHideCursor)
+    {
+        return;
+    }
+
+    Console.Write(visible ? "\u001b[?25h" : "\u001b[?25l");
+    Console.Out.Flush();
 }

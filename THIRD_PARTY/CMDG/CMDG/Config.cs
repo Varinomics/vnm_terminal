@@ -30,6 +30,7 @@
         public static bool BenchmarkMode = EnvFlag("CMDG_BENCHMARK", false);
         public static int BenchmarkFrameLimit = EnvInt("CMDG_BENCHMARK_FRAME_LIMIT", 0);
         public static string BenchmarkMetricsPath = EnvString("CMDG_BENCHMARK_METRICS", "");
+        public static bool BenchmarkHideCursor = EnvFlag("CMDG_BENCHMARK_HIDE_CURSOR", false);
         public static bool DisableAudio = EnvFlag("CMDG_DISABLE_AUDIO", BenchmarkMode);
         public static bool AdjustScreen = EnvFlag("CMDG_ADJUST_SCREEN", false); // Instructions to adjust screen at startup
         public static bool SplashScreen = EnvFlag("CMDG_SPLASH_SCREEN", !BenchmarkMode); // CMDG splash screen after screen adjustment and before demo.
