@@ -2312,6 +2312,73 @@ void append_text_layout_stats_text(
         static_cast<std::uint64_t>(stats.text_layout_runs_fast_ascii_multi_candidate));
     append_profile_counter(
         stream,
+        "text_ascii_replacement_runs_screened",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_screened));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_eligible",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_eligible));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_attempted",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_attempted));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_succeeded",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_succeeded));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_all_space_succeeded",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_all_space_succeeded));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_fallback",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_fallback));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_clipped",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_rejected_clipped));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_force_blended_order",
+        static_cast<std::uint64_t>(
+            stats.text_ascii_replacement_runs_rejected_force_blended_order));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_decoration",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_rejected_decoration));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_hyperlink",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_rejected_hyperlink));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_non_printable_ascii",
+        static_cast<std::uint64_t>(
+            stats.text_ascii_replacement_runs_rejected_non_printable_ascii));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_non_ascii",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_rejected_non_ascii));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_geometry",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_rejected_geometry));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_unsupported_font",
+        static_cast<std::uint64_t>(
+            stats.text_ascii_replacement_runs_rejected_unsupported_font));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_internal_node",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_rejected_internal_node));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_runs_rejected_glyph_mapping",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_rejected_glyph_mapping));
+    append_profile_counter(
+        stream,
         "text_layout_code_units",
         static_cast<std::uint64_t>(stats.text_layout_code_units));
     append_profile_counter(
@@ -2355,6 +2422,26 @@ void append_text_layout_stats_text(
         stream,
         "text_layout_fast_ascii_candidate_code_units",
         static_cast<std::uint64_t>(stats.text_layout_fast_ascii_candidate_code_units));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_code_units_screened",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_code_units_screened));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_code_units_eligible",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_code_units_eligible));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_code_units_attempted",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_code_units_attempted));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_code_units_succeeded",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_code_units_succeeded));
+    append_profile_counter(
+        stream,
+        "text_ascii_replacement_code_units_fallback",
+        static_cast<std::uint64_t>(stats.text_ascii_replacement_code_units_fallback));
 }
 
 template<typename Renderer_stats>
@@ -3429,6 +3516,70 @@ void insert_text_layout_stats_json(
         object,
         "text_layout_runs_fast_ascii_multi_candidate",
         stats.text_layout_runs_fast_ascii_multi_candidate);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_screened",
+        stats.text_ascii_replacement_runs_screened);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_eligible",
+        stats.text_ascii_replacement_runs_eligible);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_attempted",
+        stats.text_ascii_replacement_runs_attempted);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_succeeded",
+        stats.text_ascii_replacement_runs_succeeded);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_all_space_succeeded",
+        stats.text_ascii_replacement_runs_all_space_succeeded);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_fallback",
+        stats.text_ascii_replacement_runs_fallback);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_clipped",
+        stats.text_ascii_replacement_runs_rejected_clipped);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_force_blended_order",
+        stats.text_ascii_replacement_runs_rejected_force_blended_order);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_decoration",
+        stats.text_ascii_replacement_runs_rejected_decoration);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_hyperlink",
+        stats.text_ascii_replacement_runs_rejected_hyperlink);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_non_printable_ascii",
+        stats.text_ascii_replacement_runs_rejected_non_printable_ascii);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_non_ascii",
+        stats.text_ascii_replacement_runs_rejected_non_ascii);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_geometry",
+        stats.text_ascii_replacement_runs_rejected_geometry);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_unsupported_font",
+        stats.text_ascii_replacement_runs_rejected_unsupported_font);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_internal_node",
+        stats.text_ascii_replacement_runs_rejected_internal_node);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_runs_rejected_glyph_mapping",
+        stats.text_ascii_replacement_runs_rejected_glyph_mapping);
     insert_json_counter(object, "text_layout_code_units", stats.text_layout_code_units);
     insert_json_counter(
         object,
@@ -3470,6 +3621,26 @@ void insert_text_layout_stats_json(
         object,
         "text_layout_fast_ascii_candidate_code_units",
         stats.text_layout_fast_ascii_candidate_code_units);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_code_units_screened",
+        stats.text_ascii_replacement_code_units_screened);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_code_units_eligible",
+        stats.text_ascii_replacement_code_units_eligible);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_code_units_attempted",
+        stats.text_ascii_replacement_code_units_attempted);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_code_units_succeeded",
+        stats.text_ascii_replacement_code_units_succeeded);
+    insert_json_counter(
+        object,
+        "text_ascii_replacement_code_units_fallback",
+        stats.text_ascii_replacement_code_units_fallback);
 }
 
 QJsonObject terminal_metrics_json(
