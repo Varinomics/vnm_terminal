@@ -2947,39 +2947,214 @@ bool write_profile_text(
 }
 #endif
 
+template<typename Value>
+void insert_json_counter(
+    QJsonObject&  object,
+    const char*   name,
+    Value         value)
+{
+    object.insert(
+        QString::fromLatin1(name),
+        QString::number(static_cast<qulonglong>(value)));
+}
+
+template<typename Simple_content_stats>
+void insert_renderer_simple_content_stats(
+    QJsonObject&                  object,
+    const Simple_content_stats&   stats)
+{
+    insert_json_counter(object, "cells_considered", stats.cells_considered);
+    insert_json_counter(object, "eligible_cells", stats.eligible_cells);
+    insert_json_counter(
+        object,
+        "eligible_after_all_gates_cells",
+        stats.eligible_after_all_gates_cells);
+    insert_json_counter(object, "rows_with_eligible_cells", stats.rows_with_eligible_cells);
+    insert_json_counter(object, "styles_with_eligible_cells", stats.styles_with_eligible_cells);
+    insert_json_counter(object, "dirty_eligible_cells", stats.dirty_eligible_cells);
+    insert_json_counter(object, "clean_eligible_cells", stats.clean_eligible_cells);
+    insert_json_counter(object, "text_category_empty_cells", stats.text_category_empty_cells);
+    insert_json_counter(
+        object,
+        "text_category_printable_ascii_cells",
+        stats.text_category_printable_ascii_cells);
+    insert_json_counter(
+        object,
+        "text_category_other_ascii_cells",
+        stats.text_category_other_ascii_cells);
+    insert_json_counter(
+        object,
+        "text_category_non_ascii_cells",
+        stats.text_category_non_ascii_cells);
+    insert_json_counter(object, "route_none_cells", stats.route_none_cells);
+    insert_json_counter(object, "route_fast_text_cells", stats.route_fast_text_cells);
+    insert_json_counter(
+        object,
+        "route_qt_text_layout_cells",
+        stats.route_qt_text_layout_cells);
+    insert_json_counter(
+        object,
+        "route_graphic_geometry_cells",
+        stats.route_graphic_geometry_cells);
+    insert_json_counter(object, "route_fallback_cells", stats.route_fallback_cells);
+    insert_json_counter(object, "rejection_none_cells", stats.rejection_none_cells);
+    insert_json_counter(
+        object,
+        "rejection_empty_text_cells",
+        stats.rejection_empty_text_cells);
+    insert_json_counter(
+        object,
+        "rejection_invalid_grid_cells",
+        stats.rejection_invalid_grid_cells);
+    insert_json_counter(
+        object,
+        "rejection_invalid_position_cells",
+        stats.rejection_invalid_position_cells);
+    insert_json_counter(
+        object,
+        "rejection_invalid_style_id_cells",
+        stats.rejection_invalid_style_id_cells);
+    insert_json_counter(
+        object,
+        "rejection_wide_continuation_cells",
+        stats.rejection_wide_continuation_cells);
+    insert_json_counter(
+        object,
+        "rejection_invalid_display_width_cells",
+        stats.rejection_invalid_display_width_cells);
+    insert_json_counter(
+        object,
+        "rejection_invalid_text_encoding_cells",
+        stats.rejection_invalid_text_encoding_cells);
+    insert_json_counter(
+        object,
+        "rejection_invalid_text_width_cells",
+        stats.rejection_invalid_text_width_cells);
+    insert_json_counter(
+        object,
+        "rejection_multi_cell_text_cells",
+        stats.rejection_multi_cell_text_cells);
+    insert_json_counter(
+        object,
+        "rejection_non_printable_ascii_cells",
+        stats.rejection_non_printable_ascii_cells);
+    insert_json_counter(
+        object,
+        "rejection_non_ascii_text_cells",
+        stats.rejection_non_ascii_text_cells);
+    insert_json_counter(
+        object,
+        "rejection_decoration_cells",
+        stats.rejection_decoration_cells);
+    insert_json_counter(object, "rejection_hyperlink_cells", stats.rejection_hyperlink_cells);
+    insert_json_counter(
+        object,
+        "rejection_terminal_graphic_cells",
+        stats.rejection_terminal_graphic_cells);
+}
+
 template<typename Frame_stats>
 void insert_renderer_frame_stats(
     QJsonObject&        object,
     const Frame_stats&  stats)
 {
-    object.insert(QStringLiteral("visible_rows"),
-        QString::number(static_cast<qulonglong>(stats.visible_rows)));
-    object.insert(QStringLiteral("dirty_rows"),
-        QString::number(static_cast<qulonglong>(stats.dirty_rows)));
-    object.insert(QStringLiteral("full_dirty_rows"),
-        QString::number(static_cast<qulonglong>(stats.full_dirty_rows)));
-    object.insert(QStringLiteral("cell_pass_input_cells"),
-        QString::number(static_cast<qulonglong>(stats.cell_pass_input_cells)));
-    object.insert(QStringLiteral("cell_pass_classification_calls"),
-        QString::number(static_cast<qulonglong>(stats.cell_pass_classification_calls)));
-    object.insert(QStringLiteral("packed_pass_input_cells"),
-        QString::number(static_cast<qulonglong>(stats.packed_pass_input_cells)));
-    object.insert(QStringLiteral("packed_pass_cells_scanned"),
-        QString::number(static_cast<qulonglong>(stats.packed_pass_cells_scanned)));
-    object.insert(QStringLiteral("packed_pass_classification_calls"),
-        QString::number(static_cast<qulonglong>(stats.packed_pass_classification_calls)));
-    object.insert(QStringLiteral("cells_considered"),
-        QString::number(static_cast<qulonglong>(stats.cells_considered)));
-    object.insert(QStringLiteral("cells_rendered"),
-        QString::number(static_cast<qulonglong>(stats.cells_rendered)));
-    object.insert(QStringLiteral("text_runs_emitted"),
-        QString::number(static_cast<qulonglong>(stats.text_runs_emitted)));
-    object.insert(QStringLiteral("graphic_rects_emitted"),
-        QString::number(static_cast<qulonglong>(stats.graphic_rects_emitted)));
-    object.insert(QStringLiteral("graphic_arcs_emitted"),
-        QString::number(static_cast<qulonglong>(stats.graphic_arcs_emitted)));
-    object.insert(QStringLiteral("dirty_row_lookup_count"),
-        QString::number(static_cast<qulonglong>(stats.dirty_row_lookup_count)));
+    QJsonObject simple_content;
+    insert_renderer_simple_content_stats(simple_content, stats.simple_content);
+
+    insert_json_counter(object, "visible_rows", stats.visible_rows);
+    insert_json_counter(object, "dirty_rows", stats.dirty_rows);
+    insert_json_counter(object, "full_dirty_rows", stats.full_dirty_rows);
+    insert_json_counter(object, "cell_pass_input_cells", stats.cell_pass_input_cells);
+    insert_json_counter(
+        object,
+        "cell_pass_classification_calls",
+        stats.cell_pass_classification_calls);
+    insert_json_counter(object, "packed_pass_input_cells", stats.packed_pass_input_cells);
+    insert_json_counter(object, "packed_pass_cells_scanned", stats.packed_pass_cells_scanned);
+    insert_json_counter(
+        object,
+        "packed_pass_classification_calls",
+        stats.packed_pass_classification_calls);
+    insert_json_counter(
+        object,
+        "packed_text_sidecars_enabled",
+        stats.packed_text_sidecars_enabled);
+    insert_json_counter(
+        object,
+        "packed_text_sidecars_disabled",
+        stats.packed_text_sidecars_disabled);
+    insert_json_counter(
+        object,
+        "packed_text_disabled_cells_skipped",
+        stats.packed_text_disabled_cells_skipped);
+    insert_json_counter(
+        object,
+        "packed_graphic_candidates_classified",
+        stats.packed_graphic_candidates_classified);
+    insert_json_counter(object, "packed_cells_appended", stats.packed_cells_appended);
+    insert_json_counter(object, "dirty_row_lookup_count", stats.dirty_row_lookup_count);
+    insert_json_counter(object, "cells_considered", stats.cells_considered);
+    insert_json_counter(object, "cells_skipped_invalid", stats.cells_skipped_invalid);
+    insert_json_counter(
+        object,
+        "cells_skipped_wide_continuation",
+        stats.cells_skipped_wide_continuation);
+    insert_json_counter(object, "cells_rendered", stats.cells_rendered);
+    insert_json_counter(object, "text_cells_empty", stats.text_cells_empty);
+    insert_json_counter(
+        object,
+        "text_cells_rendered_as_text",
+        stats.text_cells_rendered_as_text);
+    insert_json_counter(
+        object,
+        "text_cells_rendered_as_graphic",
+        stats.text_cells_rendered_as_graphic);
+    insert_json_counter(
+        object,
+        "text_cells_printable_ascii",
+        stats.text_cells_printable_ascii);
+    insert_json_counter(object, "text_cells_other_ascii", stats.text_cells_other_ascii);
+    insert_json_counter(object, "text_cells_non_ascii", stats.text_cells_non_ascii);
+    insert_json_counter(object, "text_cells_simple_ascii", stats.text_cells_simple_ascii);
+    insert_json_counter(object, "text_cells_single_width", stats.text_cells_single_width);
+    insert_json_counter(object, "text_cells_multi_width", stats.text_cells_multi_width);
+    insert_json_counter(
+        object,
+        "text_cells_with_decorations",
+        stats.text_cells_with_decorations);
+    insert_json_counter(object, "text_cells_with_hyperlink", stats.text_cells_with_hyperlink);
+    insert_json_counter(object, "text_style_changes", stats.text_style_changes);
+    insert_json_counter(object, "text_distinct_styles", stats.text_distinct_styles);
+    insert_json_counter(object, "background_rects_emitted", stats.background_rects_emitted);
+    insert_json_counter(object, "selection_rects_emitted", stats.selection_rects_emitted);
+    insert_json_counter(object, "graphic_rects_emitted", stats.graphic_rects_emitted);
+    insert_json_counter(object, "graphic_arcs_emitted", stats.graphic_arcs_emitted);
+    insert_json_counter(object, "text_runs_emitted", stats.text_runs_emitted);
+    insert_json_counter(
+        object,
+        "cursor_text_runs_emitted",
+        stats.cursor_text_runs_emitted);
+    insert_json_counter(
+        object,
+        "decoration_rects_emitted",
+        stats.decoration_rects_emitted);
+    insert_json_counter(object, "cursor_rects_emitted", stats.cursor_rects_emitted);
+    insert_json_counter(
+        object,
+        "cursor_graphic_rects_emitted",
+        stats.cursor_graphic_rects_emitted);
+    insert_json_counter(
+        object,
+        "cursor_graphic_arcs_emitted",
+        stats.cursor_graphic_arcs_emitted);
+    insert_json_counter(object, "overlay_rects_emitted", stats.overlay_rects_emitted);
+    insert_json_counter(object, "packed_rows", stats.packed_rows);
+    insert_json_counter(object, "packed_text_spans", stats.packed_text_spans);
+    insert_json_counter(object, "packed_text_cells", stats.packed_text_cells);
+    insert_json_counter(object, "packed_graphic_spans", stats.packed_graphic_spans);
+    insert_json_counter(object, "packed_graphic_cells", stats.packed_graphic_cells);
+    insert_json_counter(object, "packed_payload_bytes", stats.packed_payload_bytes);
+    object.insert(QStringLiteral("simple_content"), simple_content);
 }
 
 QJsonObject terminal_metrics_json(
@@ -2995,36 +3170,328 @@ QJsonObject terminal_metrics_json(
     insert_renderer_frame_stats(frame, cumulative_stats.frame);
 
     QJsonObject renderer;
-    renderer.insert(QStringLiteral("frames_published"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.frames_published)));
-    renderer.insert(QStringLiteral("paint_completed_frames"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.paint_completed_frames)));
-    renderer.insert(QStringLiteral("root_reused_frames"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.root_reused_frames)));
-    renderer.insert(QStringLiteral("text_content_rebuilds"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.text_content_rebuilds)));
-    renderer.insert(QStringLiteral("text_content_reused"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.text_content_reused)));
-    renderer.insert(QStringLiteral("text_resource_descriptor_reuses"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.text_resource_descriptor_reuses)));
-    renderer.insert(QStringLiteral("text_key_match_reuses"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.text_key_match_reuses)));
-    renderer.insert(QStringLiteral("text_key_builds"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.text_key_builds)));
-    renderer.insert(QStringLiteral("cache_key_builds"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.cache_key_builds)));
-    renderer.insert(QStringLiteral("text_dirty_row_ranges"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.text_dirty_row_ranges)));
-    renderer.insert(QStringLiteral("text_dirty_rows"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.text_dirty_rows)));
+    insert_json_counter(renderer, "frames_published", cumulative_stats.frames_published);
+    insert_json_counter(
+        renderer,
+        "paint_completed_frames",
+        cumulative_stats.paint_completed_frames);
+    insert_json_counter(renderer, "root_reused_frames", cumulative_stats.root_reused_frames);
+    insert_json_counter(renderer, "text_content_rebuilds", cumulative_stats.text_content_rebuilds);
+    insert_json_counter(renderer, "text_content_reused", cumulative_stats.text_content_reused);
+    insert_json_counter(renderer, "text_content_removed", cumulative_stats.text_content_removed);
+    insert_json_counter(renderer, "text_content_failures", cumulative_stats.text_content_failures);
+    insert_json_counter(
+        renderer,
+        "text_leaf_nodes_created",
+        cumulative_stats.text_leaf_nodes_created);
+    insert_json_counter(
+        renderer,
+        "text_cache_entry_child_nodes_cleared_for_replacement",
+        cumulative_stats.text_cache_entry_child_nodes_cleared_for_replacement);
+    insert_json_counter(
+        renderer,
+        "text_cache_entry_child_nodes_cleared_for_removal",
+        cumulative_stats.text_cache_entry_child_nodes_cleared_for_removal);
+    insert_json_counter(
+        renderer,
+        "text_cache_entry_max_child_nodes_cleared",
+        cumulative_stats.text_cache_entry_max_child_nodes_cleared);
+    insert_json_counter(renderer, "route_fast_text_cells", cumulative_stats.route_fast_text_cells);
+    insert_json_counter(
+        renderer,
+        "route_qt_text_layout_runs",
+        cumulative_stats.route_qt_text_layout_runs);
+    insert_json_counter(
+        renderer,
+        "route_graphic_geometry_cells",
+        cumulative_stats.route_graphic_geometry_cells);
+    insert_json_counter(renderer, "route_fallback_cells", cumulative_stats.route_fallback_cells);
+    insert_json_counter(renderer, "qt_text_layout_calls", cumulative_stats.qt_text_layout_calls);
+    insert_json_counter(renderer, "qsg_nodes_created", cumulative_stats.qsg_nodes_created);
+    insert_json_counter(renderer, "qsg_nodes_replaced", cumulative_stats.qsg_nodes_replaced);
+    insert_json_counter(renderer, "qsg_nodes_destroyed", cumulative_stats.qsg_nodes_destroyed);
+    insert_json_counter(
+        renderer,
+        "background_qsg_nodes_created",
+        cumulative_stats.background_qsg_nodes_created);
+    insert_json_counter(
+        renderer,
+        "background_qsg_nodes_replaced",
+        cumulative_stats.background_qsg_nodes_replaced);
+    insert_json_counter(
+        renderer,
+        "background_qsg_nodes_destroyed",
+        cumulative_stats.background_qsg_nodes_destroyed);
+    insert_json_counter(
+        renderer,
+        "text_groups_considered",
+        cumulative_stats.text_groups_considered);
+    insert_json_counter(renderer, "text_groups_dirty", cumulative_stats.text_groups_dirty);
+    insert_json_counter(renderer, "text_groups_clean", cumulative_stats.text_groups_clean);
+    insert_json_counter(
+        renderer,
+        "text_clean_reuse_skips",
+        cumulative_stats.text_clean_reuse_skips);
+    insert_json_counter(
+        renderer,
+        "text_resource_descriptor_reuses",
+        cumulative_stats.text_resource_descriptor_reuses);
+    insert_json_counter(renderer, "text_key_match_reuses", cumulative_stats.text_key_match_reuses);
+    insert_json_counter(renderer, "text_key_builds", cumulative_stats.text_key_builds);
+    insert_json_counter(renderer, "text_key_bytes", cumulative_stats.text_key_bytes);
+    insert_json_counter(renderer, "rect_key_builds", cumulative_stats.rect_key_builds);
+    insert_json_counter(renderer, "rect_key_bytes", cumulative_stats.rect_key_bytes);
+    insert_json_counter(renderer, "cache_key_builds", cumulative_stats.cache_key_builds);
+    insert_json_counter(renderer, "cache_key_bytes", cumulative_stats.cache_key_bytes);
+    insert_json_counter(
+        renderer,
+        "text_dirty_row_ranges",
+        cumulative_stats.text_dirty_row_ranges);
+    insert_json_counter(renderer, "text_dirty_rows", cumulative_stats.text_dirty_rows);
     renderer.insert(
         QString::fromLatin1(
             renderer_text_resource_dirty_row_metric_name(cumulative_stats)),
         QString::number(
             static_cast<qulonglong>(
                 renderer_text_resource_dirty_row_metric_value(cumulative_stats))));
-    renderer.insert(QStringLiteral("text_cache_entries_replaced"),
-        QString::number(static_cast<qulonglong>(cumulative_stats.text_cache_entries_replaced)));
+    insert_json_counter(
+        renderer,
+        "text_runs_considered",
+        cumulative_stats.text_runs_considered);
+    insert_json_counter(
+        renderer,
+        "text_coalescing_candidate_groups",
+        cumulative_stats.text_coalescing_candidate_groups);
+    insert_json_counter(
+        renderer,
+        "text_coalescing_enabled_groups",
+        cumulative_stats.text_coalescing_enabled_groups);
+    insert_json_counter(
+        renderer,
+        "text_resource_rows_with_runs",
+        cumulative_stats.text_resource_rows_with_runs);
+    insert_json_counter(
+        renderer,
+        "text_resource_max_runs_after_coalescing_per_row",
+        cumulative_stats.text_resource_max_runs_after_coalescing_per_row);
+    insert_json_counter(
+        renderer,
+        "text_resource_runs_before_coalescing",
+        cumulative_stats.text_resource_runs_before_coalescing);
+    insert_json_counter(
+        renderer,
+        "text_resource_runs_after_coalescing",
+        cumulative_stats.text_resource_runs_after_coalescing);
+    insert_json_counter(
+        renderer,
+        "text_dirty_descriptor_identical_rows",
+        cumulative_stats.text_dirty_descriptor_identical_rows);
+    insert_json_counter(
+        renderer,
+        "text_dirty_rows_rebuilt",
+        cumulative_stats.text_dirty_rows_rebuilt);
+    insert_json_counter(
+        renderer,
+        "text_clean_rows_rebuilt",
+        cumulative_stats.text_clean_rows_rebuilt);
+    insert_json_counter(
+        renderer,
+        "rect_resource_rects_before_coalescing",
+        cumulative_stats.rect_resource_rects_before_coalescing);
+    insert_json_counter(
+        renderer,
+        "rect_resource_rects_after_coalescing",
+        cumulative_stats.rect_resource_rects_after_coalescing);
+    insert_json_counter(
+        renderer,
+        "background_row_rects_before_coalescing",
+        cumulative_stats.background_row_rects_before_coalescing);
+    insert_json_counter(
+        renderer,
+        "background_row_rects_after_coalescing",
+        cumulative_stats.background_row_rects_after_coalescing);
+    insert_json_counter(
+        renderer,
+        "background_batched_rects",
+        cumulative_stats.background_batched_rects);
+    insert_json_counter(
+        renderer,
+        "background_batched_vertices",
+        cumulative_stats.background_batched_vertices);
+    insert_json_counter(
+        renderer,
+        "selection_batched_rects",
+        cumulative_stats.selection_batched_rects);
+    insert_json_counter(
+        renderer,
+        "selection_batched_vertices",
+        cumulative_stats.selection_batched_vertices);
+    insert_json_counter(
+        renderer,
+        "graphic_batched_rects",
+        cumulative_stats.graphic_batched_rects);
+    insert_json_counter(
+        renderer,
+        "graphic_batched_vertices",
+        cumulative_stats.graphic_batched_vertices);
+    insert_json_counter(
+        renderer,
+        "decoration_batched_rects",
+        cumulative_stats.decoration_batched_rects);
+    insert_json_counter(
+        renderer,
+        "decoration_batched_vertices",
+        cumulative_stats.decoration_batched_vertices);
+    insert_json_counter(
+        renderer,
+        "text_cache_entries_created",
+        cumulative_stats.text_cache_entries_created);
+    insert_json_counter(
+        renderer,
+        "text_cache_entries_replaced",
+        cumulative_stats.text_cache_entries_replaced);
+    insert_json_counter(
+        renderer,
+        "text_cache_entries_removed",
+        cumulative_stats.text_cache_entries_removed);
+    insert_json_counter(
+        renderer,
+        "text_wrapper_order_rebuilds",
+        cumulative_stats.text_wrapper_order_rebuilds);
+    insert_json_counter(
+        renderer,
+        "background_layer_rebuilds",
+        cumulative_stats.background_layer_rebuilds);
+    insert_json_counter(
+        renderer,
+        "selection_layer_rebuilds",
+        cumulative_stats.selection_layer_rebuilds);
+    insert_json_counter(
+        renderer,
+        "graphic_layer_rebuilds",
+        cumulative_stats.graphic_layer_rebuilds);
+    insert_json_counter(
+        renderer,
+        "decoration_layer_rebuilds",
+        cumulative_stats.decoration_layer_rebuilds);
+    insert_json_counter(
+        renderer,
+        "cursor_layer_rebuilds",
+        cumulative_stats.cursor_layer_rebuilds);
+    insert_json_counter(
+        renderer,
+        "cursor_graphic_layer_rebuilds",
+        cumulative_stats.cursor_graphic_layer_rebuilds);
+    insert_json_counter(
+        renderer,
+        "cursor_text_layer_rebuilds",
+        cumulative_stats.cursor_text_layer_rebuilds);
+    insert_json_counter(renderer, "overlay_layer_rebuilds", cumulative_stats.overlay_layer_rebuilds);
+    insert_json_counter(renderer, "row_cache_hits", cumulative_stats.row_cache_hits);
+    insert_json_counter(
+        renderer,
+        "row_cache_clean_skips",
+        cumulative_stats.row_cache_clean_skips);
+    insert_json_counter(
+        renderer,
+        "background_rows_rebuilt",
+        cumulative_stats.background_rows_rebuilt);
+    insert_json_counter(
+        renderer,
+        "background_rows_reused",
+        cumulative_stats.background_rows_reused);
+    insert_json_counter(
+        renderer,
+        "background_row_clean_reuse_skips",
+        cumulative_stats.background_row_clean_reuse_skips);
+    insert_json_counter(
+        renderer,
+        "background_rows_removed",
+        cumulative_stats.background_rows_removed);
+    insert_json_counter(
+        renderer,
+        "background_row_cache_fallbacks",
+        cumulative_stats.background_row_cache_fallbacks);
+    insert_json_counter(
+        renderer,
+        "selection_rows_rebuilt",
+        cumulative_stats.selection_rows_rebuilt);
+    insert_json_counter(
+        renderer,
+        "selection_rows_reused",
+        cumulative_stats.selection_rows_reused);
+    insert_json_counter(
+        renderer,
+        "selection_row_clean_reuse_skips",
+        cumulative_stats.selection_row_clean_reuse_skips);
+    insert_json_counter(
+        renderer,
+        "selection_rows_removed",
+        cumulative_stats.selection_rows_removed);
+    insert_json_counter(
+        renderer,
+        "selection_row_cache_fallbacks",
+        cumulative_stats.selection_row_cache_fallbacks);
+    insert_json_counter(
+        renderer,
+        "decoration_rows_rebuilt",
+        cumulative_stats.decoration_rows_rebuilt);
+    insert_json_counter(
+        renderer,
+        "decoration_rows_reused",
+        cumulative_stats.decoration_rows_reused);
+    insert_json_counter(
+        renderer,
+        "decoration_row_clean_reuse_skips",
+        cumulative_stats.decoration_row_clean_reuse_skips);
+    insert_json_counter(
+        renderer,
+        "decoration_rows_removed",
+        cumulative_stats.decoration_rows_removed);
+    insert_json_counter(
+        renderer,
+        "decoration_row_cache_fallbacks",
+        cumulative_stats.decoration_row_cache_fallbacks);
+    insert_json_counter(
+        renderer,
+        "graphic_rect_rows_rebuilt",
+        cumulative_stats.graphic_rect_rows_rebuilt);
+    insert_json_counter(
+        renderer,
+        "graphic_rect_rows_reused",
+        cumulative_stats.graphic_rect_rows_reused);
+    insert_json_counter(
+        renderer,
+        "graphic_rect_row_clean_reuse_skips",
+        cumulative_stats.graphic_rect_row_clean_reuse_skips);
+    insert_json_counter(
+        renderer,
+        "graphic_rect_rows_removed",
+        cumulative_stats.graphic_rect_rows_removed);
+    insert_json_counter(
+        renderer,
+        "graphic_rect_row_cache_fallbacks",
+        cumulative_stats.graphic_rect_row_cache_fallbacks);
+    insert_json_counter(
+        renderer,
+        "graphic_arc_rows_rebuilt",
+        cumulative_stats.graphic_arc_rows_rebuilt);
+    insert_json_counter(
+        renderer,
+        "graphic_arc_rows_reused",
+        cumulative_stats.graphic_arc_rows_reused);
+    insert_json_counter(
+        renderer,
+        "graphic_arc_row_clean_reuse_skips",
+        cumulative_stats.graphic_arc_row_clean_reuse_skips);
+    insert_json_counter(
+        renderer,
+        "graphic_arc_rows_removed",
+        cumulative_stats.graphic_arc_rows_removed);
+    insert_json_counter(
+        renderer,
+        "graphic_arc_row_cache_fallbacks",
+        cumulative_stats.graphic_arc_row_cache_fallbacks);
     renderer.insert(QStringLiteral("frame"), frame);
 
     QJsonObject root;
