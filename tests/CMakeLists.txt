@@ -66,110 +66,45 @@ if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL Linux)
     set(vnm_terminal_custom_titlebar_supported ON)
 endif()
 
-add_executable(vnm_terminal_window_chrome_model
-    terminal_app/window_chrome_model_tests.cpp
+add_executable(vnm_terminal_title_metadata
+    terminal_app/terminal_title_metadata_tests.cpp
 )
 
-target_link_libraries(vnm_terminal_window_chrome_model PRIVATE
+target_link_libraries(vnm_terminal_title_metadata PRIVATE
     Qt6::Core
 )
 
-set_target_properties(vnm_terminal_window_chrome_model PROPERTIES
+set_target_properties(vnm_terminal_title_metadata PROPERTIES
     AUTOMOC OFF
 )
 
 add_test(
-    NAME vnm_terminal_window_chrome_model
+    NAME vnm_terminal_title_metadata
     COMMAND
         "${CMAKE_COMMAND}" -E env
         "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_window_chrome_model>"
+        "$<TARGET_FILE:vnm_terminal_title_metadata>"
 )
 
-set_tests_properties(vnm_terminal_window_chrome_model PROPERTIES
-    TIMEOUT 30
-)
-
-add_executable(vnm_terminal_window_chrome_item
-    terminal_app/window_chrome_item_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/window_chrome.cpp"
-)
-
-qt_add_resources(vnm_terminal_window_chrome_item "vnm_terminal_window_chrome_item_resources"
-    PREFIX
-        "/vnm_terminal"
-    BASE
-        "${PROJECT_SOURCE_DIR}/src"
-    FILES
-        "${PROJECT_SOURCE_DIR}/src/vnm_terminal.ico"
-)
-
-target_link_libraries(vnm_terminal_window_chrome_item PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Quick
-)
-
-set_target_properties(vnm_terminal_window_chrome_item PROPERTIES
-    AUTOMOC OFF
-)
-
-add_test(
-    NAME vnm_terminal_window_chrome_item
-    COMMAND
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_window_chrome_item>"
-)
-
-set_tests_properties(vnm_terminal_window_chrome_item PROPERTIES
-    TIMEOUT 30
-)
-
-add_executable(vnm_terminal_window_chrome_resize_filter
-    terminal_app/window_chrome_resize_filter_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/frameless_resize_filter.cpp"
-    "${PROJECT_SOURCE_DIR}/src/window_chrome.cpp"
-)
-
-target_link_libraries(vnm_terminal_window_chrome_resize_filter PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Quick
-)
-
-set_target_properties(vnm_terminal_window_chrome_resize_filter PROPERTIES
-    AUTOMOC OFF
-)
-
-add_test(
-    NAME vnm_terminal_window_chrome_resize_filter
-    COMMAND
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_window_chrome_resize_filter>"
-)
-
-set_tests_properties(vnm_terminal_window_chrome_resize_filter PROPERTIES
+set_tests_properties(vnm_terminal_title_metadata PROPERTIES
     TIMEOUT 30
 )
 
 add_executable(vnm_terminal_custom_titlebar_integration
     terminal_app/custom_titlebar_integration_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/frameless_resize_filter.cpp"
+    "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
-    "${PROJECT_SOURCE_DIR}/src/window_chrome.cpp"
 )
 
 target_link_libraries(vnm_terminal_custom_titlebar_integration PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
+    vnm_qml_chrome::vnm_qml_chrome
     Qt6::Core
     Qt6::Gui
+    Qt6::Qml
     Qt6::Quick
+    Qt6::QuickLayouts
+    Qt6::QuickControls2
 )
 
 target_compile_definitions(vnm_terminal_custom_titlebar_integration PRIVATE
@@ -177,7 +112,7 @@ target_compile_definitions(vnm_terminal_custom_titlebar_integration PRIVATE
 )
 
 set_target_properties(vnm_terminal_custom_titlebar_integration PROPERTIES
-    AUTOMOC OFF
+    AUTOMOC ON
 )
 
 add_test(
@@ -196,20 +131,23 @@ set_tests_properties(vnm_terminal_custom_titlebar_integration PROPERTIES
 
 add_executable(vnm_terminal_app_persistence
     terminal_app/app_persistence_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/frameless_resize_filter.cpp"
+    "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
-    "${PROJECT_SOURCE_DIR}/src/window_chrome.cpp"
 )
 
 target_link_libraries(vnm_terminal_app_persistence PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
+    vnm_qml_chrome::vnm_qml_chrome
     Qt6::Core
     Qt6::Gui
+    Qt6::Qml
     Qt6::Quick
+    Qt6::QuickLayouts
+    Qt6::QuickControls2
 )
 
 set_target_properties(vnm_terminal_app_persistence PROPERTIES
-    AUTOMOC OFF
+    AUTOMOC ON
 )
 
 add_test(
@@ -921,9 +859,7 @@ set_tests_properties(vnm_terminal_rejects_distribution_transcript_build PROPERTI
 )
 
 set(vnm_terminal_test_process_targets
-    vnm_terminal_window_chrome_model
-    vnm_terminal_window_chrome_item
-    vnm_terminal_window_chrome_resize_filter
+    vnm_terminal_title_metadata
     vnm_terminal_custom_titlebar_integration
     vnm_terminal_app_persistence
 )

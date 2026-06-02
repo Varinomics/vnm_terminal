@@ -3,7 +3,7 @@ if(NOT DEFINED metrics_path)
 endif()
 
 if(NOT DEFINED expected_stage42_toggle_count)
-    set(expected_stage42_toggle_count 10)
+    set(expected_stage42_toggle_count 16)
 endif()
 
 if(NOT DEFINED expected_profile_text_requested)
@@ -161,14 +161,20 @@ endif()
 set(expected_stage42_toggles
     model_ascii_direct_print
     model_ascii_skip_simple_cell_clear
-    snapshot_inline_hyperlink_ids
-    qsg_cached_internal_text_node
-    qsg_trusted_ascii_unchecked_glyphs
-    qsg_text_makeup_single_char_fast_path
     qsg_ascii_resource_prefilter
+    qsg_cached_internal_text_node
+    qsg_descriptor_reuse_frame_key_independent
     qsg_group_descriptor_eligibility
     qsg_monotonic_dirty_probe
+    qsg_row_slot_ordered_lookup
+    qsg_text_leaf_content_reuse
+    qsg_text_makeup_single_char_fast_path
+    qsg_text_resource_descriptor_direct_compare
+    qsg_trusted_ascii_glyph_batching
+    qsg_trusted_ascii_unchecked_glyphs
     render_cell_row_cache
+    render_frame_sorted_row_sort_prefilter
+    snapshot_inline_hyperlink_ids
 )
 
 foreach(toggle_name IN LISTS expected_stage42_toggles)
