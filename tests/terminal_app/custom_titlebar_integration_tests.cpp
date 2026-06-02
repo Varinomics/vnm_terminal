@@ -14,12 +14,12 @@
 #include <QJsonObject>
 #include <QMouseEvent>
 #include <QPointF>
+#include <QQmlEngine>
 #include <QQuickItem>
 #include <QTemporaryDir>
 #include <QWheelEvent>
 
 #include <cmath>
-#include <initializer_list>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -65,28 +65,6 @@ bool check_rect_equal(
     return false;
 }
 
-bool check_command_log_equal(
-    const std::vector<chrome_test::Window_chrome_command>&     actual,
-    std::initializer_list<chrome_test::Window_chrome_command>  expected,
-    const std::string&                                         message)
-{
-    if (actual.size() != expected.size()) {
-        std::cerr << "FAIL: " << message
-            << " expected-size=" << expected.size()
-            << " actual-size="   << actual.size() << '\n';
-        return false;
-    }
-
-    bool        ok    = true;
-    std::size_t index = 0;
-    for (chrome_test::Window_chrome_command expected_command : expected) {
-        ok &= check(actual[index] == expected_command,
-            message + " command " + std::to_string(index));
-        ++index;
-    }
-    return ok;
-}
-
 void pump_events(QGuiApplication& app)
 {
     for (int index = 0; index < 5; ++index) {
@@ -97,59 +75,6 @@ void pump_events(QGuiApplication& app)
 QRectF item_rect(const QQuickItem& item)
 {
     return QRectF(item.x(), item.y(), item.width(), item.height());
-}
-
-QPointF button_center(
-    const chrome_test::Terminal_window_chrome&  titlebar,
-    chrome_test::Window_chrome_button_role     role)
-{
-    const chrome_test::Window_chrome_layout layout = titlebar.chrome_layout();
-    for (const chrome_test::Window_chrome_button_geometry& button : layout.buttons) {
-        if (button.role == role) {
-            return button.rect.center() + QPointF(titlebar.x(), titlebar.y());
-        }
-    }
-
-    return {};
-}
-
-bool check_terminal_active_focus(
-    const VNM_TerminalSurface& surface,
-    const std::string&         message)
-{
-    bool ok = true;
-    ok &= check(surface.hasActiveFocus(), message + " has active focus");
-    ok &= check(surface.window() != nullptr &&
-        surface.window()->activeFocusItem() == &surface,
-        message + " is the active focus item");
-    return ok;
-}
-
-struct Mouse_filter_result
-{
-    bool filter_result    = false;
-    bool event_accepted   = false;
-};
-
-Mouse_filter_result send_resize_mouse_event(
-    chrome_test::Frameless_resize_filter&  filter,
-    QWindow&                               window,
-    QEvent::Type                           type,
-    const QPointF&                         point,
-    Qt::MouseButton                        button,
-    Qt::MouseButtons                       buttons)
-{
-    QMouseEvent event(
-        type,
-        point,
-        point,
-        point,
-        button,
-        buttons,
-        Qt::NoModifier);
-    event.setAccepted(false);
-    const bool filter_result = filter.eventFilter(&window, &event);
-    return {filter_result, event.isAccepted()};
 }
 
 bool send_item_wheel_event(
@@ -288,86 +213,6 @@ bool rect_geometry_changed(const QRectF& before, const QRectF& after)
         !nearly_equal(before.height(), after.height());
 }
 
-bool check_mouse_filter_result(
-    Mouse_filter_result    result,
-    bool                   expected_filter_result,
-    bool                   expected_event_accepted,
-    const std::string&     message)
-{
-    bool ok = true;
-    ok &= check(result.filter_result == expected_filter_result,
-        message + " filter result");
-    ok &= check(result.event_accepted == expected_event_accepted,
-        message + " event accepted");
-    return ok;
-}
-
-class Focus_window_chrome final : public chrome_test::Terminal_window_chrome
-{
-public:
-    using chrome_test::Terminal_window_chrome::Terminal_window_chrome;
-
-    bool send_mouse_press(const QPointF& point)
-    {
-        QMouseEvent event(
-            QEvent::MouseButtonPress,
-            point,
-            point,
-            point,
-            Qt::LeftButton,
-            Qt::LeftButton,
-            Qt::NoModifier);
-        event.setAccepted(false);
-        mousePressEvent(&event);
-        return event.isAccepted();
-    }
-
-    bool send_mouse_release(const QPointF& point)
-    {
-        QMouseEvent event(
-            QEvent::MouseButtonRelease,
-            point,
-            point,
-            point,
-            Qt::LeftButton,
-            Qt::NoButton,
-            Qt::NoModifier);
-        event.setAccepted(false);
-        mouseReleaseEvent(&event);
-        return event.isAccepted();
-    }
-
-    std::vector<chrome_test::Window_chrome_command> commands;
-
-protected:
-    void invoke_window_command(chrome_test::Window_chrome_command command) override
-    {
-        commands.push_back(command);
-        if (command == chrome_test::Window_chrome_command::START_SYSTEM_MOVE ||
-            command == chrome_test::Window_chrome_command::MAXIMIZE          ||
-            command == chrome_test::Window_chrome_command::RESTORE)
-        {
-            chrome_test::Terminal_window_chrome::invoke_window_command(command);
-        }
-    }
-};
-
-class Recording_resize_filter final : public chrome_test::Frameless_resize_filter
-{
-public:
-    using chrome_test::Frameless_resize_filter::Frameless_resize_filter;
-
-    std::vector<Qt::Edges> resize_edges_log;
-    bool                   resize_return_value = true;
-
-protected:
-    bool start_system_resize(Qt::Edges edges) override
-    {
-        resize_edges_log.push_back(edges);
-        return resize_return_value;
-    }
-};
-
 class Recording_event_filter final : public QObject
 {
 public:
@@ -500,26 +345,40 @@ QByteArray numbered_scroll_lines(int count)
 
 bool test_custom_titlebar_geometry()
 {
+    QQmlEngine engine;
     QQuickWindow window;
     window.resize(800, 480);
 
-    chrome_test::Terminal_window_chrome titlebar(window.contentItem());
+    chrome_test::Terminal_qml_chrome titlebar(engine, window);
     VNM_TerminalSurface surface(window.contentItem());
     chrome_test::Terminal_scrollbar scrollbar(window.contentItem());
-    chrome_test::Terminal_content_border content_border(window.contentItem());
-
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
 
     bool ok = true;
-    ok &= check_rect_equal(item_rect(titlebar), QRectF(0.0, 0.0, 800.0, 32.0),
-        "custom titlebar occupies the top band");
-    ok &= check_rect_equal(item_rect(content_border), QRectF(6.0, 32.0, 788.0, 442.0),
-        "custom content border surrounds terminal and scrollbar");
+    ok &= check(titlebar.is_valid(), "shared QML titlebar initializes");
+    if (!titlebar.is_valid()) {
+        std::cerr << titlebar.error_string().toStdString() << '\n';
+        return ok;
+    }
+
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+
+    ok &= check_rect_equal(item_rect(*titlebar.root_item()), QRectF(0.0, 0.0, 800.0, 480.0),
+        "shared chrome root covers the window");
+    ok &= check_rect_equal(item_rect(*titlebar.titlebar_item()), QRectF(0.0, 0.0, 800.0, 32.0),
+        "shared titlebar occupies the top band");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_x").toReal(), 6.0),
+        "shared chrome records content border x");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_y").toReal(), 32.0),
+        "shared chrome records content border y");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 788.0),
+        "shared chrome records content border width");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_height").toReal(), 442.0),
+        "shared chrome records content border height");
     ok &= check_rect_equal(item_rect(surface), QRectF(7.0, 33.0, 774.0, 440.0),
         "custom terminal is inset inside the content border");
     ok &= check_rect_equal(item_rect(scrollbar), QRectF(781.0, 33.0, 12.0, 440.0),
         "custom scrollbar touches the inner right frame edge");
-    ok &= check(surface.y() >= titlebar.y() + titlebar.height(),
+    ok &= check(surface.y() >= titlebar.titlebar_item()->y() + titlebar.titlebar_item()->height(),
         "terminal top is below titlebar bottom");
     ok &= check(surface.x() >= chrome_test::k_default_frameless_resize_border_width,
         "terminal left edge is inside resize border");
@@ -535,20 +394,22 @@ bool test_custom_titlebar_geometry()
         "terminal bottom edge is inside resize border");
 
     window.resize(360, 240);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
-    ok &= check_rect_equal(item_rect(titlebar), QRectF(0.0, 0.0, 360.0, 32.0),
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    ok &= check_rect_equal(item_rect(*titlebar.root_item()), QRectF(0.0, 0.0, 360.0, 240.0),
+        "resized shared chrome root tracks window size");
+    ok &= check_rect_equal(item_rect(*titlebar.titlebar_item()), QRectF(0.0, 0.0, 360.0, 32.0),
         "resized custom titlebar tracks window width");
-    ok &= check_rect_equal(item_rect(content_border), QRectF(6.0, 32.0, 348.0, 202.0),
-        "resized custom content border tracks the terminal content area");
     ok &= check_rect_equal(item_rect(surface), QRectF(7.0, 33.0, 334.0, 200.0),
         "resized custom terminal tracks titlebar and border insets");
     ok &= check_rect_equal(item_rect(scrollbar), QRectF(341.0, 33.0, 12.0, 200.0),
         "resized custom scrollbar remains inside the right frame");
 
     window.setWindowStates(Qt::WindowMaximized);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
-    ok &= check_rect_equal(item_rect(content_border), QRectF(0.0, 32.0, 360.0, 208.0),
-        "maximized custom content border drops inactive resize gutters");
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_x").toReal(), 0.0),
+        "maximized shared chrome drops inactive resize gutter x");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 360.0),
+        "maximized shared chrome drops inactive resize gutter width");
     ok &= check_rect_equal(item_rect(surface), QRectF(1.0, 33.0, 346.0, 206.0),
         "maximized custom terminal drops inactive resize border gutters");
     ok &= check_rect_equal(item_rect(scrollbar), QRectF(347.0, 33.0, 12.0, 206.0),
@@ -556,20 +417,22 @@ bool test_custom_titlebar_geometry()
     window.setWindowStates(Qt::WindowNoState);
 
     window.resize(8, 40);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
-    ok &= check_rect_equal(item_rect(content_border), QRectF(4.0, 32.0, 0.0, 2.0),
-        "very narrow custom content border clamps horizontal resize insets");
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_x").toReal(), 4.0),
+        "very narrow shared chrome clamps horizontal resize insets");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 0.0),
+        "very narrow shared chrome clamps content border width");
     ok &= check_rect_equal(item_rect(surface), QRectF(4.0, 33.0, 0.0, 0.0),
         "very narrow custom terminal clamps horizontal resize insets");
     ok &= check_rect_equal(item_rect(scrollbar), QRectF(4.0, 33.0, 0.0, 0.0),
         "very narrow custom scrollbar clamps inside horizontal resize insets");
 
     window.resize(200, 20);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true, &content_border);
-    ok &= check_rect_equal(item_rect(titlebar), QRectF(0.0, 0.0, 200.0, 20.0),
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    ok &= check_rect_equal(item_rect(*titlebar.titlebar_item()), QRectF(0.0, 0.0, 200.0, 20.0),
         "very short custom titlebar clamps to window height");
-    ok &= check_rect_equal(item_rect(content_border), QRectF(6.0, 20.0, 188.0, 0.0),
-        "very short custom content border clamps nonnegative height");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_height").toReal(), 0.0),
+        "very short shared chrome clamps content border height");
     ok &= check_rect_equal(item_rect(surface), QRectF(7.0, 20.0, 174.0, 0.0),
         "very short custom terminal clamps nonnegative height");
     ok &= check_rect_equal(item_rect(scrollbar), QRectF(181.0, 20.0, 12.0, 0.0),
@@ -1017,10 +880,10 @@ bool test_terminal_scrollbar_immediate_public_projection_routes(QGuiApplication&
 
 bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
 {
+    QQmlEngine engine;
     QQuickWindow window;
     window.resize(360, 240);
-    Focus_window_chrome titlebar(window.contentItem());
-    titlebar.setSize(QSizeF(360.0, 32.0));
+    chrome_test::Terminal_qml_chrome titlebar(engine, window);
     VNM_TerminalSurface surface(window.contentItem());
     surface.setSize(QSizeF(300.0, 180.0));
     surface.set_font_family(QStringLiteral("monospace"));
@@ -1029,46 +892,43 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
     pump_events(app);
 
     const QString spinner = scalar_text(chrome_test::k_activity_marker_dingbat_first);
+    const QString icon_spinner = scalar_text(chrome_test::k_activity_marker_braille_last);
 
     bool ok = true;
-    sync_terminal_title(window, &titlebar, QString());
-    ok &= check(window.title() == default_window_title(),
-        "empty terminal title uses native fallback title");
-    ok &= check(titlebar.terminal_title() == default_window_title(),
-        "empty terminal title initializes custom titlebar fallback title");
-
-    sync_terminal_title(window, &titlebar, QStringLiteral("   "));
-    ok &= check(window.title() == default_window_title(),
-        "whitespace terminal title uses native fallback title");
-    ok &= check(titlebar.terminal_title() == default_window_title(),
-        "whitespace terminal title uses custom titlebar fallback title");
-
-    sync_terminal_title(window, &titlebar, QStringLiteral("  ") + spinner + QStringLiteral(" build  "));
-    ok &= check(window.title() == spinner + QStringLiteral(" build"),
-        "visible window title is trimmed");
-    ok &= check(titlebar.terminal_title() == spinner + QStringLiteral(" build"),
-        "custom titlebar receives same trimmed visible title");
-    ok &= check(titlebar.title_content().spinner == spinner,
-        "custom titlebar extracts spinner after title trim");
-    ok &= check(titlebar.title_content().display_title == QStringLiteral("build"),
-        "custom titlebar display title strips leading spinner and one separator");
-
-    titlebar.setPosition(QPointF(10.0, 20.0));
-    const std::vector<QRectF> rects = window_chrome_button_rects(titlebar);
-    const chrome_test::Window_chrome_layout layout = titlebar.chrome_layout();
-    ok &= check(rects.size() == layout.buttons.size(),
-        "window chrome button rect provider returns all buttons");
-    if (!rects.empty()) {
-        ok &= check_rect_equal(
-            rects.front(),
-            layout.buttons.front().rect.translated(QPointF(10.0, 20.0)),
-            "window chrome button rect provider translates by titlebar position");
+    ok &= check(titlebar.is_valid(), "shared QML titlebar initializes for metadata sync");
+    if (!titlebar.is_valid()) {
+        std::cerr << titlebar.error_string().toStdString() << '\n';
+        return ok;
     }
 
-    titlebar.set_terminal_title(QStringLiteral("sentinel"));
-    titlebar.set_terminal_icon_name(QStringLiteral("icon-sentinel"));
+    sync_terminal_title(window, &titlebar, QString(), QString());
+    ok &= check(window.title() == default_window_title(),
+        "empty terminal title uses native fallback title");
+    ok &= check(titlebar.root_item()->property("title").toString() == default_window_title(),
+        "empty terminal title initializes shared titlebar fallback title");
+
+    sync_terminal_title(window, &titlebar, QStringLiteral("   "), QString());
+    ok &= check(window.title() == default_window_title(),
+        "whitespace terminal title uses native fallback title");
+    ok &= check(titlebar.root_item()->property("title").toString() == default_window_title(),
+        "whitespace terminal title uses shared titlebar fallback title");
+
+    sync_terminal_title(
+        window,
+        &titlebar,
+        QStringLiteral("  ") + spinner + QStringLiteral(" build  "),
+        QString());
+    ok &= check(window.title() == spinner + QStringLiteral(" build"),
+        "visible window title is trimmed");
+    ok &= check(titlebar.root_item()->property("activity_marker_text").toString() == spinner,
+        "shared titlebar extracts activity marker after title trim");
+    ok &= check(titlebar.root_item()->property("title").toString() == QStringLiteral("build"),
+        "shared titlebar display title strips leading marker and one separator");
+
+    titlebar.set_title(QStringLiteral("sentinel"));
+    titlebar.set_activity_marker_text(QStringLiteral("marker-sentinel"));
     window.setTitle(QStringLiteral("sentinel"));
-    const QString surface_icon_name = QStringLiteral("surface-icon");
+    const QString surface_icon_name = icon_spinner + QStringLiteral("surface-icon");
     auto backend = std::make_unique<Metadata_seed_backend>(
         osc1_icon_name_sequence(surface_icon_name));
     const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
@@ -1082,13 +942,14 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
     ok &= check(surface.terminal_icon_name() == surface_icon_name,
         "metadata seed backend initializes nonempty surface icon name");
 
-    connect_terminal_metadata_to_window_chrome(surface, window, &titlebar);
+    connect_terminal_metadata_to_chrome(surface, window, &titlebar);
     ok &= check(window.title() == default_window_title(),
         "metadata connection initializes native title fallback");
-    ok &= check(titlebar.terminal_title() == default_window_title(),
-        "metadata connection initializes custom title fallback");
-    ok &= check(titlebar.terminal_icon_name() == surface_icon_name,
-        "metadata connection initializes custom icon name from current surface state");
+    ok &= check(titlebar.root_item()->property("title").toString() == default_window_title(),
+        "metadata connection initializes shared title fallback");
+    ok &= check(
+        titlebar.root_item()->property("activity_marker_text").toString() == icon_spinner,
+        "metadata connection initializes shared activity marker from current icon name");
 
     return ok;
 }
@@ -1610,38 +1471,56 @@ bool test_parse_transcript_timing_diagnostics_option()
 
 bool test_window_state_sync()
 {
+    QQmlEngine engine;
     QQuickWindow window;
     window.setColor(QColor(180, 16, 16));
-    Focus_window_chrome titlebar(window.contentItem());
+    chrome_test::Terminal_qml_chrome titlebar(engine, window);
 
     bool ok = true;
+    ok &= check(titlebar.is_valid(), "shared QML titlebar initializes for state sync");
+    if (!titlebar.is_valid()) {
+        std::cerr << titlebar.error_string().toStdString() << '\n';
+        return ok;
+    }
+
     sync_chrome_window_state(titlebar, window);
-    ok &= check(!titlebar.window_maximized(),
-        "titlebar starts with nonmaximized window state");
-    ok &= check(window.color() == chrome_test::window_chrome_background_color(window.isActive()),
+    ok &= check(!titlebar.root_item()->property("maximized").toBool(),
+        "shared titlebar starts with nonmaximized window state");
+    ok &= check(titlebar.root_item()->property("resize_enabled").toBool(),
+        "shared titlebar starts with resize enabled");
+    ok &= check(window.color() == chrome_test::terminal_chrome_background_color(window.isActive()),
         "custom window border color starts synchronized with titlebar color");
 
     window.setWindowStates(Qt::WindowMaximized);
     sync_chrome_window_state(titlebar, window);
-    ok &= check(titlebar.window_maximized(),
-        "titlebar tracks maximized window state");
+    ok &= check(titlebar.root_item()->property("maximized").toBool(),
+        "shared titlebar tracks maximized window state");
+    ok &= check(!titlebar.root_item()->property("resize_enabled").toBool(),
+        "shared titlebar disables resize while maximized");
 
     window.setWindowStates(Qt::WindowFullScreen);
     sync_chrome_window_state(titlebar, window);
-    ok &= check(titlebar.window_maximized(),
-        "titlebar treats fullscreen as restore-capable window state");
+    ok &= check(titlebar.root_item()->property("maximized").toBool(),
+        "shared titlebar treats fullscreen as restore-capable window state");
 
     window.setWindowStates(Qt::WindowNoState);
     sync_chrome_window_state(titlebar, window);
-    ok &= check(!titlebar.window_maximized(),
-        "titlebar tracks restored window state");
+    ok &= check(!titlebar.root_item()->property("maximized").toBool(),
+        "shared titlebar tracks restored window state");
 
+    QQmlEngine signal_engine;
     QQuickWindow signal_window;
     signal_window.resize(360, 240);
     signal_window.setColor(QColor(180, 16, 16));
-    Focus_window_chrome signal_titlebar(signal_window.contentItem());
+    chrome_test::Terminal_qml_chrome signal_titlebar(signal_engine, signal_window);
     VNM_TerminalSurface signal_surface(signal_window.contentItem());
     chrome_test::Terminal_scrollbar signal_scrollbar(signal_window.contentItem());
+    ok &= check(signal_titlebar.is_valid(), "shared QML titlebar initializes for signal sync");
+    if (!signal_titlebar.is_valid()) {
+        std::cerr << signal_titlebar.error_string().toStdString() << '\n';
+        return ok;
+    }
+
     QObject::connect(
         &signal_window,
         &QWindow::windowStateChanged,
@@ -1664,284 +1543,17 @@ bool test_window_state_sync()
         &signal_titlebar,
         true);
     signal_window.setWindowStates(Qt::WindowMaximized);
-    ok &= check(signal_titlebar.window_maximized(),
-        "windowStateChanged connection updates custom titlebar state");
+    ok &= check(signal_titlebar.root_item()->property("maximized").toBool(),
+        "windowStateChanged connection updates shared titlebar state");
     ok &= check(
         signal_window.color() ==
-            chrome_test::window_chrome_background_color(signal_window.isActive()),
+            chrome_test::terminal_chrome_background_color(signal_window.isActive()),
         "windowStateChanged connection synchronizes custom window border color");
-    ok &= check_rect_equal(item_rect(signal_surface), QRectF(0.0, 32.0, 348.0, 208.0),
+    ok &= check_rect_equal(item_rect(signal_surface), QRectF(1.0, 33.0, 346.0, 206.0),
         "windowStateChanged connection reapplies maximized geometry");
-    ok &= check_rect_equal(item_rect(signal_scrollbar), QRectF(348.0, 32.0, 12.0, 208.0),
+    ok &= check_rect_equal(item_rect(signal_scrollbar), QRectF(347.0, 33.0, 12.0, 206.0),
         "windowStateChanged connection reapplies maximized scrollbar geometry");
 
-    return ok;
-}
-
-bool test_focus_after_custom_titlebar_interactions(QGuiApplication& app)
-{
-    QQuickWindow window;
-    window.resize(360, 240);
-    window.setFlags(window.flags() | Qt::FramelessWindowHint);
-
-    Focus_window_chrome titlebar(window.contentItem());
-    VNM_TerminalSurface surface(window.contentItem());
-    chrome_test::Terminal_scrollbar scrollbar(window.contentItem());
-    surface.set_font_family(QStringLiteral("monospace"));
-    surface.set_font_size(12.0);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
-
-    auto sync_titlebar_state = [&] {
-        sync_chrome_window_state(titlebar, window);
-    };
-    QObject::connect(
-        &window,
-        &QWindow::activeChanged,
-        &titlebar,
-        sync_titlebar_state);
-    QObject::connect(
-        &window,
-        &QWindow::windowStateChanged,
-        &titlebar,
-        [sync_titlebar_state](Qt::WindowState) {
-            sync_titlebar_state();
-        });
-
-    Recording_resize_filter resize_filter(&window);
-    resize_filter.set_button_exclusion_rects_provider([&] {
-        return window_chrome_button_rects(titlebar);
-    });
-
-    window.show();
-    pump_events(app);
-    surface.forceActiveFocus();
-    pump_events(app);
-
-    bool ok = true;
-    ok &= check_terminal_active_focus(surface,
-        "terminal after startup");
-
-    const QPointF draggable_titlebar_point(60.0, 16.0);
-    ok &= check(titlebar.send_mouse_press(draggable_titlebar_point),
-        "custom titlebar draggable press is accepted");
-    ok &= check_command_log_equal(
-        titlebar.commands,
-        { chrome_test::Window_chrome_command::START_SYSTEM_MOVE },
-        "custom titlebar press requests system move");
-    ok &= check(!titlebar.hasFocus(),
-        "chrome does not take focus after titlebar press");
-    ok &= check_terminal_active_focus(surface,
-        "terminal after titlebar press");
-
-    (void)titlebar.send_mouse_release(draggable_titlebar_point);
-    pump_events(app);
-    ok &= check_terminal_active_focus(surface,
-        "terminal after titlebar release");
-
-    titlebar.commands.clear();
-    const QPointF maximize_button =
-        button_center(titlebar, chrome_test::Window_chrome_button_role::MAXIMIZE_RESTORE);
-    ok &= check(titlebar.send_mouse_press(maximize_button),
-        "maximize button press is accepted");
-    ok &= check(titlebar.send_mouse_release(maximize_button),
-        "maximize button release is accepted");
-    pump_events(app);
-    sync_titlebar_state();
-    ok &= check_command_log_equal(
-        titlebar.commands,
-        { chrome_test::Window_chrome_command::MAXIMIZE },
-        "maximize button dispatches maximize command");
-    ok &= check(!titlebar.hasFocus(),
-        "chrome does not take focus after maximize button");
-    ok &= check_terminal_active_focus(surface,
-        "terminal after maximize button release");
-
-    titlebar.commands.clear();
-    titlebar.set_window_maximized(true);
-    ok &= check(titlebar.send_mouse_press(maximize_button),
-        "restore button press is accepted");
-    ok &= check(titlebar.send_mouse_release(maximize_button),
-        "restore button release is accepted");
-    pump_events(app);
-    ok &= check_command_log_equal(
-        titlebar.commands,
-        { chrome_test::Window_chrome_command::RESTORE },
-        "maximize/restore button dispatches restore command");
-    ok &= check_terminal_active_focus(surface,
-        "terminal after restore button release");
-
-    window.setWindowStates(Qt::WindowNoState);
-    pump_events(app);
-    sync_titlebar_state();
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
-
-    resize_filter.resize_return_value = false;
-    Mouse_filter_result refused_resize = send_resize_mouse_event(
-        resize_filter,
-        window,
-        QEvent::MouseButtonPress,
-        QPointF(60.0, 3.0),
-        Qt::LeftButton,
-        Qt::LeftButton);
-    ok &= check_mouse_filter_result(
-        refused_resize,
-        true,
-        true,
-        "refused top resize press is consumed");
-    ok &= check_terminal_active_focus(surface,
-        "terminal after refused resize press");
-
-    resize_filter.resize_edges_log.clear();
-    resize_filter.resize_return_value = true;
-    Mouse_filter_result accepted_resize = send_resize_mouse_event(
-        resize_filter,
-        window,
-        QEvent::MouseButtonPress,
-        QPointF(3.0, 80.0),
-        Qt::LeftButton,
-        Qt::LeftButton);
-    ok &= check_mouse_filter_result(
-        accepted_resize,
-        true,
-        true,
-        "accepted left resize press is consumed");
-    ok &= check_terminal_active_focus(surface,
-        "terminal after accepted resize press");
-
-    QKeyEvent key_event(QEvent::KeyPress, Qt::Key_V, Qt::ControlModifier);
-    key_event.setAccepted(false);
-    ok &= check(!resize_filter.eventFilter(&window, &key_event),
-        "resize filter passes keyboard shortcuts through");
-
-    return ok;
-}
-
-bool test_installed_filter_chain_order()
-{
-    QQuickWindow window;
-    window.resize(360, 240);
-    VNM_TerminalSurface surface(window.contentItem());
-    Recording_resize_filter resize_filter(&window);
-    Recording_event_filter key_filter(QEvent::KeyPress);
-    Recording_event_filter mouse_filter(QEvent::MouseButtonPress);
-    Terminal_shortcut_filter shortcut_filter(&surface);
-
-    window.installEventFilter(&shortcut_filter);
-    window.installEventFilter(&key_filter);
-    window.installEventFilter(&mouse_filter);
-    window.installEventFilter(&resize_filter);
-
-    QKeyEvent key_event(QEvent::KeyPress, Qt::Key_V, Qt::ControlModifier);
-    key_event.setAccepted(false);
-    const bool key_sent = QCoreApplication::sendEvent(&window, &key_event);
-
-    QMouseEvent mouse_event(
-        QEvent::MouseButtonPress,
-        QPointF(3.0, 80.0),
-        QPointF(3.0, 80.0),
-        QPointF(3.0, 80.0),
-        Qt::LeftButton,
-        Qt::LeftButton,
-        Qt::NoModifier);
-    mouse_event.setAccepted(false);
-    const bool mouse_sent = QCoreApplication::sendEvent(&window, &mouse_event);
-
-    bool ok = true;
-    ok &= check(key_sent, "installed filter chain key event is delivered");
-    ok &= check(key_filter.recorded_count == 1,
-        "resize filter passes key event through to earlier filters");
-    ok &= check(mouse_sent, "installed filter chain mouse event is delivered");
-    ok &= check(mouse_filter.recorded_count == 0,
-        "resize filter consumes resize mouse press before earlier filters");
-    ok &= check(resize_filter.resize_edges_log.size() == 1,
-        "installed resize filter receives border mouse press");
-    return ok;
-}
-
-bool test_installed_resize_filter_preempts_live_titlebar(QGuiApplication& app)
-{
-    QQuickWindow window;
-    window.resize(360, 240);
-    window.setFlags(window.flags() | Qt::FramelessWindowHint);
-
-    Focus_window_chrome titlebar(window.contentItem());
-    VNM_TerminalSurface surface(window.contentItem());
-    chrome_test::Terminal_scrollbar scrollbar(window.contentItem());
-    surface.set_font_family(QStringLiteral("monospace"));
-    surface.set_font_size(12.0);
-    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
-
-    Terminal_shortcut_filter shortcut_filter(&surface);
-    Recording_resize_filter resize_filter(&window);
-    resize_filter.set_button_exclusion_rects_provider([&] {
-        return window_chrome_button_rects(titlebar);
-    });
-    window.installEventFilter(&shortcut_filter);
-    window.installEventFilter(&resize_filter);
-
-    window.show();
-    pump_events(app);
-    surface.forceActiveFocus();
-    pump_events(app);
-
-    const QPointF top_border_point(60.0, 3.0);
-
-    bool ok = true;
-    ok &= check_terminal_active_focus(surface,
-        "terminal before installed top-border resize press");
-    ok &= check(titlebar.is_draggable_titlebar_point(top_border_point),
-        "top border point is also live draggable titlebar chrome");
-
-    QMouseEvent mouse_event(
-        QEvent::MouseButtonPress,
-        top_border_point,
-        top_border_point,
-        top_border_point,
-        Qt::LeftButton,
-        Qt::LeftButton,
-        Qt::NoModifier);
-    mouse_event.setAccepted(false);
-    const bool mouse_sent = QCoreApplication::sendEvent(&window, &mouse_event);
-
-    ok &= check(mouse_sent,
-        "installed top-border resize press is delivered");
-    ok &= check(mouse_event.isAccepted(),
-        "installed resize filter accepts top-border resize press");
-    ok &= check(resize_filter.resize_edges_log.size() == 1,
-        "installed resize filter starts one top-border resize");
-    if (!resize_filter.resize_edges_log.empty()) {
-        ok &= check(resize_filter.resize_edges_log.front() == Qt::Edges(Qt::TopEdge),
-            "installed resize filter receives top edge");
-    }
-    ok &= check(titlebar.commands.empty(),
-        "installed resize filter consumes top-border press before chrome command");
-    ok &= check_terminal_active_focus(surface,
-        "terminal after installed top-border resize press");
-
-    titlebar.commands.clear();
-    const QPointF draggable_control_point(60.0, 16.0);
-    ok &= check(titlebar.is_draggable_titlebar_point(draggable_control_point),
-        "control point is live draggable titlebar chrome");
-
-    QMouseEvent drag_event(
-        QEvent::MouseButtonPress,
-        draggable_control_point,
-        draggable_control_point,
-        draggable_control_point,
-        Qt::LeftButton,
-        Qt::LeftButton,
-        Qt::NoModifier);
-    drag_event.setAccepted(false);
-    const bool drag_sent = QCoreApplication::sendEvent(&window, &drag_event);
-
-    ok &= check(drag_sent,
-        "installed draggable control press is delivered");
-    ok &= check(drag_event.isAccepted(),
-        "installed draggable control press is accepted by live titlebar");
-    ok &= check_command_log_equal(
-        titlebar.commands,
-        { chrome_test::Window_chrome_command::START_SYSTEM_MOVE },
-        "installed draggable control press reaches live titlebar");
     return ok;
 }
 
@@ -1998,9 +1610,6 @@ int main(int argc, char** argv)
     ok &= test_parse_transcript_snapshot_diagnostics_option();
     ok &= test_parse_transcript_timing_diagnostics_option();
     ok &= test_window_state_sync();
-    ok &= test_focus_after_custom_titlebar_interactions(app);
-    ok &= test_installed_filter_chain_order();
-    ok &= test_installed_resize_filter_preempts_live_titlebar(app);
 #if defined(Q_OS_MACOS)
     ok &= test_macos_command_shortcuts_are_host_shortcuts(app);
 #endif

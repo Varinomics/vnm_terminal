@@ -24,18 +24,17 @@ if(VNM_TERMINAL_DISTRIBUTION_BUILD AND VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_RE
         "VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=OFF")
 endif()
 
-find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Quick)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2)
 include(cmake/vnm_terminal_surface_dependency.cmake)
+include(cmake/vnm_qml_chrome_dependency.cmake)
 
 add_executable(vnm_terminal
-    src/frameless_resize_filter.cpp
-    src/frameless_resize_filter.h
     src/main.cpp
+    src/qml_chrome.cpp
+    src/qml_chrome.h
     src/terminal_scrollbar.cpp
     src/terminal_scrollbar.h
-    src/window_chrome.cpp
-    src/window_chrome.h
-    src/window_chrome_model.h
+    src/terminal_title_metadata.h
 )
 
 qt_add_resources(vnm_terminal "vnm_terminal_resources"
@@ -59,6 +58,7 @@ endif()
 
 target_link_libraries(vnm_terminal PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
+    vnm_qml_chrome::vnm_qml_chrome
 )
 
 target_compile_definitions(vnm_terminal PRIVATE
@@ -137,6 +137,21 @@ if(WIN32)
             "$<TARGET_FILE_DIR:vnm_terminal>"
         COMMAND_EXPAND_LISTS
     )
+
+    function(vnm_terminal_copy_qt_qml_module module_subdir)
+        add_custom_command(TARGET vnm_terminal POST_BUILD
+            COMMAND
+                "${CMAKE_COMMAND}" -E make_directory
+                "$<TARGET_FILE_DIR:vnm_terminal>/qml/${module_subdir}"
+            COMMAND
+                "${CMAKE_COMMAND}" -E copy_directory
+                "$<TARGET_FILE_DIR:Qt6::Core>/../qml/${module_subdir}"
+                "$<TARGET_FILE_DIR:vnm_terminal>/qml/${module_subdir}"
+        )
+    endfunction()
+
+    vnm_terminal_copy_qt_qml_module(QtQml)
+    vnm_terminal_copy_qt_qml_module(QtQuick)
 
     add_executable(vnm_terminal_portable_launcher WIN32
         src/portable_launcher_win.c

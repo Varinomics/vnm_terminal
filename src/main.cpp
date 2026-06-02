@@ -1,6 +1,6 @@
-#include "frameless_resize_filter.h"
+#include "qml_chrome.h"
 #include "terminal_scrollbar.h"
-#include "window_chrome.h"
+#include "terminal_title_metadata.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
@@ -29,6 +29,8 @@
 #include <QObject>
 #include <QPoint>
 #include <QPointF>
+#include <QQmlEngine>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QRect>
 #include <QRectF>
@@ -448,7 +450,7 @@ private:
 class Wheel_delivery_indicator_filter final : public QObject
 {
 public:
-    explicit Wheel_delivery_indicator_filter(chrome::Terminal_window_chrome& titlebar)
+    explicit Wheel_delivery_indicator_filter(chrome::Terminal_qml_chrome& titlebar)
     :
         QObject(&titlebar),
         m_titlebar(titlebar)
@@ -465,13 +467,13 @@ protected:
     }
 
 private:
-    chrome::Terminal_window_chrome& m_titlebar;
+    chrome::Terminal_qml_chrome& m_titlebar;
 };
 
 void install_wheel_delivery_indicator_filter(
     VNM_TerminalSurface&             surface,
     chrome::Terminal_scrollbar&      scrollbar,
-    chrome::Terminal_window_chrome*  titlebar,
+    chrome::Terminal_qml_chrome*     titlebar,
     bool                             enabled)
 {
     if (!enabled || titlebar == nullptr) {
@@ -569,25 +571,26 @@ void apply_terminal_shell_geometry(
     QQuickWindow&                  window,
     VNM_TerminalSurface&           surface,
     chrome::Terminal_scrollbar&    scrollbar,
-    chrome::Terminal_window_chrome* titlebar,
-    bool                           custom_titlebar,
-    chrome::Terminal_content_border* content_border = nullptr)
+    chrome::Terminal_qml_chrome*   titlebar,
+    bool                           custom_titlebar)
 {
+    const qreal content_border_width = titlebar != nullptr
+        ? logical_device_pixel_width(window)
+        : 0.0;
     const Terminal_shell_geometry geometry = terminal_shell_geometry(
         QSizeF(window.width(), window.height()),
         custom_titlebar,
         custom_titlebar_resize_border_active(window),
-        content_border != nullptr ? logical_device_pixel_width(window) : 0.0);
+        content_border_width);
 
     if (titlebar != nullptr) {
-        titlebar->setPosition(geometry.chrome_rect.topLeft());
-        titlebar->setSize(geometry.chrome_rect.size());
-    }
-
-    if (content_border != nullptr) {
-        content_border->setPosition(geometry.content_border_rect.topLeft());
-        content_border->setSize(geometry.content_border_rect.size());
-        content_border->setVisible(custom_titlebar);
+        titlebar->set_size(QSizeF(window.width(), window.height()));
+        titlebar->set_content_border_rect(
+            geometry.content_border_rect,
+            content_border_width);
+        if (QQuickItem* root_item = titlebar->root_item()) {
+            root_item->setVisible(custom_titlebar);
+        }
     }
 
     surface.setPosition(geometry.terminal_rect.topLeft());
@@ -670,19 +673,6 @@ bool resize_window_for_text_area_request(
     return true;
 }
 
-std::vector<QRectF> window_chrome_button_rects(
-    const chrome::Terminal_window_chrome& titlebar)
-{
-    std::vector<QRectF> rects;
-    const chrome::Window_chrome_layout layout = titlebar.chrome_layout();
-    const QPointF offset(titlebar.x(), titlebar.y());
-    rects.reserve(layout.buttons.size());
-    for (const chrome::Window_chrome_button_geometry& button : layout.buttons) {
-        rects.push_back(button.rect.translated(offset));
-    }
-    return rects;
-}
-
 QString visible_terminal_title(QString terminal_title)
 {
     terminal_title = terminal_title.trimmed();
@@ -691,51 +681,56 @@ QString visible_terminal_title(QString terminal_title)
 
 void sync_terminal_title(
     QQuickWindow&                  window,
-    chrome::Terminal_window_chrome* titlebar,
-    const QString&                 terminal_title)
+    chrome::Terminal_qml_chrome*   titlebar,
+    const QString&                 terminal_title,
+    const QString&                 terminal_icon_name)
 {
     const QString visible_title = visible_terminal_title(terminal_title);
     window.setTitle(visible_title);
     if (titlebar != nullptr) {
-        titlebar->set_terminal_title(visible_title);
+        const chrome::Terminal_title_content content =
+            chrome::derive_terminal_title_content(visible_title, terminal_icon_name);
+        titlebar->set_title(content.display_title);
+        titlebar->set_activity_marker_text(chrome::activity_marker_text(content));
     }
 }
 
-void connect_terminal_metadata_to_window_chrome(
+void connect_terminal_metadata_to_chrome(
     VNM_TerminalSurface&           surface,
     QQuickWindow&                  window,
-    chrome::Terminal_window_chrome* titlebar)
+    chrome::Terminal_qml_chrome*   titlebar)
 {
+    auto sync_metadata = [titlebar, &window, &surface] {
+        sync_terminal_title(
+            window,
+            titlebar,
+            surface.terminal_title(),
+            surface.terminal_icon_name());
+    };
+
     QObject::connect(
         &surface,
         &VNM_TerminalSurface::terminal_title_changed,
         &window,
-        [titlebar, &window, &surface] {
-            sync_terminal_title(window, titlebar, surface.terminal_title());
-        });
-    sync_terminal_title(window, titlebar, surface.terminal_title());
-
-    if (titlebar != nullptr) {
-        QObject::connect(
-            &surface,
-            &VNM_TerminalSurface::terminal_icon_name_changed,
-            titlebar,
-            [titlebar, &surface] {
-                titlebar->set_terminal_icon_name(surface.terminal_icon_name());
-            });
-        titlebar->set_terminal_icon_name(surface.terminal_icon_name());
-    }
+        sync_metadata);
+    QObject::connect(
+        &surface,
+        &VNM_TerminalSurface::terminal_icon_name_changed,
+        &window,
+        sync_metadata);
+    sync_metadata();
 }
 
 void sync_chrome_window_state(
-    chrome::Terminal_window_chrome& titlebar,
+    chrome::Terminal_qml_chrome&    titlebar,
     QQuickWindow&                  window)
 {
-    titlebar.set_window_active(window.isActive());
-    titlebar.set_window_maximized(
+    titlebar.set_active(window.isActive());
+    titlebar.set_maximized(
         window.windowStates().testFlag(Qt::WindowMaximized) ||
         window.windowStates().testFlag(Qt::WindowFullScreen));
-    window.setColor(chrome::window_chrome_background_color(window.isActive()));
+    titlebar.set_resize_enabled(custom_titlebar_resize_border_active(window));
+    window.setColor(chrome::terminal_chrome_background_color(window.isActive()));
 }
 
 void print_error(const QString& message)
@@ -4256,11 +4251,13 @@ int main(int argc, char** argv)
             &options);
     }
 
+    QQmlEngine chrome_engine;
+
     QQuickWindow window;
     window.setTitle(default_window_title());
     window.setIcon(app_icon);
     window.setColor(options.custom_titlebar
-        ? chrome::window_chrome_background_color(window.isActive())
+        ? chrome::terminal_chrome_background_color(window.isActive())
         : QColor(9, 12, 16));
     window.resize(options.window_size);
     if (options.window_position.has_value()) {
@@ -4270,9 +4267,17 @@ int main(int argc, char** argv)
         window.setFlags(window.flags() | Qt::FramelessWindowHint);
     }
 
-    auto* titlebar = options.custom_titlebar
-        ? new chrome::Terminal_window_chrome(window.contentItem())
-        : nullptr;
+    std::unique_ptr<chrome::Terminal_qml_chrome> titlebar;
+    if (options.custom_titlebar) {
+        titlebar = std::make_unique<chrome::Terminal_qml_chrome>(chrome_engine, window);
+        if (!titlebar->is_valid()) {
+            print_error(QStringLiteral("failed to create shared window chrome: %1")
+                .arg(titlebar->error_string()));
+            return k_exit_start_failed;
+        }
+    }
+    auto* titlebar_ptr = titlebar.get();
+
     auto* surface = new VNM_TerminalSurface(window.contentItem());
     term::VNM_TerminalSurface_render_bridge::set_selection_trace_enabled(
         *surface,
@@ -4295,12 +4300,6 @@ int main(int argc, char** argv)
     }
 #endif
     auto* scrollbar = new chrome::Terminal_scrollbar(window.contentItem());
-    auto* content_border = options.custom_titlebar
-        ? new chrome::Terminal_content_border(window.contentItem())
-        : nullptr;
-    if (content_border != nullptr) {
-        content_border->setZ(-1.0);
-    }
     scrollbar->set_surface(surface);
     scrollbar->set_wheel_trace_enabled(options.wheel_trace_enabled);
     surface->set_font_family(options.font_family);
@@ -4323,7 +4322,7 @@ int main(int argc, char** argv)
     install_wheel_delivery_indicator_filter(
         *surface,
         *scrollbar,
-        titlebar,
+        titlebar_ptr,
         options.wheel_trace_enabled);
     const bool custom_titlebar_enabled = options.custom_titlebar;
     std::optional<Persisted_terminal_window_state> latest_restorable_window_state =
@@ -4341,19 +4340,11 @@ int main(int argc, char** argv)
         window,
         *surface,
         *scrollbar,
-        titlebar,
-        custom_titlebar_enabled,
-        content_border);
+        titlebar_ptr,
+        custom_titlebar_enabled);
     window.installEventFilter(new Terminal_shortcut_filter(surface));
-    if (titlebar != nullptr) {
-        auto* resize_filter = new chrome::Frameless_resize_filter(&window, &window);
-        resize_filter->set_button_exclusion_rects_provider([titlebar] {
-            return window_chrome_button_rects(*titlebar);
-        });
-        window.installEventFilter(resize_filter);
-    }
 
-    connect_terminal_metadata_to_window_chrome(*surface, window, titlebar);
+    connect_terminal_metadata_to_chrome(*surface, window, titlebar_ptr);
     QObject::connect(
         surface,
         &VNM_TerminalSurface::clipboard_write_requested,
@@ -4388,11 +4379,10 @@ int main(int argc, char** argv)
         &QQuickWindow::widthChanged,
         surface,
         [
-            titlebar,
+            titlebar_ptr,
             &window,
             surface,
             scrollbar,
-            content_border,
             custom_titlebar_enabled,
             remember_restorable_window_state
         ] {
@@ -4400,9 +4390,8 @@ int main(int argc, char** argv)
                 window,
                 *surface,
                 *scrollbar,
-                titlebar,
-                custom_titlebar_enabled,
-                content_border);
+                titlebar_ptr,
+                custom_titlebar_enabled);
             remember_restorable_window_state();
         });
     QObject::connect(
@@ -4410,11 +4399,10 @@ int main(int argc, char** argv)
         &QQuickWindow::heightChanged,
         surface,
         [
-            titlebar,
+            titlebar_ptr,
             &window,
             surface,
             scrollbar,
-            content_border,
             custom_titlebar_enabled,
             remember_restorable_window_state
         ] {
@@ -4422,9 +4410,8 @@ int main(int argc, char** argv)
                 window,
                 *surface,
                 *scrollbar,
-                titlebar,
-                custom_titlebar_enabled,
-                content_border);
+                titlebar_ptr,
+                custom_titlebar_enabled);
             remember_restorable_window_state();
         });
     QObject::connect(
@@ -4442,54 +4429,43 @@ int main(int argc, char** argv)
             remember_restorable_window_state();
         });
 
-    if (titlebar != nullptr) {
-        auto sync_titlebar_state = [titlebar, &window] {
-            sync_chrome_window_state(*titlebar, window);
+    if (titlebar_ptr != nullptr) {
+        auto sync_titlebar_state = [titlebar_ptr, &window] {
+            sync_chrome_window_state(*titlebar_ptr, window);
         };
         auto sync_titlebar_state_and_geometry =
             [
-                titlebar,
+                titlebar_ptr,
                 &window,
                 surface,
                 scrollbar,
-                content_border,
                 custom_titlebar_enabled,
                 remember_restorable_window_state
             ] {
-                sync_chrome_window_state(*titlebar, window);
-                if (content_border != nullptr) {
-                    content_border->set_window_active(window.isActive());
-                }
+                sync_chrome_window_state(*titlebar_ptr, window);
                 apply_terminal_shell_geometry(
                     window,
                     *surface,
                     *scrollbar,
-                    titlebar,
-                    custom_titlebar_enabled,
-                    content_border);
+                    titlebar_ptr,
+                    custom_titlebar_enabled);
                 remember_restorable_window_state();
             };
         QObject::connect(
             &window,
             &QWindow::activeChanged,
-            titlebar,
-            [titlebar, content_border, &window] {
-                sync_chrome_window_state(*titlebar, window);
-                if (content_border != nullptr) {
-                    content_border->set_window_active(window.isActive());
-                }
+            titlebar_ptr,
+            [titlebar_ptr, &window] {
+                sync_chrome_window_state(*titlebar_ptr, window);
             });
         QObject::connect(
             &window,
             &QWindow::windowStateChanged,
-            titlebar,
+            titlebar_ptr,
             [sync_titlebar_state_and_geometry](Qt::WindowState) {
                 sync_titlebar_state_and_geometry();
             });
         sync_titlebar_state();
-        if (content_border != nullptr) {
-            content_border->set_window_active(window.isActive());
-        }
     }
     else {
         QObject::connect(
