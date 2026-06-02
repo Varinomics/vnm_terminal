@@ -44,14 +44,22 @@ set(VNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE "1920x1080" CACHE STRING
 set(VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE "10" CACHE STRING
     "vnm_terminal font pixel size for CMDG benchmark runs.")
 option(VNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER
-    "Run the CMDG Nelostie benchmark with the Qt software renderer."
+    "Use Qt software rendering for headless/CI diagnostic CMDG runs only."
     OFF)
 option(VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN
-    "Run the CMDG Nelostie benchmark with the Qt offscreen platform."
+    "Use the Qt offscreen platform for headless/CI diagnostic CMDG runs only."
     OFF)
 option(VNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR
     "Ask CMDG to hide the terminal cursor during benchmark scene frames."
     ON)
+set(VNM_TERMINAL_CMDG_ARTIFACT_TAG "" CACHE STRING
+    "Optional artifact subfolder tag (e.g. a feature-flag set name) so repeated CMDG runs with different toggles preserve distinct artifacts instead of overwriting. Empty keeps the legacy <scene>/repeat_<n> layout.")
+if(NOT VNM_TERMINAL_CMDG_ARTIFACT_TAG STREQUAL "" AND
+    NOT VNM_TERMINAL_CMDG_ARTIFACT_TAG MATCHES "^[A-Za-z][A-Za-z0-9_]*$")
+    message(FATAL_ERROR
+        "VNM_TERMINAL_CMDG_ARTIFACT_TAG must match ^[A-Za-z][A-Za-z0-9_]*$ "
+        "(got '${VNM_TERMINAL_CMDG_ARTIFACT_TAG}').")
+endif()
 
 if(VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN)
     find_package(Qt6Gui 6.7 REQUIRED COMPONENTS QOffscreenIntegrationPlugin)
@@ -204,8 +212,13 @@ if(vnm_terminal_cmdg_nelostie_exe)
         foreach(vnm_terminal_cmdg_repeat_index RANGE 1 ${VNM_TERMINAL_CMDG_REPEAT_COUNT})
             set(vnm_terminal_cmdg_run_id
                 "${vnm_terminal_cmdg_scene}_r${vnm_terminal_cmdg_repeat_index}")
-            set(vnm_terminal_cmdg_output_dir
-                "${CMAKE_CURRENT_BINARY_DIR}/${vnm_terminal_cmdg_scene}/repeat_${vnm_terminal_cmdg_repeat_index}")
+            if(VNM_TERMINAL_CMDG_ARTIFACT_TAG STREQUAL "")
+                set(vnm_terminal_cmdg_output_dir
+                    "${CMAKE_CURRENT_BINARY_DIR}/${vnm_terminal_cmdg_scene}/repeat_${vnm_terminal_cmdg_repeat_index}")
+            else()
+                set(vnm_terminal_cmdg_output_dir
+                    "${CMAKE_CURRENT_BINARY_DIR}/${vnm_terminal_cmdg_scene}/${VNM_TERMINAL_CMDG_ARTIFACT_TAG}/repeat_${vnm_terminal_cmdg_repeat_index}")
+            endif()
 
             if(vnm_terminal_cmdg_scene STREQUAL "AssemblyWinter2025" AND
                 vnm_terminal_cmdg_repeat_index EQUAL 1)
@@ -256,6 +269,15 @@ if(vnm_terminal_cmdg_nelostie_exe)
                 list(APPEND vnm_terminal_cmdg_test_labels nelostie)
             endif()
             list(APPEND vnm_terminal_cmdg_test_labels "${vnm_terminal_cmdg_scene}")
+            # Focused regression label: the two scenes (single repeat) that drive
+            # the Plasma/ParticleVortex investigation. `ctest -L cmdg_regression_focus`
+            # runs exactly these two hardware/windowed r1 benchmarks so feature-flag
+            # toggles can be A/B compared without full-suite thermal noise.
+            if((vnm_terminal_cmdg_scene STREQUAL "Plasma" OR
+                vnm_terminal_cmdg_scene STREQUAL "ParticleVortex") AND
+                vnm_terminal_cmdg_repeat_index EQUAL 1)
+                list(APPEND vnm_terminal_cmdg_test_labels cmdg_regression_focus)
+            endif()
 
             set_tests_properties(${vnm_terminal_cmdg_test_name} PROPERTIES
                 LABELS "${vnm_terminal_cmdg_test_labels}"
