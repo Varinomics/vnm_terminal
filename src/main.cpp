@@ -2340,6 +2340,12 @@ void append_text_layout_stats_text(
         stream,
         "text_ascii_replacement_runs_all_space_succeeded",
         static_cast<std::uint64_t>(stats.text_ascii_replacement_runs_all_space_succeeded));
+    if constexpr (requires { stats.text_ascii_replacement_add_glyphs_calls; }) {
+        append_profile_counter(
+            stream,
+            "text_ascii_replacement_add_glyphs_calls",
+            static_cast<std::uint64_t>(stats.text_ascii_replacement_add_glyphs_calls));
+    }
     append_profile_counter(
         stream,
         "text_ascii_replacement_runs_fallback",
@@ -2487,6 +2493,12 @@ void append_renderer_stats_text(
         stream,
         "text_leaf_nodes_created",
         static_cast<std::uint64_t>(stats.text_leaf_nodes_created));
+    if constexpr (requires { stats.text_leaf_nodes_reused; }) {
+        append_profile_counter(
+            stream,
+            "text_leaf_nodes_reused",
+            static_cast<std::uint64_t>(stats.text_leaf_nodes_reused));
+    }
     append_profile_counter(
         stream,
         "text_cache_entry_child_nodes_cleared_for_replacement",
@@ -2527,6 +2539,12 @@ void append_renderer_stats_text(
             stream,
             "text_resource_descriptor_builds",
             static_cast<std::uint64_t>(stats.text_resource_descriptor_builds));
+    }
+    if constexpr (requires { stats.text_resource_descriptor_builds_avoided; }) {
+        append_profile_counter(
+            stream,
+            "text_resource_descriptor_builds_avoided",
+            static_cast<std::uint64_t>(stats.text_resource_descriptor_builds_avoided));
     }
     if constexpr (requires { stats.text_resource_descriptor_clean_reuse_skips; }) {
         append_profile_counter(
@@ -2817,6 +2835,9 @@ void append_cumulative_renderer_stats_text(
     append_profile_counter(stream, "text_content_removed",    stats.text_content_removed);
     append_profile_counter(stream, "text_content_failures",   stats.text_content_failures);
     append_profile_counter(stream, "text_leaf_nodes_created", stats.text_leaf_nodes_created);
+    if constexpr (requires { stats.text_leaf_nodes_reused; }) {
+        append_profile_counter(stream, "text_leaf_nodes_reused", stats.text_leaf_nodes_reused);
+    }
     append_profile_counter(
         stream,
         "text_cache_entry_child_nodes_cleared_for_replacement",
@@ -2843,6 +2864,12 @@ void append_cumulative_renderer_stats_text(
             stream,
             "text_resource_descriptor_builds",
             stats.text_resource_descriptor_builds);
+    }
+    if constexpr (requires { stats.text_resource_descriptor_builds_avoided; }) {
+        append_profile_counter(
+            stream,
+            "text_resource_descriptor_builds_avoided",
+            stats.text_resource_descriptor_builds_avoided);
     }
     if constexpr (requires { stats.text_resource_descriptor_clean_reuse_skips; }) {
         append_profile_counter(
@@ -3621,6 +3648,12 @@ void insert_text_layout_stats_json(
         object,
         "text_ascii_replacement_runs_all_space_succeeded",
         stats.text_ascii_replacement_runs_all_space_succeeded);
+    if constexpr (requires { stats.text_ascii_replacement_add_glyphs_calls; }) {
+        insert_json_counter(
+            object,
+            "text_ascii_replacement_add_glyphs_calls",
+            stats.text_ascii_replacement_add_glyphs_calls);
+    }
     insert_json_counter(
         object,
         "text_ascii_replacement_runs_fallback",
@@ -3761,6 +3794,12 @@ QJsonObject terminal_metrics_json(
         renderer,
         "text_leaf_nodes_created",
         cumulative_stats.text_leaf_nodes_created);
+    if constexpr (requires { cumulative_stats.text_leaf_nodes_reused; }) {
+        insert_json_counter(
+            renderer,
+            "text_leaf_nodes_reused",
+            cumulative_stats.text_leaf_nodes_reused);
+    }
     insert_json_counter(
         renderer,
         "text_cache_entry_child_nodes_cleared_for_replacement",
@@ -3784,6 +3823,18 @@ QJsonObject terminal_metrics_json(
         cumulative_stats.route_graphic_geometry_cells);
     insert_json_counter(renderer, "route_fallback_cells", cumulative_stats.route_fallback_cells);
     insert_text_layout_stats_json(renderer, cumulative_stats);
+    if constexpr (requires { cumulative_stats.text_resource_descriptor_builds; }) {
+        insert_json_counter(
+            renderer,
+            "text_resource_descriptor_builds",
+            cumulative_stats.text_resource_descriptor_builds);
+    }
+    if constexpr (requires { cumulative_stats.text_resource_descriptor_builds_avoided; }) {
+        insert_json_counter(
+            renderer,
+            "text_resource_descriptor_builds_avoided",
+            cumulative_stats.text_resource_descriptor_builds_avoided);
+    }
     insert_json_counter(renderer, "qsg_nodes_created", cumulative_stats.qsg_nodes_created);
     insert_json_counter(renderer, "qsg_nodes_replaced", cumulative_stats.qsg_nodes_replaced);
     insert_json_counter(renderer, "qsg_nodes_destroyed", cumulative_stats.qsg_nodes_destroyed);
