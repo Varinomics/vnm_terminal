@@ -1,4 +1,8 @@
-# AGENTS
+# CLAUDE
+
+Read `AGENTS.md` first. It contains the repository-specific AI-agent rules,
+including the no-transient-artifacts rule and the durable debugging knowledge
+exception.
 
 ## Common Varinomics Rules
 
@@ -25,26 +29,6 @@ unsure which standard applies, read all four before proceeding.
 Local path: `C:\plms\varinomics\varinomics-standards\`
 Canonical repo: `https://github.com/Varinomics/varinomics-standards`
 
-## Review and Plan Artifacts
-
-Default rule: do not stage or commit review reports, review plans,
-implementation plans, analysis notes, working notes, investigation reports,
-phase plans, or other transient documentation unless the user explicitly
-requests a repo-tracked artifact.
-
-These files are scratch work. Keep them outside the repository or delete them
-when done; do not add them to `.gitignore` as a workaround.
-
-## Durable Debugging Knowledge
-
-Before working on terminal scrollback, Codex-in-terminal behavior, transcript
-capture/replay, custom chrome diagnostics, or blank-line preservation, read
-`docs/debugging_knowledge.md`.
-
-That file records durable facts from previous debugging sessions. It is a
-repo-tracked exception to the transient-notes rule above because the user
-explicitly requested persistent knowledge for future agents.
-
 ## Local Windows Toolchain
 
 On this workstation, initialize native MSVC builds from:
@@ -58,10 +42,3 @@ The Windows debuggers are installed at:
 
 If a Ninja/MSVC build cannot find standard headers such as `stddef.h` or
 `optional`, first check that the shell was initialized through `vcvarsall.bat`.
-
-## Codex Claude Review Helper
-
-Codex agents may invoke Claude review-only sessions through
-`C:\plms\invoking_claude_from_codex` when a task calls for Claude review.
-This instruction is for Codex only: Claude must not use this helper to invoke
-Claude.
