@@ -52,8 +52,12 @@ option(VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN
 option(VNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR
     "Ask CMDG to hide the terminal cursor during benchmark scene frames."
     ON)
+set(vnm_terminal_cmdg_artifact_tag_doc
+    "Optional artifact subfolder tag so repeated CMDG runs with different "
+    "builds or runtime configurations preserve distinct artifacts instead of "
+    "overwriting. Empty keeps the existing <scene>/repeat_<n> layout.")
 set(VNM_TERMINAL_CMDG_ARTIFACT_TAG "" CACHE STRING
-    "Optional artifact subfolder tag (e.g. a feature-flag set name) so repeated CMDG runs with different toggles preserve distinct artifacts instead of overwriting. Empty keeps the legacy <scene>/repeat_<n> layout.")
+    "${vnm_terminal_cmdg_artifact_tag_doc}")
 if(NOT VNM_TERMINAL_CMDG_ARTIFACT_TAG STREQUAL "" AND
     NOT VNM_TERMINAL_CMDG_ARTIFACT_TAG MATCHES "^[A-Za-z][A-Za-z0-9_]*$")
     message(FATAL_ERROR
@@ -271,8 +275,8 @@ if(vnm_terminal_cmdg_nelostie_exe)
             list(APPEND vnm_terminal_cmdg_test_labels "${vnm_terminal_cmdg_scene}")
             # Focused regression label: the two scenes (single repeat) that drive
             # the Plasma/ParticleVortex investigation. `ctest -L cmdg_regression_focus`
-            # runs exactly these two hardware/windowed r1 benchmarks so feature-flag
-            # toggles can be A/B compared without full-suite thermal noise.
+            # runs exactly these two hardware/windowed r1 benchmarks so terminal
+            # builds can be A/B compared without full-suite thermal noise.
             if((vnm_terminal_cmdg_scene STREQUAL "Plasma" OR
                 vnm_terminal_cmdg_scene STREQUAL "ParticleVortex") AND
                 vnm_terminal_cmdg_repeat_index EQUAL 1)
