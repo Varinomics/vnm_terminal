@@ -2189,27 +2189,38 @@ void append_model_profile_stats_text(
     append_profile_counter(stream, "render_snapshot_rows_owned", stats.render_snapshot_rows_owned);
     append_profile_counter(stream, "render_snapshot_cells_scanned", stats.render_snapshot_cells_scanned);
     append_profile_counter(stream, "render_snapshot_cells_emitted", stats.render_snapshot_cells_emitted);
-    append_profile_counter(stream, "render_snapshot_qstring_copies", stats.render_snapshot_qstring_copies);
     append_profile_counter(
         stream,
-        "render_snapshot_text_code_units_copied",
-        stats.render_snapshot_text_code_units_copied);
+        "render_snapshot_compact_empty_text_cells",
+        stats.render_snapshot_compact_empty_text_cells);
     append_profile_counter(
         stream,
-        "render_snapshot_empty_text_copies",
-        stats.render_snapshot_empty_text_copies);
+        "render_snapshot_compact_ascii_text_cells",
+        stats.render_snapshot_compact_ascii_text_cells);
     append_profile_counter(
         stream,
-        "render_snapshot_ascii_text_copies",
-        stats.render_snapshot_ascii_text_copies);
+        "render_snapshot_fallback_qstring_copies",
+        stats.render_snapshot_fallback_qstring_copies);
     append_profile_counter(
         stream,
-        "render_snapshot_single_non_ascii_text_copies",
-        stats.render_snapshot_single_non_ascii_copies);
+        "render_snapshot_fallback_text_code_units_copied",
+        stats.render_snapshot_fallback_text_code_units_copied);
     append_profile_counter(
         stream,
-        "render_snapshot_multi_text_copies",
-        stats.render_snapshot_multi_text_copies);
+        "render_snapshot_fallback_printable_ascii_copies",
+        stats.render_snapshot_fallback_printable_ascii_copies);
+    append_profile_counter(
+        stream,
+        "render_snapshot_fallback_other_ascii_copies",
+        stats.render_snapshot_fallback_other_ascii_copies);
+    append_profile_counter(
+        stream,
+        "render_snapshot_fallback_single_non_ascii_copies",
+        stats.render_snapshot_fallback_single_non_ascii_copies);
+    append_profile_counter(
+        stream,
+        "render_snapshot_fallback_multi_text_copies",
+        stats.render_snapshot_fallback_multi_text_copies);
     append_profile_counter(
         stream,
         "render_snapshot_unoccupied_cells_skipped",
@@ -2244,8 +2255,8 @@ void append_model_profile_stats_text(
         stats.max_render_snapshot_cells_emitted);
     append_profile_counter(
         stream,
-        "max_render_snapshot_text_code_units_per_cell",
-        stats.max_render_snapshot_text_units_per_cell);
+        "max_render_snapshot_fallback_text_units_per_cell",
+        stats.max_render_snapshot_fallback_text_units_per_cell);
 }
 
 void append_session_profile_stats_text(
