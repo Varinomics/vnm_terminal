@@ -39,6 +39,13 @@ jobs:
           path: vnm_terminal_surface
           ref: master
 
+      - name: Checkout chrome
+        uses: actions/checkout@v4
+        with:
+          repository: imakris/vnm_qml_chrome
+          path: vnm_qml_chrome
+          ref: master
+
       - name: Derive package names
         id: package
         run: |
@@ -72,6 +79,7 @@ jobs:
           cmake -B vnm_terminal/build -S vnm_terminal \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
+            -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=OFF \
             -DVNM_TERMINAL_DISTRIBUTION_BUILD=ON \
