@@ -3330,41 +3330,6 @@ void insert_json_counter(
         QString::number(static_cast<qulonglong>(value)));
 }
 
-void insert_stage42_toggle(
-    QJsonObject&                         toggles,
-    const term::stage42_feature_flags_t& flags,
-    const term::stage42_feature_flag_metadata_t& metadata)
-{
-    const bool       is_set    = qEnvironmentVariableIsSet(metadata.environment_name);
-    const QByteArray raw_value = is_set ? qgetenv(metadata.environment_name) : QByteArray();
-
-    QJsonObject toggle;
-    toggle.insert(
-        QStringLiteral("environment"),
-        QString::fromLatin1(metadata.environment_name));
-    toggle.insert(QStringLiteral("set"), is_set);
-    toggle.insert(QStringLiteral("enabled"), flags.*(metadata.enabled_member));
-    if (is_set) {
-        toggle.insert(QStringLiteral("raw_value"), QString::fromUtf8(raw_value));
-    }
-    else {
-        toggle.insert(QStringLiteral("raw_value"), QJsonValue());
-    }
-
-    toggles.insert(QString::fromLatin1(metadata.key), toggle);
-}
-
-QJsonObject stage42_toggles_json(const term::stage42_feature_flags_t& flags)
-{
-    QJsonObject toggles;
-    for (const term::stage42_feature_flag_metadata_t& metadata :
-        term::stage42_feature_flag_metadata())
-    {
-        insert_stage42_toggle(toggles, flags, metadata);
-    }
-    return toggles;
-}
-
 QJsonObject profiling_measurement_json(const metrics_timing_t& timing)
 {
     QJsonObject object;
@@ -3880,8 +3845,6 @@ QJsonObject terminal_metrics_json(
 {
     const term::terminal_renderer_cumulative_stats_t cumulative_stats =
         term::VNM_TerminalSurface_render_bridge::cumulative_renderer_stats(surface);
-    const term::stage42_feature_flags_t& stage42_flags =
-        term::VNM_TerminalSurface_render_bridge::stage42_feature_flags();
 
     QJsonObject frame;
     insert_renderer_frame_stats(frame, cumulative_stats.frame);
@@ -4230,7 +4193,7 @@ QJsonObject terminal_metrics_json(
     renderer.insert(QStringLiteral("frame"), frame);
 
     QJsonObject root;
-    root.insert(QStringLiteral("schema"), QStringLiteral("vnm_terminal_runtime_metrics_v1"));
+    root.insert(QStringLiteral("schema"), QStringLiteral("vnm_terminal_runtime_metrics_v2"));
     root.insert(QStringLiteral("elapsed_ms"), timing.app_elapsed_ms);
     root.insert(QStringLiteral("app_result"), app_result);
     root.insert(QStringLiteral("process_exit_code"), state.process_exit_code);
@@ -4248,7 +4211,6 @@ QJsonObject terminal_metrics_json(
         QStringLiteral("paint_frames_per_second_elapsed_basis"),
         QStringLiteral("app_exec_elapsed_ms_including_process_startup_excluding_profile_write"));
     root.insert(QStringLiteral("profiling"), profiling_measurement_json(timing));
-    root.insert(QStringLiteral("stage42_toggles"), stage42_toggles_json(stage42_flags));
     root.insert(QStringLiteral("surface_geometry"), surface_geometry_json(surface));
     root.insert(QStringLiteral("renderer"), renderer);
 

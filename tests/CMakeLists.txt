@@ -291,10 +291,8 @@ if(TARGET vnm_terminal_canvas_fixture)
             -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_metrics_json.cmake"
             --
             "${CMAKE_COMMAND}" -E env
-            "--unset=VNM_TERMINAL_STAGE42_MODEL_ASCII_DIRECT_PRINT"
             ${vnm_terminal_qt_offscreen_environment}
             ${vnm_terminal_qt_unscaled_environment}
-            "VNM_TERMINAL_STAGE42_RENDER_CELL_ROW_CACHE=0"
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
             "--software-renderer"
@@ -323,10 +321,8 @@ if(TARGET vnm_terminal_canvas_fixture)
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_metrics_json.cmake"
                 --
                 "${CMAKE_COMMAND}" -E env
-                "--unset=VNM_TERMINAL_STAGE42_MODEL_ASCII_DIRECT_PRINT"
                 ${vnm_terminal_qt_offscreen_environment}
                 ${vnm_terminal_qt_unscaled_environment}
-                "VNM_TERMINAL_STAGE42_RENDER_CELL_ROW_CACHE=0"
                 "${vnm_terminal_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_terminal>"
                 "--software-renderer"

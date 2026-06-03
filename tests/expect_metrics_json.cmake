@@ -2,10 +2,6 @@ if(NOT DEFINED metrics_path)
     message(FATAL_ERROR "metrics_path is required")
 endif()
 
-if(NOT DEFINED expected_stage42_toggle_count)
-    set(expected_stage42_toggle_count 16)
-endif()
-
 if(NOT DEFINED expected_profile_text_requested)
     set(expected_profile_text_requested OFF)
 endif()
@@ -41,6 +37,27 @@ function(vnm_terminal_read_json_length out_value json_text source_path)
             "${source_path} is missing JSON object '${json_path_text}': ${json_error}")
     endif()
     set(${out_value} "${value}" PARENT_SCOPE)
+endfunction()
+
+function(vnm_terminal_expect_json_missing json_text source_path)
+    set(json_path ${ARGN})
+    string(JSON value ERROR_VARIABLE json_error TYPE "${json_text}" ${json_path})
+    if(json_error STREQUAL "NOTFOUND")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "${source_path} should not contain JSON field '${json_path_text}'")
+    endif()
+endfunction()
+
+function(vnm_terminal_expect_json_counter json_text source_path)
+    set(json_path ${ARGN})
+    vnm_terminal_read_json_field(counter_value "${json_text}" "${source_path}" ${json_path})
+    if(NOT counter_value MATCHES "^[0-9]+$")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "${source_path} JSON field '${json_path_text}' should be an integer counter, "
+            "got ${counter_value}")
+    endif()
 endfunction()
 
 set(separator_index -1)
@@ -93,9 +110,10 @@ file(READ "${metrics_path}" metrics_text)
 
 vnm_terminal_read_json_field(schema
     "${metrics_text}" "${metrics_path}" schema)
-if(NOT schema STREQUAL "vnm_terminal_runtime_metrics_v1")
+if(NOT schema STREQUAL "vnm_terminal_runtime_metrics_v2")
     message(FATAL_ERROR "unexpected metrics schema: ${schema}")
 endif()
+vnm_terminal_expect_json_missing("${metrics_text}" "${metrics_path}" stage42_toggles)
 
 vnm_terminal_read_json_field(profile_text_requested
     "${metrics_text}" "${metrics_path}" profiling profile_text_requested)
@@ -123,6 +141,17 @@ if(expected_profile_text_requested)
     if(NOT EXISTS "${profile_text_path}")
         message(FATAL_ERROR "profile text was not written: ${profile_text_path}")
     endif()
+    file(READ "${profile_text_path}" profile_text)
+    foreach(profile_fragment IN ITEMS
+        "dirty_rows"
+        "enabled=true"
+        "session_profile_stats")
+        string(FIND "${profile_text}" "${profile_fragment}" profile_fragment_index)
+        if(profile_fragment_index LESS 0)
+            message(FATAL_ERROR
+                "profile text is missing expected fragment: ${profile_fragment}")
+        endif()
+    endforeach()
 else()
     if(NOT profile_write_elapsed_ms STREQUAL "0")
         message(FATAL_ERROR
@@ -150,82 +179,6 @@ if(NOT fps_elapsed_basis STREQUAL
     message(FATAL_ERROR "unexpected paint_frames_per_second_elapsed_basis")
 endif()
 
-vnm_terminal_read_json_length(stage42_toggle_count
-    "${metrics_text}" "${metrics_path}" stage42_toggles)
-if(NOT stage42_toggle_count STREQUAL "${expected_stage42_toggle_count}")
-    message(FATAL_ERROR
-        "expected ${expected_stage42_toggle_count} Stage 4.2 toggles, got "
-        "${stage42_toggle_count}")
-endif()
-
-set(expected_stage42_toggles
-    model_ascii_direct_print
-    model_ascii_skip_simple_cell_clear
-    qsg_ascii_resource_prefilter
-    qsg_cached_internal_text_node
-    qsg_descriptor_reuse_frame_key_independent
-    qsg_group_descriptor_eligibility
-    qsg_monotonic_dirty_probe
-    qsg_row_slot_ordered_lookup
-    qsg_text_leaf_content_reuse
-    qsg_text_makeup_single_char_fast_path
-    qsg_text_resource_descriptor_direct_compare
-    qsg_trusted_ascii_glyph_batching
-    qsg_trusted_ascii_unchecked_glyphs
-    render_cell_row_cache
-    render_frame_sorted_row_sort_prefilter
-    snapshot_inline_hyperlink_ids
-)
-
-foreach(toggle_name IN LISTS expected_stage42_toggles)
-    vnm_terminal_read_json_field(toggle_enabled
-        "${metrics_text}" "${metrics_path}" stage42_toggles ${toggle_name} enabled)
-    vnm_terminal_read_json_field(toggle_environment
-        "${metrics_text}" "${metrics_path}" stage42_toggles ${toggle_name} environment)
-    if(toggle_environment STREQUAL "")
-        message(FATAL_ERROR "Stage 4.2 toggle ${toggle_name} has no environment name")
-    endif()
-endforeach()
-
-vnm_terminal_read_json_field(default_toggle_enabled
-    "${metrics_text}" "${metrics_path}" stage42_toggles model_ascii_direct_print enabled)
-if(NOT default_toggle_enabled)
-    message(FATAL_ERROR "model_ascii_direct_print should default to enabled")
-endif()
-
-vnm_terminal_read_json_field(default_toggle_set
-    "${metrics_text}" "${metrics_path}" stage42_toggles model_ascii_direct_print set)
-if(default_toggle_set)
-    message(FATAL_ERROR "model_ascii_direct_print should be unset by this smoke test")
-endif()
-
-vnm_terminal_read_json_type(default_toggle_raw_value_type
-    "${metrics_text}" "${metrics_path}" stage42_toggles model_ascii_direct_print raw_value)
-if(NOT default_toggle_raw_value_type STREQUAL "NULL")
-    message(FATAL_ERROR
-        "model_ascii_direct_print raw_value should be null, got "
-        "${default_toggle_raw_value_type}")
-endif()
-
-vnm_terminal_read_json_field(row_cache_enabled
-    "${metrics_text}" "${metrics_path}" stage42_toggles render_cell_row_cache enabled)
-if(row_cache_enabled)
-    message(FATAL_ERROR "render_cell_row_cache should be disabled by this smoke test")
-endif()
-
-vnm_terminal_read_json_field(row_cache_set
-    "${metrics_text}" "${metrics_path}" stage42_toggles render_cell_row_cache set)
-if(NOT row_cache_set)
-    message(FATAL_ERROR "render_cell_row_cache environment should be marked set")
-endif()
-
-vnm_terminal_read_json_field(row_cache_raw_value
-    "${metrics_text}" "${metrics_path}" stage42_toggles render_cell_row_cache raw_value)
-if(NOT row_cache_raw_value STREQUAL "0")
-    message(FATAL_ERROR
-        "render_cell_row_cache raw_value should be 0, got ${row_cache_raw_value}")
-endif()
-
 vnm_terminal_read_json_field(font_size
     "${metrics_text}" "${metrics_path}" surface_geometry font_size)
 if(NOT font_size MATCHES "^10(\\.0+)?$")
@@ -237,3 +190,19 @@ vnm_terminal_read_json_field(paint_completed_frames
 if(NOT paint_completed_frames MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR "metrics JSON reports no painted frames")
 endif()
+
+foreach(frame_counter IN ITEMS
+    visible_rows
+    dirty_rows
+    packed_text_spans
+    packed_text_cells
+    packed_text_ascii_direct_cells
+    packed_text_ascii_direct_bytes
+    packed_text_utf8_cells
+    packed_text_utf8_input_code_units
+    packed_text_utf8_output_bytes)
+    vnm_terminal_expect_json_counter(
+        "${metrics_text}"
+        "${metrics_path}"
+        renderer frame ${frame_counter})
+endforeach()
