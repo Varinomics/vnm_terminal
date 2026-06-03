@@ -1872,6 +1872,60 @@ void append_renderer_frame_stats_text(
         stream,
         "frame_overlay_rects_emitted",
         static_cast<std::uint64_t>(stats.overlay_rects_emitted));
+    append_profile_counter(
+        stream,
+        "frame_packed_rows",
+        static_cast<std::uint64_t>(stats.packed_rows));
+    append_profile_counter(
+        stream,
+        "frame_packed_text_spans",
+        static_cast<std::uint64_t>(stats.packed_text_spans));
+    append_profile_counter(
+        stream,
+        "frame_packed_text_cells",
+        static_cast<std::uint64_t>(stats.packed_text_cells));
+    if constexpr (requires { stats.packed_text_ascii_direct_cells; }) {
+        append_profile_counter(
+            stream,
+            "frame_packed_text_ascii_direct_cells",
+            static_cast<std::uint64_t>(stats.packed_text_ascii_direct_cells));
+    }
+    if constexpr (requires { stats.packed_text_ascii_direct_bytes; }) {
+        append_profile_counter(
+            stream,
+            "frame_packed_text_ascii_direct_bytes",
+            static_cast<std::uint64_t>(stats.packed_text_ascii_direct_bytes));
+    }
+    if constexpr (requires { stats.packed_text_utf8_cells; }) {
+        append_profile_counter(
+            stream,
+            "frame_packed_text_utf8_cells",
+            static_cast<std::uint64_t>(stats.packed_text_utf8_cells));
+    }
+    if constexpr (requires { stats.packed_text_utf8_input_units; }) {
+        append_profile_counter(
+            stream,
+            "frame_packed_text_utf8_input_code_units",
+            static_cast<std::uint64_t>(stats.packed_text_utf8_input_units));
+    }
+    if constexpr (requires { stats.packed_text_utf8_output_bytes; }) {
+        append_profile_counter(
+            stream,
+            "frame_packed_text_utf8_output_bytes",
+            static_cast<std::uint64_t>(stats.packed_text_utf8_output_bytes));
+    }
+    append_profile_counter(
+        stream,
+        "frame_packed_graphic_spans",
+        static_cast<std::uint64_t>(stats.packed_graphic_spans));
+    append_profile_counter(
+        stream,
+        "frame_packed_graphic_cells",
+        static_cast<std::uint64_t>(stats.packed_graphic_cells));
+    append_profile_counter(
+        stream,
+        "frame_packed_payload_bytes",
+        static_cast<std::uint64_t>(stats.packed_payload_bytes));
 }
 
 QString profile_string_literal(const QString& value)
@@ -2131,8 +2185,35 @@ void append_model_profile_stats_text(
         stream,
         "render_snapshot_rows_materialized",
         stats.render_snapshot_rows_materialized);
+    append_profile_counter(stream, "render_snapshot_rows_borrowed", stats.render_snapshot_rows_borrowed);
+    append_profile_counter(stream, "render_snapshot_rows_owned", stats.render_snapshot_rows_owned);
     append_profile_counter(stream, "render_snapshot_cells_scanned", stats.render_snapshot_cells_scanned);
     append_profile_counter(stream, "render_snapshot_cells_emitted", stats.render_snapshot_cells_emitted);
+    append_profile_counter(stream, "render_snapshot_qstring_copies", stats.render_snapshot_qstring_copies);
+    append_profile_counter(
+        stream,
+        "render_snapshot_text_code_units_copied",
+        stats.render_snapshot_text_code_units_copied);
+    append_profile_counter(
+        stream,
+        "render_snapshot_empty_text_copies",
+        stats.render_snapshot_empty_text_copies);
+    append_profile_counter(
+        stream,
+        "render_snapshot_ascii_text_copies",
+        stats.render_snapshot_ascii_text_copies);
+    append_profile_counter(
+        stream,
+        "render_snapshot_single_non_ascii_text_copies",
+        stats.render_snapshot_single_non_ascii_copies);
+    append_profile_counter(
+        stream,
+        "render_snapshot_multi_text_copies",
+        stats.render_snapshot_multi_text_copies);
+    append_profile_counter(
+        stream,
+        "render_snapshot_unoccupied_cells_skipped",
+        stats.render_snapshot_unoccupied_cells_skipped);
     append_profile_counter(
         stream,
         "render_snapshot_dirty_rows_requested",
@@ -2161,6 +2242,10 @@ void append_model_profile_stats_text(
         stream,
         "max_render_snapshot_cells_emitted",
         stats.max_render_snapshot_cells_emitted);
+    append_profile_counter(
+        stream,
+        "max_render_snapshot_text_code_units_per_cell",
+        stats.max_render_snapshot_text_units_per_cell);
 }
 
 void append_session_profile_stats_text(
@@ -3504,6 +3589,33 @@ void insert_renderer_frame_stats(
     insert_json_counter(object, "packed_rows", stats.packed_rows);
     insert_json_counter(object, "packed_text_spans", stats.packed_text_spans);
     insert_json_counter(object, "packed_text_cells", stats.packed_text_cells);
+    if constexpr (requires { stats.packed_text_ascii_direct_cells; }) {
+        insert_json_counter(
+            object,
+            "packed_text_ascii_direct_cells",
+            stats.packed_text_ascii_direct_cells);
+    }
+    if constexpr (requires { stats.packed_text_ascii_direct_bytes; }) {
+        insert_json_counter(
+            object,
+            "packed_text_ascii_direct_bytes",
+            stats.packed_text_ascii_direct_bytes);
+    }
+    if constexpr (requires { stats.packed_text_utf8_cells; }) {
+        insert_json_counter(object, "packed_text_utf8_cells", stats.packed_text_utf8_cells);
+    }
+    if constexpr (requires { stats.packed_text_utf8_input_units; }) {
+        insert_json_counter(
+            object,
+            "packed_text_utf8_input_code_units",
+            stats.packed_text_utf8_input_units);
+    }
+    if constexpr (requires { stats.packed_text_utf8_output_bytes; }) {
+        insert_json_counter(
+            object,
+            "packed_text_utf8_output_bytes",
+            stats.packed_text_utf8_output_bytes);
+    }
     insert_json_counter(object, "packed_graphic_spans", stats.packed_graphic_spans);
     insert_json_counter(object, "packed_graphic_cells", stats.packed_graphic_cells);
     insert_json_counter(object, "packed_payload_bytes", stats.packed_payload_bytes);
