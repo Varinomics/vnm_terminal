@@ -2199,6 +2199,10 @@ void append_model_profile_stats_text(
         stats.render_snapshot_compact_ascii_text_cells);
     append_profile_counter(
         stream,
+        "render_snapshot_inline_single_bmp_text_cells",
+        stats.render_snapshot_inline_single_bmp_text_cells);
+    append_profile_counter(
+        stream,
         "render_snapshot_fallback_qstring_copies",
         stats.render_snapshot_fallback_qstring_copies);
     append_profile_counter(
