@@ -32,6 +32,13 @@ jobs:
           ref: master
           token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
 
+      - name: Checkout chrome
+        uses: actions/checkout@v4
+        with:
+          repository: imakris/vnm_qml_chrome
+          path: vnm_qml_chrome
+          ref: master
+
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.1
         with:
@@ -46,6 +53,7 @@ jobs:
             -G "Visual Studio 17 2022" \
             -A x64 \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
+            -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DBUILD_TESTING=ON
 
