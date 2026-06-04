@@ -173,7 +173,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--window-size" "800x480"
             "--timeout-ms" "10000"
             "--require-output"
@@ -215,7 +214,6 @@ if(TARGET vnm_terminal_canvas_fixture)
                 ${vnm_terminal_custom_titlebar_environment}
                 "${vnm_terminal_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_terminal>"
-                "--software-renderer"
                 "--window-size" "800x480"
                 "--timeout-ms" "10000"
                 "--require-output"
@@ -241,7 +239,6 @@ if(TARGET vnm_terminal_canvas_fixture)
                 ${vnm_terminal_native_titlebar_environment}
                 "${vnm_terminal_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_terminal>"
-                "--software-renderer"
                 "--native-titlebar"
                 "--window-size" "800x480"
                 "--timeout-ms" "10000"
@@ -269,7 +266,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--window-size" "800x480"
             "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_output_$<CONFIG>.raw"
             "--timeout-ms" "10000"
@@ -295,7 +291,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--window-size" "800x480"
             "--font-size" "10"
             "--metrics-json" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_json_$<CONFIG>.json"
@@ -325,7 +320,6 @@ if(TARGET vnm_terminal_canvas_fixture)
                 ${vnm_terminal_qt_unscaled_environment}
                 "${vnm_terminal_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_terminal>"
-                "--software-renderer"
                 "--window-size" "800x480"
                 "--font-size" "10"
                 "--metrics-json" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_profile_text_$<CONFIG>.json"
@@ -356,7 +350,6 @@ if(TARGET vnm_terminal_canvas_fixture)
                 ${vnm_terminal_qt_unscaled_environment}
                 "${vnm_terminal_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_terminal>"
-                "--software-renderer"
                 "--window-size" "800x480"
                 "--capture-transcript" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_transcript_$<CONFIG>.ndjson"
                 "--transcript-snapshot-diagnostics"
@@ -384,7 +377,6 @@ if(TARGET vnm_terminal_canvas_fixture)
                 ${vnm_terminal_qt_unscaled_environment}
                 "${vnm_terminal_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_terminal>"
-                "--software-renderer"
                 "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_duplicate_capture_$<CONFIG>.raw"
                 "--capture-transcript" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_duplicate_capture_$<CONFIG>.raw"
         )
@@ -408,7 +400,6 @@ if(TARGET vnm_terminal_canvas_fixture)
                 ${vnm_terminal_qt_unscaled_environment}
                 "${vnm_terminal_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_terminal>"
-                "--software-renderer"
                 "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_preserved_capture_$<CONFIG>.raw"
                 "--capture-transcript" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_preserved_capture_$<CONFIG>.raw/transcript.ndjson"
         )
@@ -430,7 +421,6 @@ if(TARGET vnm_terminal_canvas_fixture)
                 ${vnm_terminal_qt_unscaled_environment}
                 "${vnm_terminal_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_terminal>"
-                "--software-renderer"
                 "--capture-transcript" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_disabled_transcript_$<CONFIG>.ndjson"
         )
 
@@ -451,7 +441,6 @@ if(TARGET vnm_terminal_canvas_fixture)
                 ${vnm_terminal_qt_unscaled_environment}
                 "${vnm_terminal_qt_runtime_path}"
                 "$<TARGET_FILE:vnm_terminal>"
-                "--software-renderer"
                 "--transcript-snapshot-diagnostics"
         )
 
@@ -468,7 +457,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--window-size" "800x480"
             "--timeout-ms" "10000"
             "--require-output"
@@ -496,7 +484,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--window-size" "0x480"
             "--"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
@@ -520,7 +507,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--"
     )
 
@@ -541,7 +527,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--alternate-wheel" "invalid"
             "--"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
@@ -565,7 +550,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--synchronized-output-scroll-policy=hidden-live"
             "--"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
@@ -589,7 +573,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--synchronized-output-scroll-policy="
             "--"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
@@ -614,7 +597,6 @@ add_test(
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
         "$<TARGET_FILE:vnm_terminal>"
-        "--software-renderer"
         "--help"
 )
 
@@ -635,7 +617,6 @@ add_test(
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
         "$<TARGET_FILE:vnm_terminal>"
-        "--software-renderer"
         "--help"
 )
 
@@ -652,7 +633,6 @@ add_test(
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
         "$<TARGET_FILE:vnm_terminal>"
-        "--software-renderer"
         "--help"
 )
 
@@ -677,7 +657,6 @@ add_test(
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
         "$<TARGET_FILE:vnm_terminal>"
-        "--software-renderer"
         "--help"
 )
 
@@ -700,7 +679,6 @@ if(vnm_terminal_custom_titlebar_supported)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--help"
     )
 
@@ -723,7 +701,6 @@ if(VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--help"
     )
 
@@ -744,7 +721,6 @@ if(VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--help"
     )
 
@@ -766,7 +742,6 @@ else()
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--software-renderer"
             "--help"
     )
 
@@ -788,7 +763,6 @@ add_test(
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
         "$<TARGET_FILE:vnm_terminal>"
-        "--software-renderer"
         "--help"
 )
 
@@ -809,7 +783,6 @@ add_test(
         ${vnm_terminal_qt_unscaled_environment}
         "${vnm_terminal_qt_runtime_path}"
         "$<TARGET_FILE:vnm_terminal>"
-        "--software-renderer"
         "--help"
 )
 

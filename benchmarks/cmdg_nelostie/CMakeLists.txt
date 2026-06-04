@@ -43,18 +43,12 @@ set(VNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE "1920x1080" CACHE STRING
     "vnm_terminal window size for the CMDG Nelostie benchmark.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE "10" CACHE STRING
     "vnm_terminal font pixel size for CMDG benchmark runs.")
-option(VNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER
-    "Use Qt software rendering for headless/CI diagnostic CMDG runs only."
-    OFF)
 option(VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN
     "Use the Qt offscreen platform for headless/CI diagnostic CMDG runs only."
     OFF)
 option(VNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR
     "Ask CMDG to hide the terminal cursor during benchmark scene frames."
     ON)
-option(VNM_TERMINAL_CMDG_NELOSTIE_QSG_ATLAS_STAGE1_PROBE
-    "Use the hidden/internal default-off QSG atlas Stage 1 probe for CMDG benchmark runs."
-    OFF)
 set(vnm_terminal_cmdg_artifact_tag_doc
     "Optional artifact subfolder tag so repeated CMDG runs with different "
     "builds or runtime configurations preserve distinct artifacts instead of "
@@ -266,9 +260,7 @@ if(vnm_terminal_cmdg_nelostie_exe)
                     "-Dhide_cursor=$<BOOL:${VNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR}>"
                     "-Dqt_bin_dir=$<TARGET_FILE_DIR:Qt6::Core>"
                     "-Doffscreen_plugin_dir=${vnm_terminal_cmdg_offscreen_plugin_dir}"
-                    "-Dsoftware_renderer=$<BOOL:${VNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER}>"
                     "-Doffscreen=$<BOOL:${VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN}>"
-                    "-Dqsg_atlas_stage1_probe=$<BOOL:${VNM_TERMINAL_CMDG_NELOSTIE_QSG_ATLAS_STAGE1_PROBE}>"
                     -P "${CMAKE_CURRENT_SOURCE_DIR}/run_cmdg_nelostie.cmake"
             )
 

@@ -132,14 +132,6 @@ if(profile_text)
     list(APPEND terminal_arguments "--profile-text" "${profile_text}")
 endif()
 
-if(software_renderer)
-    list(APPEND terminal_arguments "--software-renderer")
-endif()
-
-if(qsg_atlas_stage1_probe)
-    list(APPEND terminal_arguments "--internal-qsg-atlas-stage1-probe")
-endif()
-
 list(APPEND terminal_arguments
     "--"
     "${cmdg_exe}")
