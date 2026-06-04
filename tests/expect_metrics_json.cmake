@@ -39,16 +39,6 @@ function(vnm_terminal_read_json_length out_value json_text source_path)
     set(${out_value} "${value}" PARENT_SCOPE)
 endfunction()
 
-function(vnm_terminal_expect_json_missing json_text source_path)
-    set(json_path ${ARGN})
-    string(JSON value ERROR_VARIABLE json_error TYPE "${json_text}" ${json_path})
-    if(json_error STREQUAL "NOTFOUND")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} should not contain JSON field '${json_path_text}'")
-    endif()
-endfunction()
-
 function(vnm_terminal_expect_json_counter json_text source_path)
     set(json_path ${ARGN})
     vnm_terminal_read_json_field(counter_value "${json_text}" "${source_path}" ${json_path})
@@ -113,7 +103,6 @@ vnm_terminal_read_json_field(schema
 if(NOT schema STREQUAL "vnm_terminal_runtime_metrics_v2")
     message(FATAL_ERROR "unexpected metrics schema: ${schema}")
 endif()
-vnm_terminal_expect_json_missing("${metrics_text}" "${metrics_path}" stage42_toggles)
 
 vnm_terminal_read_json_field(profile_text_requested
     "${metrics_text}" "${metrics_path}" profiling profile_text_requested)
@@ -145,6 +134,10 @@ if(expected_profile_text_requested)
     foreach(profile_fragment IN ITEMS
         "dirty_rows"
         "enabled=true"
+        "qsg_atlas"
+        "renderer=atlas"
+        "atlas_page_budget"
+        "atlas_failed_inserts"
         "session_profile_stats")
         string(FIND "${profile_text}" "${profile_fragment}" profile_fragment_index)
         if(profile_fragment_index LESS 0)
@@ -190,6 +183,23 @@ vnm_terminal_read_json_field(paint_completed_frames
 if(NOT paint_completed_frames MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR "metrics JSON reports no painted frames")
 endif()
+
+vnm_terminal_read_json_field(atlas_renderer
+    "${metrics_text}" "${metrics_path}" qsg_atlas renderer)
+if(NOT atlas_renderer STREQUAL "atlas")
+    message(FATAL_ERROR "metrics JSON reports unexpected atlas renderer: ${atlas_renderer}")
+endif()
+
+vnm_terminal_read_json_field(atlas_capture_count
+    "${metrics_text}" "${metrics_path}" qsg_atlas capture_count)
+if(NOT atlas_capture_count MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "qsg_atlas.capture_count should be an integer counter")
+endif()
+
+vnm_terminal_expect_json_counter(
+    "${metrics_text}"
+    "${metrics_path}"
+    qsg_atlas buffer_upload atlas_failed_inserts)
 
 foreach(frame_counter IN ITEMS
     visible_rows

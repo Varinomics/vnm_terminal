@@ -36,7 +36,6 @@
 #include <QRectF>
 #include <QScreen>
 #include <QSettings>
-#include <QSGRendererInterface>
 #include <QSize>
 #include <QSizeF>
 #include <QString>
@@ -91,9 +90,6 @@ constexpr char k_window_settings_maximized[]   = "maximized";
 constexpr char k_window_settings_width[]       = "width";
 constexpr char k_window_settings_x[]           = "x";
 constexpr char k_window_settings_y[]           = "y";
-constexpr char k_internal_qsg_atlas_stage1_probe_option[] =
-    "--internal-qsg-atlas-stage1-probe";
-
 #if defined(_WIN32) || defined(__linux__)
 constexpr bool k_custom_titlebar_supported_on_platform = true;
 #else
@@ -135,7 +131,6 @@ struct App_options
     bool               transcript_snapshot_diagnostics    = false;
     bool               transcript_timing_diagnostics      = false;
     bool               wheel_trace_enabled                 = false;
-    bool               qsg_atlas_stage1_probe_enabled      = false;
     std::optional<bool> primary_repaint_recovery_enabled;
     bool               font_size_explicit                 = false;
     bool               window_size_explicit               = false;
@@ -778,7 +773,6 @@ void print_usage()
 #if VNM_TERMINAL_PROFILING_ENABLED
         << "  --profile-text <path>           write profile and dirty-row diagnostics\n"
 #endif
-        << "  --software-renderer             use the Qt software scene graph\n"
         << "  --keep-open-after-process-exits leave the window open after the child exits\n"
         << "  --timeout-ms <n>                fail if the run is still active after n ms\n"
         << "  --require-output                fail if no terminal output activity is observed\n"
@@ -1186,17 +1180,6 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--software-renderer")) {
-            ++index;
-            continue;
-        }
-
-        if (argument_is(argument, k_internal_qsg_atlas_stage1_probe_option)) {
-            result.options.qsg_atlas_stage1_probe_enabled = true;
-            ++index;
-            continue;
-        }
-
         if (argument_is(argument, "--exit-when-process-exits")) {
             result.options.keep_open_after_process_exits = false;
             ++index;
@@ -1549,22 +1532,6 @@ Qt_arguments make_qt_arguments(int argc, char** argv)
     arguments.argc = static_cast<int>(arguments.storage.size());
     arguments.argv.push_back(nullptr);
     return arguments;
-}
-
-bool has_software_renderer_argument(int argc, char** argv)
-{
-    for (int index = 1; index < argc; ++index) {
-        const QByteArray argument(argv[index]);
-        if (argument == "--") {
-            return false;
-        }
-
-        if (argument == "--software-renderer") {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 void request_vsync_surface_format()
@@ -2595,13 +2562,13 @@ void append_renderer_stats_text(
         static_cast<std::uint64_t>(stats.text_content_failures));
     append_profile_counter(
         stream,
-        "text_leaf_nodes_created",
-        static_cast<std::uint64_t>(stats.text_leaf_nodes_created));
-    if constexpr (requires { stats.text_leaf_nodes_reused; }) {
+        "atlas_work_created",
+        static_cast<std::uint64_t>(stats.atlas_work_created));
+    if constexpr (requires { stats.atlas_work_reused; }) {
         append_profile_counter(
             stream,
-            "text_leaf_nodes_reused",
-            static_cast<std::uint64_t>(stats.text_leaf_nodes_reused));
+            "atlas_work_reused",
+            static_cast<std::uint64_t>(stats.atlas_work_reused));
     }
     append_profile_counter(
         stream,
@@ -2938,9 +2905,9 @@ void append_cumulative_renderer_stats_text(
     append_profile_counter(stream, "text_content_reused",     stats.text_content_reused);
     append_profile_counter(stream, "text_content_removed",    stats.text_content_removed);
     append_profile_counter(stream, "text_content_failures",   stats.text_content_failures);
-    append_profile_counter(stream, "text_leaf_nodes_created", stats.text_leaf_nodes_created);
-    if constexpr (requires { stats.text_leaf_nodes_reused; }) {
-        append_profile_counter(stream, "text_leaf_nodes_reused", stats.text_leaf_nodes_reused);
+    append_profile_counter(stream, "atlas_work_created", stats.atlas_work_created);
+    if constexpr (requires { stats.atlas_work_reused; }) {
+        append_profile_counter(stream, "atlas_work_reused", stats.atlas_work_reused);
     }
     append_profile_counter(
         stream,
@@ -3268,6 +3235,58 @@ void append_slow_text_layout_diagnostics_text(
     }
 }
 
+void append_qsg_atlas_profile_text(
+    QTextStream&                         stream,
+    const term::Qsg_atlas_frame_report&  report)
+{
+    stream << "qsg_atlas\n";
+    stream << "  renderer=atlas\n";
+    append_profile_counter(stream, "capture_count", report.capture_count);
+    append_profile_counter(stream, "prepare_count", report.prepare_count);
+    append_profile_counter(stream, "render_count", report.render_count);
+    append_profile_counter(stream, "capture_sequence", report.capture_sequence);
+    append_profile_counter(
+        stream,
+        "captured_snapshot_sequence",
+        report.captured_snapshot_sequence);
+    append_profile_counter(stream, "captured_font_epoch", report.captured_font_epoch);
+    stream
+        << "  command_buffer_non_null="
+        << (report.command_buffer_non_null ? "true" : "false") << '\n';
+    stream
+        << "  render_target_non_null="
+        << (report.render_target_non_null ? "true" : "false") << '\n';
+    stream << "  rhi_non_null=" << (report.rhi_non_null ? "true" : "false") << '\n';
+    stream << "  drew=" << (report.drew ? "true" : "false") << '\n';
+    append_profile_counter(stream, "rasterized_glyphs", report.rasterized_glyphs);
+    append_profile_counter(stream, "atlas_page_count", report.atlas_page_count);
+    stream << "  buffer_upload\n";
+    append_profile_counter(
+        stream,
+        "atlas_page_budget",
+        report.render.atlas_page_budget);
+    append_profile_counter(
+        stream,
+        "atlas_budget_bytes",
+        report.render.atlas_budget_bytes);
+    append_profile_counter(stream, "atlas_used_bytes", report.render.atlas_used_bytes);
+    append_profile_counter(
+        stream,
+        "atlas_failed_inserts",
+        report.render.atlas_failed_inserts);
+    append_profile_counter(stream, "draw_calls", report.render.draw_calls);
+    append_profile_counter(stream, "rect_draw_calls", report.render.rect_draw_calls);
+    append_profile_counter(stream, "glyph_draw_calls", report.render.glyph_draw_calls);
+    append_profile_counter(
+        stream,
+        "rect_buffer_uploaded_bytes",
+        report.render.rect_buffer.uploaded_bytes);
+    append_profile_counter(
+        stream,
+        "glyph_buffer_uploaded_bytes",
+        report.render.glyph_buffer.uploaded_bytes);
+}
+
 bool write_profile_text(
     const QString&                     path,
     VNM_TerminalSurface&               surface,
@@ -3288,6 +3307,8 @@ bool write_profile_text(
         term::VNM_TerminalSurface_render_bridge::last_renderer_stats(surface);
     const term::terminal_renderer_cumulative_stats_t cumulative_renderer_stats =
         term::VNM_TerminalSurface_render_bridge::cumulative_renderer_stats(surface);
+    const term::Qsg_atlas_frame_report atlas_report =
+        term::VNM_TerminalSurface_render_bridge::qsg_atlas_frame(surface);
     const term::Profile_timeline_snapshot gui_timeline = gui_profiler.timeline_snapshot();
 
     QString text;
@@ -3308,6 +3329,8 @@ bool write_profile_text(
     append_renderer_stats_text(stream, renderer_stats);
     stream << '\n';
     append_cumulative_renderer_stats_text(stream, cumulative_renderer_stats);
+    stream << '\n';
+    append_qsg_atlas_profile_text(stream, atlas_report);
     stream << '\n';
     append_slow_text_layout_diagnostics_text(stream, render_profile.slow_text_layouts);
     stream << "\ngui_thread\n";
@@ -3366,8 +3389,8 @@ QJsonObject profiling_measurement_json(const metrics_timing_t& timing)
     return object;
 }
 
-QJsonObject atlas_stage4_buffer_summary_json(
-    const term::Qsg_atlas_stage4_buffer_update_summary& summary)
+QJsonObject atlas_buffer_summary_json(
+    const term::Qsg_atlas_buffer_update_summary& summary)
 {
     QJsonObject object;
     insert_json_counter(object, "rhi_frames_in_flight", summary.rhi_frames_in_flight);
@@ -3402,16 +3425,16 @@ QJsonObject atlas_stage4_buffer_summary_json(
     return object;
 }
 
-QJsonObject atlas_stage4_summary_json(
-    const term::Qsg_atlas_stage4_frame_summary& summary)
+QJsonObject atlas_render_summary_json(
+    const term::Qsg_atlas_render_summary& summary)
 {
     QJsonObject object;
     object.insert(
         QStringLiteral("rect_buffer"),
-        atlas_stage4_buffer_summary_json(summary.rect_buffer));
+        atlas_buffer_summary_json(summary.rect_buffer));
     object.insert(
         QStringLiteral("glyph_buffer"),
-        atlas_stage4_buffer_summary_json(summary.glyph_buffer));
+        atlas_buffer_summary_json(summary.glyph_buffer));
     insert_json_counter(
         object,
         "direct_ascii_text_runs",
@@ -3494,18 +3517,13 @@ QJsonObject atlas_stage4_summary_json(
     return object;
 }
 
-QJsonObject qsg_atlas_stage1_metrics_json(
-    const VNM_TerminalSurface& surface,
-    bool                       enabled)
+QJsonObject qsg_atlas_metrics_json(const VNM_TerminalSurface& surface)
 {
     QJsonObject object;
-    object.insert(QStringLiteral("enabled"), enabled);
-    if (!enabled) {
-        return object;
-    }
+    object.insert(QStringLiteral("renderer"), QStringLiteral("atlas"));
 
-    const term::Qsg_atlas_stage1_frame_report report =
-        term::VNM_TerminalSurface_render_bridge::qsg_atlas_stage1_frame(surface);
+    const term::Qsg_atlas_frame_report report =
+        term::VNM_TerminalSurface_render_bridge::qsg_atlas_frame(surface);
     insert_json_counter(object, "capture_count", report.capture_count);
     insert_json_counter(object, "prepare_count", report.prepare_count);
     insert_json_counter(object, "render_count", report.render_count);
@@ -3524,7 +3542,7 @@ QJsonObject qsg_atlas_stage1_metrics_json(
     object.insert(QStringLiteral("raw_font_rasterized"), report.raw_font_rasterized);
     insert_json_counter(object, "rasterized_glyphs", report.rasterized_glyphs);
     insert_json_counter(object, "atlas_page_count", report.atlas_page_count);
-    object.insert(QStringLiteral("stage4"), atlas_stage4_summary_json(report.stage4));
+    object.insert(QStringLiteral("buffer_upload"), atlas_render_summary_json(report.render));
     return object;
 }
 
@@ -4027,8 +4045,7 @@ QJsonObject terminal_metrics_json(
     const VNM_TerminalSurface&  surface,
     const Runtime_state&        state,
     const metrics_timing_t&     timing,
-    int                         app_result,
-    bool                        qsg_atlas_stage1_probe_enabled)
+    int                         app_result)
 {
     const term::terminal_renderer_cumulative_stats_t cumulative_stats =
         term::VNM_TerminalSurface_render_bridge::cumulative_renderer_stats(surface);
@@ -4049,13 +4066,13 @@ QJsonObject terminal_metrics_json(
     insert_json_counter(renderer, "text_content_failures", cumulative_stats.text_content_failures);
     insert_json_counter(
         renderer,
-        "text_leaf_nodes_created",
-        cumulative_stats.text_leaf_nodes_created);
-    if constexpr (requires { cumulative_stats.text_leaf_nodes_reused; }) {
+        "atlas_work_created",
+        cumulative_stats.atlas_work_created);
+    if constexpr (requires { cumulative_stats.atlas_work_reused; }) {
         insert_json_counter(
             renderer,
-            "text_leaf_nodes_reused",
-            cumulative_stats.text_leaf_nodes_reused);
+            "atlas_work_reused",
+            cumulative_stats.atlas_work_reused);
     }
     insert_json_counter(
         renderer,
@@ -4400,9 +4417,7 @@ QJsonObject terminal_metrics_json(
     root.insert(QStringLiteral("profiling"), profiling_measurement_json(timing));
     root.insert(QStringLiteral("surface_geometry"), surface_geometry_json(surface));
     root.insert(QStringLiteral("renderer"), renderer);
-    root.insert(
-        QStringLiteral("qsg_atlas_stage1_probe"),
-        qsg_atlas_stage1_metrics_json(surface, qsg_atlas_stage1_probe_enabled));
+    root.insert(QStringLiteral("qsg_atlas"), qsg_atlas_metrics_json(surface));
 
     return root;
 }
@@ -4413,7 +4428,6 @@ bool write_metrics_json(
     const Runtime_state&        state,
     const metrics_timing_t&     timing,
     int                         app_result,
-    bool                        qsg_atlas_stage1_probe_enabled,
     QString*                    out_error)
 {
     QFile file(path);
@@ -4428,8 +4442,7 @@ bool write_metrics_json(
             surface,
             state,
             timing,
-            app_result,
-            qsg_atlas_stage1_probe_enabled))
+            app_result))
             .toJson(QJsonDocument::Indented);
     if (file.write(json) != json.size()) {
         *out_error = QStringLiteral("could not write metrics JSON %1: %2")
@@ -4447,9 +4460,6 @@ int main(int argc, char** argv)
 {
     const QStringList arguments = raw_arguments(argc, argv);
     request_vsync_surface_format();
-    if (has_software_renderer_argument(argc, argv)) {
-        QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
-    }
 
     Qt_arguments qt_arguments = make_qt_arguments(argc, argv);
     QGuiApplication app(qt_arguments.argc, qt_arguments.argv.data());
@@ -4552,11 +4562,6 @@ int main(int argc, char** argv)
     term::VNM_TerminalSurface_render_bridge::set_selection_trace_enabled(
         *surface,
         options.selection_trace_enabled);
-    if (options.qsg_atlas_stage1_probe_enabled) {
-        term::VNM_TerminalSurface_render_bridge::set_qsg_atlas_stage1_probe_enabled(
-            *surface,
-            true);
-    }
 #if VNM_TERMINAL_PROFILING_ENABLED
     std::unique_ptr<term::Hierarchical_profiler> gui_profiler;
     std::unique_ptr<term::Active_profiler_binding> gui_profiler_binding;
@@ -4900,7 +4905,6 @@ int main(int argc, char** argv)
                 state,
                 metrics_timing,
                 app_result,
-                options.qsg_atlas_stage1_probe_enabled,
                 &metrics_error))
         {
             print_error(metrics_error);

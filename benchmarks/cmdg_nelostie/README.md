@@ -18,10 +18,9 @@ Use it for local performance investigation and for producing captures that can
 later become deterministic surface replay benchmarks.
 
 Decision-grade local performance runs use a visible window and the hardware
-scene graph. Keep software rendering and offscreen mode disabled unless the run
-is explicitly a headless/CI diagnostic; software/offscreen results must not be
-compared against hardware-windowed baselines or used for land/no-land
-performance decisions.
+scene graph. Keep offscreen mode disabled unless the run is explicitly a
+headless/CI diagnostic; offscreen results must not be compared against
+hardware-windowed baselines or used for land/no-land performance decisions.
 
 Hardware-windowed configure example:
 
@@ -37,14 +36,12 @@ cmake -S C:\plms\varinomics\vnm_terminal `
   -DVNM_TERMINAL_CMDG_SCENES="AssemblyWinter2025;Example2D;Plasma" `
   -DVNM_TERMINAL_CMDG_REPEAT_COUNT=2 `
   -DVNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN=OFF `
-  -DVNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER=OFF `
   -DVNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR=ON
 ```
 
 For headless/CI smoke diagnostics only, the same runner can be configured with
-`VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN=ON` and
-`VNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER=ON`. Mark those artifacts as
-diagnostic and do not mix them with hardware-windowed comparison sets.
+`VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN=ON`. Mark those artifacts as diagnostic
+and do not mix them with hardware-windowed comparison sets.
 
 Thermal and frequency state matters. Single full-suite runs are not
 decision-grade when the CPU can boost for a cold first run and then downclock
@@ -81,8 +78,7 @@ ctest --test-dir <build-dir> -L cmdg_regression_focus --output-on-failure
 ```
 
 The build fixture is pulled in automatically. Confirm the configured tree has
-`VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN=OFF` and
-`VNM_TERMINAL_CMDG_NELOSTIE_SOFTWARE_RENDERER=OFF` before using the results.
+`VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN=OFF` before using the results.
 
 To keep artifacts from successive comparison runs side by side instead of
 overwriting `<scene>/repeat_<n>/`, configure with a tag (matching
@@ -101,32 +97,37 @@ keeps the legacy `<scene>/repeat_<n>/` layout, so existing suites are unchanged.
 Use separate artifact tags and separate benchmark processes when comparing
 different terminal builds or runtime configurations.
 
-## Stage 4 atlas probe gate
+## Canonical atlas CMDG gate
 
-The atlas renderer Stage 4 CMDG gate uses a hidden, default-off app probe that
-is appended only when the benchmark cache variable
-`VNM_TERMINAL_CMDG_NELOSTIE_QSG_ATLAS_STAGE1_PROBE=ON` is configured. The app
-switch is internal and must not be treated as a production renderer cutover.
+After the atlas cutover there is no in-repo alternate renderer path to select
+for A/B runs. The retained CMDG gate builds one Release app with the atlas
+renderer as the canonical path, runs the configured CMDG suite, validates
+terminal/CMDG metrics including the `qsg_atlas.buffer_upload` budget counters,
+and can compare the canonical run against an archived pre-cutover baseline.
+The runner never rebuilds or selects the removed renderer.
 
-Run the Stage 4 A/B gate with:
+Run the canonical atlas gate with:
 
 ```powershell
-.\benchmarks\cmdg_nelostie\run_stage4_cmdg_gate.ps1 `
-  -ArtifactTag stage4_cmdg_gate_<tag>
+.\benchmarks\cmdg_nelostie\run_canonical_atlas_cmdg_gate.ps1 `
+  -ArtifactTag canonical_atlas_cmdg_gate_<tag> `
+  -ArchivedBaselineComparisonJson artifacts\stage4_cmdg_gate_repeat3_20260604_062208\stage4_cmdg_gate_comparison.json
 ```
 
-The script configures separate Release/profiling-off hardware-windowed CTest
-runs for the QSGTextNode baseline and atlas probe candidate, assigns distinct
-artifact tags, and writes `stage4_cmdg_gate_comparison.json` plus a Markdown
-summary under `artifacts/<tag>/`.
+The script configures a Release/profiling-off hardware-windowed CTest run,
+assigns the provided artifact tag, and writes `canonical_atlas_cmdg_gate.json`
+plus a Markdown summary under `artifacts/<tag>/`.
 
-The Stage 4 gate treats terminal `paint_frames_per_second` as the primary
-renderer threshold. The motivating scenes must improve paint FPS by at least
-25%, and every default-suite scene must keep paint FPS within a 5% regression
-guard. CMDG `draw_frames_per_second` is reported as corroborating/backpressure
-evidence and also has a 5% default-suite no-regression guard. CMDG
-`scene_frames_per_second` is only a producer/user-visible no-regression guard
-because CMDG caps scene production near 31 FPS.
+The gate treats terminal `paint_frames_per_second`, CMDG
+`draw_frames_per_second`, and CMDG `scene_frames_per_second` as evidence fields.
+The pass/fail checks require zero backend errors/timeouts, canonical atlas
+metrics to be present, positive atlas budget counters, and zero atlas failed
+inserts. When `-ArchivedBaselineComparisonJson` is supplied, the gate also
+requires at least a 25% median terminal-paint FPS improvement for the motivating
+scenes (`Plasma` and `ParticleVortex`) and no more than a 5% median regression
+across CMDG draw FPS and CMDG scene FPS for every archived-comparison scene.
+Terminal paint FPS remains reported for every scene because it is still the
+renderer-side evidence field.
 
 By default the runner builds `THIRD_PARTY/CMDG/CMDG/CMDG.csproj` in Release
 and uses the resulting `CMDG.exe`. To run against an external/prebuilt CMDG,
@@ -138,6 +139,10 @@ The default suite is a small autonomous scene mix:
 `QuickHello` and `ContentWiggler` are supported for explicit runs but are not
 defaults because they depend on pre-existing console content or scene-specific
 assumptions.
+
+The canonical gate defaults to three repeats, 300 CMDG scene frames per repeat,
+the full scene list above, `1920x1080`, font size `10`, visible windowed
+rendering, and D3D11 RHI through the script environment.
 
 The default benchmark window is `1920x1080` with font size `10`. Keep that
 font size unless the window size is adjusted to preserve at least the CMDG

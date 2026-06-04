@@ -67,16 +67,11 @@ compaction or future agent sessions.
 - A replay divergence must first be checked against binary/source mismatch
   before being interpreted as a terminal bug.
 
-## Software renderer / custom chrome issue
+## Renderer cutover note
 
-- The transcript-enabled diagnostic build showed corrupted custom chrome when
-  launched with `--software-renderer`.
-- The same minimal launch without `--software-renderer` had correct custom
-  chrome.
-- Do not silently work around this as if it were irrelevant. It is a separate
-  concrete bug to investigate later.
-- For blank-line capture sessions, avoid `--software-renderer` unless the
-  software-renderer bug is the target of the run.
+- The app no longer exposes a Qt software scene graph launch flag. Renderer
+  debugging should use the canonical atlas path and explicit Qt/RHI environment
+  controls when hardware backend selection needs to be constrained.
 
 ## Debugging policy reminders
 
