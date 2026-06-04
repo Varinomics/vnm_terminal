@@ -91,6 +91,8 @@ constexpr char k_window_settings_maximized[]   = "maximized";
 constexpr char k_window_settings_width[]       = "width";
 constexpr char k_window_settings_x[]           = "x";
 constexpr char k_window_settings_y[]           = "y";
+constexpr char k_internal_qsg_atlas_stage1_probe_option[] =
+    "--internal-qsg-atlas-stage1-probe";
 
 #if defined(_WIN32) || defined(__linux__)
 constexpr bool k_custom_titlebar_supported_on_platform = true;
@@ -133,6 +135,7 @@ struct App_options
     bool               transcript_snapshot_diagnostics    = false;
     bool               transcript_timing_diagnostics      = false;
     bool               wheel_trace_enabled                 = false;
+    bool               qsg_atlas_stage1_probe_enabled      = false;
     std::optional<bool> primary_repaint_recovery_enabled;
     bool               font_size_explicit                 = false;
     bool               window_size_explicit               = false;
@@ -1184,6 +1187,12 @@ Parse_result parse_arguments(const QStringList& arguments)
         }
 
         if (argument_is(argument, "--software-renderer")) {
+            ++index;
+            continue;
+        }
+
+        if (argument_is(argument, k_internal_qsg_atlas_stage1_probe_option)) {
+            result.options.qsg_atlas_stage1_probe_enabled = true;
             ++index;
             continue;
         }
@@ -3357,6 +3366,168 @@ QJsonObject profiling_measurement_json(const metrics_timing_t& timing)
     return object;
 }
 
+QJsonObject atlas_stage4_buffer_summary_json(
+    const term::Qsg_atlas_stage4_buffer_update_summary& summary)
+{
+    QJsonObject object;
+    insert_json_counter(object, "rhi_frames_in_flight", summary.rhi_frames_in_flight);
+    insert_json_counter(object, "rhi_frame_slot", summary.rhi_frame_slot);
+    insert_json_counter(object, "instance_count", summary.instance_count);
+    insert_json_counter(
+        object,
+        "active_instance_count",
+        summary.active_instance_count);
+    insert_json_counter(object, "instance_bytes", summary.instance_bytes);
+    insert_json_counter(object, "buffer_bytes", summary.buffer_bytes);
+    insert_json_counter(object, "dirty_rows", summary.dirty_rows);
+    insert_json_counter(object, "seeded_slots", summary.seeded_slots);
+    insert_json_counter(object, "full_uploads", summary.full_uploads);
+    insert_json_counter(object, "partial_uploads", summary.partial_uploads);
+    insert_json_counter(object, "uploaded_bytes", summary.uploaded_bytes);
+    object.insert(QStringLiteral("full_upload"), summary.full_upload);
+    object.insert(QStringLiteral("partial_upload"), summary.partial_upload);
+    object.insert(QStringLiteral("skipped_upload"), summary.skipped_upload);
+    object.insert(
+        QStringLiteral("rotating_slot_seed_upload"),
+        summary.rotating_slot_seed_upload);
+    object.insert(
+        QStringLiteral("buffer_recreated_upload"),
+        summary.buffer_recreated_upload);
+    object.insert(
+        QStringLiteral("instance_layout_changed_upload"),
+        summary.instance_layout_changed_upload);
+    object.insert(QStringLiteral("full_repaint_upload"), summary.full_repaint_upload);
+    object.insert(QStringLiteral("non_dirty_state_upload"), summary.non_dirty_state_upload);
+    object.insert(QStringLiteral("row_stable_layout"), summary.row_stable_layout);
+    return object;
+}
+
+QJsonObject atlas_stage4_summary_json(
+    const term::Qsg_atlas_stage4_frame_summary& summary)
+{
+    QJsonObject object;
+    object.insert(
+        QStringLiteral("rect_buffer"),
+        atlas_stage4_buffer_summary_json(summary.rect_buffer));
+    object.insert(
+        QStringLiteral("glyph_buffer"),
+        atlas_stage4_buffer_summary_json(summary.glyph_buffer));
+    insert_json_counter(
+        object,
+        "direct_ascii_text_runs",
+        summary.direct_ascii_text_runs);
+    insert_json_counter(
+        object,
+        "qt_layout_text_runs",
+        summary.qt_layout_text_runs);
+    insert_json_counter(
+        object,
+        "direct_ascii_glyph_instances",
+        summary.direct_ascii_glyph_instances);
+    insert_json_counter(
+        object,
+        "qt_layout_glyph_instances",
+        summary.qt_layout_glyph_instances);
+    insert_json_counter(
+        object,
+        "glyph_buffer_instances",
+        summary.glyph_buffer_instances);
+    insert_json_counter(
+        object,
+        "glyph_text_row_capacity",
+        summary.glyph_text_row_capacity);
+    insert_json_counter(
+        object,
+        "glyph_cursor_text_row_capacity",
+        summary.glyph_cursor_text_row_capacity);
+    insert_json_counter(
+        object,
+        "background_rects_before_coalescing",
+        summary.background_rects_before_coalescing);
+    insert_json_counter(
+        object,
+        "background_rects_after_coalescing",
+        summary.background_rects_after_coalescing);
+    insert_json_counter(
+        object,
+        "background_rects_coalesced",
+        summary.background_rects_coalesced);
+    insert_json_counter(object, "rect_draw_calls", summary.rect_draw_calls);
+    insert_json_counter(object, "glyph_draw_calls", summary.glyph_draw_calls);
+    insert_json_counter(object, "draw_calls", summary.draw_calls);
+    insert_json_counter(object, "atlas_page_count", summary.atlas_page_count);
+    insert_json_counter(object, "atlas_page_budget", summary.atlas_page_budget);
+    insert_json_counter(object, "atlas_page_bytes", summary.atlas_page_bytes);
+    insert_json_counter(object, "atlas_allocated_bytes", summary.atlas_allocated_bytes);
+    insert_json_counter(object, "atlas_budget_bytes", summary.atlas_budget_bytes);
+    insert_json_counter(object, "atlas_used_bytes", summary.atlas_used_bytes);
+    insert_json_counter(object, "atlas_failed_inserts", summary.atlas_failed_inserts);
+    object.insert(
+        QStringLiteral("coverage_texture_uploaded"),
+        summary.coverage_texture_uploaded);
+    object.insert(
+        QStringLiteral("coverage_texture_skipped"),
+        summary.coverage_texture_skipped);
+    object.insert(
+        QStringLiteral("full_dirty_range_reupload"),
+        summary.full_dirty_range_reupload);
+    object.insert(
+        QStringLiteral("public_projection_full_reupload"),
+        summary.public_projection_full_reupload);
+    object.insert(QStringLiteral("scroll_full_reupload"), summary.scroll_full_reupload);
+    object.insert(
+        QStringLiteral("non_dirty_selection_invalidation"),
+        summary.non_dirty_selection_invalidation);
+    object.insert(
+        QStringLiteral("non_dirty_cursor_invalidation"),
+        summary.non_dirty_cursor_invalidation);
+    object.insert(
+        QStringLiteral("non_dirty_preedit_invalidation"),
+        summary.non_dirty_preedit_invalidation);
+    object.insert(
+        QStringLiteral("non_dirty_options_invalidation"),
+        summary.non_dirty_options_invalidation);
+    object.insert(
+        QStringLiteral("non_dirty_visual_bell_invalidation"),
+        summary.non_dirty_visual_bell_invalidation);
+    object.insert(QStringLiteral("font_epoch_invalidation"), summary.font_epoch_invalidation);
+    return object;
+}
+
+QJsonObject qsg_atlas_stage1_metrics_json(
+    const VNM_TerminalSurface& surface,
+    bool                       enabled)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("enabled"), enabled);
+    if (!enabled) {
+        return object;
+    }
+
+    const term::Qsg_atlas_stage1_frame_report report =
+        term::VNM_TerminalSurface_render_bridge::qsg_atlas_stage1_frame(surface);
+    insert_json_counter(object, "capture_count", report.capture_count);
+    insert_json_counter(object, "prepare_count", report.prepare_count);
+    insert_json_counter(object, "render_count", report.render_count);
+    insert_json_counter(object, "capture_sequence", report.capture_sequence);
+    insert_json_counter(
+        object,
+        "captured_snapshot_sequence",
+        report.captured_snapshot_sequence);
+    insert_json_counter(object, "captured_font_epoch", report.captured_font_epoch);
+    object.insert(QStringLiteral("command_buffer_non_null"), report.command_buffer_non_null);
+    object.insert(QStringLiteral("render_target_non_null"), report.render_target_non_null);
+    object.insert(QStringLiteral("rhi_non_null"), report.rhi_non_null);
+    object.insert(QStringLiteral("drew"), report.drew);
+    object.insert(QStringLiteral("r8_texture_created"), report.r8_texture_created);
+    object.insert(QStringLiteral("r8_upload_recorded"), report.r8_upload_recorded);
+    object.insert(QStringLiteral("raw_font_rasterized"), report.raw_font_rasterized);
+    insert_json_counter(object, "rasterized_glyphs", report.rasterized_glyphs);
+    insert_json_counter(object, "atlas_page_count", report.atlas_page_count);
+    object.insert(QStringLiteral("stage4"), atlas_stage4_summary_json(report.stage4));
+    return object;
+}
+
 QJsonObject surface_geometry_json(const VNM_TerminalSurface& surface)
 {
     QJsonObject object;
@@ -3856,7 +4027,8 @@ QJsonObject terminal_metrics_json(
     const VNM_TerminalSurface&  surface,
     const Runtime_state&        state,
     const metrics_timing_t&     timing,
-    int                         app_result)
+    int                         app_result,
+    bool                        qsg_atlas_stage1_probe_enabled)
 {
     const term::terminal_renderer_cumulative_stats_t cumulative_stats =
         term::VNM_TerminalSurface_render_bridge::cumulative_renderer_stats(surface);
@@ -4228,6 +4400,9 @@ QJsonObject terminal_metrics_json(
     root.insert(QStringLiteral("profiling"), profiling_measurement_json(timing));
     root.insert(QStringLiteral("surface_geometry"), surface_geometry_json(surface));
     root.insert(QStringLiteral("renderer"), renderer);
+    root.insert(
+        QStringLiteral("qsg_atlas_stage1_probe"),
+        qsg_atlas_stage1_metrics_json(surface, qsg_atlas_stage1_probe_enabled));
 
     return root;
 }
@@ -4238,6 +4413,7 @@ bool write_metrics_json(
     const Runtime_state&        state,
     const metrics_timing_t&     timing,
     int                         app_result,
+    bool                        qsg_atlas_stage1_probe_enabled,
     QString*                    out_error)
 {
     QFile file(path);
@@ -4248,7 +4424,12 @@ bool write_metrics_json(
     }
 
     const QByteArray json = QJsonDocument(
-        terminal_metrics_json(surface, state, timing, app_result))
+        terminal_metrics_json(
+            surface,
+            state,
+            timing,
+            app_result,
+            qsg_atlas_stage1_probe_enabled))
             .toJson(QJsonDocument::Indented);
     if (file.write(json) != json.size()) {
         *out_error = QStringLiteral("could not write metrics JSON %1: %2")
@@ -4371,6 +4552,11 @@ int main(int argc, char** argv)
     term::VNM_TerminalSurface_render_bridge::set_selection_trace_enabled(
         *surface,
         options.selection_trace_enabled);
+    if (options.qsg_atlas_stage1_probe_enabled) {
+        term::VNM_TerminalSurface_render_bridge::set_qsg_atlas_stage1_probe_enabled(
+            *surface,
+            true);
+    }
 #if VNM_TERMINAL_PROFILING_ENABLED
     std::unique_ptr<term::Hierarchical_profiler> gui_profiler;
     std::unique_ptr<term::Active_profiler_binding> gui_profiler_binding;
@@ -4714,6 +4900,7 @@ int main(int argc, char** argv)
                 state,
                 metrics_timing,
                 app_result,
+                options.qsg_atlas_stage1_probe_enabled,
                 &metrics_error))
         {
             print_error(metrics_error);
