@@ -101,6 +101,33 @@ keeps the legacy `<scene>/repeat_<n>/` layout, so existing suites are unchanged.
 Use separate artifact tags and separate benchmark processes when comparing
 different terminal builds or runtime configurations.
 
+## Stage 4 atlas probe gate
+
+The atlas renderer Stage 4 CMDG gate uses a hidden, default-off app probe that
+is appended only when the benchmark cache variable
+`VNM_TERMINAL_CMDG_NELOSTIE_QSG_ATLAS_STAGE1_PROBE=ON` is configured. The app
+switch is internal and must not be treated as a production renderer cutover.
+
+Run the Stage 4 A/B gate with:
+
+```powershell
+.\benchmarks\cmdg_nelostie\run_stage4_cmdg_gate.ps1 `
+  -ArtifactTag stage4_cmdg_gate_<tag>
+```
+
+The script configures separate Release/profiling-off hardware-windowed CTest
+runs for the QSGTextNode baseline and atlas probe candidate, assigns distinct
+artifact tags, and writes `stage4_cmdg_gate_comparison.json` plus a Markdown
+summary under `artifacts/<tag>/`.
+
+The Stage 4 gate treats terminal `paint_frames_per_second` as the primary
+renderer threshold. The motivating scenes must improve paint FPS by at least
+25%, and every default-suite scene must keep paint FPS within a 5% regression
+guard. CMDG `draw_frames_per_second` is reported as corroborating/backpressure
+evidence and also has a 5% default-suite no-regression guard. CMDG
+`scene_frames_per_second` is only a producer/user-visible no-regression guard
+because CMDG caps scene production near 31 FPS.
+
 By default the runner builds `THIRD_PARTY/CMDG/CMDG/CMDG.csproj` in Release
 and uses the resulting `CMDG.exe`. To run against an external/prebuilt CMDG,
 set `VNM_TERMINAL_CMDG_NELOSTIE_EXE` and, if needed,
