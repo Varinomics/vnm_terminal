@@ -13,6 +13,7 @@ param(
     [string] $ArchivedBaselineComparisonJson = "",
     [double] $MotivatingPaintImprovementThresholdPercent = 25.0,
     [double] $DefaultSceneRegressionThresholdPercent = -5.0,
+    [double] $MinimumRendererFrameFps = 5.0,
     [switch] $FocusOnly
 )
 
@@ -240,6 +241,44 @@ function Get-MedianMetric {
     return ([double] $values[$middle - 1] + [double] $values[$middle]) / 2.0
 }
 
+function Get-RecordRendererFrameFps {
+    param([object] $Record)
+
+    $frameEvidence = Get-ObjectProperty $Record "renderer_frame_evidence"
+    $frameEvidenceFps = Convert-MetricNumber (
+        Get-ObjectProperty $frameEvidence "frames_per_second"
+    )
+    if ($null -ne $frameEvidenceFps) {
+        return $frameEvidenceFps
+    }
+
+    return Convert-MetricNumber (Get-ObjectProperty $Record "paint_frames_per_second")
+}
+
+function Get-MedianRendererFrameFps {
+    param([object[]] $Records)
+
+    $values = @(
+        $Records |
+            ForEach-Object {
+                Get-RecordRendererFrameFps $_
+            } |
+            Where-Object { $null -ne $_ } |
+            Sort-Object
+    )
+
+    if ($values.Count -eq 0) {
+        return $null
+    }
+
+    $middle = [int] [Math]::Floor($values.Count / 2)
+    if (($values.Count % 2) -eq 1) {
+        return [double] $values[$middle]
+    }
+
+    return ([double] $values[$middle - 1] + [double] $values[$middle]) / 2.0
+}
+
 function Get-ImprovementPercent {
     param(
         [double] $Baseline,
@@ -296,22 +335,25 @@ function Compare-ArchivedBaseline {
             (Get-ObjectProperty $_ "scene") -eq $scene
         })
 
-        $baselinePaint = Get-MedianMetric $baselineSceneRecords "paint_frames_per_second"
-        $currentPaint = Get-MedianMetric $currentSceneRecords "paint_frames_per_second"
+        $baselineRendererFrame = Get-MedianRendererFrameFps $baselineSceneRecords
+        $currentRendererFrame = Get-MedianRendererFrameFps $currentSceneRecords
         $baselineDraw = Get-MedianMetric $baselineSceneRecords "draw_frames_per_second"
         $currentDraw = Get-MedianMetric $currentSceneRecords "draw_frames_per_second"
         $baselineScene = Get-MedianMetric $baselineSceneRecords "scene_frames_per_second"
         $currentScene = Get-MedianMetric $currentSceneRecords "scene_frames_per_second"
 
-        if ($null -eq $baselinePaint -or $null -eq $currentPaint -or
+        if ($null -eq $baselineRendererFrame -or $null -eq $currentRendererFrame -or
             $null -eq $baselineDraw -or $null -eq $currentDraw -or
             $null -eq $baselineScene -or $null -eq $currentScene)
         {
             $missingScenes.Add($scene)
         }
 
-        $paintImprovement = if ($null -ne $baselinePaint -and $null -ne $currentPaint) {
-            Get-ImprovementPercent $baselinePaint $currentPaint
+        $rendererFrameImprovement = if (
+            $null -ne $baselineRendererFrame -and
+            $null -ne $currentRendererFrame)
+        {
+            Get-ImprovementPercent $baselineRendererFrame $currentRendererFrame
         }
         else {
             $null
@@ -330,13 +372,13 @@ function Compare-ArchivedBaseline {
         }
 
         $motivatingScene = $MotivatingSceneNames -contains $scene
-        $motivatingPaintPass = !$motivatingScene -or (
-            $null -ne $paintImprovement -and
-            $paintImprovement -ge $MotivatingPaintImprovementThresholdPercent
+        $motivatingRendererFramePass = !$motivatingScene -or (
+            $null -ne $rendererFrameImprovement -and
+            $rendererFrameImprovement -ge $MotivatingPaintImprovementThresholdPercent
         )
-        $defaultPaintRegressionPass = $motivatingScene -or (
-            $null -ne $paintImprovement -and
-            $paintImprovement -ge $DefaultSceneRegressionThresholdPercent
+        $defaultRendererFrameRegressionPass = $motivatingScene -or (
+            $null -ne $rendererFrameImprovement -and
+            $rendererFrameImprovement -ge $DefaultSceneRegressionThresholdPercent
         )
         $defaultDrawRegressionPass = $null -ne $drawImprovement -and
             $drawImprovement -ge $DefaultSceneRegressionThresholdPercent
@@ -353,19 +395,19 @@ function Compare-ArchivedBaseline {
         $comparisons.Add([ordered]@{
             scene = $scene
             motivating_scene = $motivatingScene
-            baseline_median_paint_fps = $baselinePaint
-            canonical_median_paint_fps = $currentPaint
-            paint_improvement_percent = $paintImprovement
+            baseline_median_renderer_frame_fps = $baselineRendererFrame
+            canonical_median_renderer_frame_fps = $currentRendererFrame
+            renderer_frame_improvement_percent = $rendererFrameImprovement
             baseline_median_draw_fps = $baselineDraw
             canonical_median_draw_fps = $currentDraw
             draw_improvement_percent = $drawImprovement
             baseline_median_scene_fps = $baselineScene
             canonical_median_scene_fps = $currentScene
             scene_improvement_percent = $sceneImprovement
-            motivating_paint_improvement_threshold_percent = $motivatingPaintThreshold
+            motivating_renderer_frame_improvement_threshold_percent = $motivatingPaintThreshold
             default_scene_regression_threshold_percent = $defaultSceneRegressionThreshold
-            motivating_paint_pass = $motivatingPaintPass
-            default_paint_regression_pass = $defaultPaintRegressionPass
+            motivating_renderer_frame_pass = $motivatingRendererFramePass
+            default_renderer_frame_regression_pass = $defaultRendererFrameRegressionPass
             default_draw_regression_pass = $defaultDrawRegressionPass
             default_scene_regression_pass = $defaultSceneRegressionPass
         }) | Out-Null
@@ -373,8 +415,8 @@ function Compare-ArchivedBaseline {
 
     $comparisonPass = $missingScenes.Count -eq 0 -and
         @($comparisons | Where-Object {
-            $_.motivating_paint_pass -ne $true -or
-            $_.default_paint_regression_pass -ne $true -or
+            $_.motivating_renderer_frame_pass -ne $true -or
+            $_.default_renderer_frame_regression_pass -ne $true -or
             $_.default_draw_regression_pass -ne $true -or
             $_.default_scene_regression_pass -ne $true
         }).Count -eq 0
@@ -425,6 +467,24 @@ function Run-CmdgTests {
     ) $TerminalRepo (Join-Path $artifactRoot "ctest_canonical_atlas.log") -AllowFailure
 }
 
+function Copy-RunMetricArtifact {
+    param(
+        [string] $SourcePath,
+        [string] $Scene,
+        [int]    $Repeat
+    )
+
+    if (!(Test-Path $SourcePath)) {
+        return ""
+    }
+
+    $destinationDir = Join-Path $artifactRoot "per_run_metrics\$Scene\repeat_$Repeat"
+    New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
+    $destinationPath = Join-Path $destinationDir (Split-Path -Leaf $SourcePath)
+    Copy-Item -LiteralPath $SourcePath -Destination $destinationPath -Force
+    return $destinationPath
+}
+
 function Read-CmdgRecord {
     param(
         [string] $Scene,
@@ -463,14 +523,56 @@ function Read-CmdgRecord {
         $errors.Add("missing terminal metrics JSON")
     }
 
+    $rendererMetrics = Get-ObjectProperty $terminalMetrics "renderer"
     $atlasMetrics = Get-ObjectProperty $terminalMetrics "qsg_atlas"
+    $frameEvidenceMetrics = Get-ObjectProperty $terminalMetrics "renderer_frame_evidence"
+    $startupMetrics = Get-ObjectProperty $terminalMetrics "startup"
     $bufferUploadMetrics = Get-ObjectProperty $atlasMetrics "buffer_upload"
+    $producerMetrics = Get-ObjectProperty $atlasMetrics "producer"
+    $glyphBufferMetrics = Get-ObjectProperty $bufferUploadMetrics "glyph_buffer"
+    $terminalElapsedMs = Convert-MetricNumber (
+        Get-ObjectProperty $terminalMetrics "elapsed_ms"
+    )
+    $firstOutputElapsedMs = Convert-MetricNumber (
+        Get-ObjectProperty $startupMetrics "first_output_elapsed_ms"
+    )
+    $visibleFirstFrameCompleted = Convert-MetricBool (
+        Get-ObjectProperty $startupMetrics "visible_first_frame_completed"
+    )
+    $visibleFirstFrameCounterPath = Get-ObjectProperty `
+        $startupMetrics `
+        "visible_first_frame_counter_path"
+    $paintCompletedFrames = Convert-MetricNumber (
+        Get-ObjectProperty $rendererMetrics "paint_completed_frames"
+    )
+    $framesPublished = Convert-MetricNumber (
+        Get-ObjectProperty $rendererMetrics "frames_published"
+    )
+    $paintFramesPerSecond = Convert-MetricNumber (
+        Get-ObjectProperty $terminalMetrics "paint_frames_per_second"
+    )
+    $frameEvidenceCounterPath = Get-ObjectProperty $frameEvidenceMetrics "counter_path"
+    $frameEvidenceCount = Convert-MetricNumber (
+        Get-ObjectProperty $frameEvidenceMetrics "frame_count"
+    )
+    $frameEvidenceFramesPerSecond = Convert-MetricNumber (
+        Get-ObjectProperty $frameEvidenceMetrics "frames_per_second"
+    )
     $atlasRenderer = Get-ObjectProperty $atlasMetrics "renderer"
     $atlasFailedInserts = Convert-MetricNumber (
         Get-ObjectProperty $bufferUploadMetrics "atlas_failed_inserts"
     )
     $atlasBudgetBytes = Convert-MetricNumber (
         Get-ObjectProperty $bufferUploadMetrics "atlas_budget_bytes"
+    )
+    $atlasAllocatedBytes = Convert-MetricNumber (
+        Get-ObjectProperty $bufferUploadMetrics "atlas_allocated_bytes"
+    )
+    $atlasUsedBytes = Convert-MetricNumber (
+        Get-ObjectProperty $bufferUploadMetrics "atlas_used_bytes"
+    )
+    $atlasPagePressure = Convert-MetricBool (
+        Get-ObjectProperty $bufferUploadMetrics "atlas_page_pressure"
     )
     $atlasPageBudget = Convert-MetricNumber (
         Get-ObjectProperty $bufferUploadMetrics "atlas_page_budget"
@@ -484,6 +586,81 @@ function Read-CmdgRecord {
     $renderCount = Convert-MetricNumber (
         Get-ObjectProperty $atlasMetrics "render_count"
     )
+    $rasterizedGlyphs = Convert-MetricNumber (
+        Get-ObjectProperty $atlasMetrics "rasterized_glyphs"
+    )
+    $rawFontRasterized = Convert-MetricBool (
+        Get-ObjectProperty $atlasMetrics "raw_font_rasterized"
+    )
+    $glyphMissedInstances = Convert-MetricNumber (
+        Get-ObjectProperty $atlasMetrics "glyph_missed_instances"
+    )
+    $glyphCoverageFailures = Convert-MetricNumber (
+        Get-ObjectProperty $atlasMetrics "glyph_coverage_failures"
+    )
+    $glyphAtlasInsertFailures = Convert-MetricNumber (
+        Get-ObjectProperty $atlasMetrics "glyph_atlas_insert_failures"
+    )
+    $glyphBufferUploadedBytes = Convert-MetricNumber (
+        Get-ObjectProperty $glyphBufferMetrics "uploaded_bytes"
+    )
+    $glyphBufferPartialUploads = Convert-MetricNumber (
+        Get-ObjectProperty $glyphBufferMetrics "partial_uploads"
+    )
+    $glyphBufferFullUploads = Convert-MetricNumber (
+        Get-ObjectProperty $glyphBufferMetrics "full_uploads"
+    )
+    $producerTextRunsConsidered = Convert-MetricNumber (
+        Get-ObjectProperty $producerMetrics "text_runs_considered"
+    )
+    $producerShapeCacheHits = Convert-MetricNumber (
+        Get-ObjectProperty $producerMetrics "shape_cache_hits"
+    )
+    $producerShapeCacheMisses = Convert-MetricNumber (
+        Get-ObjectProperty $producerMetrics "shape_cache_misses"
+    )
+    $producerShapeCachePruned = Convert-MetricNumber (
+        Get-ObjectProperty $producerMetrics "shape_cache_pruned"
+    )
+    $producerShapedRunsBuilt = Convert-MetricNumber (
+        Get-ObjectProperty $producerMetrics "shaped_runs_built"
+    )
+    $producerShapedRunsReused = Convert-MetricNumber (
+        Get-ObjectProperty $producerMetrics "shaped_runs_reused"
+    )
+    $producerShapedGlyphsBuilt = Convert-MetricNumber (
+        Get-ObjectProperty $producerMetrics "shaped_glyph_records_built"
+    )
+    $producerShapedGlyphsReused = Convert-MetricNumber (
+        Get-ObjectProperty $producerMetrics "shaped_glyph_records_reused"
+    )
+    $rendererFrameTimeMs = if (
+        $null -ne $frameEvidenceFramesPerSecond -and
+        $frameEvidenceFramesPerSecond -gt 0.0)
+    {
+        1000.0 / $frameEvidenceFramesPerSecond
+    }
+    else {
+        $null
+    }
+    $terminalMetricsArtifactPath = Copy-RunMetricArtifact `
+        -SourcePath $terminalMetricsPath `
+        -Scene $Scene `
+        -Repeat $Repeat
+    $cmdgMetricsArtifactPath = Copy-RunMetricArtifact `
+        -SourcePath $cmdgMetricsPath `
+        -Scene $Scene `
+        -Repeat $Repeat
+
+    $frameEvidenceCounterMatches = $false
+    if ($frameEvidenceCounterPath -eq "renderer.paint_completed_frames") {
+        $frameEvidenceCounterMatches = $null -ne $paintCompletedFrames -and
+            $frameEvidenceCount -eq $paintCompletedFrames
+    }
+    elseif ($frameEvidenceCounterPath -eq "qsg_atlas.render_count") {
+        $frameEvidenceCounterMatches = $null -ne $renderCount -and
+            $frameEvidenceCount -eq $renderCount
+    }
 
     $backendErrorCount = Convert-MetricNumber (
         Get-ObjectProperty $terminalMetrics "backend_error_count"
@@ -500,13 +677,32 @@ function Read-CmdgRecord {
         $atlasBudgetBytes -gt 0.0 -and
         $null -ne $atlasPageBudget -and
         $atlasPageBudget -gt 0.0 -and
-        $null -ne $atlasPageCount
+        $null -ne $atlasPageCount -and
+        $null -ne $producerTextRunsConsidered -and
+        $null -ne $producerShapedRunsBuilt -and
+        $null -ne $producerShapedRunsReused
+    $glyphMissCountersZero =
+        $glyphMissedInstances -eq 0.0 -and
+        $glyphCoverageFailures -eq 0.0 -and
+        $glyphAtlasInsertFailures -eq 0.0
+
+    $frameEvidencePresent = $null -ne $frameEvidenceCounterPath -and
+        $null -ne $frameEvidenceCount -and
+        $frameEvidenceCount -gt 0.0 -and
+        $null -ne $frameEvidenceFramesPerSecond -and
+        $frameEvidenceFramesPerSecond -gt 0.0 -and
+        $frameEvidenceCounterMatches
+    $rendererFrameFloorPass = $null -ne $frameEvidenceFramesPerSecond -and
+        $frameEvidenceFramesPerSecond -ge $MinimumRendererFrameFps
 
     $runOk = $errors.Count -eq 0 -and
         $backendErrorCount -eq 0.0 -and
         $timeoutExpired -eq $false -and
         $exitReason -eq "frame_limit" -and
-        $exitCode -eq 0.0
+        $exitCode -eq 0.0 -and
+        $frameEvidencePresent -and
+        $rendererFrameFloorPass -and
+        $glyphMissCountersZero
 
     return [ordered]@{
         variant = "canonical_atlas"
@@ -515,9 +711,30 @@ function Read-CmdgRecord {
         run_dir = $runDir
         cmdg_metrics_path = $cmdgMetricsPath
         terminal_metrics_path = $terminalMetricsPath
-        paint_frames_per_second = Convert-MetricNumber (
-            Get-ObjectProperty $terminalMetrics "paint_frames_per_second"
-        )
+        cmdg_metrics_artifact_path = $cmdgMetricsArtifactPath
+        terminal_metrics_artifact_path = $terminalMetricsArtifactPath
+        startup_latency_ms = $firstOutputElapsedMs
+        app_elapsed_ms = $terminalElapsedMs
+        paint_frames_per_second = $paintFramesPerSecond
+        paint_completed_frames = $paintCompletedFrames
+        frames_published = $framesPublished
+        renderer_frame_evidence = [ordered]@{
+            counter_path = $frameEvidenceCounterPath
+            frame_count = $frameEvidenceCount
+            frames_per_second = $frameEvidenceFramesPerSecond
+            frame_time_ms = $rendererFrameTimeMs
+        }
+        renderer_frame_evidence_present = $frameEvidencePresent
+        renderer_frame_floor_pass = $rendererFrameFloorPass
+        minimum_renderer_frame_fps = $MinimumRendererFrameFps
+        frame_completion = [ordered]@{
+            frames_published = $framesPublished
+            atlas_capture_count = $captureCount
+            atlas_render_count = $renderCount
+            renderer_frame_evidence_present = $frameEvidencePresent
+            visible_first_frame_completed = $visibleFirstFrameCompleted
+            visible_first_frame_counter_path = $visibleFirstFrameCounterPath
+        }
         scene_frames_per_second = Convert-MetricNumber (
             Get-ObjectProperty $cmdgMetrics "scene_frames_per_second"
         )
@@ -534,8 +751,39 @@ function Read-CmdgRecord {
         atlas_page_count = $atlasPageCount
         atlas_page_budget = $atlasPageBudget
         atlas_budget_bytes = $atlasBudgetBytes
+        atlas_memory = [ordered]@{
+            page_count = $atlasPageCount
+            page_budget = $atlasPageBudget
+            allocated_bytes = $atlasAllocatedBytes
+            budget_bytes = $atlasBudgetBytes
+            used_bytes = $atlasUsedBytes
+            page_pressure = $atlasPagePressure
+        }
+        glyph_misses = [ordered]@{
+            glyph_missed_instances = $glyphMissedInstances
+            glyph_coverage_failures = $glyphCoverageFailures
+            glyph_atlas_insert_failures = $glyphAtlasInsertFailures
+        }
+        cold_glyph_insertion_frame_impact = [ordered]@{
+            rasterized_glyphs = $rasterizedGlyphs
+            raw_font_rasterized = $rawFontRasterized
+            glyph_buffer_uploaded_bytes = $glyphBufferUploadedBytes
+            glyph_buffer_partial_uploads = $glyphBufferPartialUploads
+            glyph_buffer_full_uploads = $glyphBufferFullUploads
+        }
+        producer = [ordered]@{
+            text_runs_considered = $producerTextRunsConsidered
+            shape_cache_hits = $producerShapeCacheHits
+            shape_cache_misses = $producerShapeCacheMisses
+            shape_cache_pruned = $producerShapeCachePruned
+            shaped_runs_built = $producerShapedRunsBuilt
+            shaped_runs_reused = $producerShapedRunsReused
+            shaped_glyph_records_built = $producerShapedGlyphsBuilt
+            shaped_glyph_records_reused = $producerShapedGlyphsReused
+        }
         atlas_failed_inserts = $atlasFailedInserts
         atlas_metrics_present = $atlasMetricsPresent
+        glyph_miss_counters_zero = $glyphMissCountersZero
         run_ok = $runOk
         errors = @($errors)
     }
@@ -570,24 +818,38 @@ function Write-GateReport {
     $lines.Add("Validation flow:")
     $lines.Add("- Build one Release app with the atlas renderer as the only runtime path.")
     $lines.Add("- Run the CMDG suite, or the focused Plasma/ParticleVortex label with -FocusOnly.")
-    $lines.Add("- Require zero backend errors/timeouts and canonical qsg_atlas metrics with atlas budget counters.")
+    $lines.Add(
+        "- Require zero backend errors/timeouts, positive renderer frame evidence, " +
+        "the minimum renderer FPS floor, and canonical qsg_atlas metrics with " +
+        "atlas budget counters.")
     if ($Summary.archived_baseline_comparison.enabled) {
         $lines.Add("- Compare canonical atlas metrics against the archived retired-renderer baseline.")
     }
     else {
         $lines.Add("- No archived retired-renderer baseline was supplied for this canonical-only run.")
     }
+    $lines.Add("- Per-run terminal and CMDG metrics JSONs are copied under `per_run_metrics/`.")
     $lines.Add("")
-    $lines.Add("| Scene | Paint FPS | Draw FPS | Scene FPS | Atlas metrics | Failed inserts | Run OK |")
-    $lines.Add("| --- | ---: | ---: | ---: | --- | ---: | --- |")
+    $lines.Add("| Scene | Renderer Frame FPS | Frame Time ms | Frame Counter | Shaped Built | Shaped Reused | Draw FPS | Scene FPS | Atlas Used Bytes | Page Pressure | Glyph Misses | First Output ms | Run OK |")
+    $lines.Add("| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- |")
     foreach ($record in @($Summary.records)) {
+        $frameEvidence = Get-ObjectProperty $record "renderer_frame_evidence"
+        $atlasMemory = Get-ObjectProperty $record "atlas_memory"
+        $glyphMisses = Get-ObjectProperty $record "glyph_misses"
+        $producer = Get-ObjectProperty $record "producer"
         $lines.Add(
             "| $($record.scene) | " +
-            "$($record.paint_frames_per_second) | " +
+            "$(Get-ObjectProperty $frameEvidence 'frames_per_second') | " +
+            "$(Get-ObjectProperty $frameEvidence 'frame_time_ms') | " +
+            "$(Get-ObjectProperty $frameEvidence 'counter_path') | " +
+            "$(Get-ObjectProperty $producer 'shaped_glyph_records_built') | " +
+            "$(Get-ObjectProperty $producer 'shaped_glyph_records_reused') | " +
             "$($record.draw_frames_per_second) | " +
             "$($record.scene_frames_per_second) | " +
-            "$($record.atlas_metrics_present) | " +
-            "$($record.atlas_failed_inserts) | " +
+            "$(Get-ObjectProperty $atlasMemory 'used_bytes') | " +
+            "$(Get-ObjectProperty $atlasMemory 'page_pressure') | " +
+            "$(Get-ObjectProperty $glyphMisses 'glyph_missed_instances') | " +
+            "$($record.startup_latency_ms) | " +
             "$($record.run_ok) |"
         )
     }
@@ -595,18 +857,18 @@ function Write-GateReport {
     if ($Summary.archived_baseline_comparison.enabled) {
         $lines.Add("Archived retired-renderer baseline: $($Summary.archived_baseline_comparison.archive_path)")
         $lines.Add("")
-        $lines.Add("| Scene | Baseline Paint FPS | Canonical Paint FPS | Paint Delta % | Draw Delta % | Scene Delta % | Gate |")
+        $lines.Add("| Scene | Baseline Frame FPS | Canonical Frame FPS | Frame Delta % | Draw Delta % | Scene Delta % | Gate |")
         $lines.Add("| --- | ---: | ---: | ---: | ---: | ---: | --- |")
         foreach ($comparison in @($Summary.archived_baseline_comparison.comparisons)) {
-            $gateOk = $comparison.motivating_paint_pass -and
-                $comparison.default_paint_regression_pass -and
+            $gateOk = $comparison.motivating_renderer_frame_pass -and
+                $comparison.default_renderer_frame_regression_pass -and
                 $comparison.default_draw_regression_pass -and
                 $comparison.default_scene_regression_pass
             $lines.Add(
                 "| $($comparison.scene) | " +
-                "$($comparison.baseline_median_paint_fps) | " +
-                "$($comparison.canonical_median_paint_fps) | " +
-                "$($comparison.paint_improvement_percent) | " +
+                "$($comparison.baseline_median_renderer_frame_fps) | " +
+                "$($comparison.canonical_median_renderer_frame_fps) | " +
+                "$($comparison.renderer_frame_improvement_percent) | " +
                 "$($comparison.draw_improvement_percent) | " +
                 "$($comparison.scene_improvement_percent) | " +
                 "$gateOk |"
@@ -666,18 +928,36 @@ if ($ArchivedBaselineComparisonJson.Trim() -ne "") {
         -ArchivePath $ArchivedBaselineComparisonJson
 }
 
-$backendErrorsTimeoutsZero = @($records | Where-Object { $_.run_ok -ne $true }).Count -eq 0
+$backendErrorsTimeoutsZero = @($records | Where-Object {
+    $_.errors.Count -ne 0 -or
+    $_.backend_error_count -ne 0.0 -or
+    $_.timeout_expired -ne $false -or
+    $_.exit_reason -ne "frame_limit" -or
+    $_.exit_code -ne 0.0
+}).Count -eq 0
 $atlasMetricsPresent = @($records | Where-Object {
     $_.atlas_metrics_present -ne $true
+}).Count -eq 0
+$rendererFrameEvidencePresent = @($records | Where-Object {
+    $_.renderer_frame_evidence_present -ne $true
+}).Count -eq 0
+$rendererFrameFloorPass = @($records | Where-Object {
+    $_.renderer_frame_floor_pass -ne $true
 }).Count -eq 0
 $atlasFailedInsertsZero = @($records | Where-Object {
     $_.atlas_failed_inserts -ne 0.0
 }).Count -eq 0
+$glyphMissCountersZero = @($records | Where-Object {
+    $_.glyph_miss_counters_zero -ne $true
+}).Count -eq 0
 
 $gatePass = $ctestExit -eq 0 -and
     $backendErrorsTimeoutsZero -and
+    $rendererFrameEvidencePresent -and
+    $rendererFrameFloorPass -and
     $atlasMetricsPresent -and
     $atlasFailedInsertsZero -and
+    $glyphMissCountersZero -and
     $archivedBaselineComparison.comparison_pass
 
 $summary = [ordered]@{
@@ -692,6 +972,7 @@ $summary = [ordered]@{
         frame_limit = $FrameLimit
         window_size = $WindowSize
         font_size = $FontSize
+        minimum_renderer_frame_fps = $MinimumRendererFrameFps
         archived_baseline_comparison_json = $ArchivedBaselineComparisonJson
         focus_only = [bool] $FocusOnly
         profiling = "OFF"
@@ -703,10 +984,14 @@ $summary = [ordered]@{
     ctest_exit_code = $ctestExit
     thresholds = [ordered]@{
         backend_errors_timeouts_zero = $backendErrorsTimeoutsZero
+        renderer_frame_evidence_present = $rendererFrameEvidencePresent
+        renderer_frame_floor_pass = $rendererFrameFloorPass
+        minimum_renderer_frame_fps = $MinimumRendererFrameFps
         atlas_budget_metrics_present = $atlasMetricsPresent
         atlas_failed_inserts_zero = $atlasFailedInsertsZero
+        glyph_miss_counters_zero = $glyphMissCountersZero
         archived_baseline_comparison_pass = $archivedBaselineComparison.comparison_pass
-        motivating_paint_improvement_threshold_percent =
+        motivating_renderer_frame_improvement_threshold_percent =
             $MotivatingPaintImprovementThresholdPercent
         default_scene_regression_threshold_percent =
             $DefaultSceneRegressionThresholdPercent
