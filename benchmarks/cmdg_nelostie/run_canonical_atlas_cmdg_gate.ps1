@@ -459,10 +459,9 @@ function Build-Terminal {
 }
 
 function Run-CmdgTests {
-    $label = if ($FocusOnly) { "cmdg_regression_focus" } else { "cmdg_suite" }
     return Invoke-VcvarsCommand "ctest" @(
         "--test-dir", $buildDir,
-        "-L", $label,
+        "-L", "cmdg_suite",
         "--output-on-failure"
     ) $TerminalRepo (Join-Path $artifactRoot "ctest_canonical_atlas.log") -AllowFailure
 }
@@ -529,6 +528,7 @@ function Read-CmdgRecord {
     $startupMetrics = Get-ObjectProperty $terminalMetrics "startup"
     $bufferUploadMetrics = Get-ObjectProperty $atlasMetrics "buffer_upload"
     $producerMetrics = Get-ObjectProperty $atlasMetrics "producer"
+    $warmLazyMetrics = Get-ObjectProperty $atlasMetrics "warm_lazy"
     $glyphBufferMetrics = Get-ObjectProperty $bufferUploadMetrics "glyph_buffer"
     $terminalElapsedMs = Convert-MetricNumber (
         Get-ObjectProperty $terminalMetrics "elapsed_ms"
@@ -634,6 +634,78 @@ function Read-CmdgRecord {
     $producerShapedGlyphsReused = Convert-MetricNumber (
         Get-ObjectProperty $producerMetrics "shaped_glyph_records_reused"
     )
+    $warmCompleted = Convert-MetricBool (
+        Get-ObjectProperty $warmLazyMetrics "warm_completed"
+    )
+    $warmEpoch = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_epoch"
+    )
+    $warmSeedStrings = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_seed_strings"
+    )
+    $warmShapedGlyphRecords = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_shaped_glyph_records"
+    )
+    $warmCoveredGlyphRecords = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_covered_glyph_records"
+    )
+    $warmSkippedGlyphRecords = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_skipped_glyph_records"
+    )
+    $warmEnvironmentSkippedGlyphRecords = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_environment_skipped_glyph_records"
+    )
+    $warmFailedGlyphRecords = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_failed_glyph_records"
+    )
+    $warmMissingStringIndexes = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_missing_string_indexes"
+    )
+    $warmInvalidStringIndexes = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_invalid_string_indexes"
+    )
+    $warmUnsupportedImages = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_unsupported_images"
+    )
+    $warmCacheHits = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_cache_hits"
+    )
+    $warmInsertAttempts = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_insert_attempts"
+    )
+    $warmInserts = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_inserts"
+    )
+    $warmFailedInserts = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_failed_inserts"
+    )
+    $warmElapsedMs = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "warm_elapsed_ms"
+    )
+    $warmPagePressure = Convert-MetricBool (
+        Get-ObjectProperty $warmLazyMetrics "warm_page_pressure"
+    )
+    $lazyInsertAttempts = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "lazy_insert_attempts"
+    )
+    $lazyInserts = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "lazy_inserts"
+    )
+    $lazyFailedInserts = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "lazy_failed_inserts"
+    )
+    $lazyElapsedMs = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "lazy_elapsed_ms"
+    )
+    $lazyMaxInsertUs = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "lazy_max_insert_us"
+    )
+    $lazyFrames = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "lazy_frames"
+    )
+    $incompleteFrames = Convert-MetricNumber (
+        Get-ObjectProperty $warmLazyMetrics "incomplete_frames"
+    )
     $rendererFrameTimeMs = if (
         $null -ne $frameEvidenceFramesPerSecond -and
         $frameEvidenceFramesPerSecond -gt 0.0)
@@ -680,11 +752,47 @@ function Read-CmdgRecord {
         $null -ne $atlasPageCount -and
         $null -ne $producerTextRunsConsidered -and
         $null -ne $producerShapedRunsBuilt -and
-        $null -ne $producerShapedRunsReused
+        $null -ne $producerShapedRunsReused -and
+        $null -ne $warmCompleted -and
+        $null -ne $warmEpoch -and
+        $null -ne $warmSeedStrings -and
+        $warmSeedStrings -gt 0.0 -and
+        $null -ne $warmShapedGlyphRecords -and
+        $warmShapedGlyphRecords -gt 0.0 -and
+        $null -ne $warmCoveredGlyphRecords -and
+        $warmCoveredGlyphRecords -gt 0.0 -and
+        $null -ne $warmSkippedGlyphRecords -and
+        $null -ne $warmEnvironmentSkippedGlyphRecords -and
+        $null -ne $warmFailedGlyphRecords -and
+        $null -ne $warmMissingStringIndexes -and
+        $null -ne $warmInvalidStringIndexes -and
+        $null -ne $warmUnsupportedImages -and
+        $null -ne $warmCacheHits -and
+        $null -ne $warmInsertAttempts -and
+        $null -ne $warmInserts -and
+        $null -ne $warmFailedInserts -and
+        $null -ne $warmElapsedMs -and
+        $null -ne $warmPagePressure -and
+        $null -ne $lazyInsertAttempts -and
+        $null -ne $lazyInserts -and
+        $null -ne $lazyFailedInserts -and
+        $null -ne $lazyElapsedMs -and
+        $null -ne $lazyMaxInsertUs -and
+        $null -ne $lazyFrames -and
+        $null -ne $incompleteFrames
     $glyphMissCountersZero =
         $glyphMissedInstances -eq 0.0 -and
         $glyphCoverageFailures -eq 0.0 -and
         $glyphAtlasInsertFailures -eq 0.0
+    $warmLazyCountersOk =
+        $warmCompleted -eq $true -and
+        $warmFailedGlyphRecords -eq 0.0 -and
+        $warmMissingStringIndexes -eq 0.0 -and
+        $warmInvalidStringIndexes -eq 0.0 -and
+        $warmUnsupportedImages -eq 0.0 -and
+        $warmFailedInserts -eq 0.0 -and
+        $lazyFailedInserts -eq 0.0 -and
+        $incompleteFrames -eq 0.0
 
     $frameEvidencePresent = $null -ne $frameEvidenceCounterPath -and
         $null -ne $frameEvidenceCount -and
@@ -702,7 +810,8 @@ function Read-CmdgRecord {
         $exitCode -eq 0.0 -and
         $frameEvidencePresent -and
         $rendererFrameFloorPass -and
-        $glyphMissCountersZero
+        $glyphMissCountersZero -and
+        $warmLazyCountersOk
 
     return [ordered]@{
         variant = "canonical_atlas"
@@ -781,9 +890,36 @@ function Read-CmdgRecord {
             shaped_glyph_records_built = $producerShapedGlyphsBuilt
             shaped_glyph_records_reused = $producerShapedGlyphsReused
         }
+        warm_lazy = [ordered]@{
+            warm_completed = $warmCompleted
+            warm_epoch = $warmEpoch
+            warm_seed_strings = $warmSeedStrings
+            warm_shaped_glyph_records = $warmShapedGlyphRecords
+            warm_covered_glyph_records = $warmCoveredGlyphRecords
+            warm_skipped_glyph_records = $warmSkippedGlyphRecords
+            warm_environment_skipped_glyph_records = $warmEnvironmentSkippedGlyphRecords
+            warm_failed_glyph_records = $warmFailedGlyphRecords
+            warm_missing_string_indexes = $warmMissingStringIndexes
+            warm_invalid_string_indexes = $warmInvalidStringIndexes
+            warm_unsupported_images = $warmUnsupportedImages
+            warm_cache_hits = $warmCacheHits
+            warm_insert_attempts = $warmInsertAttempts
+            warm_inserts = $warmInserts
+            warm_failed_inserts = $warmFailedInserts
+            warm_elapsed_ms = $warmElapsedMs
+            warm_page_pressure = $warmPagePressure
+            lazy_insert_attempts = $lazyInsertAttempts
+            lazy_inserts = $lazyInserts
+            lazy_failed_inserts = $lazyFailedInserts
+            lazy_elapsed_ms = $lazyElapsedMs
+            lazy_max_insert_us = $lazyMaxInsertUs
+            lazy_frames = $lazyFrames
+            incomplete_frames = $incompleteFrames
+        }
         atlas_failed_inserts = $atlasFailedInserts
         atlas_metrics_present = $atlasMetricsPresent
         glyph_miss_counters_zero = $glyphMissCountersZero
+        warm_lazy_counters_ok = $warmLazyCountersOk
         run_ok = $runOk
         errors = @($errors)
     }
@@ -817,11 +953,11 @@ function Write-GateReport {
     $lines.Add("")
     $lines.Add("Validation flow:")
     $lines.Add("- Build one Release app with the atlas renderer as the only runtime path.")
-    $lines.Add("- Run the CMDG suite, or the focused Plasma/ParticleVortex label with -FocusOnly.")
+    $lines.Add("- Run the CMDG suite, or the focused Plasma/ParticleVortex scene list with -FocusOnly.")
     $lines.Add(
         "- Require zero backend errors/timeouts, positive renderer frame evidence, " +
-        "the minimum renderer FPS floor, and canonical qsg_atlas metrics with " +
-        "atlas budget counters.")
+        "the minimum renderer FPS floor, canonical qsg_atlas metrics with atlas " +
+        "budget counters, and complete warm/lazy atlas diagnostics.")
     if ($Summary.archived_baseline_comparison.enabled) {
         $lines.Add("- Compare canonical atlas metrics against the archived retired-renderer baseline.")
     }
@@ -830,13 +966,14 @@ function Write-GateReport {
     }
     $lines.Add("- Per-run terminal and CMDG metrics JSONs are copied under `per_run_metrics/`.")
     $lines.Add("")
-    $lines.Add("| Scene | Renderer Frame FPS | Frame Time ms | Frame Counter | Shaped Built | Shaped Reused | Draw FPS | Scene FPS | Atlas Used Bytes | Page Pressure | Glyph Misses | First Output ms | Run OK |")
-    $lines.Add("| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: | --- |")
+    $lines.Add("| Scene | Renderer Frame FPS | Frame Time ms | Frame Counter | Shaped Built | Shaped Reused | Draw FPS | Scene FPS | Atlas Used Bytes | Page Pressure | Warm Complete | Warm Failed | Lazy Failed | Incomplete Frames | Glyph Misses | First Output ms | Run OK |")
+    $lines.Add("| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |")
     foreach ($record in @($Summary.records)) {
         $frameEvidence = Get-ObjectProperty $record "renderer_frame_evidence"
         $atlasMemory = Get-ObjectProperty $record "atlas_memory"
         $glyphMisses = Get-ObjectProperty $record "glyph_misses"
         $producer = Get-ObjectProperty $record "producer"
+        $warmLazy = Get-ObjectProperty $record "warm_lazy"
         $lines.Add(
             "| $($record.scene) | " +
             "$(Get-ObjectProperty $frameEvidence 'frames_per_second') | " +
@@ -848,6 +985,10 @@ function Write-GateReport {
             "$($record.scene_frames_per_second) | " +
             "$(Get-ObjectProperty $atlasMemory 'used_bytes') | " +
             "$(Get-ObjectProperty $atlasMemory 'page_pressure') | " +
+            "$(Get-ObjectProperty $warmLazy 'warm_completed') | " +
+            "$(Get-ObjectProperty $warmLazy 'warm_failed_inserts') | " +
+            "$(Get-ObjectProperty $warmLazy 'lazy_failed_inserts') | " +
+            "$(Get-ObjectProperty $warmLazy 'incomplete_frames') | " +
             "$(Get-ObjectProperty $glyphMisses 'glyph_missed_instances') | " +
             "$($record.startup_latency_ms) | " +
             "$($record.run_ok) |"
@@ -950,6 +1091,9 @@ $atlasFailedInsertsZero = @($records | Where-Object {
 $glyphMissCountersZero = @($records | Where-Object {
     $_.glyph_miss_counters_zero -ne $true
 }).Count -eq 0
+$warmLazyCountersOk = @($records | Where-Object {
+    $_.warm_lazy_counters_ok -ne $true
+}).Count -eq 0
 
 $gatePass = $ctestExit -eq 0 -and
     $backendErrorsTimeoutsZero -and
@@ -958,6 +1102,7 @@ $gatePass = $ctestExit -eq 0 -and
     $atlasMetricsPresent -and
     $atlasFailedInsertsZero -and
     $glyphMissCountersZero -and
+    $warmLazyCountersOk -and
     $archivedBaselineComparison.comparison_pass
 
 $summary = [ordered]@{
@@ -990,6 +1135,7 @@ $summary = [ordered]@{
         atlas_budget_metrics_present = $atlasMetricsPresent
         atlas_failed_inserts_zero = $atlasFailedInsertsZero
         glyph_miss_counters_zero = $glyphMissCountersZero
+        warm_lazy_counters_ok = $warmLazyCountersOk
         archived_baseline_comparison_pass = $archivedBaselineComparison.comparison_pass
         motivating_renderer_frame_improvement_threshold_percent =
             $MotivatingPaintImprovementThresholdPercent

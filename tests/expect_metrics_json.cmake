@@ -212,6 +212,17 @@ if(expected_profile_text_requested)
         "qsg_atlas"
         "renderer=atlas"
         "producer"
+        "warm_lazy"
+        "warm_completed"
+        "warm_seed_strings"
+        "warm_shaped_glyph_records"
+        "warm_covered_glyph_records"
+        "warm_environment_skipped_glyph_records"
+        "warm_failed_glyph_records"
+        "warm_failed_inserts"
+        "lazy_insert_attempts"
+        "lazy_failed_inserts"
+        "incomplete_frames"
         "shape_cache_hits"
         "shaped_runs_reused"
         "placement"
@@ -275,6 +286,11 @@ vnm_terminal_read_json_field(atlas_capture_count
     "${metrics_text}" "${metrics_path}" qsg_atlas capture_count)
 if(NOT atlas_capture_count MATCHES "^[0-9]+$")
     message(FATAL_ERROR "qsg_atlas.capture_count should be an integer counter")
+endif()
+vnm_terminal_read_json_field(atlas_prepare_count
+    "${metrics_text}" "${metrics_path}" qsg_atlas prepare_count)
+if(NOT atlas_prepare_count MATCHES "^[0-9]+$")
+    message(FATAL_ERROR "qsg_atlas.prepare_count should be an integer counter")
 endif()
 vnm_terminal_read_json_field(atlas_render_count
     "${metrics_text}" "${metrics_path}" qsg_atlas render_count)
@@ -388,6 +404,96 @@ foreach(producer_counter IN ITEMS
         "${metrics_text}"
         "${metrics_path}"
         qsg_atlas producer ${producer_counter})
+endforeach()
+
+vnm_terminal_expect_json_boolean(
+    "${metrics_text}"
+    "${metrics_path}"
+    qsg_atlas warm_lazy warm_completed)
+vnm_terminal_expect_json_boolean(
+    "${metrics_text}"
+    "${metrics_path}"
+    qsg_atlas warm_lazy warm_page_pressure)
+vnm_terminal_expect_json_number(
+    "${metrics_text}"
+    "${metrics_path}"
+    qsg_atlas warm_lazy warm_elapsed_ms)
+vnm_terminal_expect_json_number(
+    "${metrics_text}"
+    "${metrics_path}"
+    qsg_atlas warm_lazy lazy_elapsed_ms)
+
+foreach(warm_lazy_counter IN ITEMS
+    warm_epoch
+    warm_seed_strings
+    warm_shaped_glyph_records
+    warm_covered_glyph_records
+    warm_skipped_glyph_records
+    warm_environment_skipped_glyph_records
+    warm_failed_glyph_records
+    warm_missing_string_indexes
+    warm_invalid_string_indexes
+    warm_unsupported_images
+    warm_cache_hits
+    warm_insert_attempts
+    warm_inserts
+    warm_failed_inserts
+    lazy_insert_attempts
+    lazy_inserts
+    lazy_failed_inserts
+    lazy_max_insert_us
+    lazy_frames
+    incomplete_frames)
+    vnm_terminal_expect_json_counter(
+        "${metrics_text}"
+        "${metrics_path}"
+        qsg_atlas warm_lazy ${warm_lazy_counter})
+endforeach()
+
+vnm_terminal_read_json_field(warm_completed
+    "${metrics_text}" "${metrics_path}" qsg_atlas warm_lazy warm_completed)
+vnm_terminal_read_json_field(warm_seed_strings
+    "${metrics_text}" "${metrics_path}" qsg_atlas warm_lazy warm_seed_strings)
+vnm_terminal_read_json_field(warm_shaped_glyph_records
+    "${metrics_text}" "${metrics_path}" qsg_atlas warm_lazy warm_shaped_glyph_records)
+vnm_terminal_read_json_field(warm_covered_glyph_records
+    "${metrics_text}" "${metrics_path}" qsg_atlas warm_lazy warm_covered_glyph_records)
+if(atlas_prepare_count MATCHES "^[1-9][0-9]*$")
+    if(NOT warm_completed)
+        message(FATAL_ERROR
+            "qsg_atlas.warm_lazy.warm_completed should be true when "
+            "qsg_atlas.prepare_count is positive")
+    endif()
+    if(NOT warm_seed_strings MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR
+            "qsg_atlas.warm_lazy.warm_seed_strings should be positive when "
+            "qsg_atlas.prepare_count is positive")
+    endif()
+    if(NOT warm_shaped_glyph_records MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR
+            "qsg_atlas.warm_lazy.warm_shaped_glyph_records should be positive "
+            "when qsg_atlas.prepare_count is positive")
+    endif()
+    if(NOT warm_covered_glyph_records MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR
+            "qsg_atlas.warm_lazy.warm_covered_glyph_records should be positive "
+            "when qsg_atlas.prepare_count is positive")
+    endif()
+endif()
+foreach(zero_counter IN ITEMS
+    warm_failed_glyph_records
+    warm_missing_string_indexes
+    warm_invalid_string_indexes
+    warm_unsupported_images
+    warm_failed_inserts
+    lazy_failed_inserts
+    incomplete_frames)
+    vnm_terminal_read_json_field(zero_value
+        "${metrics_text}" "${metrics_path}" qsg_atlas warm_lazy ${zero_counter})
+    if(NOT zero_value STREQUAL "0")
+        message(FATAL_ERROR
+            "qsg_atlas.warm_lazy.${zero_counter} should be zero, got ${zero_value}")
+    endif()
 endforeach()
 
 vnm_terminal_read_json_field(producer_text_runs_considered
