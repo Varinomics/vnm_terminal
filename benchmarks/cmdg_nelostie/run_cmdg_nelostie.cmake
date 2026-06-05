@@ -9,6 +9,60 @@ function(vnm_terminal_read_json_field out_value json_text source_path)
     set(${out_value} "${value}" PARENT_SCOPE)
 endfunction()
 
+function(vnm_terminal_expect_renderer_frame_evidence json_text source_path)
+    vnm_terminal_read_json_field(evidence_counter_path
+        "${json_text}" "${source_path}" renderer_frame_evidence counter_path)
+    vnm_terminal_read_json_field(evidence_frame_count
+        "${json_text}" "${source_path}" renderer_frame_evidence frame_count)
+    vnm_terminal_read_json_field(evidence_frames_per_second
+        "${json_text}" "${source_path}" renderer_frame_evidence frames_per_second)
+
+    if(evidence_counter_path STREQUAL "renderer.paint_completed_frames")
+        vnm_terminal_read_json_field(producer_frame_count
+            "${json_text}" "${source_path}" renderer paint_completed_frames)
+    elseif(evidence_counter_path STREQUAL "qsg_atlas.render_count")
+        vnm_terminal_read_json_field(producer_frame_count
+            "${json_text}" "${source_path}" qsg_atlas render_count)
+    else()
+        message(FATAL_ERROR
+            "terminal metrics JSON reports unexpected renderer_frame_evidence.counter_path: "
+            "${evidence_counter_path}")
+    endif()
+
+    if(NOT evidence_frame_count STREQUAL producer_frame_count)
+        message(FATAL_ERROR
+            "terminal metrics JSON reports renderer_frame_evidence.frame_count="
+            "${evidence_frame_count}, expected "
+            "${evidence_counter_path}=${producer_frame_count}")
+    endif()
+
+    if(NOT evidence_frame_count MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR
+            "terminal metrics JSON reports no renderer frame evidence")
+    endif()
+
+    if(NOT evidence_frames_per_second GREATER 0)
+        message(FATAL_ERROR
+            "terminal metrics JSON reports non-positive renderer frame evidence FPS: "
+            "${evidence_frames_per_second}")
+    endif()
+
+    vnm_terminal_read_json_field(startup_first_output_elapsed_ms
+        "${json_text}" "${source_path}" startup first_output_elapsed_ms)
+    vnm_terminal_read_json_field(visible_first_frame_completed
+        "${json_text}" "${source_path}" startup visible_first_frame_completed)
+
+    if(NOT startup_first_output_elapsed_ms MATCHES "^[0-9]+$")
+        message(FATAL_ERROR
+            "terminal metrics JSON reports no startup first-output latency")
+    endif()
+
+    if(NOT visible_first_frame_completed)
+        message(FATAL_ERROR
+            "terminal metrics JSON reports no visible first-frame completion")
+    endif()
+endfunction()
+
 if(NOT DEFINED scene OR scene STREQUAL "")
     set(scene "AssemblyWinter2025")
 endif()
@@ -193,8 +247,6 @@ vnm_terminal_read_json_field(terminal_backend_error_count
     "${terminal_metrics_text}" "${terminal_metrics}" backend_error_count)
 vnm_terminal_read_json_field(terminal_timeout_expired
     "${terminal_metrics_text}" "${terminal_metrics}" timeout_expired)
-vnm_terminal_read_json_field(terminal_paint_completed_frames
-    "${terminal_metrics_text}" "${terminal_metrics}" renderer paint_completed_frames)
 
 if(NOT terminal_backend_error_count STREQUAL "0")
     message(FATAL_ERROR
@@ -205,9 +257,7 @@ if(terminal_timeout_expired)
     message(FATAL_ERROR "terminal metrics JSON reports a timeout")
 endif()
 
-if(NOT terminal_paint_completed_frames MATCHES "^[1-9][0-9]*$")
-    message(FATAL_ERROR "terminal metrics JSON reports no painted frames")
-endif()
+vnm_terminal_expect_renderer_frame_evidence("${terminal_metrics_text}" "${terminal_metrics}")
 
 vnm_terminal_read_json_field(cmdg_scene
     "${cmdg_metrics_text}" "${cmdg_metrics}" scene)

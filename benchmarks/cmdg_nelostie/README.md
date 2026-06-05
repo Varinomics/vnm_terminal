@@ -115,19 +115,31 @@ Run the canonical atlas gate with:
 ```
 
 The script configures a Release/profiling-off hardware-windowed CTest run,
-assigns the provided artifact tag, and writes `canonical_atlas_cmdg_gate.json`
-plus a Markdown summary under `artifacts/<tag>/`.
+assigns the provided artifact tag, copies each per-run terminal/CMDG metrics JSON
+under `artifacts/<tag>/per_run_metrics/`, and writes
+`canonical_atlas_cmdg_gate.json` plus a Markdown summary under
+`artifacts/<tag>/`.
 
-The gate treats terminal `paint_frames_per_second`, CMDG
+The gate treats terminal `renderer_frame_evidence.frames_per_second`, CMDG
 `draw_frames_per_second`, and CMDG `scene_frames_per_second` as evidence fields.
-The pass/fail checks require zero backend errors/timeouts, canonical atlas
-metrics to be present, positive atlas budget counters, and zero atlas failed
-inserts. When `-ArchivedBaselineComparisonJson` is supplied, the gate also
-requires at least a 25% median terminal-paint FPS improvement for the motivating
-scenes (`Plasma` and `ParticleVortex`) and no more than a 5% median regression
-across CMDG draw FPS and CMDG scene FPS for every archived-comparison scene.
-Terminal paint FPS remains reported for every scene because it is still the
-renderer-side evidence field.
+The terminal evidence records the counter it used, either
+`renderer.paint_completed_frames` or canonical atlas `qsg_atlas.render_count`.
+The pass/fail checks require zero backend errors/timeouts, positive renderer
+frame evidence above the absolute renderer-FPS floor, canonical atlas metrics to
+be present, positive atlas budget counters, and zero atlas failed inserts. The
+per-run records include producer-sourced `qsg_atlas.producer` counters for shaped
+work built versus reused; the legacy `renderer.text_content_*` counters are not
+atlas reuse evidence. When `-ArchivedBaselineComparisonJson`
+is supplied, the gate also requires at least a 25% median terminal renderer
+frame FPS improvement for the motivating scenes (`Plasma` and `ParticleVortex`)
+and no more than a 5% median regression across CMDG draw FPS and CMDG scene FPS
+for every archived-comparison scene. Terminal paint FPS remains reported for
+diagnostics, but it is not the canonical atlas frame-evidence counter when atlas
+render frames are available. The archived per-run records also preserve renderer
+frame time, first-output startup latency, terminal app elapsed time, atlas
+memory, glyph misses, page pressure, visible first-frame completion evidence,
+and cold-glyph/frame-impact proxy counters such as rasterized glyphs and
+glyph-buffer upload counts.
 
 By default the runner builds `THIRD_PARTY/CMDG/CMDG/CMDG.csproj` in Release
 and uses the resulting `CMDG.exe`. To run against an external/prebuilt CMDG,

@@ -148,6 +148,7 @@ struct Runtime_state
 {
     int                backend_error_count = 0;
     int                process_exit_code   = 0;
+    qint64             first_output_elapsed_ms = -1;
     VNM_TerminalSurface::Exit_reason process_exit_reason =
         VNM_TerminalSurface::Exit_reason::EXITED;
     bool               output_seen     = false;
@@ -1651,6 +1652,14 @@ void append_profile_counter(
     std::uint64_t              value)
 {
     stream << "  " << name << '=' << static_cast<qulonglong>(value) << '\n';
+}
+
+void append_profile_bool(
+    QTextStream&               stream,
+    const char*                name,
+    bool                       value)
+{
+    stream << "  " << name << '=' << (value ? "true" : "false") << '\n';
 }
 
 template<typename Frame_stats>
@@ -3239,8 +3248,15 @@ void append_qsg_atlas_profile_text(
     QTextStream&                         stream,
     const term::Qsg_atlas_frame_report&  report)
 {
+    const term::Glyph_coverage_counts& coverage =
+        report.frame_build.glyph_coverage;
+
     stream << "qsg_atlas\n";
     stream << "  renderer=atlas\n";
+    stream << "  sampler_mode="
+        << QString::fromLatin1(
+            term::qsg_atlas_sampler_mode_name(report.render.glyph_sampler_mode))
+        << '\n';
     append_profile_counter(stream, "capture_count", report.capture_count);
     append_profile_counter(stream, "prepare_count", report.prepare_count);
     append_profile_counter(stream, "render_count", report.render_count);
@@ -3258,8 +3274,180 @@ void append_qsg_atlas_profile_text(
         << (report.render_target_non_null ? "true" : "false") << '\n';
     stream << "  rhi_non_null=" << (report.rhi_non_null ? "true" : "false") << '\n';
     stream << "  drew=" << (report.drew ? "true" : "false") << '\n';
+    append_profile_bool(
+        stream,
+        "coverage_texture_created",
+        report.coverage_texture_created);
+    append_profile_bool(
+        stream,
+        "coverage_upload_recorded",
+        report.coverage_upload_recorded);
     append_profile_counter(stream, "rasterized_glyphs", report.rasterized_glyphs);
     append_profile_counter(stream, "atlas_page_count", report.atlas_page_count);
+    append_profile_counter(
+        stream,
+        "max_glyph_instance_page",
+        static_cast<std::uint64_t>(std::max(
+            0,
+            report.frame_build.max_glyph_instance_page)));
+    const term::Qsg_atlas_producer_summary& producer = report.producer;
+    stream << "  producer\n";
+    append_profile_counter(
+        stream,
+        "text_runs_considered",
+        producer.text_runs_considered);
+    append_profile_counter(stream, "text_runs_empty", producer.text_runs_empty);
+    append_profile_counter(
+        stream,
+        "shape_cache_lookups",
+        producer.shape_cache_lookups);
+    append_profile_counter(stream, "shape_cache_hits", producer.shape_cache_hits);
+    append_profile_counter(
+        stream,
+        "shape_cache_misses",
+        producer.shape_cache_misses);
+    append_profile_counter(
+        stream,
+        "shape_cache_inserts",
+        producer.shape_cache_inserts);
+    append_profile_counter(stream, "shape_cache_pruned", producer.shape_cache_pruned);
+    append_profile_counter(
+        stream,
+        "shape_cache_entries",
+        producer.shape_cache_entries);
+    append_profile_counter(stream, "shaped_runs_built", producer.shaped_runs_built);
+    append_profile_counter(
+        stream,
+        "shaped_runs_reused",
+        producer.shaped_runs_reused);
+    append_profile_counter(
+        stream,
+        "shaped_glyph_records_built",
+        producer.shaped_glyph_records_built);
+    append_profile_counter(
+        stream,
+        "shaped_glyph_records_reused",
+        producer.shaped_glyph_records_reused);
+    append_profile_counter(
+        stream,
+        "presentation_run_scans",
+        producer.presentation_run_scans);
+    append_profile_counter(
+        stream,
+        "presentation_source_scans",
+        producer.presentation_source_scans);
+    append_profile_counter(
+        stream,
+        "presentation_fast_text_runs",
+        producer.presentation_fast_text_runs);
+    append_profile_counter(
+        stream,
+        "presentation_emoji_runs",
+        producer.presentation_emoji_runs);
+    append_profile_counter(
+        stream,
+        "slot_resolutions_built",
+        producer.slot_resolutions_built);
+    append_profile_counter(
+        stream,
+        "slot_resolutions_reused",
+        producer.slot_resolutions_reused);
+    append_profile_counter(stream, "simple_path_attempts", producer.simple_path_attempts);
+    append_profile_counter(stream, "simple_path_used", producer.simple_path_used);
+    append_profile_counter(stream, "simple_path_fallbacks", producer.simple_path_fallbacks);
+    stream << "  placement\n";
+    append_profile_counter(
+        stream,
+        "snapped_origin_failures",
+        static_cast<std::uint64_t>(report.frame_build.snapped_origin_failures));
+    stream << "  misses\n";
+    append_profile_counter(
+        stream,
+        "glyph_missed_instances",
+        static_cast<std::uint64_t>(report.frame_build.glyph_missed_instances));
+    append_profile_counter(
+        stream,
+        "glyph_coverage_failures",
+        static_cast<std::uint64_t>(report.frame_build.glyph_coverage_failures));
+    append_profile_counter(
+        stream,
+        "glyph_atlas_insert_failures",
+        static_cast<std::uint64_t>(report.frame_build.glyph_atlas_insert_failures));
+    if (report.frame_build.first_glyph_miss.valid) {
+        const term::Qsg_atlas_glyph_miss_diagnostic& miss =
+            report.frame_build.first_glyph_miss;
+        stream << "  first_glyph_miss\n";
+        stream << "  cause="
+            << QString::fromLatin1(
+                term::qsg_atlas_glyph_miss_cause_name(miss.cause))
+            << '\n';
+        stream << "  coverage_kind="
+            << QString::fromLatin1(
+                term::qsg_atlas_glyph_coverage_kind_name(
+                    miss.image.coverage_kind))
+            << '\n';
+        stream << "  presentation="
+            << QString::fromLatin1(
+                term::qsg_atlas_glyph_image_presentation_name(
+                    miss.image.presentation))
+            << '\n';
+        append_profile_counter(
+            stream,
+            "glyph_index",
+            static_cast<std::uint64_t>(miss.image.glyph_index));
+        stream << "  fallback_face_id="
+            << profile_string_literal(miss.image.fallback_face_id)
+            << '\n';
+        append_profile_counter(
+            stream,
+            "source_format",
+            static_cast<std::uint64_t>(miss.image.source_format));
+        append_profile_counter(
+            stream,
+            "source_string_start",
+            static_cast<std::uint64_t>(miss.image.source_string_start));
+        append_profile_counter(
+            stream,
+            "source_string_end",
+            static_cast<std::uint64_t>(miss.image.source_string_end));
+        append_profile_counter(
+            stream,
+            "atlas_page_count",
+            static_cast<std::uint64_t>(miss.atlas_page_count));
+        append_profile_counter(
+            stream,
+            "atlas_page_budget",
+            static_cast<std::uint64_t>(miss.atlas_page_budget));
+    }
+    stream << "  coverage\n";
+    append_profile_counter(
+        stream,
+        "grayscale_masks",
+        static_cast<std::uint64_t>(coverage.grayscale_masks));
+    append_profile_counter(
+        stream,
+        "lcd_rgb_masks",
+        static_cast<std::uint64_t>(coverage.lcd_rgb_masks));
+    append_profile_counter(
+        stream,
+        "lcd_bgr_masks",
+        static_cast<std::uint64_t>(coverage.lcd_bgr_masks));
+    append_profile_counter(
+        stream,
+        "color_images",
+        static_cast<std::uint64_t>(coverage.color_images));
+    append_profile_counter(
+        stream,
+        "ambiguous_images",
+        static_cast<std::uint64_t>(coverage.ambiguous_images));
+    append_profile_counter(
+        stream,
+        "unsupported_images",
+        static_cast<std::uint64_t>(coverage.unsupported_images));
+    append_profile_counter(
+        stream,
+        "missed_images",
+        static_cast<std::uint64_t>(coverage.missed_images));
     stream << "  buffer_upload\n";
     append_profile_counter(
         stream,
@@ -3274,6 +3462,29 @@ void append_qsg_atlas_profile_text(
         stream,
         "atlas_failed_inserts",
         report.render.atlas_failed_inserts);
+    append_profile_counter(
+        stream,
+        "shaped_text_runs",
+        static_cast<std::uint64_t>(report.render.shaped_text_runs));
+    append_profile_counter(
+        stream,
+        "shaped_glyph_records",
+        static_cast<std::uint64_t>(report.render.shaped_glyph_records));
+    append_profile_counter(
+        stream,
+        "shaped_missing_string_indexes",
+        static_cast<std::uint64_t>(
+            report.render.shaped_missing_string_indexes));
+    append_profile_counter(
+        stream,
+        "shaped_invalid_string_indexes",
+        static_cast<std::uint64_t>(
+            report.render.shaped_invalid_string_indexes));
+    append_profile_bool(
+        stream,
+        "atlas_page_pressure",
+        report.render.atlas_page_pressure);
+    stream << "  render\n";
     append_profile_counter(stream, "draw_calls", report.render.draw_calls);
     append_profile_counter(stream, "rect_draw_calls", report.render.rect_draw_calls);
     append_profile_counter(stream, "glyph_draw_calls", report.render.glyph_draw_calls);
@@ -3285,6 +3496,23 @@ void append_qsg_atlas_profile_text(
         stream,
         "glyph_buffer_uploaded_bytes",
         report.render.glyph_buffer.uploaded_bytes);
+    stream << "  capabilities\n";
+    append_profile_bool(
+        stream,
+        "glyph_shader_package_available",
+        report.render.glyph_shader_package_available);
+    append_profile_bool(
+        stream,
+        "dual_source_probe_shader_package_available",
+        report.render.dual_source_probe_shader_package_available);
+    append_profile_bool(
+        stream,
+        "dual_source_blend_factors_available",
+        report.render.dual_source_blend_factors_available);
+    append_profile_bool(
+        stream,
+        "dual_source_blend_factors_runtime_probe",
+        report.render.dual_source_blend_factors_runtime_probe);
 }
 
 bool write_profile_text(
@@ -3377,6 +3605,79 @@ void insert_json_counter(
         QString::number(static_cast<qulonglong>(value)));
 }
 
+constexpr const char* k_runtime_frame_rate_elapsed_basis =
+    "app_exec_elapsed_ms_including_process_startup_excluding_profile_write";
+constexpr const char* k_paint_completed_frame_counter_path =
+    "renderer.paint_completed_frames";
+constexpr const char* k_qsg_atlas_render_frame_counter_path =
+    "qsg_atlas.render_count";
+
+struct renderer_frame_evidence_t
+{
+    const char*   counter_path = k_paint_completed_frame_counter_path;
+    std::uint64_t frame_count  = 0U;
+};
+
+double frames_per_second(
+    std::uint64_t frame_count,
+    qint64        elapsed_ms)
+{
+    return elapsed_ms > 0
+        ? static_cast<double>(frame_count) * 1000.0 / static_cast<double>(elapsed_ms)
+        : 0.0;
+}
+
+renderer_frame_evidence_t renderer_frame_evidence(
+    const term::terminal_renderer_cumulative_stats_t& cumulative_stats,
+    const term::Qsg_atlas_frame_report&               atlas_report)
+{
+    if (atlas_report.render_count > 0U) {
+        return {
+            k_qsg_atlas_render_frame_counter_path,
+            atlas_report.render_count,
+        };
+    }
+
+    return {
+        k_paint_completed_frame_counter_path,
+        cumulative_stats.paint_completed_frames,
+    };
+}
+
+QJsonObject renderer_frame_evidence_json(
+    const renderer_frame_evidence_t& evidence,
+    qint64                           elapsed_ms)
+{
+    QJsonObject object;
+    object.insert(
+        QStringLiteral("counter_path"),
+        QString::fromLatin1(evidence.counter_path));
+    insert_json_counter(object, "frame_count", evidence.frame_count);
+    object.insert(
+        QStringLiteral("frames_per_second"),
+        frames_per_second(evidence.frame_count, elapsed_ms));
+    object.insert(
+        QStringLiteral("elapsed_basis"),
+        QString::fromLatin1(k_runtime_frame_rate_elapsed_basis));
+    return object;
+}
+
+QJsonObject startup_metrics_json(
+    const Runtime_state&              state,
+    const renderer_frame_evidence_t&  frame_evidence)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("first_output_elapsed_ms"), state.first_output_elapsed_ms);
+    object.insert(QStringLiteral("output_seen"), state.output_seen);
+    object.insert(
+        QStringLiteral("visible_first_frame_completed"),
+        frame_evidence.frame_count > 0U);
+    object.insert(
+        QStringLiteral("visible_first_frame_counter_path"),
+        QString::fromLatin1(frame_evidence.counter_path));
+    return object;
+}
+
 QJsonObject profiling_measurement_json(const metrics_timing_t& timing)
 {
     QJsonObject object;
@@ -3425,6 +3726,88 @@ QJsonObject atlas_buffer_summary_json(
     return object;
 }
 
+QJsonObject glyph_coverage_counts_json(
+    const term::Qsg_atlas_frame_build_summary& summary)
+{
+    const term::Glyph_coverage_counts& counts = summary.glyph_coverage;
+
+    QJsonObject object;
+    insert_json_counter(object, "grayscale_masks", counts.grayscale_masks);
+    insert_json_counter(object, "lcd_rgb_masks", counts.lcd_rgb_masks);
+    insert_json_counter(object, "lcd_bgr_masks", counts.lcd_bgr_masks);
+    insert_json_counter(object, "color_images", counts.color_images);
+    insert_json_counter(object, "ambiguous_images", counts.ambiguous_images);
+    insert_json_counter(object, "unsupported_images", counts.unsupported_images);
+    insert_json_counter(object, "missed_images", counts.missed_images);
+    return object;
+}
+
+QJsonObject atlas_first_glyph_miss_json(
+    const term::Qsg_atlas_glyph_miss_diagnostic& miss)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("valid"), miss.valid);
+    object.insert(
+        QStringLiteral("cause"),
+        QString::fromLatin1(term::qsg_atlas_glyph_miss_cause_name(miss.cause)));
+    object.insert(
+        QStringLiteral("coverage_kind"),
+        QString::fromLatin1(
+            term::qsg_atlas_glyph_coverage_kind_name(
+                miss.image.coverage_kind)));
+    object.insert(
+        QStringLiteral("presentation"),
+        QString::fromLatin1(
+            term::qsg_atlas_glyph_image_presentation_name(
+                miss.image.presentation)));
+    object.insert(
+        QStringLiteral("source_format"),
+        static_cast<int>(miss.image.source_format));
+    object.insert(QStringLiteral("source_width"), miss.image.source_size.width());
+    object.insert(QStringLiteral("source_height"), miss.image.source_size.height());
+    insert_json_counter(object, "glyph_index", miss.image.glyph_index);
+    object.insert(QStringLiteral("fallback_face_id"), miss.image.fallback_face_id);
+    insert_json_counter(object, "text_run_index", miss.image.text_run_index);
+    insert_json_counter(object, "glyph_run_index", miss.image.glyph_run_index);
+    insert_json_counter(
+        object,
+        "glyph_index_in_run",
+        miss.image.glyph_index_in_run);
+    insert_json_counter(
+        object,
+        "source_string_start",
+        miss.image.source_string_start);
+    insert_json_counter(object, "source_string_end", miss.image.source_string_end);
+    object.insert(QStringLiteral("tile_width"), miss.tile_size.width());
+    object.insert(QStringLiteral("tile_height"), miss.tile_size.height());
+    insert_json_counter(object, "tile_bytes_per_line", miss.tile_bytes_per_line);
+    insert_json_counter(object, "atlas_page_count", miss.atlas_page_count);
+    insert_json_counter(object, "atlas_page_budget", miss.atlas_page_budget);
+    object.insert(QStringLiteral("atlas_page_width"), miss.atlas_page_size.width());
+    object.insert(
+        QStringLiteral("atlas_page_height"),
+        miss.atlas_page_size.height());
+    return object;
+}
+
+QJsonObject atlas_capabilities_json(const term::Qsg_atlas_render_summary& summary)
+{
+    QJsonObject object;
+    object.insert(
+        QStringLiteral("glyph_shader_package_available"),
+        summary.glyph_shader_package_available);
+    object.insert(
+        QStringLiteral("dual_source_probe_shader_package_available"),
+        summary.dual_source_probe_shader_package_available);
+    object.insert(
+        QStringLiteral("dual_source_blend_factors_available"),
+        summary.dual_source_blend_factors_available);
+    object.insert(
+        QStringLiteral("dual_source_blend_factors_runtime_probe"),
+        summary.dual_source_blend_factors_runtime_probe);
+    return object;
+}
+
 QJsonObject atlas_render_summary_json(
     const term::Qsg_atlas_render_summary& summary)
 {
@@ -3437,20 +3820,20 @@ QJsonObject atlas_render_summary_json(
         atlas_buffer_summary_json(summary.glyph_buffer));
     insert_json_counter(
         object,
-        "direct_ascii_text_runs",
-        summary.direct_ascii_text_runs);
+        "shaped_text_runs",
+        summary.shaped_text_runs);
     insert_json_counter(
         object,
-        "qt_layout_text_runs",
-        summary.qt_layout_text_runs);
+        "shaped_glyph_records",
+        summary.shaped_glyph_records);
     insert_json_counter(
         object,
-        "direct_ascii_glyph_instances",
-        summary.direct_ascii_glyph_instances);
+        "shaped_missing_string_indexes",
+        summary.shaped_missing_string_indexes);
     insert_json_counter(
         object,
-        "qt_layout_glyph_instances",
-        summary.qt_layout_glyph_instances);
+        "shaped_invalid_string_indexes",
+        summary.shaped_invalid_string_indexes);
     insert_json_counter(
         object,
         "glyph_buffer_instances",
@@ -3485,6 +3868,7 @@ QJsonObject atlas_render_summary_json(
     insert_json_counter(object, "atlas_budget_bytes", summary.atlas_budget_bytes);
     insert_json_counter(object, "atlas_used_bytes", summary.atlas_used_bytes);
     insert_json_counter(object, "atlas_failed_inserts", summary.atlas_failed_inserts);
+    object.insert(QStringLiteral("atlas_page_pressure"), summary.atlas_page_pressure);
     object.insert(
         QStringLiteral("coverage_texture_uploaded"),
         summary.coverage_texture_uploaded);
@@ -3517,13 +3901,57 @@ QJsonObject atlas_render_summary_json(
     return object;
 }
 
-QJsonObject qsg_atlas_metrics_json(const VNM_TerminalSurface& surface)
+QJsonObject atlas_producer_summary_json(
+    const term::Qsg_atlas_producer_summary& summary)
+{
+    QJsonObject object;
+    insert_json_counter(object, "text_runs_considered", summary.text_runs_considered);
+    insert_json_counter(object, "text_runs_empty", summary.text_runs_empty);
+    insert_json_counter(object, "shape_cache_lookups", summary.shape_cache_lookups);
+    insert_json_counter(object, "shape_cache_hits", summary.shape_cache_hits);
+    insert_json_counter(object, "shape_cache_misses", summary.shape_cache_misses);
+    insert_json_counter(object, "shape_cache_inserts", summary.shape_cache_inserts);
+    insert_json_counter(object, "shape_cache_pruned", summary.shape_cache_pruned);
+    insert_json_counter(object, "shape_cache_entries", summary.shape_cache_entries);
+    insert_json_counter(object, "shaped_runs_built", summary.shaped_runs_built);
+    insert_json_counter(object, "shaped_runs_reused", summary.shaped_runs_reused);
+    insert_json_counter(
+        object,
+        "shaped_glyph_records_built",
+        summary.shaped_glyph_records_built);
+    insert_json_counter(
+        object,
+        "shaped_glyph_records_reused",
+        summary.shaped_glyph_records_reused);
+    insert_json_counter(
+        object,
+        "presentation_run_scans",
+        summary.presentation_run_scans);
+    insert_json_counter(
+        object,
+        "presentation_source_scans",
+        summary.presentation_source_scans);
+    insert_json_counter(
+        object,
+        "presentation_fast_text_runs",
+        summary.presentation_fast_text_runs);
+    insert_json_counter(
+        object,
+        "presentation_emoji_runs",
+        summary.presentation_emoji_runs);
+    insert_json_counter(object, "slot_resolutions_built", summary.slot_resolutions_built);
+    insert_json_counter(object, "slot_resolutions_reused", summary.slot_resolutions_reused);
+    insert_json_counter(object, "simple_path_attempts", summary.simple_path_attempts);
+    insert_json_counter(object, "simple_path_used", summary.simple_path_used);
+    insert_json_counter(object, "simple_path_fallbacks", summary.simple_path_fallbacks);
+    return object;
+}
+
+QJsonObject qsg_atlas_metrics_json(const term::Qsg_atlas_frame_report& report)
 {
     QJsonObject object;
     object.insert(QStringLiteral("renderer"), QStringLiteral("atlas"));
 
-    const term::Qsg_atlas_frame_report report =
-        term::VNM_TerminalSurface_render_bridge::qsg_atlas_frame(surface);
     insert_json_counter(object, "capture_count", report.capture_count);
     insert_json_counter(object, "prepare_count", report.prepare_count);
     insert_json_counter(object, "render_count", report.render_count);
@@ -3537,11 +3965,47 @@ QJsonObject qsg_atlas_metrics_json(const VNM_TerminalSurface& surface)
     object.insert(QStringLiteral("render_target_non_null"), report.render_target_non_null);
     object.insert(QStringLiteral("rhi_non_null"), report.rhi_non_null);
     object.insert(QStringLiteral("drew"), report.drew);
-    object.insert(QStringLiteral("r8_texture_created"), report.r8_texture_created);
-    object.insert(QStringLiteral("r8_upload_recorded"), report.r8_upload_recorded);
+    object.insert(QStringLiteral("coverage_texture_created"), report.coverage_texture_created);
+    object.insert(QStringLiteral("coverage_upload_recorded"), report.coverage_upload_recorded);
     object.insert(QStringLiteral("raw_font_rasterized"), report.raw_font_rasterized);
     insert_json_counter(object, "rasterized_glyphs", report.rasterized_glyphs);
     insert_json_counter(object, "atlas_page_count", report.atlas_page_count);
+    insert_json_counter(
+        object,
+        "max_glyph_instance_page",
+        std::max(0, report.frame_build.max_glyph_instance_page));
+    insert_json_counter(
+        object,
+        "snapped_origin_failures",
+        report.frame_build.snapped_origin_failures);
+    insert_json_counter(
+        object,
+        "glyph_missed_instances",
+        report.frame_build.glyph_missed_instances);
+    insert_json_counter(
+        object,
+        "glyph_coverage_failures",
+        report.frame_build.glyph_coverage_failures);
+    insert_json_counter(
+        object,
+        "glyph_atlas_insert_failures",
+        report.frame_build.glyph_atlas_insert_failures);
+    object.insert(
+        QStringLiteral("coverage"),
+        glyph_coverage_counts_json(report.frame_build));
+    object.insert(
+        QStringLiteral("first_glyph_miss"),
+        atlas_first_glyph_miss_json(report.frame_build.first_glyph_miss));
+    object.insert(
+        QStringLiteral("sampler_mode"),
+        QString::fromLatin1(
+            term::qsg_atlas_sampler_mode_name(report.render.glyph_sampler_mode)));
+    object.insert(
+        QStringLiteral("capabilities"),
+        atlas_capabilities_json(report.render));
+    object.insert(
+        QStringLiteral("producer"),
+        atlas_producer_summary_json(report.producer));
     object.insert(QStringLiteral("buffer_upload"), atlas_render_summary_json(report.render));
     return object;
 }
@@ -4049,6 +4513,10 @@ QJsonObject terminal_metrics_json(
 {
     const term::terminal_renderer_cumulative_stats_t cumulative_stats =
         term::VNM_TerminalSurface_render_bridge::cumulative_renderer_stats(surface);
+    const term::Qsg_atlas_frame_report atlas_report =
+        term::VNM_TerminalSurface_render_bridge::qsg_atlas_frame(surface);
+    const renderer_frame_evidence_t frame_evidence =
+        renderer_frame_evidence(cumulative_stats, atlas_report);
 
     QJsonObject frame;
     insert_renderer_frame_stats(frame, cumulative_stats.frame);
@@ -4406,18 +4874,22 @@ QJsonObject terminal_metrics_json(
     root.insert(QStringLiteral("output_seen"), state.output_seen);
     root.insert(QStringLiteral("process_exited"), state.process_exited);
     root.insert(QStringLiteral("timeout_expired"), state.timeout_expired);
-    root.insert(QStringLiteral("paint_frames_per_second"),
-        timing.app_elapsed_ms > 0
-            ? static_cast<double>(cumulative_stats.paint_completed_frames) * 1000.0 /
-                static_cast<double>(timing.app_elapsed_ms)
-            : 0.0);
+    root.insert(
+        QStringLiteral("paint_frames_per_second"),
+        frames_per_second(cumulative_stats.paint_completed_frames, timing.app_elapsed_ms));
     root.insert(
         QStringLiteral("paint_frames_per_second_elapsed_basis"),
-        QStringLiteral("app_exec_elapsed_ms_including_process_startup_excluding_profile_write"));
+        QString::fromLatin1(k_runtime_frame_rate_elapsed_basis));
+    root.insert(
+        QStringLiteral("renderer_frame_evidence"),
+        renderer_frame_evidence_json(frame_evidence, timing.app_elapsed_ms));
+    root.insert(
+        QStringLiteral("startup"),
+        startup_metrics_json(state, frame_evidence));
     root.insert(QStringLiteral("profiling"), profiling_measurement_json(timing));
     root.insert(QStringLiteral("surface_geometry"), surface_geometry_json(surface));
     root.insert(QStringLiteral("renderer"), renderer);
-    root.insert(QStringLiteral("qsg_atlas"), qsg_atlas_metrics_json(surface));
+    root.insert(QStringLiteral("qsg_atlas"), qsg_atlas_metrics_json(atlas_report));
 
     return root;
 }
@@ -4785,6 +5257,8 @@ int main(int argc, char** argv)
         });
 
     Runtime_state state;
+    QElapsedTimer startup_elapsed_timer;
+    startup_elapsed_timer.start();
 
     QObject::connect(
         surface,
@@ -4799,7 +5273,10 @@ int main(int argc, char** argv)
         surface,
         &VNM_TerminalSurface::output_activity,
         surface,
-        [&state] {
+        [&state, &startup_elapsed_timer] {
+            if (!state.output_seen) {
+                state.first_output_elapsed_ms = startup_elapsed_timer.elapsed();
+            }
             state.output_seen = true;
         });
     QObject::connect(
