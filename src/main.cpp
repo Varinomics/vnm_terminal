@@ -1711,18 +1711,6 @@ void append_renderer_frame_stats_text(
             "frame_packed_text_disabled_cells_skipped",
             static_cast<std::uint64_t>(stats.packed_text_disabled_cells_skipped));
     }
-    if constexpr (requires { stats.packed_graphic_candidates_classified; }) {
-        append_profile_counter(
-            stream,
-            "frame_packed_graphic_candidates_classified",
-            static_cast<std::uint64_t>(stats.packed_graphic_candidates_classified));
-    }
-    if constexpr (requires { stats.packed_graphic_cells_inlined; }) {
-        append_profile_counter(
-            stream,
-            "frame_packed_graphic_cells_inlined",
-            static_cast<std::uint64_t>(stats.packed_graphic_cells_inlined));
-    }
     if constexpr (requires { stats.packed_data_passes_skipped; }) {
         append_profile_counter(
             stream,
@@ -1769,10 +1757,6 @@ void append_renderer_frame_stats_text(
         stream,
         "frame_text_cells_rendered_as_text",
         static_cast<std::uint64_t>(stats.text_cells_rendered_as_text));
-    append_profile_counter(
-        stream,
-        "frame_text_cells_rendered_as_graphic",
-        static_cast<std::uint64_t>(stats.text_cells_rendered_as_graphic));
     append_profile_counter(
         stream,
         "frame_text_cells_printable_ascii",
@@ -1847,14 +1831,6 @@ void append_renderer_frame_stats_text(
         static_cast<std::uint64_t>(stats.cursor_rects_emitted));
     append_profile_counter(
         stream,
-        "frame_cursor_graphic_rects_emitted",
-        static_cast<std::uint64_t>(stats.cursor_graphic_rects_emitted));
-    append_profile_counter(
-        stream,
-        "frame_cursor_graphic_arcs_emitted",
-        static_cast<std::uint64_t>(stats.cursor_graphic_arcs_emitted));
-    append_profile_counter(
-        stream,
         "frame_overlay_rects_emitted",
         static_cast<std::uint64_t>(stats.overlay_rects_emitted));
     append_profile_counter(
@@ -1899,14 +1875,6 @@ void append_renderer_frame_stats_text(
             "frame_packed_text_utf8_output_bytes",
             static_cast<std::uint64_t>(stats.packed_text_utf8_output_bytes));
     }
-    append_profile_counter(
-        stream,
-        "frame_packed_graphic_spans",
-        static_cast<std::uint64_t>(stats.packed_graphic_spans));
-    append_profile_counter(
-        stream,
-        "frame_packed_graphic_cells",
-        static_cast<std::uint64_t>(stats.packed_graphic_cells));
     append_profile_counter(
         stream,
         "frame_packed_payload_bytes",
@@ -2790,9 +2758,6 @@ void append_renderer_stats_text(
         << "  cursor_layer_rebuilt="
         << (stats.cursor_layer_rebuilt ? "true" : "false") << '\n';
     stream
-        << "  cursor_graphic_layer_rebuilt="
-        << (stats.cursor_graphic_layer_rebuilt ? "true" : "false") << '\n';
-    stream
         << "  cursor_text_layer_rebuilt="
         << (stats.cursor_text_layer_rebuilt ? "true" : "false") << '\n';
     stream
@@ -3092,10 +3057,6 @@ void append_cumulative_renderer_stats_text(
     append_profile_counter(stream, "graphic_layer_rebuilds",    stats.graphic_layer_rebuilds);
     append_profile_counter(stream, "decoration_layer_rebuilds", stats.decoration_layer_rebuilds);
     append_profile_counter(stream, "cursor_layer_rebuilds",     stats.cursor_layer_rebuilds);
-    append_profile_counter(
-        stream,
-        "cursor_graphic_layer_rebuilds",
-        stats.cursor_graphic_layer_rebuilds);
     append_profile_counter(stream, "cursor_text_layer_rebuilds", stats.cursor_text_layer_rebuilds);
     append_profile_counter(stream, "overlay_layer_rebuilds",     stats.overlay_layer_rebuilds);
     append_profile_counter(stream, "background_rows_rebuilt",    stats.background_rows_rebuilt);
@@ -3355,6 +3316,74 @@ void append_qsg_atlas_profile_text(
     append_profile_counter(stream, "simple_path_attempts", producer.simple_path_attempts);
     append_profile_counter(stream, "simple_path_used", producer.simple_path_used);
     append_profile_counter(stream, "simple_path_fallbacks", producer.simple_path_fallbacks);
+    const term::Qsg_atlas_warm_lazy_summary& warm_lazy = report.warm_lazy;
+    stream << "  warm_lazy\n";
+    append_profile_bool(stream, "warm_completed", warm_lazy.warm_completed);
+    append_profile_counter(stream, "warm_epoch", warm_lazy.warm_epoch);
+    append_profile_counter(stream, "warm_seed_strings", warm_lazy.warm_seed_strings);
+    append_profile_counter(
+        stream,
+        "warm_shaped_glyph_records",
+        warm_lazy.warm_shaped_glyph_records);
+    append_profile_counter(
+        stream,
+        "warm_covered_glyph_records",
+        warm_lazy.warm_covered_glyph_records);
+    append_profile_counter(
+        stream,
+        "warm_skipped_glyph_records",
+        warm_lazy.warm_skipped_glyph_records);
+    append_profile_counter(
+        stream,
+        "warm_environment_skipped_glyph_records",
+        warm_lazy.warm_environment_skipped_glyph_records);
+    append_profile_counter(
+        stream,
+        "warm_failed_glyph_records",
+        warm_lazy.warm_failed_glyph_records);
+    append_profile_counter(
+        stream,
+        "warm_missing_string_indexes",
+        warm_lazy.warm_missing_string_indexes);
+    append_profile_counter(
+        stream,
+        "warm_invalid_string_indexes",
+        warm_lazy.warm_invalid_string_indexes);
+    append_profile_counter(
+        stream,
+        "warm_unsupported_images",
+        warm_lazy.warm_unsupported_images);
+    append_profile_counter(stream, "warm_cache_hits", warm_lazy.warm_cache_hits);
+    append_profile_counter(
+        stream,
+        "warm_insert_attempts",
+        warm_lazy.warm_insert_attempts);
+    append_profile_counter(stream, "warm_inserts", warm_lazy.warm_inserts);
+    append_profile_counter(
+        stream,
+        "warm_failed_inserts",
+        warm_lazy.warm_failed_inserts);
+    stream << "  warm_elapsed_ms=" << warm_lazy.warm_elapsed_ms << '\n';
+    append_profile_bool(stream, "warm_page_pressure", warm_lazy.warm_page_pressure);
+    append_profile_counter(
+        stream,
+        "lazy_insert_attempts",
+        warm_lazy.lazy_insert_attempts);
+    append_profile_counter(stream, "lazy_inserts", warm_lazy.lazy_inserts);
+    append_profile_counter(
+        stream,
+        "lazy_failed_inserts",
+        warm_lazy.lazy_failed_inserts);
+    stream << "  lazy_elapsed_ms=" << warm_lazy.lazy_elapsed_ms << '\n';
+    append_profile_counter(
+        stream,
+        "lazy_max_insert_us",
+        warm_lazy.lazy_max_insert_us);
+    append_profile_counter(stream, "lazy_frames", warm_lazy.lazy_frames);
+    append_profile_counter(
+        stream,
+        "incomplete_frames",
+        warm_lazy.incomplete_frames);
     stream << "  placement\n";
     append_profile_counter(
         stream,
@@ -3947,6 +3976,76 @@ QJsonObject atlas_producer_summary_json(
     return object;
 }
 
+QJsonObject atlas_warm_lazy_summary_json(
+    const term::Qsg_atlas_warm_lazy_summary& summary)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("warm_completed"), summary.warm_completed);
+    insert_json_counter(object, "warm_epoch", summary.warm_epoch);
+    insert_json_counter(object, "warm_seed_strings", summary.warm_seed_strings);
+    insert_json_counter(
+        object,
+        "warm_shaped_glyph_records",
+        summary.warm_shaped_glyph_records);
+    insert_json_counter(
+        object,
+        "warm_covered_glyph_records",
+        summary.warm_covered_glyph_records);
+    insert_json_counter(
+        object,
+        "warm_skipped_glyph_records",
+        summary.warm_skipped_glyph_records);
+    insert_json_counter(
+        object,
+        "warm_environment_skipped_glyph_records",
+        summary.warm_environment_skipped_glyph_records);
+    insert_json_counter(
+        object,
+        "warm_failed_glyph_records",
+        summary.warm_failed_glyph_records);
+    insert_json_counter(
+        object,
+        "warm_missing_string_indexes",
+        summary.warm_missing_string_indexes);
+    insert_json_counter(
+        object,
+        "warm_invalid_string_indexes",
+        summary.warm_invalid_string_indexes);
+    insert_json_counter(
+        object,
+        "warm_unsupported_images",
+        summary.warm_unsupported_images);
+    insert_json_counter(object, "warm_cache_hits", summary.warm_cache_hits);
+    insert_json_counter(
+        object,
+        "warm_insert_attempts",
+        summary.warm_insert_attempts);
+    insert_json_counter(object, "warm_inserts", summary.warm_inserts);
+    insert_json_counter(
+        object,
+        "warm_failed_inserts",
+        summary.warm_failed_inserts);
+    object.insert(QStringLiteral("warm_elapsed_ms"), summary.warm_elapsed_ms);
+    object.insert(QStringLiteral("warm_page_pressure"), summary.warm_page_pressure);
+    insert_json_counter(
+        object,
+        "lazy_insert_attempts",
+        summary.lazy_insert_attempts);
+    insert_json_counter(object, "lazy_inserts", summary.lazy_inserts);
+    insert_json_counter(
+        object,
+        "lazy_failed_inserts",
+        summary.lazy_failed_inserts);
+    object.insert(QStringLiteral("lazy_elapsed_ms"), summary.lazy_elapsed_ms);
+    insert_json_counter(
+        object,
+        "lazy_max_insert_us",
+        summary.lazy_max_insert_us);
+    insert_json_counter(object, "lazy_frames", summary.lazy_frames);
+    insert_json_counter(object, "incomplete_frames", summary.incomplete_frames);
+    return object;
+}
+
 QJsonObject qsg_atlas_metrics_json(const term::Qsg_atlas_frame_report& report)
 {
     QJsonObject object;
@@ -4006,6 +4105,9 @@ QJsonObject qsg_atlas_metrics_json(const term::Qsg_atlas_frame_report& report)
     object.insert(
         QStringLiteral("producer"),
         atlas_producer_summary_json(report.producer));
+    object.insert(
+        QStringLiteral("warm_lazy"),
+        atlas_warm_lazy_summary_json(report.warm_lazy));
     object.insert(QStringLiteral("buffer_upload"), atlas_render_summary_json(report.render));
     return object;
 }
@@ -4063,10 +4165,6 @@ void insert_renderer_simple_content_stats(
         object,
         "route_qt_text_layout_cells",
         stats.route_qt_text_layout_cells);
-    insert_json_counter(
-        object,
-        "route_graphic_geometry_cells",
-        stats.route_graphic_geometry_cells);
     insert_json_counter(object, "route_fallback_cells", stats.route_fallback_cells);
     insert_json_counter(object, "rejection_none_cells", stats.rejection_none_cells);
     insert_json_counter(
@@ -4118,10 +4216,6 @@ void insert_renderer_simple_content_stats(
         "rejection_decoration_cells",
         stats.rejection_decoration_cells);
     insert_json_counter(object, "rejection_hyperlink_cells", stats.rejection_hyperlink_cells);
-    insert_json_counter(
-        object,
-        "rejection_terminal_graphic_cells",
-        stats.rejection_terminal_graphic_cells);
 }
 
 template<typename Frame_stats>
@@ -4158,10 +4252,6 @@ void insert_renderer_frame_stats(
         object,
         "packed_text_disabled_cells_skipped",
         stats.packed_text_disabled_cells_skipped);
-    insert_json_counter(
-        object,
-        "packed_graphic_candidates_classified",
-        stats.packed_graphic_candidates_classified);
     insert_json_counter(object, "packed_cells_appended", stats.packed_cells_appended);
     insert_json_counter(object, "dirty_row_lookup_count", stats.dirty_row_lookup_count);
     insert_json_counter(object, "cells_considered", stats.cells_considered);
@@ -4176,10 +4266,6 @@ void insert_renderer_frame_stats(
         object,
         "text_cells_rendered_as_text",
         stats.text_cells_rendered_as_text);
-    insert_json_counter(
-        object,
-        "text_cells_rendered_as_graphic",
-        stats.text_cells_rendered_as_graphic);
     insert_json_counter(
         object,
         "text_cells_printable_ascii",
@@ -4210,14 +4296,6 @@ void insert_renderer_frame_stats(
         "decoration_rects_emitted",
         stats.decoration_rects_emitted);
     insert_json_counter(object, "cursor_rects_emitted", stats.cursor_rects_emitted);
-    insert_json_counter(
-        object,
-        "cursor_graphic_rects_emitted",
-        stats.cursor_graphic_rects_emitted);
-    insert_json_counter(
-        object,
-        "cursor_graphic_arcs_emitted",
-        stats.cursor_graphic_arcs_emitted);
     insert_json_counter(object, "overlay_rects_emitted", stats.overlay_rects_emitted);
     insert_json_counter(object, "packed_rows", stats.packed_rows);
     insert_json_counter(object, "packed_text_spans", stats.packed_text_spans);
@@ -4249,8 +4327,6 @@ void insert_renderer_frame_stats(
             "packed_text_utf8_output_bytes",
             stats.packed_text_utf8_output_bytes);
     }
-    insert_json_counter(object, "packed_graphic_spans", stats.packed_graphic_spans);
-    insert_json_counter(object, "packed_graphic_cells", stats.packed_graphic_cells);
     insert_json_counter(object, "packed_payload_bytes", stats.packed_payload_bytes);
     object.insert(QStringLiteral("simple_content"), simple_content);
 }
@@ -4559,10 +4635,6 @@ QJsonObject terminal_metrics_json(
         renderer,
         "route_qt_text_layout_runs",
         cumulative_stats.route_qt_text_layout_runs);
-    insert_json_counter(
-        renderer,
-        "route_graphic_geometry_cells",
-        cumulative_stats.route_graphic_geometry_cells);
     insert_json_counter(renderer, "route_fallback_cells", cumulative_stats.route_fallback_cells);
     insert_text_layout_stats_json(renderer, cumulative_stats);
     if constexpr (requires { cumulative_stats.text_resource_descriptor_builds; }) {
@@ -4748,10 +4820,6 @@ QJsonObject terminal_metrics_json(
         renderer,
         "cursor_layer_rebuilds",
         cumulative_stats.cursor_layer_rebuilds);
-    insert_json_counter(
-        renderer,
-        "cursor_graphic_layer_rebuilds",
-        cumulative_stats.cursor_graphic_layer_rebuilds);
     insert_json_counter(
         renderer,
         "cursor_text_layer_rebuilds",
