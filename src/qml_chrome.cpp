@@ -61,6 +61,7 @@ QObject* find_child_object(QObject& root, const QString& object_name)
 
 constexpr const char* k_terminal_chrome_qml = R"(
 import QtQuick
+import QtQuick.Window
 import VNM_Chrome
 
 Item {
@@ -78,11 +79,32 @@ Item {
     property real content_border_width: 0
     property real content_border_height: 0
     property real content_border_line_width: 0
+    property real device_pixel_ratio: Screen.devicePixelRatio
+    readonly property real base_resize_border_width: 6
+    readonly property real resize_border_physical_reduction: 2
+    readonly property real reduced_resize_border_width:
+        reduced_chrome_width(
+            base_resize_border_width,
+            resize_border_physical_reduction)
+    readonly property real base_titlebar_height: 32
+    readonly property real titlebar_physical_reduction: 2
+    readonly property real reduced_titlebar_height:
+        reduced_chrome_width(
+            base_titlebar_height,
+            titlebar_physical_reduction)
     readonly property bool content_border_visible:
         content_border_width > 0
         && content_border_height > 0
         && content_border_line_width > 0
     readonly property color content_border_color: active ? "#2a313c" : "#1f242c"
+
+    function reduced_chrome_width(logical_width, physical_reduction) {
+        var dpr = VNM_chrome_geometry.normalized_device_pixel_ratio(device_pixel_ratio)
+        return Math.max(
+            0,
+            VNM_chrome_geometry.snapped_logical_edge(logical_width, dpr)
+                - physical_reduction / dpr)
+    }
 
     signal move_requested()
     signal resize_requested(int edges)
@@ -108,7 +130,7 @@ Item {
     VNM_ChromeSideResizeLayer {
         anchors.fill: parent
         resize_enabled: root.resize_enabled
-        resize_border_width: 6
+        resize_border_width: root.reduced_resize_border_width
 
         onResize_requested: (edges) => root.resize_requested(edges)
     }
@@ -117,9 +139,9 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        height: 6
+        height: root.reduced_resize_border_width
         resize_enabled: root.resize_enabled
-        resize_border_width: 6
+        resize_border_width: root.reduced_resize_border_width
 
         onResize_requested: (edges) => root.resize_requested(edges)
     }
@@ -131,13 +153,13 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        height: Math.min(32, root.height)
+        height: Math.min(root.reduced_titlebar_height, root.height)
         theme: terminal_chrome_theme
         title: root.title
         active: root.active
         maximized: root.maximized
         resize_enabled: root.resize_enabled
-        resize_border_width: 6
+        resize_border_width: root.reduced_resize_border_width
         activity_marker_text: root.activity_marker_text
         trailing_action_component:
             root.wheel_delivery_indicator_visible ? wheel_indicator_component : null

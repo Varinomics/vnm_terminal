@@ -4,6 +4,8 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include "vnm_qml_chrome/vnm_chrome_geometry.h"
+
 #include "vnm_terminal/internal/hierarchical_profiler.h"
 #include "vnm_terminal/internal/qt_grid_metrics_provider.h"
 #include "vnm_terminal/internal/vnm_terminal_font.h"
@@ -75,8 +77,9 @@ constexpr int   k_exit_process_failed          = 4;
 constexpr int   k_exit_timeout                 = 5;
 constexpr int   k_exit_no_output               = 6;
 constexpr int   k_timeout_force_exit_grace_ms  = 5000;
-constexpr qreal k_custom_titlebar_height       = 32.0;
-constexpr qreal k_terminal_scrollbar_width     = 12.0;
+constexpr qreal k_custom_titlebar_height             = 32.0;
+constexpr qreal k_custom_titlebar_physical_reduction = 2.0;
+constexpr qreal k_terminal_scrollbar_width           = 12.0;
 constexpr int   k_persisted_window_min_axis    = 1;
 constexpr int   k_text_area_resize_max_rows    = 512;
 constexpr int   k_text_area_resize_max_columns = 512;
@@ -484,39 +487,91 @@ void install_wheel_delivery_indicator_filter(
     scrollbar.installEventFilter(filter);
 }
 
+void split_terminal_area(
+    Terminal_shell_geometry& geometry,
+    const QRectF&            area)
+{
+    const qreal scrollbar_width = std::min(k_terminal_scrollbar_width, area.width());
+    geometry.terminal_rect  = QRectF(
+        area.left(),
+        area.top(),
+        std::max<qreal>(0.0, area.width() - scrollbar_width),
+        area.height());
+    geometry.scrollbar_rect = QRectF(
+        area.right() - scrollbar_width,
+        area.top(),
+        scrollbar_width,
+        area.height());
+}
+
+void snap_terminal_shell_geometry(
+    Terminal_shell_geometry& geometry,
+    qreal                    device_pixel_ratio)
+{
+    const qreal dpr =
+        vnm_qml_chrome::normalized_device_pixel_ratio(device_pixel_ratio);
+    geometry.content_border_rect = vnm_qml_chrome::snapped_logical_rect(
+        geometry.content_border_rect,
+        dpr);
+    geometry.terminal_rect = vnm_qml_chrome::snapped_logical_rect(
+        geometry.terminal_rect,
+        dpr);
+    geometry.scrollbar_rect = vnm_qml_chrome::snapped_logical_rect(
+        geometry.scrollbar_rect,
+        dpr);
+}
+
+qreal reduced_chrome_span(
+    qreal logical_span,
+    qreal physical_reduction,
+    qreal device_pixel_ratio)
+{
+    const qreal dpr = vnm_qml_chrome::normalized_device_pixel_ratio(device_pixel_ratio);
+    const qreal snapped_logical_span =
+        vnm_qml_chrome::snapped_logical_edge(logical_span, dpr);
+    const qreal logical_reduction = physical_reduction / dpr;
+    return std::max<qreal>(
+        0.0,
+        snapped_logical_span - logical_reduction);
+}
+
+qreal reduced_frameless_resize_border_width(qreal device_pixel_ratio)
+{
+    return reduced_chrome_span(
+        chrome::k_default_frameless_resize_border_width,
+        chrome::k_frameless_resize_border_physical_reduction,
+        device_pixel_ratio);
+}
+
+qreal reduced_custom_titlebar_height(qreal device_pixel_ratio)
+{
+    return reduced_chrome_span(
+        k_custom_titlebar_height,
+        k_custom_titlebar_physical_reduction,
+        device_pixel_ratio);
+}
+
 Terminal_shell_geometry terminal_shell_geometry(
     const QSizeF&  window_size,
     bool           custom_titlebar,
     bool           resize_border_active = true,
-    qreal          content_border_width = 0.0)
+    qreal          content_border_width = 0.0,
+    qreal          device_pixel_ratio   = 1.0)
 {
     const qreal width  = std::max<qreal>(0.0, window_size.width());
     const qreal height = std::max<qreal>(0.0, window_size.height());
 
-    const auto split_terminal_area = [](const QRectF& area, Terminal_shell_geometry* geometry) {
-        const qreal scrollbar_width = std::min(k_terminal_scrollbar_width, area.width());
-        geometry->terminal_rect  = QRectF(
-            area.left(),
-            area.top(),
-            std::max<qreal>(0.0, area.width() - scrollbar_width),
-            area.height());
-        geometry->scrollbar_rect = QRectF(
-            area.right() - scrollbar_width,
-            area.top(),
-            scrollbar_width,
-            area.height());
-    };
-
     Terminal_shell_geometry geometry;
     if (!custom_titlebar) {
-        split_terminal_area(QRectF(0.0, 0.0, width, height), &geometry);
+        split_terminal_area(geometry, QRectF(0.0, 0.0, width, height));
         return geometry;
     }
 
     const qreal border = resize_border_active
-        ? chrome::k_default_frameless_resize_border_width
+        ? reduced_frameless_resize_border_width(device_pixel_ratio)
         : 0.0;
-    const qreal titlebar_height  = std::min(k_custom_titlebar_height, height);
+    const qreal titlebar_height =
+        std::min(reduced_custom_titlebar_height(device_pixel_ratio), height);
     const qreal horizontal_inset = std::min(border, width / 2.0);
     const qreal terminal_width_available =
         std::max<qreal>(0.0, width - horizontal_inset * 2.0);
@@ -538,12 +593,13 @@ Terminal_shell_geometry terminal_shell_geometry(
     const qreal content_vertical_inset =
         std::min(frame_border, geometry.content_border_rect.height() / 2.0);
     split_terminal_area(
+        geometry,
         geometry.content_border_rect.adjusted(
             content_horizontal_inset,
             content_vertical_inset,
             -content_horizontal_inset,
-            -content_vertical_inset),
-        &geometry);
+            -content_vertical_inset));
+    snap_terminal_shell_geometry(geometry, device_pixel_ratio);
     return geometry;
 }
 
@@ -580,7 +636,8 @@ void apply_terminal_shell_geometry(
         QSizeF(window.width(), window.height()),
         custom_titlebar,
         custom_titlebar_resize_border_active(window),
-        content_border_width);
+        content_border_width,
+        window.devicePixelRatio());
 
     if (titlebar != nullptr) {
         titlebar->set_size(QSizeF(window.width(), window.height()));

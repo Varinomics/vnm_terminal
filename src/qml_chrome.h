@@ -18,7 +18,8 @@ class QVariant;
 
 namespace vnm_terminal::terminal_app {
 
-constexpr qreal k_default_frameless_resize_border_width = 6.0;
+constexpr qreal k_default_frameless_resize_border_width      = 6.0;
+constexpr qreal k_frameless_resize_border_physical_reduction = 2.0;
 
 QColor terminal_chrome_background_color(bool active);
 QColor terminal_chrome_content_border_color(bool active);
