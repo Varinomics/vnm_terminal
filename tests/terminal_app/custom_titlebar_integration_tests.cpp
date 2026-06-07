@@ -1327,6 +1327,209 @@ bool test_parse_disable_primary_repaint_recovery_option()
     return ok;
 }
 
+bool test_parse_text_renderer_option()
+{
+    using Text_renderer_mode = VNM_TerminalSurface::Text_renderer_mode;
+
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result msdf_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--text-renderer"),
+        QStringLiteral("msdf"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result glyph_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--text-renderer"),
+        QStringLiteral("glyph"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result auto_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--text-renderer"),
+        QStringLiteral("AUTO"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result invalid_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--text-renderer"),
+        QStringLiteral("invalid"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--text-renderer"),
+        QStringLiteral("glyph"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(), "text renderer default parse succeeds");
+    ok &= check(default_result.options.text_renderer_mode == Text_renderer_mode::AUTO,
+        "text renderer default selects auto");
+    ok &= check(msdf_result.error.isEmpty(), "text renderer msdf option parses");
+    ok &= check(msdf_result.options.text_renderer_mode == Text_renderer_mode::MSDF,
+        "text renderer msdf option selects MSDF");
+    ok &= check(glyph_result.error.isEmpty(), "text renderer glyph option parses");
+    ok &= check(glyph_result.options.text_renderer_mode == Text_renderer_mode::GLYPH,
+        "text renderer glyph option selects glyph");
+    ok &= check(auto_result.error.isEmpty(), "text renderer auto option parses");
+    ok &= check(auto_result.options.text_renderer_mode == Text_renderer_mode::AUTO,
+        "text renderer option is case-insensitive");
+    ok &= check(!invalid_result.error.isEmpty(),
+        "text renderer option rejects invalid values");
+    ok &= check(command_result.error.isEmpty(),
+        "text renderer option after command separator parses as command argv");
+    ok &= check(command_result.options.text_renderer_mode == Text_renderer_mode::AUTO,
+        "text renderer option after command separator leaves default");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{
+                QStringLiteral("--text-renderer"),
+                QStringLiteral("glyph"),
+            },
+        "text renderer option after command separator is preserved in command argv");
+
+    VNM_TerminalSurface surface;
+    surface.set_text_renderer_mode(msdf_result.options.text_renderer_mode);
+    ok &= check(surface.text_renderer_mode() == Text_renderer_mode::MSDF,
+        "text renderer option reaches surface config");
+    surface.set_text_renderer_mode(glyph_result.options.text_renderer_mode);
+    ok &= check(surface.text_renderer_mode() == Text_renderer_mode::GLYPH,
+        "text renderer glyph option reaches surface config");
+
+    return ok;
+}
+
+bool test_parse_lcd_subpixel_option()
+{
+    using Lcd_subpixel_order = VNM_TerminalSurface::Lcd_subpixel_order;
+
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result rgb_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--lcd-subpixel"),
+        QStringLiteral("rgb"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result bgr_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--lcd-subpixel"),
+        QStringLiteral("bgr"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result vrgb_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--lcd-subpixel"),
+        QStringLiteral("vrgb"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result vbgr_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--lcd-subpixel"),
+        QStringLiteral("vbgr"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result none_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--lcd-subpixel"),
+        QStringLiteral("none"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result auto_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--lcd-subpixel"),
+        QStringLiteral("AUTO"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result invalid_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--lcd-subpixel"),
+        QStringLiteral("invalid"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--lcd-subpixel"),
+        QStringLiteral("rgb"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(), "LCD subpixel default parse succeeds");
+    ok &= check(default_result.options.lcd_subpixel_order == Lcd_subpixel_order::AUTO,
+        "LCD subpixel default selects auto");
+    ok &= check(rgb_result.error.isEmpty(), "LCD subpixel rgb option parses");
+    ok &= check(rgb_result.options.lcd_subpixel_order == Lcd_subpixel_order::RGB,
+        "LCD subpixel rgb option selects RGB");
+    ok &= check(bgr_result.error.isEmpty(), "LCD subpixel bgr option parses");
+    ok &= check(bgr_result.options.lcd_subpixel_order == Lcd_subpixel_order::BGR,
+        "LCD subpixel bgr option selects BGR");
+    ok &= check(vrgb_result.error.isEmpty(), "LCD subpixel vrgb option parses");
+    ok &= check(vrgb_result.options.lcd_subpixel_order == Lcd_subpixel_order::VRGB,
+        "LCD subpixel vrgb option selects VRGB");
+    ok &= check(vbgr_result.error.isEmpty(), "LCD subpixel vbgr option parses");
+    ok &= check(vbgr_result.options.lcd_subpixel_order == Lcd_subpixel_order::VBGR,
+        "LCD subpixel vbgr option selects VBGR");
+    ok &= check(none_result.error.isEmpty(), "LCD subpixel none option parses");
+    ok &= check(none_result.options.lcd_subpixel_order == Lcd_subpixel_order::NONE,
+        "LCD subpixel none option disables LCD sampling");
+    ok &= check(auto_result.error.isEmpty(), "LCD subpixel auto option parses");
+    ok &= check(auto_result.options.lcd_subpixel_order == Lcd_subpixel_order::AUTO,
+        "LCD subpixel option is case-insensitive");
+    ok &= check(!invalid_result.error.isEmpty(),
+        "LCD subpixel option rejects invalid values");
+    ok &= check(command_result.error.isEmpty(),
+        "LCD subpixel option after command separator parses as command argv");
+    ok &= check(command_result.options.lcd_subpixel_order == Lcd_subpixel_order::AUTO,
+        "LCD subpixel option after command separator leaves default");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{
+                QStringLiteral("--lcd-subpixel"),
+                QStringLiteral("rgb"),
+            },
+        "LCD subpixel option after command separator is preserved in command argv");
+
+    VNM_TerminalSurface surface;
+    surface.set_lcd_subpixel_order(rgb_result.options.lcd_subpixel_order);
+    ok &= check(surface.lcd_subpixel_order() == Lcd_subpixel_order::RGB,
+        "LCD subpixel rgb option reaches surface config");
+    surface.set_lcd_subpixel_order(vbgr_result.options.lcd_subpixel_order);
+    ok &= check(surface.lcd_subpixel_order() == Lcd_subpixel_order::VBGR,
+        "LCD subpixel vbgr option reaches surface config");
+
+    return ok;
+}
+
 bool test_parse_scrollback_limit_option()
 {
     Parse_result default_result = parse_arguments({
@@ -1649,6 +1852,8 @@ int main(int argc, char** argv)
     ok &= test_parse_wheel_trace_option();
     ok &= test_parse_synchronized_output_scroll_policy_option();
     ok &= test_parse_disable_primary_repaint_recovery_option();
+    ok &= test_parse_text_renderer_option();
+    ok &= test_parse_lcd_subpixel_option();
     ok &= test_parse_scrollback_limit_option();
     ok &= test_parse_transcript_snapshot_diagnostics_option();
     ok &= test_parse_transcript_timing_diagnostics_option();

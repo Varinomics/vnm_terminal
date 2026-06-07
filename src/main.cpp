@@ -124,6 +124,10 @@ struct App_options
         VNM_TerminalSurface::Alternate_screen_wheel_policy::MOUSE_REPORTING_FIRST;
     VNM_TerminalSurface::Synchronized_output_scroll_policy synchronized_output_scroll_policy =
         VNM_TerminalSurface::Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION;
+    VNM_TerminalSurface::Text_renderer_mode text_renderer_mode =
+        VNM_TerminalSurface::Text_renderer_mode::AUTO;
+    VNM_TerminalSurface::Lcd_subpixel_order lcd_subpixel_order =
+        VNM_TerminalSurface::Lcd_subpixel_order::AUTO;
     std::optional<int> timeout_ms;
     std::optional<int> scrollback_limit;
     bool               shell_requested                    = false;
@@ -813,6 +817,8 @@ void print_usage()
         << "  --native-titlebar               use the platform titlebar instead of built-in chrome\n"
 #endif
         << "  --alternate-wheel <mode>        alternate-screen wheel: mouse(default), cursor, or page\n"
+        << "  --text-renderer <mode>          text renderer: auto(default), msdf, or glyph\n"
+        << "  --lcd-subpixel <order>          MSDF LCD order: auto(default), none, rgb, bgr, vrgb, or vbgr\n"
         << "  --synchronized-output-scroll-policy=<policy>\n"
         << "                                  DEC synchronized-output scroll: defer(default) "
         << "or immediate-public (case-insensitive)\n"
@@ -1016,6 +1022,67 @@ bool parse_synchronized_output_scroll_policy(
 
     *out_error = QStringLiteral(
         "--synchronized-output-scroll-policy supports only defer or immediate-public");
+    return false;
+}
+
+bool parse_text_renderer_mode(
+    const QString&                         value,
+    VNM_TerminalSurface::Text_renderer_mode*
+                                           out_mode,
+    QString*                               out_error)
+{
+    const QString normalized = value.trimmed().toLower();
+    if (normalized == QStringLiteral("auto")) {
+        *out_mode = VNM_TerminalSurface::Text_renderer_mode::AUTO;
+        return true;
+    }
+    if (normalized == QStringLiteral("msdf")) {
+        *out_mode = VNM_TerminalSurface::Text_renderer_mode::MSDF;
+        return true;
+    }
+    if (normalized == QStringLiteral("glyph")) {
+        *out_mode = VNM_TerminalSurface::Text_renderer_mode::GLYPH;
+        return true;
+    }
+
+    *out_error = QStringLiteral("--text-renderer supports only auto, msdf, or glyph");
+    return false;
+}
+
+bool parse_lcd_subpixel_order(
+    const QString&                         value,
+    VNM_TerminalSurface::Lcd_subpixel_order*
+                                           out_order,
+    QString*                               out_error)
+{
+    const QString normalized = value.trimmed().toLower();
+    if (normalized == QStringLiteral("auto")) {
+        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::AUTO;
+        return true;
+    }
+    if (normalized == QStringLiteral("none")) {
+        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::NONE;
+        return true;
+    }
+    if (normalized == QStringLiteral("rgb")) {
+        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::RGB;
+        return true;
+    }
+    if (normalized == QStringLiteral("bgr")) {
+        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::BGR;
+        return true;
+    }
+    if (normalized == QStringLiteral("vrgb")) {
+        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::VRGB;
+        return true;
+    }
+    if (normalized == QStringLiteral("vbgr")) {
+        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::VBGR;
+        return true;
+    }
+
+    *out_error = QStringLiteral(
+        "--lcd-subpixel supports only auto, none, rgb, bgr, vrgb, or vbgr");
     return false;
 }
 
@@ -1350,6 +1417,28 @@ Parse_result parse_arguments(const QStringList& arguments)
             if (!take_option_value(arguments, index, &value, &result.error) ||
                 !parse_alternate_wheel_policy(
                     value, &result.options.alternate_screen_wheel_policy, &result.error))
+            {
+                return result;
+            }
+
+            continue;
+        }
+
+        if (argument_is(argument, "--text-renderer")) {
+            if (!take_option_value(arguments, index, &value, &result.error) ||
+                !parse_text_renderer_mode(
+                    value, &result.options.text_renderer_mode, &result.error))
+            {
+                return result;
+            }
+
+            continue;
+        }
+
+        if (argument_is(argument, "--lcd-subpixel")) {
+            if (!take_option_value(arguments, index, &value, &result.error) ||
+                !parse_lcd_subpixel_order(
+                    value, &result.options.lcd_subpixel_order, &result.error))
             {
                 return result;
             }
@@ -3271,6 +3360,33 @@ void append_qsg_atlas_profile_text(
 
     stream << "qsg_atlas\n";
     stream << "  renderer=atlas\n";
+    stream << "  text_renderer_policy="
+        << QString::fromLatin1(
+            term::qsg_atlas_text_renderer_policy_name(
+                report.text_renderer_policy))
+        << '\n';
+    stream << "  effective_text_renderer="
+        << QString::fromLatin1(
+            term::qsg_atlas_text_renderer_kind_name(
+                report.effective_text_renderer))
+        << '\n';
+    stream << "  msdf_lcd_subpixel_order="
+        << QString::fromLatin1(
+            term::qsg_atlas_lcd_subpixel_order_name(
+                report.msdf_lcd_subpixel_order))
+        << '\n';
+    append_profile_bool(
+        stream,
+        "msdf_lcd_text_enabled",
+        report.msdf_lcd_text_enabled);
+    append_profile_bool(
+        stream,
+        "text_renderer_fallback_allowed",
+        report.text_renderer_fallback_allowed);
+    append_profile_bool(
+        stream,
+        "text_renderer_fallback_used",
+        report.text_renderer_fallback_used);
     stream << "  sampler_mode="
         << QString::fromLatin1(
             term::qsg_atlas_sampler_mode_name(report.render.glyph_sampler_mode))
@@ -3946,7 +4062,35 @@ QJsonObject atlas_render_summary_json(
         summary.background_rects_coalesced);
     insert_json_counter(object, "rect_draw_calls", summary.rect_draw_calls);
     insert_json_counter(object, "glyph_draw_calls", summary.glyph_draw_calls);
+    insert_json_counter(
+        object,
+        "msdf_text_draw_calls",
+        summary.msdf_text_draw_calls);
     insert_json_counter(object, "draw_calls", summary.draw_calls);
+    object.insert(
+        QStringLiteral("text_renderer_policy"),
+        QString::fromLatin1(
+            term::qsg_atlas_text_renderer_policy_name(
+                summary.text_renderer_policy)));
+    object.insert(
+        QStringLiteral("effective_text_renderer"),
+        QString::fromLatin1(
+            term::qsg_atlas_text_renderer_kind_name(
+                summary.effective_text_renderer)));
+    object.insert(
+        QStringLiteral("text_renderer_fallback_allowed"),
+        summary.text_renderer_fallback_allowed);
+    object.insert(
+        QStringLiteral("text_renderer_fallback_used"),
+        summary.text_renderer_fallback_used);
+    object.insert(
+        QStringLiteral("msdf_lcd_subpixel_order"),
+        QString::fromLatin1(
+            term::qsg_atlas_lcd_subpixel_order_name(
+                summary.msdf_lcd_subpixel_order)));
+    object.insert(
+        QStringLiteral("msdf_lcd_text_enabled"),
+        summary.msdf_lcd_text_enabled);
     insert_json_counter(object, "atlas_page_count", summary.atlas_page_count);
     insert_json_counter(object, "atlas_page_budget", summary.atlas_page_budget);
     insert_json_counter(object, "atlas_page_bytes", summary.atlas_page_bytes);
@@ -4107,6 +4251,30 @@ QJsonObject qsg_atlas_metrics_json(const term::Qsg_atlas_frame_report& report)
 {
     QJsonObject object;
     object.insert(QStringLiteral("renderer"), QStringLiteral("atlas"));
+    object.insert(
+        QStringLiteral("text_renderer_policy"),
+        QString::fromLatin1(
+            term::qsg_atlas_text_renderer_policy_name(
+                report.text_renderer_policy)));
+    object.insert(
+        QStringLiteral("effective_text_renderer"),
+        QString::fromLatin1(
+            term::qsg_atlas_text_renderer_kind_name(
+                report.effective_text_renderer)));
+    object.insert(
+        QStringLiteral("text_renderer_fallback_allowed"),
+        report.text_renderer_fallback_allowed);
+    object.insert(
+        QStringLiteral("text_renderer_fallback_used"),
+        report.text_renderer_fallback_used);
+    object.insert(
+        QStringLiteral("msdf_lcd_subpixel_order"),
+        QString::fromLatin1(
+            term::qsg_atlas_lcd_subpixel_order_name(
+                report.msdf_lcd_subpixel_order)));
+    object.insert(
+        QStringLiteral("msdf_lcd_text_enabled"),
+        report.msdf_lcd_text_enabled);
 
     insert_json_counter(object, "capture_count", report.capture_count);
     insert_json_counter(object, "prepare_count", report.prepare_count);
@@ -5189,6 +5357,8 @@ int main(int argc, char** argv)
     surface->set_copy_shortcut_policy(VNM_TerminalSurface::Copy_shortcut_policy::TERMINAL_INPUT);
 #endif
     surface->set_alternate_screen_wheel_policy(options.alternate_screen_wheel_policy);
+    surface->set_text_renderer_mode(options.text_renderer_mode);
+    surface->set_lcd_subpixel_order(options.lcd_subpixel_order);
     apply_synchronized_output_scroll_policy_option(*surface, options);
     apply_primary_repaint_recovery_option(*surface, options);
     surface->set_backend_output_capture_path(options.backend_output_capture_path);

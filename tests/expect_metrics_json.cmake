@@ -297,6 +297,17 @@ vnm_terminal_read_json_field(atlas_render_count
 if(NOT atlas_render_count MATCHES "^[0-9]+$")
     message(FATAL_ERROR "qsg_atlas.render_count should be an integer counter")
 endif()
+vnm_terminal_read_json_field(atlas_msdf_lcd_subpixel_order
+    "${metrics_text}" "${metrics_path}" qsg_atlas msdf_lcd_subpixel_order)
+if(NOT atlas_msdf_lcd_subpixel_order MATCHES "^(none|rgb|bgr|vrgb|vbgr)$")
+    message(FATAL_ERROR
+        "unexpected qsg_atlas.msdf_lcd_subpixel_order: "
+        "${atlas_msdf_lcd_subpixel_order}")
+endif()
+vnm_terminal_expect_json_boolean(
+    "${metrics_text}"
+    "${metrics_path}"
+    qsg_atlas msdf_lcd_text_enabled)
 
 vnm_terminal_read_json_field(paint_completed_frames
     "${metrics_text}" "${metrics_path}" renderer paint_completed_frames)

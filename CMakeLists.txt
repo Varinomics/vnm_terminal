@@ -122,13 +122,48 @@ if(WIN32)
         )
     endfunction()
 
+    function(vnm_terminal_copy_qt_runtime_library library_target)
+        if(NOT TARGET ${library_target})
+            message(FATAL_ERROR
+                "Required Qt runtime target ${library_target} is missing")
+        endif()
+
+        get_target_property(library_target_type ${library_target} TYPE)
+        if(NOT library_target_type STREQUAL "SHARED_LIBRARY")
+            message(STATUS
+                "Skipping runtime copy for ${library_target}; target type is ${library_target_type}")
+            return()
+        endif()
+
+        add_custom_command(TARGET vnm_terminal POST_BUILD
+            COMMAND
+                "${CMAKE_COMMAND}" -E copy_if_different
+                "$<TARGET_FILE:${library_target}>"
+                "$<TARGET_FILE_DIR:vnm_terminal>/$<TARGET_FILE_NAME:${library_target}>"
+        )
+    endfunction()
+
     find_package(Qt6Gui 6.7 REQUIRED COMPONENTS
         QICOPlugin
         QWindowsIntegrationPlugin
     )
+    find_package(Qt6 6.7 REQUIRED COMPONENTS
+        QuickControls2Basic
+        QuickControls2BasicStyleImpl
+        QuickControls2Fusion
+        QuickControls2FusionStyleImpl
+        QuickControls2Impl
+        QuickControls2WindowsStyleImpl
+    )
 
     vnm_terminal_copy_qt_plugin(Qt6::QWindowsIntegrationPlugin platforms)
     vnm_terminal_copy_qt_plugin(Qt6::QICOPlugin imageformats)
+    vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Basic)
+    vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2BasicStyleImpl)
+    vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Fusion)
+    vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2FusionStyleImpl)
+    vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Impl)
+    vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2WindowsStyleImpl)
 
     add_custom_command(TARGET vnm_terminal POST_BUILD
         COMMAND
