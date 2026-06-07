@@ -364,44 +364,87 @@ bool test_custom_titlebar_geometry()
 
     ok &= check_rect_equal(item_rect(*titlebar.root_item()), QRectF(0.0, 0.0, 800.0, 480.0),
         "shared chrome root covers the window");
-    ok &= check_rect_equal(item_rect(*titlebar.titlebar_item()), QRectF(0.0, 0.0, 800.0, 32.0),
+    ok &= check_rect_equal(item_rect(*titlebar.titlebar_item()), QRectF(0.0, 0.0, 800.0, 30.0),
         "shared titlebar occupies the top band");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_x").toReal(), 6.0),
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_x").toReal(), 4.0),
         "shared chrome records content border x");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_y").toReal(), 32.0),
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_y").toReal(), 30.0),
         "shared chrome records content border y");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 788.0),
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 792.0),
         "shared chrome records content border width");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_height").toReal(), 442.0),
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_height").toReal(), 446.0),
         "shared chrome records content border height");
-    ok &= check_rect_equal(item_rect(surface), QRectF(7.0, 33.0, 774.0, 440.0),
+    ok &= check_rect_equal(item_rect(surface), QRectF(5.0, 31.0, 778.0, 444.0),
         "custom terminal is inset inside the content border");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(781.0, 33.0, 12.0, 440.0),
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(783.0, 31.0, 12.0, 444.0),
         "custom scrollbar touches the inner right frame edge");
     ok &= check(surface.y() >= titlebar.titlebar_item()->y() + titlebar.titlebar_item()->height(),
         "terminal top is below titlebar bottom");
-    ok &= check(surface.x() >= chrome_test::k_default_frameless_resize_border_width,
+    constexpr qreal expected_resize_border_width =
+        chrome_test::k_default_frameless_resize_border_width -
+        chrome_test::k_frameless_resize_border_physical_reduction;
+    ok &= check(surface.x() >= expected_resize_border_width,
         "terminal left edge is inside resize border");
     ok &= check(nearly_equal(surface.x() + surface.width(), scrollbar.x()),
         "terminal right edge is adjacent to scrollbar");
     ok &= check(
         scrollbar.x() + scrollbar.width() <=
-            window.width() - chrome_test::k_default_frameless_resize_border_width,
+            window.width() - expected_resize_border_width,
         "scrollbar right edge is inside resize border");
     ok &= check(
         surface.y() + surface.height() <=
-            window.height() - chrome_test::k_default_frameless_resize_border_width,
+            window.height() - expected_resize_border_width,
         "terminal bottom edge is inside resize border");
+
+    constexpr qreal hidpi_dpr = 1.25;
+    const Terminal_shell_geometry hidpi_geometry = terminal_shell_geometry(
+        QSizeF(1920.0, 1080.0),
+        true,
+        true,
+        1.0 / hidpi_dpr,
+        hidpi_dpr);
+    ok &= check_rect_equal(
+        hidpi_geometry.content_border_rect,
+        QRectF(4.8, 30.4, 1910.4, 1044.8),
+        "custom titlebar content border snaps to physical pixels at fractional DPR");
+    ok &= check_rect_equal(
+        hidpi_geometry.terminal_rect,
+        QRectF(5.6, 31.2, 1896.8, 1043.2),
+        "custom titlebar terminal rect rounds to physical pixels at fractional DPR");
+    ok &= check_rect_equal(
+        hidpi_geometry.scrollbar_rect,
+        QRectF(1902.4, 31.2, 12.0, 1043.2),
+        "custom titlebar scrollbar rect rounds to physical pixels at fractional DPR");
+    ok &= check(
+        vnm_qml_chrome::rect_has_snapped_physical_edges(
+            hidpi_geometry.content_border_rect,
+            hidpi_dpr),
+        "custom titlebar content border edges are physical-pixel aligned");
+    ok &= check(
+        vnm_qml_chrome::rect_has_snapped_physical_edges(
+            hidpi_geometry.terminal_rect,
+            hidpi_dpr),
+        "custom titlebar terminal edges are physical-pixel aligned");
+    ok &= check(
+        vnm_qml_chrome::rect_has_snapped_physical_edges(
+            hidpi_geometry.scrollbar_rect,
+            hidpi_dpr),
+        "custom titlebar scrollbar edges are physical-pixel aligned");
+    ok &= check(
+        nearly_equal(
+            hidpi_geometry.terminal_rect.right(),
+            hidpi_geometry.scrollbar_rect.left()),
+        "custom titlebar fractional-DPR terminal and scrollbar remain adjacent");
 
     window.resize(360, 240);
     apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
     ok &= check_rect_equal(item_rect(*titlebar.root_item()), QRectF(0.0, 0.0, 360.0, 240.0),
         "resized shared chrome root tracks window size");
-    ok &= check_rect_equal(item_rect(*titlebar.titlebar_item()), QRectF(0.0, 0.0, 360.0, 32.0),
+    ok &= check_rect_equal(item_rect(*titlebar.titlebar_item()), QRectF(0.0, 0.0, 360.0, 30.0),
         "resized custom titlebar tracks window width");
-    ok &= check_rect_equal(item_rect(surface), QRectF(7.0, 33.0, 334.0, 200.0),
+    ok &= check_rect_equal(item_rect(surface), QRectF(5.0, 31.0, 338.0, 204.0),
         "resized custom terminal tracks titlebar and border insets");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(341.0, 33.0, 12.0, 200.0),
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(343.0, 31.0, 12.0, 204.0),
         "resized custom scrollbar remains inside the right frame");
 
     window.setWindowStates(Qt::WindowMaximized);
@@ -410,9 +453,9 @@ bool test_custom_titlebar_geometry()
         "maximized shared chrome drops inactive resize gutter x");
     ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 360.0),
         "maximized shared chrome drops inactive resize gutter width");
-    ok &= check_rect_equal(item_rect(surface), QRectF(1.0, 33.0, 346.0, 206.0),
+    ok &= check_rect_equal(item_rect(surface), QRectF(1.0, 31.0, 346.0, 208.0),
         "maximized custom terminal drops inactive resize border gutters");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(347.0, 33.0, 12.0, 206.0),
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(347.0, 31.0, 12.0, 208.0),
         "maximized custom scrollbar remains inside content bounds");
     window.setWindowStates(Qt::WindowNoState);
 
@@ -422,9 +465,9 @@ bool test_custom_titlebar_geometry()
         "very narrow shared chrome clamps horizontal resize insets");
     ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 0.0),
         "very narrow shared chrome clamps content border width");
-    ok &= check_rect_equal(item_rect(surface), QRectF(4.0, 33.0, 0.0, 0.0),
+    ok &= check_rect_equal(item_rect(surface), QRectF(4.0, 31.0, 0.0, 4.0),
         "very narrow custom terminal clamps horizontal resize insets");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(4.0, 33.0, 0.0, 0.0),
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(4.0, 31.0, 0.0, 4.0),
         "very narrow custom scrollbar clamps inside horizontal resize insets");
 
     window.resize(200, 20);
@@ -433,9 +476,9 @@ bool test_custom_titlebar_geometry()
         "very short custom titlebar clamps to window height");
     ok &= check(nearly_equal(titlebar.root_item()->property("content_border_height").toReal(), 0.0),
         "very short shared chrome clamps content border height");
-    ok &= check_rect_equal(item_rect(surface), QRectF(7.0, 20.0, 174.0, 0.0),
+    ok &= check_rect_equal(item_rect(surface), QRectF(5.0, 20.0, 178.0, 0.0),
         "very short custom terminal clamps nonnegative height");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(181.0, 20.0, 12.0, 0.0),
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(183.0, 20.0, 12.0, 0.0),
         "very short custom scrollbar clamps nonnegative height");
 
     window.resize(360, 240);
@@ -1549,9 +1592,9 @@ bool test_window_state_sync()
         signal_window.color() ==
             chrome_test::terminal_chrome_background_color(signal_window.isActive()),
         "windowStateChanged connection synchronizes custom window border color");
-    ok &= check_rect_equal(item_rect(signal_surface), QRectF(1.0, 33.0, 346.0, 206.0),
+    ok &= check_rect_equal(item_rect(signal_surface), QRectF(1.0, 31.0, 346.0, 208.0),
         "windowStateChanged connection reapplies maximized geometry");
-    ok &= check_rect_equal(item_rect(signal_scrollbar), QRectF(347.0, 33.0, 12.0, 206.0),
+    ok &= check_rect_equal(item_rect(signal_scrollbar), QRectF(347.0, 31.0, 12.0, 208.0),
         "windowStateChanged connection reapplies maximized scrollbar geometry");
 
     return ok;
