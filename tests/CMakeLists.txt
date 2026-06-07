@@ -538,6 +538,52 @@ if(TARGET vnm_terminal_canvas_fixture)
     )
 
     add_test(
+        NAME vnm_terminal_rejects_bad_text_renderer
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=2"
+            "-Dexpected_output_regex=--text-renderer supports only auto, msdf, or glyph"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--text-renderer" "invalid"
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--list"
+    )
+
+    set_tests_properties(vnm_terminal_rejects_bad_text_renderer PROPERTIES
+        TIMEOUT 30
+    )
+
+    add_test(
+        NAME vnm_terminal_rejects_bad_lcd_subpixel
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=2"
+            "-Dexpected_output_regex=--lcd-subpixel supports only auto, none, rgb, bgr, vrgb, or vbgr"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--lcd-subpixel" "invalid"
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--list"
+    )
+
+    set_tests_properties(vnm_terminal_rejects_bad_lcd_subpixel PROPERTIES
+        TIMEOUT 30
+    )
+
+    add_test(
         NAME vnm_terminal_rejects_bad_synchronized_output_scroll_policy
         COMMAND
             "${CMAKE_COMMAND}"
@@ -603,6 +649,52 @@ add_test(
 set_tests_properties(vnm_terminal_help_mentions_alternate_wheel_default PROPERTIES
     TIMEOUT 30
 )
+
+add_test(
+    NAME vnm_terminal_help_mentions_text_renderer
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-Dexpected_exit_code=0"
+        "-Dexpected_output_regex=text renderer: auto\\(default\\), msdf, or glyph"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+        --
+        "${CMAKE_COMMAND}" -E env
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
+        "${vnm_terminal_qt_runtime_path}"
+        "$<TARGET_FILE:vnm_terminal>"
+        "--help"
+)
+
+set_tests_properties(vnm_terminal_help_mentions_text_renderer PROPERTIES
+    TIMEOUT 30
+)
+
+if(WIN32 AND TARGET vnm_terminal_canvas_fixture)
+    add_test(
+        NAME vnm_terminal_custom_chrome_starts_from_deployed_runtime
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=0"
+            "-Dforbidden_output_regex=failed to create shared window chrome|Type VNM_ChromeTitleBar unavailable"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/terminal_app/expect_process_clean.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "PATH=$<TARGET_FILE_DIR:vnm_terminal>"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--timeout-ms" "5000"
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--list"
+    )
+
+    set_tests_properties(vnm_terminal_custom_chrome_starts_from_deployed_runtime
+        PROPERTIES
+        TIMEOUT 30
+    )
+endif()
 
 add_test(
     NAME vnm_terminal_help_mentions_synchronized_output_scroll_policy

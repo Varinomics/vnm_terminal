@@ -46,6 +46,14 @@ The app starts the platform default shell when no explicit command follows
 `--`. On validated platforms it uses built-in window chrome by default; pass
 `--native-titlebar` to use the platform frame instead.
 
+Pass `--text-renderer msdf` or `--text-renderer glyph` before `--` to force one
+terminal text renderer for manual comparison. The default `--text-renderer auto`
+uses the surface renderer's automatic selection and fallback behavior.
+Pass `--lcd-subpixel auto|none|rgb|bgr|vrgb|vbgr` before `--` to choose MSDF
+LCD sampling. The default `auto` uses the display order reported by Qt and, on
+Windows, falls back to the system ClearType orientation when Qt reports no
+subpixel order.
+
 Pass `--selection-trace` before `--` to write selection diagnostics to stderr.
 Diagnostic builds configured with
 `VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON` also accept
