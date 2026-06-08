@@ -12,6 +12,7 @@
 #include <QEventLoop>
 #include <QGuiApplication>
 #include <QJsonObject>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPointF>
 #include <QQmlEngine>
