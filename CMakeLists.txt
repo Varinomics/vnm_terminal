@@ -36,6 +36,8 @@ add_executable(vnm_terminal
     src/app_common.h
     src/app_options.cpp
     src/app_options.h
+    src/app_settings.cpp
+    src/app_settings.h
     src/qml_chrome.cpp
     src/qml_chrome.h
     src/terminal_scrollbar.cpp

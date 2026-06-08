@@ -95,6 +95,7 @@ add_executable(vnm_terminal_custom_titlebar_integration
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_settings.cpp"
     "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
 )
@@ -137,6 +138,7 @@ add_executable(vnm_terminal_app_persistence
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_settings.cpp"
     "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
 )
