@@ -1,5 +1,6 @@
 #include "app_clipboard_policy.h"
 #include "app_common.h"
+#include "app_options.h"
 #include "qml_chrome.h"
 #include "terminal_scrollbar.h"
 #include "terminal_title_metadata.h"
@@ -72,8 +73,14 @@ namespace {
 namespace term   = vnm_terminal::internal;
 namespace chrome = vnm_terminal::terminal_app;
 
+using chrome::App_options;
+using chrome::custom_titlebar_supported_on_platform;
+using chrome::default_shell_argv;
 using chrome::enum_key;
+using chrome::environment_or_default;
 using chrome::handle_clipboard_write_request;
+using chrome::k_custom_titlebar_default_enabled;
+using chrome::k_custom_titlebar_supported_on_platform;
 using chrome::k_exit_no_output;
 using chrome::k_exit_process_failed;
 using chrome::k_exit_start_failed;
@@ -101,57 +108,11 @@ constexpr char k_window_settings_maximized[]   = "maximized";
 constexpr char k_window_settings_width[]       = "width";
 constexpr char k_window_settings_x[]           = "x";
 constexpr char k_window_settings_y[]           = "y";
-#if defined(_WIN32) || defined(__linux__)
-constexpr bool k_custom_titlebar_supported_on_platform = true;
-#else
-constexpr bool k_custom_titlebar_supported_on_platform = false;
-#endif
-
-constexpr bool k_custom_titlebar_default_enabled =
-    k_custom_titlebar_supported_on_platform;
 
 QString default_window_title()
 {
     return QStringLiteral("vnm_terminal example terminal");
 }
-
-struct App_options
-{
-    QStringList        command;
-    QString            working_directory;
-    QString            backend_output_capture_path;
-    QString            transcript_capture_path;
-    QString            profile_text_path;
-    QString            metrics_json_path;
-    QString            font_family = term::vnm_terminal_default_monospace_font_family();
-    qreal              font_size   = term::k_vnm_terminal_default_font_pixel_size;
-    QString            theme       = QStringLiteral("default");
-    QSize              window_size = QSize(900, 600);
-    std::optional<QPoint> window_position;
-    VNM_TerminalSurface::Alternate_screen_wheel_policy alternate_screen_wheel_policy =
-        VNM_TerminalSurface::Alternate_screen_wheel_policy::MOUSE_REPORTING_FIRST;
-    VNM_TerminalSurface::Synchronized_output_scroll_policy synchronized_output_scroll_policy =
-        VNM_TerminalSurface::Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION;
-    VNM_TerminalSurface::Text_renderer_mode text_renderer_mode =
-        VNM_TerminalSurface::Text_renderer_mode::AUTO;
-    VNM_TerminalSurface::Lcd_subpixel_order lcd_subpixel_order =
-        VNM_TerminalSurface::Lcd_subpixel_order::AUTO;
-    Osc52_clipboard_policy osc52_clipboard_policy = Osc52_clipboard_policy::DENY;
-    std::optional<int> timeout_ms;
-    std::optional<int> scrollback_limit;
-    bool               shell_requested                    = false;
-    bool               keep_open_after_process_exits      = false;
-    bool               require_output                     = false;
-    bool               custom_titlebar                    = k_custom_titlebar_default_enabled;
-    bool               selection_trace_enabled            = false;
-    bool               transcript_snapshot_diagnostics    = false;
-    bool               transcript_timing_diagnostics      = false;
-    bool               wheel_trace_enabled                 = false;
-    std::optional<bool> primary_repaint_recovery_enabled;
-    bool               font_size_explicit                 = false;
-    bool               window_size_explicit               = false;
-    bool               restore_maximized_window_state     = false;
-};
 
 struct Parse_result
 {
@@ -353,11 +314,6 @@ std::optional<Persisted_terminal_window_state> restorable_terminal_window_state(
     state.font_size = surface.font_size();
     state.maximized = false;
     return state;
-}
-
-bool custom_titlebar_supported_on_platform()
-{
-    return k_custom_titlebar_supported_on_platform;
 }
 
 class Terminal_shortcut_filter final : public QObject
@@ -838,23 +794,6 @@ void print_usage()
 #endif
         << "  OSC 52 clipboard writes are denied by default; --osc52-clipboard allow permits "
         << "writes to target c/clipboard\n";
-}
-
-QString environment_or_default(const char* name, const QString& fallback)
-{
-    const QString value = QString::fromLocal8Bit(qgetenv(name));
-    return value.trimmed().isEmpty() ? fallback : value;
-}
-
-QStringList default_shell_argv()
-{
-#if defined(_WIN32)
-    return {environment_or_default("COMSPEC", QStringLiteral("cmd.exe"))};
-#elif defined(__linux__) || defined(__APPLE__)
-    return {environment_or_default("SHELL", QStringLiteral("/bin/sh"))};
-#else
-    return {};
-#endif
 }
 
 bool argument_is(const QString& argument, const char* expected)
