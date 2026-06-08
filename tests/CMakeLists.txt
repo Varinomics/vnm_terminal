@@ -584,6 +584,29 @@ if(TARGET vnm_terminal_canvas_fixture)
     )
 
     add_test(
+        NAME vnm_terminal_rejects_bad_osc52_clipboard
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=2"
+            "-Dexpected_output_regex=--osc52-clipboard supports only deny or allow"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--osc52-clipboard" "invalid"
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--list"
+    )
+
+    set_tests_properties(vnm_terminal_rejects_bad_osc52_clipboard PROPERTIES
+        TIMEOUT 30
+    )
+
+    add_test(
         NAME vnm_terminal_rejects_bad_synchronized_output_scroll_policy
         COMMAND
             "${CMAKE_COMMAND}"
@@ -867,7 +890,7 @@ add_test(
     COMMAND
         "${CMAKE_COMMAND}"
         "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=OSC 52 clipboard writes are allowed for target c/clipboard"
+        "-Dexpected_output_regex=OSC 52 clipboard writes are denied by default"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
         --
         "${CMAKE_COMMAND}" -E env

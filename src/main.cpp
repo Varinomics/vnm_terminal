@@ -107,6 +107,16 @@ QString default_window_title()
     return QStringLiteral("vnm_terminal example terminal");
 }
 
+enum class Osc52_clipboard_policy
+{
+    DENY,
+    ALLOW,
+};
+
+// Bound how much a terminal program may push to the system clipboard in a single
+// OSC 52 write even when the session is explicitly trusted (--osc52-clipboard allow).
+constexpr qsizetype k_osc52_clipboard_max_payload_bytes = 1024 * 1024;
+
 struct App_options
 {
     QStringList        command;
@@ -128,6 +138,7 @@ struct App_options
         VNM_TerminalSurface::Text_renderer_mode::AUTO;
     VNM_TerminalSurface::Lcd_subpixel_order lcd_subpixel_order =
         VNM_TerminalSurface::Lcd_subpixel_order::AUTO;
+    Osc52_clipboard_policy osc52_clipboard_policy = Osc52_clipboard_policy::DENY;
     std::optional<int> timeout_ms;
     std::optional<int> scrollback_limit;
     bool               shell_requested                    = false;
@@ -840,6 +851,7 @@ void print_usage()
         << "  --keep-open-after-process-exits leave the window open after the child exits\n"
         << "  --timeout-ms <n>                fail if the run is still active after n ms\n"
         << "  --require-output                fail if no terminal output activity is observed\n"
+        << "  --osc52-clipboard <policy>      OSC 52 clipboard write policy: deny(default) or allow\n"
         << "  --help                          show this help\n"
         << "\n"
         << "interactions:\n"
@@ -851,7 +863,8 @@ void print_usage()
         << "  Ctrl+C copies selected text, otherwise sends Ctrl+C; "
         << "Ctrl+V/Ctrl+Shift+V paste clipboard text\n"
 #endif
-        << "  OSC 52 clipboard writes are allowed for target c/clipboard and denied otherwise\n";
+        << "  OSC 52 clipboard writes are denied by default; --osc52-clipboard allow permits "
+        << "writes to target c/clipboard\n";
 }
 
 template <typename T>
@@ -1083,6 +1096,25 @@ bool parse_lcd_subpixel_order(
 
     *out_error = QStringLiteral(
         "--lcd-subpixel supports only auto, none, rgb, bgr, vrgb, or vbgr");
+    return false;
+}
+
+bool parse_osc52_clipboard_policy(
+    const QString&          value,
+    Osc52_clipboard_policy* out_policy,
+    QString*                out_error)
+{
+    const QString normalized = value.trimmed().toLower();
+    if (normalized == QStringLiteral("deny")) {
+        *out_policy = Osc52_clipboard_policy::DENY;
+        return true;
+    }
+    if (normalized == QStringLiteral("allow")) {
+        *out_policy = Osc52_clipboard_policy::ALLOW;
+        return true;
+    }
+
+    *out_error = QStringLiteral("--osc52-clipboard supports only deny or allow");
     return false;
 }
 
@@ -1446,6 +1478,17 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
+        if (argument_is(argument, "--osc52-clipboard")) {
+            if (!take_option_value(arguments, index, &value, &result.error) ||
+                !parse_osc52_clipboard_policy(
+                    value, &result.options.osc52_clipboard_policy, &result.error))
+            {
+                return result;
+            }
+
+            continue;
+        }
+
         if (take_synchronized_output_scroll_policy_value(
                 argument, &value, &result.error))
         {
@@ -1688,31 +1731,39 @@ void request_vsync_surface_format()
     QSurfaceFormat::setDefaultFormat(format);
 }
 
-bool osc52_clipboard_target_allowed(const QString& target_selection)
+void handle_clipboard_write_request(
+    VNM_TerminalSurface&     surface,
+    quint64                  request_id,
+    const QString&           target_selection,
+    qsizetype                payload_size,
+    Osc52_clipboard_policy   policy)
 {
-    return
+    using Decision = VNM_TerminalSurface::Clipboard_response_decision;
+
+    const bool target_is_clipboard =
         target_selection == QStringLiteral("c") ||
         target_selection == QStringLiteral("clipboard");
-}
+    const bool over_payload_cap = payload_size > k_osc52_clipboard_max_payload_bytes;
+    const bool allow =
+        policy == Osc52_clipboard_policy::ALLOW &&
+        target_is_clipboard                     &&
+        !over_payload_cap;
 
-void handle_clipboard_write_request(
-    VNM_TerminalSurface&   surface,
-    quint64                request_id,
-    const QString&         target_selection)
-{
-    if (osc52_clipboard_target_allowed(target_selection)) {
-        if (!surface.respond_clipboard_write(
-                request_id, VNM_TerminalSurface::Clipboard_response_decision::ALLOW))
-        {
-            print_error(QStringLiteral("OSC 52 clipboard write could not be allowed"));
-        }
+    if (!surface.respond_clipboard_write(
+            request_id, allow ? Decision::ALLOW : Decision::DENY))
+    {
+        print_error(QStringLiteral("OSC 52 clipboard write response could not be delivered"));
         return;
     }
 
-    if (!surface.respond_clipboard_write(
-            request_id, VNM_TerminalSurface::Clipboard_response_decision::DENY))
-    {
-        print_error(QStringLiteral("OSC 52 clipboard write could not be denied"));
+    // Surface only the surprising case: the session is trusted and the target is valid,
+    // but the write is rejected solely because the payload exceeds the size cap. The
+    // expected default-deny path stays quiet so a noisy program cannot flood stderr.
+    if (policy == Osc52_clipboard_policy::ALLOW && target_is_clipboard && over_payload_cap) {
+        print_error(QStringLiteral(
+            "OSC 52 clipboard write denied: payload of %1 bytes exceeds the %2-byte limit")
+            .arg(static_cast<qlonglong>(payload_size))
+            .arg(k_osc52_clipboard_max_payload_bytes));
     }
 }
 
@@ -5463,18 +5514,19 @@ int main(int argc, char** argv)
         surface,
         &VNM_TerminalSurface::clipboard_write_requested,
         surface,
-        [surface](
+        [surface, policy = options.osc52_clipboard_policy](
             quint64 request_id,
             const QString& target_selection,
             const QByteArray& payload)
         {
             // Respond during the signal delivery so the single pending host
             // request slot in VNM_TerminalSurface cannot be superseded.
-            Q_UNUSED(payload);
             handle_clipboard_write_request(
                 *surface,
                 request_id,
-                target_selection);
+                target_selection,
+                payload.size(),
+                policy);
         });
     QObject::connect(
         surface,
