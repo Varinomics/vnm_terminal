@@ -45,6 +45,8 @@ add_executable(vnm_terminal
     src/terminal_scrollbar.cpp
     src/terminal_scrollbar.h
     src/terminal_title_metadata.h
+    src/terminal_window.cpp
+    src/terminal_window.h
 )
 
 qt_add_resources(vnm_terminal "vnm_terminal_resources"

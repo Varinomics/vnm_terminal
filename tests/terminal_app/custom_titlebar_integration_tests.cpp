@@ -2,6 +2,10 @@
 #include "../../src/main.cpp"
 #undef VNM_TERMINAL_APP_NO_MAIN
 
+#include "terminal_title_metadata.h"
+
+#include "vnm_qml_chrome/vnm_chrome_geometry.h"
+
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
 #include "vnm_terminal/internal/terminal_transcript.h"
 #include "helpers/test_check.h"

@@ -99,6 +99,7 @@ add_executable(vnm_terminal_custom_titlebar_integration
     "${PROJECT_SOURCE_DIR}/src/app_shortcuts.cpp"
     "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
+    "${PROJECT_SOURCE_DIR}/src/terminal_window.cpp"
 )
 
 target_link_libraries(vnm_terminal_custom_titlebar_integration PRIVATE
@@ -143,6 +144,7 @@ add_executable(vnm_terminal_app_persistence
     "${PROJECT_SOURCE_DIR}/src/app_shortcuts.cpp"
     "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
+    "${PROJECT_SOURCE_DIR}/src/terminal_window.cpp"
 )
 
 target_link_libraries(vnm_terminal_app_persistence PRIVATE
