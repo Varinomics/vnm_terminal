@@ -1,3 +1,4 @@
+#include "app_common.h"
 #include "qml_chrome.h"
 #include "terminal_scrollbar.h"
 #include "terminal_title_metadata.h"
@@ -27,7 +28,6 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QKeyEvent>
-#include <QMetaEnum>
 #include <QObject>
 #include <QPoint>
 #include <QPointF>
@@ -71,20 +71,24 @@ namespace {
 namespace term   = vnm_terminal::internal;
 namespace chrome = vnm_terminal::terminal_app;
 
-constexpr int   k_exit_usage_error             = 2;
-constexpr int   k_exit_start_failed            = 3;
-constexpr int   k_exit_process_failed          = 4;
-constexpr int   k_exit_timeout                 = 5;
-constexpr int   k_exit_no_output               = 6;
-constexpr int   k_timeout_force_exit_grace_ms  = 5000;
+using chrome::enum_key;
+using chrome::k_exit_no_output;
+using chrome::k_exit_process_failed;
+using chrome::k_exit_start_failed;
+using chrome::k_exit_timeout;
+using chrome::k_exit_usage_error;
+using chrome::k_text_area_resize_max_window_axis;
+using chrome::k_timeout_force_exit_grace_ms;
+using chrome::metrics_timing_t;
+using chrome::print_error;
+using chrome::Runtime_state;
+
 constexpr qreal k_custom_titlebar_height             = 32.0;
 constexpr qreal k_custom_titlebar_physical_reduction = 2.0;
 constexpr qreal k_terminal_scrollbar_width           = 12.0;
 constexpr int   k_persisted_window_min_axis    = 1;
 constexpr int   k_text_area_resize_max_rows    = 512;
 constexpr int   k_text_area_resize_max_columns = 512;
-
-constexpr qreal k_text_area_resize_max_window_axis = 8192.0;
 
 constexpr char k_window_settings_group[]       = "window";
 constexpr char k_window_settings_font_size[]   = "font_size";
@@ -160,25 +164,6 @@ struct Parse_result
     App_options        options;
     QString            error;
     bool               help_requested                = false;
-};
-
-struct Runtime_state
-{
-    int                backend_error_count = 0;
-    int                process_exit_code   = 0;
-    qint64             first_output_elapsed_ms = -1;
-    VNM_TerminalSurface::Exit_reason process_exit_reason =
-        VNM_TerminalSurface::Exit_reason::EXITED;
-    bool               output_seen     = false;
-    bool               process_exited  = false;
-    bool               timeout_expired = false;
-};
-
-struct metrics_timing_t
-{
-    qint64             app_elapsed_ms           = 0;
-    qint64             profile_write_elapsed_ms = 0;
-    bool               profile_text_requested   = false;
 };
 
 struct Terminal_shell_geometry
@@ -804,12 +789,6 @@ void sync_chrome_window_state(
     window.setColor(chrome::terminal_chrome_background_color(window.isActive()));
 }
 
-void print_error(const QString& message)
-{
-    const QByteArray bytes = message.toUtf8();
-    std::cerr << "vnm_terminal: " << bytes.constData() << '\n';
-}
-
 void print_usage()
 {
     std::cout
@@ -865,18 +844,6 @@ void print_usage()
 #endif
         << "  OSC 52 clipboard writes are denied by default; --osc52-clipboard allow permits "
         << "writes to target c/clipboard\n";
-}
-
-template <typename T>
-QString enum_key(T value)
-{
-    const QMetaEnum meta = QMetaEnum::fromType<T>();
-    const char*     key  = meta.valueToKey(static_cast<int>(value));
-    if (key != nullptr) {
-        return QString::fromLatin1(key);
-    }
-
-    return QString::number(static_cast<int>(value));
 }
 
 QString environment_or_default(const char* name, const QString& fallback)
