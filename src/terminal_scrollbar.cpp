@@ -558,7 +558,8 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
     sync_from_surface();
     if (
         !diagnostic.event_accepted &&
-        (boundary_before_surface || diagnostic.no_op_cause == QStringLiteral("boundary_or_clamp"))
+        (boundary_before_surface ||
+            diagnostic.no_op_cause == VNM_TerminalSurface::Scroll_noop_cause::BOUNDARY_OR_CLAMP)
     )
     {
         m_wheel_scroll_angle_remainder = 0.0;
@@ -571,7 +572,7 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
         ? QStringLiteral("visible_scroll_applied")
         : diagnostic.local_scroll_applied
         ? QStringLiteral("local_scroll_applied")
-        : diagnostic.no_op_cause;
+        : VNM_TerminalSurface::scroll_noop_cause_name(diagnostic.no_op_cause);
 
     record_wheel_trace_event(
         *event,
@@ -585,8 +586,8 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
         diagnostic.backend_drain_calls,
         diagnostic.backend_drain_elapsed_ns,
         diagnostic.local_scroll_intent_recorded,
-        diagnostic.no_op_cause,
-        diagnostic.scroll_action,
+        VNM_TerminalSurface::scroll_noop_cause_name(diagnostic.no_op_cause),
+        VNM_TerminalSurface::scroll_action_name(diagnostic.scroll_action),
         diagnostic.applied_line_delta,
         diagnostic.deferred_intent_recorded);
     return diagnostic.event_accepted;
