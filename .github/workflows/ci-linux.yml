@@ -16,6 +16,11 @@ env:
     libgl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
     libxi-dev libxext-dev libwayland-dev libxkbcommon-dev libvulkan-dev
     fontconfig fonts-dejavu-core fonts-liberation
+  # The bundled monospace font is FontForge-hinted; the runner FreeType's default
+  # v40 TrueType interpreter rejects its bytecode with err=7 (Unimplemented_Feature),
+  # which breaks glyph rasterization and trips the require-empty-stderr smoke gate.
+  # Force the full classic v35 interpreter.
+  FREETYPE_PROPERTIES: truetype:interpreter-version=35
 
 jobs:
   build-and-test:
