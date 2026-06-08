@@ -4247,6 +4247,70 @@ QJsonObject atlas_warm_lazy_summary_json(
     return object;
 }
 
+QJsonObject atlas_msdf_text_metrics_json(
+    const term::Qsg_atlas_render_summary& summary)
+{
+    QJsonObject object;
+    object.insert(
+        QStringLiteral("renderer_enabled"),
+        summary.msdf_text_renderer_enabled);
+    object.insert(
+        QStringLiteral("renderer_active"),
+        summary.msdf_text_renderer_active);
+    object.insert(
+        QStringLiteral("atlas_built"), summary.msdf_text_atlas_built);
+    object.insert(
+        QStringLiteral("atlas_ready"), summary.msdf_text_atlas_ready);
+    insert_json_counter(
+        object, "draw_pixel_height", summary.msdf_text_pixel_height);
+    insert_json_counter(
+        object, "baked_pixel_height", summary.msdf_text_baked_pixel_height);
+    insert_json_counter(object, "atlas_size", summary.msdf_text_atlas_size);
+    object.insert(
+        QStringLiteral("px_range"),
+        static_cast<double>(summary.msdf_text_px_range));
+    insert_json_counter(
+        object, "atlas_generation", summary.msdf_text_atlas_generation);
+    // Per-frame event flags.
+    object.insert(QStringLiteral("cache_hit"), summary.msdf_text_cache_hit);
+    object.insert(QStringLiteral("cache_miss"), summary.msdf_text_cache_miss);
+    object.insert(
+        QStringLiteral("baked_atlas_reused"),
+        summary.msdf_text_baked_atlas_reused);
+    object.insert(
+        QStringLiteral("atlas_build_attempted"),
+        summary.msdf_text_atlas_build_attempted);
+    object.insert(
+        QStringLiteral("atlas_build_succeeded"),
+        summary.msdf_text_atlas_build_succeeded);
+    object.insert(
+        QStringLiteral("texture_uploaded"),
+        summary.msdf_text_texture_uploaded);
+    // Lifetime-cumulative counters: a zoom gesture needs these so a single
+    // build/upload cannot be hidden by a later clean frame before capture.
+    insert_json_counter(
+        object,
+        "atlas_build_attempts_total",
+        summary.msdf_text_atlas_build_attempts_total);
+    insert_json_counter(
+        object,
+        "atlas_build_successes_total",
+        summary.msdf_text_atlas_build_successes_total);
+    insert_json_counter(
+        object,
+        "atlas_texture_uploads_total",
+        summary.msdf_text_atlas_texture_uploads_total);
+    insert_json_counter(
+        object,
+        "baked_cache_hits_total",
+        summary.msdf_text_baked_cache_hits_total);
+    insert_json_counter(
+        object,
+        "baked_cache_misses_total",
+        summary.msdf_text_baked_cache_misses_total);
+    return object;
+}
+
 QJsonObject qsg_atlas_metrics_json(const term::Qsg_atlas_frame_report& report)
 {
     QJsonObject object;
@@ -4334,6 +4398,9 @@ QJsonObject qsg_atlas_metrics_json(const term::Qsg_atlas_frame_report& report)
         QStringLiteral("warm_lazy"),
         atlas_warm_lazy_summary_json(report.warm_lazy));
     object.insert(QStringLiteral("buffer_upload"), atlas_render_summary_json(report.render));
+    object.insert(
+        QStringLiteral("msdf_text"),
+        atlas_msdf_text_metrics_json(report.render));
     return object;
 }
 
