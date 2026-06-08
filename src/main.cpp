@@ -1,3 +1,4 @@
+#include "app_clipboard_policy.h"
 #include "app_common.h"
 #include "qml_chrome.h"
 #include "terminal_scrollbar.h"
@@ -72,14 +73,17 @@ namespace term   = vnm_terminal::internal;
 namespace chrome = vnm_terminal::terminal_app;
 
 using chrome::enum_key;
+using chrome::handle_clipboard_write_request;
 using chrome::k_exit_no_output;
 using chrome::k_exit_process_failed;
 using chrome::k_exit_start_failed;
 using chrome::k_exit_timeout;
 using chrome::k_exit_usage_error;
+using chrome::k_osc52_clipboard_max_payload_bytes;
 using chrome::k_text_area_resize_max_window_axis;
 using chrome::k_timeout_force_exit_grace_ms;
 using chrome::metrics_timing_t;
+using chrome::Osc52_clipboard_policy;
 using chrome::print_error;
 using chrome::Runtime_state;
 
@@ -110,16 +114,6 @@ QString default_window_title()
 {
     return QStringLiteral("vnm_terminal example terminal");
 }
-
-enum class Osc52_clipboard_policy
-{
-    DENY,
-    ALLOW,
-};
-
-// Bound how much a terminal program may push to the system clipboard in a single
-// OSC 52 write even when the session is explicitly trusted (--osc52-clipboard allow).
-constexpr qsizetype k_osc52_clipboard_max_payload_bytes = 1024 * 1024;
 
 struct App_options
 {
@@ -1696,42 +1690,6 @@ void request_vsync_surface_format()
     QSurfaceFormat format = QSurfaceFormat::defaultFormat();
     format.setSwapInterval(1);
     QSurfaceFormat::setDefaultFormat(format);
-}
-
-void handle_clipboard_write_request(
-    VNM_TerminalSurface&     surface,
-    quint64                  request_id,
-    const QString&           target_selection,
-    qsizetype                payload_size,
-    Osc52_clipboard_policy   policy)
-{
-    using Decision = VNM_TerminalSurface::Clipboard_response_decision;
-
-    const bool target_is_clipboard =
-        target_selection == QStringLiteral("c") ||
-        target_selection == QStringLiteral("clipboard");
-    const bool over_payload_cap = payload_size > k_osc52_clipboard_max_payload_bytes;
-    const bool allow =
-        policy == Osc52_clipboard_policy::ALLOW &&
-        target_is_clipboard                     &&
-        !over_payload_cap;
-
-    if (!surface.respond_clipboard_write(
-            request_id, allow ? Decision::ALLOW : Decision::DENY))
-    {
-        print_error(QStringLiteral("OSC 52 clipboard write response could not be delivered"));
-        return;
-    }
-
-    // Surface only the surprising case: the session is trusted and the target is valid,
-    // but the write is rejected solely because the payload exceeds the size cap. The
-    // expected default-deny path stays quiet so a noisy program cannot flood stderr.
-    if (policy == Osc52_clipboard_policy::ALLOW && target_is_clipboard && over_payload_cap) {
-        print_error(QStringLiteral(
-            "OSC 52 clipboard write denied: payload of %1 bytes exceeds the %2-byte limit")
-            .arg(static_cast<qlonglong>(payload_size))
-            .arg(k_osc52_clipboard_max_payload_bytes));
-    }
 }
 
 int process_exit_status(VNM_TerminalSurface::Exit_reason reason, int exit_code)

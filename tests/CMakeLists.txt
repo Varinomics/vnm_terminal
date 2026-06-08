@@ -92,6 +92,7 @@ set_tests_properties(vnm_terminal_title_metadata PROPERTIES
 
 add_executable(vnm_terminal_custom_titlebar_integration
     terminal_app/custom_titlebar_integration_tests.cpp
+    "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
     "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
@@ -132,6 +133,7 @@ set_tests_properties(vnm_terminal_custom_titlebar_integration PROPERTIES
 
 add_executable(vnm_terminal_app_persistence
     terminal_app/app_persistence_tests.cpp
+    "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
     "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
