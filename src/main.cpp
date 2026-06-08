@@ -2,6 +2,7 @@
 #include "app_common.h"
 #include "app_options.h"
 #include "app_settings.h"
+#include "app_shortcuts.h"
 #include "qml_chrome.h"
 #include "terminal_scrollbar.h"
 #include "terminal_title_metadata.h"
@@ -16,7 +17,6 @@
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
 
 #include <QByteArray>
-#include <QClipboard>
 #include <QColor>
 #include <QCoreApplication>
 #include <QDir>
@@ -30,7 +30,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
-#include <QKeyEvent>
 #include <QObject>
 #include <QPoint>
 #include <QPointF>
@@ -111,6 +110,7 @@ using chrome::settings_font_size;
 using chrome::settings_int_value;
 using chrome::settings_window_position;
 using chrome::settings_window_size;
+using chrome::Terminal_shortcut_filter;
 using chrome::terminal_window_persistence_enabled;
 using chrome::window_geometry_intersects_available_screen;
 
@@ -138,89 +138,6 @@ struct Terminal_shell_geometry
     QRectF             content_border_rect;
     QRectF             terminal_rect;
     QRectF             scrollbar_rect;
-};
-
-class Terminal_shortcut_filter final : public QObject
-{
-public:
-    explicit Terminal_shortcut_filter(VNM_TerminalSurface* surface)
-    :
-        QObject(surface),
-        m_surface(surface)
-    {}
-
-protected:
-    bool eventFilter(QObject*, QEvent* event) override
-    {
-        if (event->type() != QEvent::KeyPress) {
-            return false;
-        }
-
-        auto* key_event = static_cast<QKeyEvent*>(event);
-        const Qt::KeyboardModifiers modifiers =
-            key_event->modifiers() &
-            (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
-        const bool control_paste_shortcut =
-            key_event->key() == Qt::Key_V &&
-            (modifiers == Qt::ControlModifier ||
-             modifiers == (Qt::ControlModifier | Qt::ShiftModifier));
-#if defined(Q_OS_MACOS)
-        const bool platform_paste_shortcut =
-            key_event->key() == Qt::Key_V &&
-            modifiers       == Qt::MetaModifier;
-#else
-        constexpr bool platform_paste_shortcut = false;
-#endif
-        const bool paste_shortcut = control_paste_shortcut || platform_paste_shortcut;
-#if defined(Q_OS_MACOS)
-        const bool copy_shortcut =
-            key_event->key() == Qt::Key_C &&
-            modifiers       == Qt::MetaModifier;
-#else
-        constexpr bool copy_shortcut = false;
-#endif
-        if (!paste_shortcut && !copy_shortcut) {
-            return false;
-        }
-
-        if (!m_surface->hasActiveFocus()) {
-            return false;
-        }
-
-        if (copy_shortcut) {
-            return copy_selected_text();
-        }
-
-        return paste_clipboard_text();
-    }
-
-private:
-    bool copy_selected_text()
-    {
-        QClipboard* clipboard = QGuiApplication::clipboard();
-        if (clipboard == nullptr) {
-            return true;
-        }
-
-        const QString text = m_surface->selected_text();
-        if (!text.isEmpty()) {
-            clipboard->setText(text);
-        }
-        return true;
-    }
-
-    bool paste_clipboard_text()
-    {
-        QClipboard* clipboard = QGuiApplication::clipboard();
-        if (clipboard != nullptr) {
-            m_surface->paste_text(clipboard->text());
-            return true;
-        }
-
-        return false;
-    }
-
-    VNM_TerminalSurface* m_surface = nullptr;
 };
 
 class Wheel_delivery_indicator_filter final : public QObject
