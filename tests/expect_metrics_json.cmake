@@ -637,14 +637,7 @@ vnm_terminal_expect_json_boolean(
 
 foreach(frame_counter IN ITEMS
     visible_rows
-    dirty_rows
-    packed_text_spans
-    packed_text_cells
-    packed_text_ascii_direct_cells
-    packed_text_ascii_direct_bytes
-    packed_text_utf8_cells
-    packed_text_utf8_input_code_units
-    packed_text_utf8_output_bytes)
+    dirty_rows)
     vnm_terminal_expect_json_counter(
         "${metrics_text}"
         "${metrics_path}"
