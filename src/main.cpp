@@ -1,6 +1,7 @@
 #include "app_clipboard_policy.h"
 #include "app_common.h"
 #include "app_options.h"
+#include "app_settings.h"
 #include "qml_chrome.h"
 #include "terminal_scrollbar.h"
 #include "terminal_title_metadata.h"
@@ -38,7 +39,6 @@
 #include <QQuickWindow>
 #include <QRect>
 #include <QRectF>
-#include <QScreen>
 #include <QSettings>
 #include <QSize>
 #include <QSizeF>
@@ -74,6 +74,7 @@ namespace term   = vnm_terminal::internal;
 namespace chrome = vnm_terminal::terminal_app;
 
 using chrome::App_options;
+using chrome::apply_persisted_terminal_window_state;
 using chrome::custom_titlebar_supported_on_platform;
 using chrome::default_shell_argv;
 using chrome::enum_key;
@@ -87,27 +88,37 @@ using chrome::k_exit_start_failed;
 using chrome::k_exit_timeout;
 using chrome::k_exit_usage_error;
 using chrome::k_osc52_clipboard_max_payload_bytes;
+using chrome::k_persisted_window_min_axis;
 using chrome::k_text_area_resize_max_window_axis;
 using chrome::k_timeout_force_exit_grace_ms;
+using chrome::k_window_settings_font_size;
+using chrome::k_window_settings_group;
+using chrome::k_window_settings_height;
+using chrome::k_window_settings_maximized;
+using chrome::k_window_settings_width;
+using chrome::k_window_settings_x;
+using chrome::k_window_settings_y;
+using chrome::load_persisted_terminal_window_state;
 using chrome::metrics_timing_t;
 using chrome::Osc52_clipboard_policy;
+using chrome::Persisted_terminal_window_state;
+using chrome::persisted_window_axis_is_valid;
 using chrome::print_error;
+using chrome::restorable_terminal_window_state;
 using chrome::Runtime_state;
+using chrome::save_persisted_terminal_window_state;
+using chrome::settings_font_size;
+using chrome::settings_int_value;
+using chrome::settings_window_position;
+using chrome::settings_window_size;
+using chrome::terminal_window_persistence_enabled;
+using chrome::window_geometry_intersects_available_screen;
 
 constexpr qreal k_custom_titlebar_height             = 32.0;
 constexpr qreal k_custom_titlebar_physical_reduction = 2.0;
 constexpr qreal k_terminal_scrollbar_width           = 12.0;
-constexpr int   k_persisted_window_min_axis    = 1;
 constexpr int   k_text_area_resize_max_rows    = 512;
 constexpr int   k_text_area_resize_max_columns = 512;
-
-constexpr char k_window_settings_group[]       = "window";
-constexpr char k_window_settings_font_size[]   = "font_size";
-constexpr char k_window_settings_height[]      = "height";
-constexpr char k_window_settings_maximized[]   = "maximized";
-constexpr char k_window_settings_width[]       = "width";
-constexpr char k_window_settings_x[]           = "x";
-constexpr char k_window_settings_y[]           = "y";
 
 QString default_window_title()
 {
@@ -128,193 +139,6 @@ struct Terminal_shell_geometry
     QRectF             terminal_rect;
     QRectF             scrollbar_rect;
 };
-
-struct Persisted_terminal_window_state
-{
-    std::optional<QPoint> position;
-    std::optional<QSize>  size;
-    std::optional<qreal>  font_size;
-    bool                  maximized = false;
-};
-
-bool persisted_window_axis_is_valid(int value)
-{
-    return
-        value >= k_persisted_window_min_axis &&
-        value <= static_cast<int>(k_text_area_resize_max_window_axis);
-}
-
-std::optional<int> settings_int_value(QSettings& settings, const char* key)
-{
-    if (!settings.contains(QLatin1String(key))) {
-        return std::nullopt;
-    }
-
-    bool      ok    = false;
-    const int value = settings.value(QLatin1String(key)).toInt(&ok);
-    if (!ok) {
-        return std::nullopt;
-    }
-
-    return value;
-}
-
-std::optional<qreal> settings_font_size(QSettings& settings)
-{
-    if (!settings.contains(QLatin1String(k_window_settings_font_size))) {
-        return std::nullopt;
-    }
-
-    bool         ok        = false;
-    const double font_size =
-        settings.value(QLatin1String(k_window_settings_font_size)).toDouble(&ok);
-    if (!ok || !std::isfinite(font_size) || font_size <= 0.0) {
-        return std::nullopt;
-    }
-
-    return static_cast<qreal>(font_size);
-}
-
-std::optional<QSize> settings_window_size(QSettings& settings)
-{
-    const std::optional<int> width  = settings_int_value(settings, k_window_settings_width);
-    const std::optional<int> height = settings_int_value(settings, k_window_settings_height);
-    if (!width.has_value() || !height.has_value()) {
-        return std::nullopt;
-    }
-
-    if (!persisted_window_axis_is_valid(*width) ||
-        !persisted_window_axis_is_valid(*height))
-    {
-        return std::nullopt;
-    }
-
-    return QSize(*width, *height);
-}
-
-std::optional<QPoint> settings_window_position(QSettings& settings)
-{
-    const std::optional<int> x = settings_int_value(settings, k_window_settings_x);
-    const std::optional<int> y = settings_int_value(settings, k_window_settings_y);
-    if (!x.has_value() || !y.has_value()) {
-        return std::nullopt;
-    }
-
-    return QPoint(*x, *y);
-}
-
-Persisted_terminal_window_state load_persisted_terminal_window_state(
-    QSettings& settings)
-{
-    Persisted_terminal_window_state state;
-    settings.beginGroup(QLatin1String(k_window_settings_group));
-    state.font_size = settings_font_size(settings);
-    state.size      = settings_window_size(settings);
-    state.position  = settings_window_position(settings);
-    state.maximized =
-        settings.value(QLatin1String(k_window_settings_maximized), false).toBool();
-    settings.endGroup();
-    return state;
-}
-
-void save_persisted_terminal_window_state(
-    QSettings& settings,
-    const Persisted_terminal_window_state& state)
-{
-    settings.beginGroup(QLatin1String(k_window_settings_group));
-    if (state.font_size.has_value() &&
-        std::isfinite(*state.font_size) &&
-        *state.font_size > 0.0)
-    {
-        settings.setValue(QLatin1String(k_window_settings_font_size), *state.font_size);
-    }
-
-    if (state.size.has_value() &&
-        persisted_window_axis_is_valid(state.size->width()) &&
-        persisted_window_axis_is_valid(state.size->height()))
-    {
-        settings.setValue(QLatin1String(k_window_settings_width),  state.size->width());
-        settings.setValue(QLatin1String(k_window_settings_height), state.size->height());
-    }
-
-    if (state.position.has_value()) {
-        settings.setValue(QLatin1String(k_window_settings_x), state.position->x());
-        settings.setValue(QLatin1String(k_window_settings_y), state.position->y());
-    }
-
-    settings.setValue(QLatin1String(k_window_settings_maximized), state.maximized);
-    settings.endGroup();
-    settings.sync();
-}
-
-bool terminal_window_persistence_enabled()
-{
-    return QGuiApplication::platformName() != QStringLiteral("offscreen");
-}
-
-bool window_geometry_intersects_available_screen(
-    const QPoint& position,
-    const QSize&  size)
-{
-    const QRect window_rect(position, size);
-    for (const QScreen* screen : QGuiApplication::screens()) {
-        if (screen->availableGeometry().intersects(window_rect)) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-void apply_persisted_terminal_window_state(
-    const Persisted_terminal_window_state& state,
-    App_options*                           options)
-{
-    if (!options->font_size_explicit && state.font_size.has_value()) {
-        options->font_size = *state.font_size;
-    }
-
-    if (!options->window_size_explicit && state.size.has_value()) {
-        options->window_size = *state.size;
-    }
-
-    if (state.position.has_value() &&
-        window_geometry_intersects_available_screen(
-            *state.position, options->window_size))
-    {
-        options->window_position = *state.position;
-    }
-
-    options->restore_maximized_window_state =
-        state.maximized && !options->window_size_explicit;
-}
-
-std::optional<Persisted_terminal_window_state> restorable_terminal_window_state(
-    const QWindow&              window,
-    const VNM_TerminalSurface&  surface)
-{
-    const Qt::WindowStates window_states = window.windowStates();
-    if (window_states.testFlag(Qt::WindowMinimized) ||
-        window_states.testFlag(Qt::WindowMaximized) ||
-        window_states.testFlag(Qt::WindowFullScreen))
-    {
-        return std::nullopt;
-    }
-
-    const QSize size = window.size();
-    if (!persisted_window_axis_is_valid(size.width()) ||
-        !persisted_window_axis_is_valid(size.height()))
-    {
-        return std::nullopt;
-    }
-
-    Persisted_terminal_window_state state;
-    state.position  = window.position();
-    state.size      = size;
-    state.font_size = surface.font_size();
-    state.maximized = false;
-    return state;
-}
 
 class Terminal_shortcut_filter final : public QObject
 {
