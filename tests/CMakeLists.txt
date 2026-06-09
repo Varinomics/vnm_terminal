@@ -637,7 +637,7 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--synchronized-output-scroll-policy=hidden-live"
+            "--synchronized-output-scroll-policy" "hidden-live"
             "--"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
             "--list"
@@ -648,11 +648,11 @@ if(TARGET vnm_terminal_canvas_fixture)
     )
 
     add_test(
-        NAME vnm_terminal_rejects_empty_synchronized_output_scroll_policy
+        NAME vnm_terminal_rejects_missing_synchronized_output_scroll_policy
         COMMAND
             "${CMAKE_COMMAND}"
             "-Dexpected_exit_code=2"
-            "-Dexpected_output_regex=--synchronized-output-scroll-policy supports only defer or immediate-public"
+            "-Dexpected_output_regex=--synchronized-output-scroll-policy requires a value"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
             --
             "${CMAKE_COMMAND}" -E env
@@ -660,13 +660,10 @@ if(TARGET vnm_terminal_canvas_fixture)
             ${vnm_terminal_qt_unscaled_environment}
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
-            "--synchronized-output-scroll-policy="
-            "--"
-            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
-            "--list"
+            "--synchronized-output-scroll-policy"
     )
 
-    set_tests_properties(vnm_terminal_rejects_empty_synchronized_output_scroll_policy PROPERTIES
+    set_tests_properties(vnm_terminal_rejects_missing_synchronized_output_scroll_policy PROPERTIES
         TIMEOUT 30
     )
 endif()
@@ -742,7 +739,7 @@ add_test(
     COMMAND
         "${CMAKE_COMMAND}"
         "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=--synchronized-output-scroll-policy=<policy>"
+        "-Dexpected_output_regex=--synchronized-output-scroll-policy <policy>"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
         --
         "${CMAKE_COMMAND}" -E env

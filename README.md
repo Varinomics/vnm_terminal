@@ -68,9 +68,9 @@ scrollback recovery for the launched session. It is enabled by default on
 Windows and disabled by default elsewhere.
 
 Synchronized-output scrolling is deferred until content publication by default.
-Pass `--synchronized-output-scroll-policy=immediate-public` before `--` to
+Pass `--synchronized-output-scroll-policy immediate-public` before `--` to
 opt in to immediate public-projection scrolling during DEC synchronized-output
-holds. Pass `--synchronized-output-scroll-policy=defer` to request the default
+holds. Pass `--synchronized-output-scroll-policy defer` to request the default
 policy explicitly. Policy values are case-insensitive.
 
 Manual validation for immediate public scrolling should use an app build whose
