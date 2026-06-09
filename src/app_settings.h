@@ -29,6 +29,7 @@ constexpr char k_appearance_settings_group[]     = "appearance";
 constexpr char k_appearance_color_scheme[]       = "color_scheme";
 constexpr char k_appearance_font_family[]        = "font_family";
 constexpr char k_appearance_text_renderer_mode[] = "text_renderer_mode";
+constexpr char k_appearance_lcd_subpixel_order[] = "lcd_subpixel_order";
 constexpr char k_appearance_scrollback_limit[]   = "scrollback_limit";
 
 struct Persisted_terminal_window_state
@@ -44,6 +45,7 @@ struct Persisted_appearance_settings
     std::optional<QString> color_scheme;
     std::optional<QString> font_family;
     std::optional<int>     text_renderer_mode;
+    std::optional<int>     lcd_subpixel_order;
     std::optional<int>     scrollback_limit;
 };
 

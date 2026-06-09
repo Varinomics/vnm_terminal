@@ -143,6 +143,7 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
     }
 
     state.text_renderer_mode = settings_int_value(settings, k_appearance_text_renderer_mode);
+    state.lcd_subpixel_order = settings_int_value(settings, k_appearance_lcd_subpixel_order);
     state.scrollback_limit   = settings_int_value(settings, k_appearance_scrollback_limit);
 
     settings.endGroup();
@@ -171,6 +172,16 @@ void apply_persisted_appearance_settings(
         {
             options->text_renderer_mode =
                 static_cast<VNM_TerminalSurface::Text_renderer_mode>(mode);
+        }
+    }
+
+    if (!options->lcd_subpixel_order_explicit && state.lcd_subpixel_order.has_value()) {
+        const int order = *state.lcd_subpixel_order;
+        if (order >= static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::AUTO) &&
+            order <= static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::VBGR))
+        {
+            options->lcd_subpixel_order =
+                static_cast<VNM_TerminalSurface::Lcd_subpixel_order>(order);
         }
     }
 

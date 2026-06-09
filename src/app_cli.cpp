@@ -648,6 +648,7 @@ Parse_result parse_arguments(const QStringList& arguments)
                 return result;
             }
 
+            result.options.lcd_subpixel_order_explicit = true;
             continue;
         }
 

@@ -68,6 +68,7 @@ struct App_options
     bool               font_family_explicit               = false;
     bool               color_scheme_explicit              = false;
     bool               text_renderer_mode_explicit        = false;
+    bool               lcd_subpixel_order_explicit        = false;
     bool               window_size_explicit               = false;
     bool               restore_maximized_window_state     = false;
 };

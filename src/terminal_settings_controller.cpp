@@ -43,6 +43,7 @@ void settings::Terminal_settings_controller::connect_persistence()
     QObject::connect(m_surface, &VNM_TerminalSurface::font_family_changed,        this, persist);
     QObject::connect(m_surface, &VNM_TerminalSurface::font_size_changed,          this, persist);
     QObject::connect(m_surface, &VNM_TerminalSurface::text_renderer_mode_changed, this, persist);
+    QObject::connect(m_surface, &VNM_TerminalSurface::lcd_subpixel_order_changed,  this, persist);
     QObject::connect(m_surface, &VNM_TerminalSurface::scrollback_limit_changed,   this, persist);
 }
 
@@ -59,6 +60,9 @@ void settings::Terminal_settings_controller::persist_appearance() const
     settings.setValue(
         QLatin1String(k_appearance_text_renderer_mode),
         static_cast<int>(m_surface->text_renderer_mode()));
+    settings.setValue(
+        QLatin1String(k_appearance_lcd_subpixel_order),
+        static_cast<int>(m_surface->lcd_subpixel_order()));
     settings.setValue(QLatin1String(k_appearance_scrollback_limit), m_surface->scrollback_limit());
     settings.endGroup();
 
