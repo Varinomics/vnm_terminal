@@ -5,7 +5,7 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
-#include "vnm_terminal/internal/vnm_terminal_font.h"
+#include "vnm_terminal/font_metrics.h"
 
 #include <QPoint>
 #include <QSize>
@@ -15,8 +15,6 @@
 #include <optional>
 
 namespace vnm_terminal::terminal_app {
-
-namespace term = vnm_terminal::internal;
 
 #if defined(_WIN32) || defined(__linux__)
 constexpr bool k_custom_titlebar_supported_on_platform = true;
@@ -40,8 +38,8 @@ struct App_options
     QString            transcript_capture_path;
     QString            profile_text_path;
     QString            metrics_json_path;
-    QString            font_family = term::vnm_terminal_default_monospace_font_family();
-    qreal              font_size   = term::k_vnm_terminal_default_font_pixel_size;
+    QString            font_family = vnm_terminal::default_monospace_font_family();
+    qreal              font_size   = vnm_terminal::k_default_font_pixel_size;
     QString            theme       = QStringLiteral("default");
     QSize              window_size = QSize(900, 600);
     std::optional<QPoint> window_position;
