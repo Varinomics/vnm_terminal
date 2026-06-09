@@ -204,7 +204,7 @@ Window {
                                 width: swatch.implicitWidth + 4
                                 height: 18
                                 radius: 2
-                                color: parent.preview.background
+                                color: preview.background
 
                                 Row {
                                     id: swatch
