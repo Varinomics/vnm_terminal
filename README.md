@@ -131,7 +131,9 @@ MinGW, CMake, Ninja, and `vnm_terminal_surface` paths, then run:
 build_portable.bat
 ```
 
-The script writes `dist\portable\` and `dist\vnm_terminal_v1.0.1_w64.zip`.
+The script writes `dist\portable\` and `dist\vnm_terminal_v<version>_w64.zip`,
+where `<version>` is the `project()` version in `CMakeLists.txt` (derived from
+the configured CMake cache, not hardcoded).
 Portable releases are built with `VNM_TERMINAL_DISTRIBUTION_BUILD=ON`,
 `VNM_TERMINAL_ENABLE_PROFILING=OFF`, and transcript capture/replay disabled.
 They are packaged from the Qt MinGW kit and include the required Qt and MinGW
