@@ -164,9 +164,17 @@ Item {
         resize_border_width: root.reduced_resize_border_width
         activity_marker_text: root.activity_marker_text
         trailing_action_component:
-            (root.settings_button_visible || root.wheel_delivery_indicator_visible)
-                ? trailing_actions_component
-                : null
+            root.wheel_delivery_indicator_visible ? trailing_actions_component : null
+        custom_buttons: root.settings_button_visible
+            ? [{
+                object_name: "settings_button",
+                glyph: "\uE713",
+                font_family: "Segoe Fluent Icons",
+                pixel_size: 16,
+                tooltip: "Settings",
+                action: function() { root.settings_requested() }
+            }]
+            : []
 
         onMove_requested: root.move_requested()
         onResize_requested: (edges) => root.resize_requested(edges)
@@ -178,81 +186,20 @@ Item {
     Component {
         id: trailing_actions_component
 
-        Row {
-            spacing: 6
+        Item {
+            id: wheel_indicator
+            width: 14
+            height: Math.max(0, root.reduced_titlebar_height)
 
-            VNM_ChromeWindowButton {
-                id: settings_button
-                objectName: "settings_button"
-
-                visible: root.settings_button_visible
-                theme: terminal_chrome_theme
-                width: 34
-                height: Math.max(0, root.reduced_titlebar_height)
-                onClicked: root.settings_requested()
-
-                Canvas {
-                    anchors.fill: parent
-                    property color icon_color: terminal_chrome_theme.titlebar_button_icon
-
-                    onIcon_colorChanged: requestPaint()
-                    onWidthChanged: requestPaint()
-                    onHeightChanged: requestPaint()
-                    onPaint: {
-                        const ctx = getContext("2d")
-                        ctx.clearRect(0, 0, width, height)
-                        ctx.fillStyle = icon_color
-
-                        const cx    = width / 2
-                        const cy    = height / 2
-                        const teeth = 8
-                        const r_out = 6.2
-                        const r_in  = 4.5
-                        const hole  = 2.3
-                        const step  = Math.PI * 2 / teeth
-                        const tip   = step * 0.30
-
-                        ctx.beginPath()
-                        for (let i = 0; i < teeth; ++i) {
-                            const a  = i * step
-                            const p0 = a - tip
-                            const p1 = a + tip
-                            const p2 = a + step - tip
-                            if (i === 0) {
-                                ctx.moveTo(cx + Math.cos(p0) * r_out, cy + Math.sin(p0) * r_out)
-                            }
-                            else {
-                                ctx.lineTo(cx + Math.cos(p0) * r_out, cy + Math.sin(p0) * r_out)
-                            }
-                            ctx.lineTo(cx + Math.cos(p1) * r_out, cy + Math.sin(p1) * r_out)
-                            ctx.lineTo(cx + Math.cos(p1) * r_in,  cy + Math.sin(p1) * r_in)
-                            ctx.lineTo(cx + Math.cos(p2) * r_in,  cy + Math.sin(p2) * r_in)
-                        }
-                        ctx.closePath()
-
-                        ctx.moveTo(cx + hole, cy)
-                        ctx.arc(cx, cy, hole, 0, Math.PI * 2, true)
-                        ctx.fill()
-                    }
-                }
-            }
-
-            Item {
-                id: wheel_indicator
+            Rectangle {
+                anchors.centerIn: parent
                 width: 7
-                height: Math.max(0, root.reduced_titlebar_height)
-                visible: root.wheel_delivery_indicator_visible
-
-                Rectangle {
-                    anchors.centerIn: parent
-                    width: 7
-                    height: 7
-                    radius: width / 2
-                    color: "#ffdc2a"
-                    border.color: "#6c4a00"
-                    border.width: 1
-                    opacity: 0.92
-                }
+                height: 7
+                radius: width / 2
+                color: "#ffdc2a"
+                border.color: "#6c4a00"
+                border.width: 1
+                opacity: 0.92
             }
         }
     }
