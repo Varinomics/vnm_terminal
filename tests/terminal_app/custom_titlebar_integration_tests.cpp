@@ -2129,7 +2129,8 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     ok &= check(settings_requests == 1,
         "clicking the settings gear emits exactly one settings request");
 
-    chrome_test::Terminal_settings_window settings_window(engine);
+    chrome_test::Terminal_settings_controller settings_controller(surface);
+    chrome_test::Terminal_settings_window settings_window(engine, surface, settings_controller);
     ok &= check(settings_window.is_valid(), "settings window initializes");
     if (!settings_window.is_valid()) {
         std::cerr << settings_window.error_string().toStdString() << '\n';
@@ -2157,8 +2158,78 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
             settings_qml_window->findChild<QQuickItem*>(
                 QStringLiteral("settings_window_titlebar")) != nullptr,
             "settings window builds its chrome titlebar");
+
+        auto* scheme_list = settings_qml_window->findChild<QQuickItem*>(
+            QStringLiteral("scheme_list"));
+        ok &= check(scheme_list != nullptr,
+            "settings panel builds the color-scheme picker");
+        if (scheme_list != nullptr) {
+            ok &= check(
+                scheme_list->property("count").toInt() ==
+                    surface.available_color_schemes().size(),
+                "color-scheme picker lists every bundled scheme");
+        }
     }
 
+    ok &= check(surface.color_scheme() == QStringLiteral("Campbell"),
+        "surface defaults to the Campbell color scheme");
+    ok &= check(surface.available_color_schemes().size() == 16,
+        "surface exposes the 16 bundled color schemes");
+    surface.set_color_scheme(QStringLiteral("Tango Dark"));
+    ok &= check(surface.color_scheme() == QStringLiteral("Tango Dark"),
+        "selecting a bundled scheme updates the surface live");
+
+    return ok;
+}
+
+bool test_settings_shortcut_requests_settings(QGuiApplication& app)
+{
+    QQuickWindow window;
+    window.resize(360, 240);
+    VNM_TerminalSurface surface(window.contentItem());
+
+    Recording_event_filter   key_filter(QEvent::KeyPress);
+    Terminal_shortcut_filter shortcut_filter(&surface);
+    window.installEventFilter(&key_filter);
+    window.installEventFilter(&shortcut_filter);
+    window.show();
+    pump_events(app);
+    surface.forceActiveFocus();
+    pump_events(app);
+
+    int settings_requests = 0;
+    QObject::connect(
+        &shortcut_filter,
+        &Terminal_shortcut_filter::settings_requested,
+        &shortcut_filter,
+        [&settings_requests] {
+            ++settings_requests;
+        });
+
+#if defined(Q_OS_MACOS)
+    const Qt::KeyboardModifiers settings_modifier = Qt::MetaModifier;
+#else
+    const Qt::KeyboardModifiers settings_modifier = Qt::ControlModifier;
+#endif
+
+    QKeyEvent settings_event(QEvent::KeyPress, Qt::Key_Comma, settings_modifier);
+    settings_event.setAccepted(false);
+    QCoreApplication::sendEvent(&window, &settings_event);
+
+    bool ok = true;
+    ok &= check(settings_requests == 1,
+        "the settings shortcut requests the panel exactly once");
+    ok &= check(key_filter.recorded_count == 0,
+        "the settings shortcut is consumed before reaching the terminal");
+
+    QKeyEvent plain_comma(QEvent::KeyPress, Qt::Key_Comma, Qt::NoModifier);
+    plain_comma.setAccepted(false);
+    QCoreApplication::sendEvent(&window, &plain_comma);
+
+    ok &= check(settings_requests == 1,
+        "a plain comma key press does not request the settings panel");
+    ok &= check(key_filter.recorded_count == 1,
+        "a plain comma key press is delivered to the terminal");
     return ok;
 }
 
@@ -2187,6 +2258,7 @@ int main(int argc, char** argv)
     ok &= test_parse_paste_shortcut_option();
     ok &= test_window_state_sync();
     ok &= test_settings_gear_button_and_window(app);
+    ok &= test_settings_shortcut_requests_settings(app);
 #if defined(Q_OS_MACOS)
     ok &= test_macos_command_shortcuts_are_host_shortcuts(app);
 #endif

@@ -150,6 +150,81 @@ bool test_invalid_persisted_values_are_ignored()
     return ok;
 }
 
+bool test_appearance_settings_round_trip()
+{
+    QTemporaryDir dir;
+    bool ok = check(dir.isValid(), "temporary appearance-settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+    writer.beginGroup(QLatin1String(k_appearance_settings_group));
+    writer.setValue(QLatin1String(k_appearance_color_scheme), QStringLiteral("Solarized Dark"));
+    writer.setValue(QLatin1String(k_appearance_font_family),  QStringLiteral("Cascadia Mono"));
+    writer.setValue(
+        QLatin1String(k_appearance_text_renderer_mode),
+        static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH));
+    writer.setValue(QLatin1String(k_appearance_scrollback_limit), 25000);
+    writer.endGroup();
+    writer.sync();
+
+    QSettings reader(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+    const Persisted_appearance_settings state = load_persisted_appearance_settings(reader);
+
+    ok &= check(state.color_scheme.value_or(QString()) == QStringLiteral("Solarized Dark"),
+        "persisted color scheme round-trips");
+    ok &= check(state.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
+        "persisted font family round-trips");
+    ok &= check(
+        state.text_renderer_mode.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH),
+        "persisted renderer mode round-trips");
+    ok &= check(state.scrollback_limit.value_or(-1) == 25000,
+        "persisted scrollback limit round-trips");
+
+    App_options options;
+    apply_persisted_appearance_settings(state, &options);
+    ok &= check(options.color_scheme == QStringLiteral("Solarized Dark"),
+        "persisted color scheme is applied without command-line override");
+    ok &= check(options.font_family == QStringLiteral("Cascadia Mono"),
+        "persisted font family is applied without command-line override");
+    ok &= check(
+        options.text_renderer_mode == VNM_TerminalSurface::Text_renderer_mode::GLYPH,
+        "persisted renderer mode is applied without command-line override");
+    ok &= check(options.scrollback_limit.value_or(0) == 25000,
+        "persisted scrollback limit is applied without command-line override");
+
+    App_options explicit_options;
+    explicit_options.color_scheme                = QStringLiteral("Campbell");
+    explicit_options.color_scheme_explicit       = true;
+    explicit_options.font_family                 = QStringLiteral("Consolas");
+    explicit_options.font_family_explicit        = true;
+    explicit_options.text_renderer_mode          = VNM_TerminalSurface::Text_renderer_mode::MSDF;
+    explicit_options.text_renderer_mode_explicit = true;
+    explicit_options.scrollback_limit            = 4000;
+    apply_persisted_appearance_settings(state, &explicit_options);
+    ok &= check(explicit_options.color_scheme == QStringLiteral("Campbell"),
+        "explicit color scheme overrides persisted scheme");
+    ok &= check(explicit_options.font_family == QStringLiteral("Consolas"),
+        "explicit font family overrides persisted family");
+    ok &= check(
+        explicit_options.text_renderer_mode == VNM_TerminalSurface::Text_renderer_mode::MSDF,
+        "explicit renderer mode overrides persisted mode");
+    ok &= check(explicit_options.scrollback_limit.value_or(0) == 4000,
+        "explicit scrollback limit overrides persisted limit");
+
+    Persisted_appearance_settings bogus;
+    bogus.color_scheme = QStringLiteral("Not A Real Scheme");
+    App_options bogus_options;
+    const QString default_scheme = bogus_options.color_scheme;
+    apply_persisted_appearance_settings(bogus, &bogus_options);
+    ok &= check(bogus_options.color_scheme == default_scheme,
+        "unknown persisted color scheme is rejected");
+
+    return ok;
+}
+
 }
 
 int main(int argc, char** argv)
@@ -160,5 +235,6 @@ int main(int argc, char** argv)
     ok &= test_save_and_load_window_state();
     ok &= test_apply_persisted_window_state();
     ok &= test_invalid_persisted_values_are_ignored();
+    ok &= test_appearance_settings_round_trip();
     return ok ? 0 : 1;
 }

@@ -2,6 +2,8 @@
 
 #include "app_common.h"
 
+#include "vnm_terminal/internal/terminal_color_scheme.h"
+
 #include <QGuiApplication>
 #include <QLatin1String>
 #include <QRect>
@@ -121,6 +123,63 @@ void save_persisted_terminal_window_state(
     settings.setValue(QLatin1String(k_window_settings_maximized), state.maximized);
     settings.endGroup();
     settings.sync();
+}
+
+Persisted_appearance_settings load_persisted_appearance_settings(QSettings& settings)
+{
+    Persisted_appearance_settings state;
+    settings.beginGroup(QLatin1String(k_appearance_settings_group));
+
+    const QString color_scheme =
+        settings.value(QLatin1String(k_appearance_color_scheme)).toString().trimmed();
+    if (!color_scheme.isEmpty()) {
+        state.color_scheme = color_scheme;
+    }
+
+    const QString font_family =
+        settings.value(QLatin1String(k_appearance_font_family)).toString().trimmed();
+    if (!font_family.isEmpty()) {
+        state.font_family = font_family;
+    }
+
+    state.text_renderer_mode = settings_int_value(settings, k_appearance_text_renderer_mode);
+    state.scrollback_limit   = settings_int_value(settings, k_appearance_scrollback_limit);
+
+    settings.endGroup();
+    return state;
+}
+
+void apply_persisted_appearance_settings(
+    const Persisted_appearance_settings& state,
+    App_options*                         options)
+{
+    if (!options->color_scheme_explicit &&
+        state.color_scheme.has_value() &&
+        vnm_terminal::internal::find_color_scheme(*state.color_scheme) != nullptr)
+    {
+        options->color_scheme = *state.color_scheme;
+    }
+
+    if (!options->font_family_explicit && state.font_family.has_value()) {
+        options->font_family = *state.font_family;
+    }
+
+    if (!options->text_renderer_mode_explicit && state.text_renderer_mode.has_value()) {
+        const int mode = *state.text_renderer_mode;
+        if (mode >= static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO) &&
+            mode <= static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH))
+        {
+            options->text_renderer_mode =
+                static_cast<VNM_TerminalSurface::Text_renderer_mode>(mode);
+        }
+    }
+
+    if (!options->scrollback_limit.has_value() &&
+        state.scrollback_limit.has_value()     &&
+        *state.scrollback_limit >= 0)
+    {
+        options->scrollback_limit = *state.scrollback_limit;
+    }
 }
 
 bool terminal_window_persistence_enabled()

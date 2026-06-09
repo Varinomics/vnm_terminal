@@ -8,6 +8,7 @@
 #include "app_shortcuts.h"
 #include "qml_chrome.h"
 #include "terminal_scrollbar.h"
+#include "terminal_settings_controller.h"
 #include "terminal_settings_window.h"
 #include "terminal_window.h"
 
@@ -62,6 +63,7 @@ namespace term   = vnm_terminal::internal;
 namespace chrome = vnm_terminal::terminal_app;
 
 using chrome::App_options;
+using chrome::apply_persisted_appearance_settings;
 using chrome::apply_persisted_terminal_window_state;
 using chrome::apply_primary_repaint_recovery_option;
 using chrome::apply_scrollback_limit_option;
@@ -92,6 +94,11 @@ using chrome::k_text_area_resize_max_columns;
 using chrome::k_text_area_resize_max_rows;
 using chrome::k_text_area_resize_max_window_axis;
 using chrome::k_timeout_force_exit_grace_ms;
+using chrome::k_appearance_color_scheme;
+using chrome::k_appearance_font_family;
+using chrome::k_appearance_scrollback_limit;
+using chrome::k_appearance_settings_group;
+using chrome::k_appearance_text_renderer_mode;
 using chrome::k_window_settings_font_size;
 using chrome::k_window_settings_group;
 using chrome::k_window_settings_height;
@@ -99,10 +106,12 @@ using chrome::k_window_settings_maximized;
 using chrome::k_window_settings_width;
 using chrome::k_window_settings_x;
 using chrome::k_window_settings_y;
+using chrome::load_persisted_appearance_settings;
 using chrome::load_persisted_terminal_window_state;
 using chrome::logical_device_pixel_width;
 using chrome::metrics_timing_t;
 using chrome::Osc52_clipboard_policy;
+using chrome::Persisted_appearance_settings;
 using chrome::Persisted_terminal_window_state;
 using chrome::persisted_window_axis_is_valid;
 #if VNM_TERMINAL_PROFILING_ENABLED
@@ -299,6 +308,9 @@ int main(int argc, char** argv)
         apply_persisted_terminal_window_state(
             load_persisted_terminal_window_state(settings),
             &options);
+        apply_persisted_appearance_settings(
+            load_persisted_appearance_settings(settings),
+            &options);
     }
 
     QQmlEngine chrome_engine;
@@ -328,24 +340,6 @@ int main(int argc, char** argv)
     }
     auto* titlebar_ptr = titlebar.get();
 
-    std::unique_ptr<chrome::Terminal_settings_window> settings_window;
-    if (titlebar_ptr != nullptr) {
-        settings_window = std::make_unique<chrome::Terminal_settings_window>(chrome_engine);
-        if (!settings_window->is_valid()) {
-            print_error(QStringLiteral("failed to create settings window: %1")
-                .arg(settings_window->error_string()));
-            settings_window.reset();
-        }
-        else {
-            settings_window->set_transient_parent(&window);
-            QObject::connect(
-                titlebar_ptr,
-                &chrome::Terminal_qml_chrome::settings_requested,
-                settings_window.get(),
-                &chrome::Terminal_settings_window::show_window);
-        }
-    }
-
     auto* surface = new VNM_TerminalSurface(window.contentItem());
     surface->set_selection_trace_enabled(options.selection_trace_enabled);
 #if VNM_TERMINAL_PROFILING_ENABLED
@@ -368,7 +362,7 @@ int main(int argc, char** argv)
     scrollbar->set_wheel_trace_enabled(options.wheel_trace_enabled);
     surface->set_font_family(options.font_family);
     surface->set_font_size(options.font_size);
-    surface->set_color_theme(options.theme);
+    surface->set_color_scheme(options.color_scheme);
     surface->set_wheel_event_policy(
         VNM_TerminalSurface::Wheel_event_policy::LOCAL_SCROLLBACK_FIRST);
     apply_scrollback_limit_option(*surface, options);
@@ -408,8 +402,39 @@ int main(int argc, char** argv)
         *scrollbar,
         titlebar_ptr,
         custom_titlebar_enabled);
-    window.installEventFilter(
-        new Terminal_shortcut_filter(surface, options.paste_shortcut_policy));
+    auto* shortcut_filter =
+        new Terminal_shortcut_filter(surface, options.paste_shortcut_policy);
+    window.installEventFilter(shortcut_filter);
+
+    auto settings_controller =
+        std::make_unique<chrome::Terminal_settings_controller>(*surface);
+    auto settings_window = std::make_unique<chrome::Terminal_settings_window>(
+        chrome_engine,
+        *surface,
+        *settings_controller);
+    if (!settings_window->is_valid()) {
+        print_error(QStringLiteral("failed to create settings window: %1")
+            .arg(settings_window->error_string()));
+        settings_window.reset();
+        settings_controller.reset();
+    }
+    else {
+        settings_window->set_transient_parent(&window);
+        // Settings are reachable everywhere via Ctrl+, / Cmd+, and, when the
+        // built-in chrome is active, via the titlebar gear button.
+        QObject::connect(
+            shortcut_filter,
+            &Terminal_shortcut_filter::settings_requested,
+            settings_window.get(),
+            &chrome::Terminal_settings_window::show_window);
+        if (titlebar_ptr != nullptr) {
+            QObject::connect(
+                titlebar_ptr,
+                &chrome::Terminal_qml_chrome::settings_requested,
+                settings_window.get(),
+                &chrome::Terminal_settings_window::show_window);
+        }
+    }
 
     connect_terminal_metadata_to_chrome(*surface, window, titlebar_ptr);
     QObject::connect(

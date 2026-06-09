@@ -9,19 +9,28 @@
 class QQmlEngine;
 class QQuickWindow;
 class QWindow;
+class VNM_TerminalSurface;
 
 namespace vnm_terminal::terminal_app {
+
+class Terminal_settings_controller;
 
 // Frameless, chrome-styled child window that hosts the terminal settings panel.
 // It owns a self-contained QML Window (its own VNM_ChromeTitleBar with drag,
 // resize, and close) created from the shared chrome runtime, and is shown on
-// demand when the user activates the titlebar settings (gear) button.
+// demand when the user activates the titlebar settings (gear) button. The
+// panel binds its controls to the live surface and the settings controller,
+// which are exposed to the QML as context properties.
 class Terminal_settings_window final : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit Terminal_settings_window(QQmlEngine& engine, QObject* parent = nullptr);
+    Terminal_settings_window(
+        QQmlEngine&                   engine,
+        VNM_TerminalSurface&          surface,
+        Terminal_settings_controller& controller,
+        QObject*                      parent = nullptr);
     ~Terminal_settings_window() override;
 
     bool    is_valid() const;

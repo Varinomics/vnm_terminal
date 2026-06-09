@@ -29,10 +29,15 @@ bool paste_shortcut_should_paste(
 
 class Terminal_shortcut_filter final : public QObject
 {
+    Q_OBJECT
+
 public:
     explicit Terminal_shortcut_filter(
         VNM_TerminalSurface*  surface,
         Paste_shortcut_policy paste_policy = Paste_shortcut_policy::PLATFORM_DEFAULT);
+
+signals:
+    void settings_requested();
 
 protected:
     bool eventFilter(QObject*, QEvent* event) override;
