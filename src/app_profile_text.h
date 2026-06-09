@@ -3,6 +3,9 @@
 #include "vnm_terminal/vnm_terminal_surface.h"
 
 #if VNM_TERMINAL_PROFILING_ENABLED
+// Privileged first-party use: the app owns its GUI-thread Hierarchical_profiler
+// (profiling builds only). See vnm_terminal_surface docs/public_surface.md,
+// "Internal Headers And Privileged First-Party Consumers".
 #include "vnm_terminal/internal/hierarchical_profiler.h"
 
 #include <QString>
