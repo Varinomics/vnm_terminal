@@ -5,6 +5,7 @@
 #include "app_options.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
+#include "vnm_terminal/internal/terminal_color_scheme.h"
 
 #include <QDir>
 #include <QFile>
@@ -331,7 +332,7 @@ void print_usage()
         << "  --cwd <path>                    launch in a working directory\n"
         << "  --font-family <family>          terminal font family\n"
         << "  --font-size <pixels>            terminal font size in pixels\n"
-        << "  --theme <name>                  terminal color theme\n"
+        << "  --color-scheme <name>           terminal color scheme (e.g. Campbell)\n"
         << "  --scrollback-limit <rows>       maximum retained scrollback rows\n"
         << "  --window-size <width>x<height>  window size in logical pixels\n"
 #if defined(_WIN32) || defined(__linux__)
@@ -563,7 +564,8 @@ Parse_result parse_arguments(const QStringList& arguments)
                 return result;
             }
 
-            result.options.font_family = value;
+            result.options.font_family          = value;
+            result.options.font_family_explicit = true;
             continue;
         }
 
@@ -578,12 +580,13 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--theme")) {
+        if (argument_is(argument, "--color-scheme")) {
             if (!take_option_value(arguments, index, &value, &result.error)) {
                 return result;
             }
 
-            result.options.theme = value;
+            result.options.color_scheme          = value;
+            result.options.color_scheme_explicit = true;
             continue;
         }
 
@@ -633,6 +636,7 @@ Parse_result parse_arguments(const QStringList& arguments)
                 return result;
             }
 
+            result.options.text_renderer_mode_explicit = true;
             continue;
         }
 
@@ -846,19 +850,20 @@ Parse_result parse_arguments(const QStringList& arguments)
         return result;
     }
 
-    const QString theme = result.options.theme.trimmed();
-    if (theme.isEmpty()) {
-        result.error = QStringLiteral("--theme requires a non-empty theme name");
+    const QString color_scheme = result.options.color_scheme.trimmed();
+    if (color_scheme.isEmpty()) {
+        result.error = QStringLiteral("--color-scheme requires a non-empty scheme name");
         return result;
     }
 
-    if (theme.compare(QStringLiteral("default"), Qt::CaseInsensitive) != 0 &&
-        theme.compare(QStringLiteral("light"), Qt::CaseInsensitive)   != 0)
-    {
-        result.error = QStringLiteral("--theme supports only 'default' or 'light'");
+    const vnm_terminal::internal::Terminal_color_scheme* scheme =
+        vnm_terminal::internal::find_color_scheme(color_scheme);
+    if (scheme == nullptr) {
+        result.error =
+            QStringLiteral("--color-scheme: unknown scheme name '%1'").arg(color_scheme);
         return result;
     }
-    result.options.theme = theme;
+    result.options.color_scheme = scheme->name;
 
     return result;
 }

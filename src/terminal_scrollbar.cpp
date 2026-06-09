@@ -4,6 +4,7 @@
 #include <QHoverEvent>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QVariant>
 #include <QWheelEvent>
 
 #include <algorithm>
@@ -39,13 +40,14 @@ QColor thumb_color(bool active)
 
 QColor terminal_background_color(const VNM_TerminalSurface* surface)
 {
-    if (surface                                                                      != nullptr &&
-        surface->color_theme().compare(QStringLiteral("light"), Qt::CaseInsensitive) == 0)
-    {
-        return QColor(246, 247, 242);
+    if (surface == nullptr) {
+        return QColor(0, 0, 0);
     }
 
-    return QColor(0, 0, 0);
+    // Match the scrollbar gutter to the active color scheme's background.
+    const QVariantMap preview = surface->color_scheme_preview(surface->color_scheme());
+    const QVariant background = preview.value(QStringLiteral("background"));
+    return background.canConvert<QColor>() ? background.value<QColor>() : QColor(0, 0, 0);
 }
 
 bool has_vertical_wheel_delta(const QWheelEvent& event)
@@ -102,7 +104,7 @@ void scrollbar::Terminal_scrollbar::set_surface(VNM_TerminalSurface* surface)
             });
         m_theme_connection = QObject::connect(
             m_surface,
-            &VNM_TerminalSurface::color_theme_changed,
+            &VNM_TerminalSurface::color_scheme_changed,
             this,
             [this] {
                 update();

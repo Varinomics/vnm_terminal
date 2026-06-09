@@ -25,12 +25,26 @@ constexpr char k_window_settings_width[]     = "width";
 constexpr char k_window_settings_x[]         = "x";
 constexpr char k_window_settings_y[]         = "y";
 
+constexpr char k_appearance_settings_group[]     = "appearance";
+constexpr char k_appearance_color_scheme[]       = "color_scheme";
+constexpr char k_appearance_font_family[]        = "font_family";
+constexpr char k_appearance_text_renderer_mode[] = "text_renderer_mode";
+constexpr char k_appearance_scrollback_limit[]   = "scrollback_limit";
+
 struct Persisted_terminal_window_state
 {
     std::optional<QPoint> position;
     std::optional<QSize>  size;
     std::optional<qreal>  font_size;
     bool                  maximized = false;
+};
+
+struct Persisted_appearance_settings
+{
+    std::optional<QString> color_scheme;
+    std::optional<QString> font_family;
+    std::optional<int>     text_renderer_mode;
+    std::optional<int>     scrollback_limit;
 };
 
 bool persisted_window_axis_is_valid(int value);
@@ -46,6 +60,12 @@ Persisted_terminal_window_state load_persisted_terminal_window_state(
 void save_persisted_terminal_window_state(
     QSettings&                             settings,
     const Persisted_terminal_window_state& state);
+
+Persisted_appearance_settings load_persisted_appearance_settings(QSettings& settings);
+
+void apply_persisted_appearance_settings(
+    const Persisted_appearance_settings& state,
+    App_options*                         options);
 
 bool terminal_window_persistence_enabled();
 

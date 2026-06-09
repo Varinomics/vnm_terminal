@@ -58,6 +58,22 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
     const Qt::KeyboardModifiers modifiers =
         key_event->modifiers() &
         (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
+
+    if (key_event->key() == Qt::Key_Comma) {
+        // Settings shortcut: Ctrl+, everywhere, Cmd+, on macOS (the platform
+        // Preferences convention, and the only entry point where the custom
+        // chrome -- and thus the settings gear -- is unavailable).
+#if defined(Q_OS_MACOS)
+        const bool settings_shortcut = modifiers == Qt::MetaModifier;
+#else
+        const bool settings_shortcut = modifiers == Qt::ControlModifier;
+#endif
+        if (settings_shortcut) {
+            emit settings_requested();
+            return true;
+        }
+    }
+
     const bool paste_shortcut =
         paste_shortcut_should_paste(m_paste_policy, key_event->key(), modifiers);
 #if defined(Q_OS_MACOS)

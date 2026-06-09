@@ -38,10 +38,10 @@ struct App_options
     QString            transcript_capture_path;
     QString            profile_text_path;
     QString            metrics_json_path;
-    QString            font_family = vnm_terminal::default_monospace_font_family();
-    qreal              font_size   = vnm_terminal::k_default_font_pixel_size;
-    QString            theme       = QStringLiteral("default");
-    QSize              window_size = QSize(900, 600);
+    QString            font_family  = vnm_terminal::default_monospace_font_family();
+    qreal              font_size    = vnm_terminal::k_default_font_pixel_size;
+    QString            color_scheme = QStringLiteral("Campbell");
+    QSize              window_size  = QSize(900, 600);
     std::optional<QPoint> window_position;
     VNM_TerminalSurface::Alternate_screen_wheel_policy alternate_screen_wheel_policy =
         VNM_TerminalSurface::Alternate_screen_wheel_policy::MOUSE_REPORTING_FIRST;
@@ -65,6 +65,9 @@ struct App_options
     bool               wheel_trace_enabled                 = false;
     std::optional<bool> primary_repaint_recovery_enabled;
     bool               font_size_explicit                 = false;
+    bool               font_family_explicit               = false;
+    bool               color_scheme_explicit              = false;
+    bool               text_renderer_mode_explicit        = false;
     bool               window_size_explicit               = false;
     bool               restore_maximized_window_state     = false;
 };
