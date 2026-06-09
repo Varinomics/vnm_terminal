@@ -50,6 +50,8 @@ add_executable(vnm_terminal
     src/qml_chrome.h
     src/terminal_scrollbar.cpp
     src/terminal_scrollbar.h
+    src/terminal_settings_window.cpp
+    src/terminal_settings_window.h
     src/terminal_title_metadata.h
     src/terminal_window.cpp
     src/terminal_window.h

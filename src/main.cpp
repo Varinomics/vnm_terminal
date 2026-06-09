@@ -8,6 +8,7 @@
 #include "app_shortcuts.h"
 #include "qml_chrome.h"
 #include "terminal_scrollbar.h"
+#include "terminal_settings_window.h"
 #include "terminal_window.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
@@ -326,6 +327,24 @@ int main(int argc, char** argv)
         }
     }
     auto* titlebar_ptr = titlebar.get();
+
+    std::unique_ptr<chrome::Terminal_settings_window> settings_window;
+    if (titlebar_ptr != nullptr) {
+        settings_window = std::make_unique<chrome::Terminal_settings_window>(chrome_engine);
+        if (!settings_window->is_valid()) {
+            print_error(QStringLiteral("failed to create settings window: %1")
+                .arg(settings_window->error_string()));
+            settings_window.reset();
+        }
+        else {
+            settings_window->set_transient_parent(&window);
+            QObject::connect(
+                titlebar_ptr,
+                &chrome::Terminal_qml_chrome::settings_requested,
+                settings_window.get(),
+                &chrome::Terminal_settings_window::show_window);
+        }
+    }
 
     auto* surface = new VNM_TerminalSurface(window.contentItem());
     surface->set_selection_trace_enabled(options.selection_trace_enabled);

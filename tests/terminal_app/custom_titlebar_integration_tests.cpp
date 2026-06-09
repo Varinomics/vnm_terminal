@@ -23,6 +23,7 @@
 #include <QQuickItem>
 #include <QTemporaryDir>
 #include <QWheelEvent>
+#include <QWindow>
 
 #include <cmath>
 #include <iostream>
@@ -2067,6 +2068,100 @@ bool test_macos_command_shortcuts_are_host_shortcuts(QGuiApplication& app)
 }
 #endif
 
+bool test_settings_gear_button_and_window(QGuiApplication& app)
+{
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(800, 480);
+
+    chrome_test::Terminal_qml_chrome titlebar(engine, window);
+    VNM_TerminalSurface surface(window.contentItem());
+    chrome_test::Terminal_scrollbar scrollbar(window.contentItem());
+
+    bool ok = true;
+    ok &= check(titlebar.is_valid(), "settings gear titlebar initializes");
+    if (!titlebar.is_valid()) {
+        std::cerr << titlebar.error_string().toStdString() << '\n';
+        return ok;
+    }
+
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    window.show();
+    pump_events(app);
+
+    auto* gear = titlebar.root_item()->findChild<QQuickItem*>(
+        QStringLiteral("settings_button"));
+    ok &= check(gear != nullptr, "titlebar exposes a settings gear button");
+    if (gear == nullptr) {
+        return ok;
+    }
+    ok &= check(gear->isVisible(), "settings gear button is visible by default");
+    ok &= check(gear->width() > 0.0 && gear->height() > 0.0,
+        "settings gear button has a nonzero hit area");
+
+    int settings_requests = 0;
+    QObject::connect(
+        &titlebar,
+        &chrome_test::Terminal_qml_chrome::settings_requested,
+        &titlebar,
+        [&settings_requests] {
+            ++settings_requests;
+        });
+
+    const QPointF gear_center(gear->width() / 2.0, gear->height() / 2.0);
+    ok &= send_item_mouse_event(
+        *gear,
+        QEvent::MouseButtonPress,
+        gear_center,
+        Qt::LeftButton,
+        Qt::LeftButton,
+        true,
+        "settings gear press is accepted");
+    ok &= send_item_mouse_event(
+        *gear,
+        QEvent::MouseButtonRelease,
+        gear_center,
+        Qt::LeftButton,
+        Qt::NoButton,
+        true,
+        "settings gear release is accepted");
+    pump_events(app);
+    ok &= check(settings_requests == 1,
+        "clicking the settings gear emits exactly one settings request");
+
+    chrome_test::Terminal_settings_window settings_window(engine);
+    ok &= check(settings_window.is_valid(), "settings window initializes");
+    if (!settings_window.is_valid()) {
+        std::cerr << settings_window.error_string().toStdString() << '\n';
+        return ok;
+    }
+
+    settings_window.set_transient_parent(&window);
+    settings_window.show_window();
+    pump_events(app);
+
+    QQuickWindow* settings_qml_window = nullptr;
+    const auto top_level_windows = QGuiApplication::topLevelWindows();
+    for (QWindow* top_level : top_level_windows) {
+        if (top_level->objectName() == QStringLiteral("terminal_settings_window")) {
+            settings_qml_window = qobject_cast<QQuickWindow*>(top_level);
+            break;
+        }
+    }
+    ok &= check(settings_qml_window != nullptr,
+        "settings window registers a top-level window");
+    if (settings_qml_window != nullptr) {
+        ok &= check(settings_qml_window->isVisible(),
+            "settings window becomes visible when shown");
+        ok &= check(
+            settings_qml_window->findChild<QQuickItem*>(
+                QStringLiteral("settings_window_titlebar")) != nullptr,
+            "settings window builds its chrome titlebar");
+    }
+
+    return ok;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -2091,6 +2186,7 @@ int main(int argc, char** argv)
     ok &= test_paste_shortcut_should_paste_predicate();
     ok &= test_parse_paste_shortcut_option();
     ok &= test_window_state_sync();
+    ok &= test_settings_gear_button_and_window(app);
 #if defined(Q_OS_MACOS)
     ok &= test_macos_command_shortcuts_are_host_shortcuts(app);
 #endif
