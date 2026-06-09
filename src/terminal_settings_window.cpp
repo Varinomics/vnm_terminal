@@ -291,7 +291,7 @@ Window {
                     spacing: 8
 
                     Text {
-                        text: "Glyph mode"
+                        text: "Mode"
                         color: win.label_color
                         Layout.preferredWidth: 78
                     }
@@ -299,9 +299,15 @@ Window {
                     Basic.ComboBox {
                         objectName: "renderer_mode_combo"
                         Layout.fillWidth: true
-                        model: ["Auto", "MSDF", "Glyph"]
-                        currentIndex: surface.textRendererMode
-                        onActivated: surface.textRendererMode = currentIndex
+                        // Auto (Text_renderer_mode 0) already renders crisp,
+                        // resolution-independent MSDF text with automatic glyph
+                        // fallback; forcing raw MSDF (1) is a CLI-only diagnostic
+                        // that drops glyphs the MSDF atlas lacks. The panel offers
+                        // the two safe, visibly distinct outcomes: MSDF (= Auto)
+                        // and the bitmap glyph atlas (Glyph = 2).
+                        model: ["MSDF", "Glyph"]
+                        currentIndex: surface.textRendererMode === 2 ? 1 : 0
+                        onActivated: surface.textRendererMode = currentIndex === 1 ? 2 : 0
                     }
                 }
 
