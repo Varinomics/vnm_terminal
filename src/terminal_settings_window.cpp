@@ -54,7 +54,7 @@ Window {
     visible: false
     flags: Qt.Window | Qt.FramelessWindowHint | Qt.Dialog
     color: "#0e1116"
-    title: "vnm_terminal — Settings"
+    title: "vnm_terminal - Settings"
 
     signal close_requested()
     signal move_requested()
