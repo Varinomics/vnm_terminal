@@ -30,6 +30,8 @@ include(cmake/vnm_qml_chrome_dependency.cmake)
 
 add_executable(vnm_terminal
     src/main.cpp
+    src/app_cli.cpp
+    src/app_cli.h
     src/app_clipboard_policy.cpp
     src/app_clipboard_policy.h
     src/app_common.cpp
