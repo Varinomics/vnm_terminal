@@ -311,6 +311,26 @@ Window {
                     }
                 }
 
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Text {
+                        text: "LCD subpixel"
+                        color: win.label_color
+                        Layout.preferredWidth: 78
+                    }
+
+                    Basic.Switch {
+                        objectName: "lcd_subpixel_switch"
+                        // lcdSubpixelOrder: AUTO=0 (on, auto-detected order), NONE=1
+                        // (off, grayscale). RGB/BGR/etc. chosen via the CLI also
+                        // read as on here.
+                        checked: surface.lcdSubpixelOrder !== 1
+                        onToggled: surface.lcdSubpixelOrder = checked ? 0 : 1
+                    }
+                }
+
                 Text {
                     text: "Scrollback"
                     color: win.section_color

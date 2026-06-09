@@ -165,6 +165,9 @@ bool test_appearance_settings_round_trip()
     writer.setValue(
         QLatin1String(k_appearance_text_renderer_mode),
         static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH));
+    writer.setValue(
+        QLatin1String(k_appearance_lcd_subpixel_order),
+        static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::NONE));
     writer.setValue(QLatin1String(k_appearance_scrollback_limit), 25000);
     writer.endGroup();
     writer.sync();
@@ -180,6 +183,10 @@ bool test_appearance_settings_round_trip()
         state.text_renderer_mode.value_or(-1) ==
             static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH),
         "persisted renderer mode round-trips");
+    ok &= check(
+        state.lcd_subpixel_order.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::NONE),
+        "persisted lcd subpixel order round-trips");
     ok &= check(state.scrollback_limit.value_or(-1) == 25000,
         "persisted scrollback limit round-trips");
 
@@ -192,6 +199,9 @@ bool test_appearance_settings_round_trip()
     ok &= check(
         options.text_renderer_mode == VNM_TerminalSurface::Text_renderer_mode::GLYPH,
         "persisted renderer mode is applied without command-line override");
+    ok &= check(
+        options.lcd_subpixel_order == VNM_TerminalSurface::Lcd_subpixel_order::NONE,
+        "persisted lcd subpixel order is applied without command-line override");
     ok &= check(options.scrollback_limit.value_or(0) == 25000,
         "persisted scrollback limit is applied without command-line override");
 
@@ -202,6 +212,8 @@ bool test_appearance_settings_round_trip()
     explicit_options.font_family_explicit        = true;
     explicit_options.text_renderer_mode          = VNM_TerminalSurface::Text_renderer_mode::MSDF;
     explicit_options.text_renderer_mode_explicit = true;
+    explicit_options.lcd_subpixel_order          = VNM_TerminalSurface::Lcd_subpixel_order::RGB;
+    explicit_options.lcd_subpixel_order_explicit = true;
     explicit_options.scrollback_limit            = 4000;
     apply_persisted_appearance_settings(state, &explicit_options);
     ok &= check(explicit_options.color_scheme == QStringLiteral("Campbell"),
@@ -211,6 +223,9 @@ bool test_appearance_settings_round_trip()
     ok &= check(
         explicit_options.text_renderer_mode == VNM_TerminalSurface::Text_renderer_mode::MSDF,
         "explicit renderer mode overrides persisted mode");
+    ok &= check(
+        explicit_options.lcd_subpixel_order == VNM_TerminalSurface::Lcd_subpixel_order::RGB,
+        "explicit lcd subpixel order overrides persisted order");
     ok &= check(explicit_options.scrollback_limit.value_or(0) == 4000,
         "explicit scrollback limit overrides persisted limit");
 
