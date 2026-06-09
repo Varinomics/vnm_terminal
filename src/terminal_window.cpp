@@ -5,8 +5,7 @@
 
 #include "vnm_qml_chrome/vnm_chrome_geometry.h"
 
-#include "vnm_terminal/internal/qt_grid_metrics_provider.h"
-#include "vnm_terminal/internal/vnm_terminal_font.h"
+#include "vnm_terminal/font_metrics.h"
 
 #include <QEvent>
 #include <QQuickItem>
@@ -17,8 +16,6 @@
 #include <cmath>
 
 namespace vnm_terminal::terminal_app {
-
-namespace term = vnm_terminal::internal;
 
 QString default_window_title()
 {
@@ -264,12 +261,11 @@ bool resize_window_for_text_area_request(
         return false;
     }
 
-    const term::Qt_grid_metrics_provider metrics_provider(
-        term::vnm_terminal_font(surface.font_family(), surface.font_size()),
+    const vnm_terminal::Cell_metrics cell_metrics = vnm_terminal::cell_metrics_for_font(
+        surface.font_family(),
+        surface.font_size(),
         window.devicePixelRatio());
-    const term::terminal_cell_metrics_t cell_metrics =
-        metrics_provider.cell_metrics();
-    if (!term::is_valid_cell_metrics(cell_metrics)) {
+    if (!vnm_terminal::cell_metrics_valid(cell_metrics)) {
         return false;
     }
 
