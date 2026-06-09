@@ -131,11 +131,11 @@ Window {
             active: win.active
             resize_enabled: win.resize_enabled
             animated_mark_visible: false
+            minimize_button_visible: false
+            maximize_button_visible: false
 
             onMove_requested: win.move_requested()
             onResize_requested: (edges) => win.resize_requested(edges)
-            onMinimize_requested: win.showMinimized()
-            onMaximize_toggle_requested: {}
             onClose_requested: win.close_requested()
         }
 
