@@ -41,7 +41,7 @@ private:
     void center_over_transient_parent();
 
     std::unique_ptr<QObject> m_root_object;
-    QPointer<QQuickWindow>    m_window;
+    QPointer<QQuickWindow>   m_window;
     QString                  m_error_string;
     bool                     m_positioned = false;
 };
