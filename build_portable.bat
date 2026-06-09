@@ -52,7 +52,8 @@ set PORTABLE_DIR=%DIST_DIR%\portable
 set RUNTIME_DIR=%PORTABLE_DIR%\vnm_terminal_runtime
 set REAL_EXE=%BUILD_DIR%\vnm_terminal.exe
 set LAUNCHER_EXE=%BUILD_DIR%\vnm_terminal_portable_launcher.exe
-set PACKAGE_VERSION=1.0.1
+REM PACKAGE_VERSION is derived from the configured CMake project version after
+REM the configure step below (single source of truth: project() in CMakeLists.txt).
 
 if not exist "%CMAKE%" (
     echo ERROR: CMake not found at %CMAKE%
@@ -112,6 +113,15 @@ if errorlevel 1 (
     echo ERROR: CMake configuration failed.
     exit /b 1
 )
+
+echo.
+echo Deriving package version from the configured CMake project version ...
+for /f "tokens=2 delims==" %%V in ('findstr /b /c:"CMAKE_PROJECT_VERSION:STATIC=" "%BUILD_DIR%\CMakeCache.txt"') do set PACKAGE_VERSION=%%V
+if "%PACKAGE_VERSION%"=="" (
+    echo ERROR: Could not derive PACKAGE_VERSION from "%BUILD_DIR%\CMakeCache.txt".
+    exit /b 1
+)
+echo Package version: %PACKAGE_VERSION%
 
 echo.
 echo [2/5] Building ...
