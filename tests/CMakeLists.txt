@@ -94,6 +94,7 @@ add_executable(vnm_terminal_custom_titlebar_integration
     terminal_app/custom_titlebar_integration_tests.cpp
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_profile_text.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_settings.cpp"
@@ -140,6 +141,7 @@ add_executable(vnm_terminal_app_persistence
     terminal_app/app_persistence_tests.cpp
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_profile_text.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_settings.cpp"

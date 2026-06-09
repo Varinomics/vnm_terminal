@@ -34,6 +34,8 @@ add_executable(vnm_terminal
     src/app_clipboard_policy.h
     src/app_common.cpp
     src/app_common.h
+    src/app_metrics.cpp
+    src/app_metrics.h
     src/app_options.cpp
     src/app_options.h
     src/app_profile_text.cpp
