@@ -19,9 +19,11 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPointF>
+#include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QTemporaryDir>
+#include <QVariant>
 #include <QWheelEvent>
 #include <QWindow>
 
@@ -2173,8 +2175,8 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
 
     ok &= check(surface.color_scheme() == QStringLiteral("Campbell"),
         "surface defaults to the Campbell color scheme");
-    ok &= check(surface.available_color_schemes().size() == 16,
-        "surface exposes the 16 bundled color schemes");
+    ok &= check(surface.available_color_schemes().size() == 17,
+        "surface exposes the bundled color schemes");
     surface.set_color_scheme(QStringLiteral("Tango Dark"));
     ok &= check(surface.color_scheme() == QStringLiteral("Tango Dark"),
         "selecting a bundled scheme updates the surface live");
@@ -2233,6 +2235,47 @@ bool test_settings_shortcut_requests_settings(QGuiApplication& app)
     return ok;
 }
 
+bool test_renderer_mode_enum_assignment_from_qml(QGuiApplication& app)
+{
+    QQmlEngine engine;
+    QQuickWindow window;
+    VNM_TerminalSurface surface(window.contentItem());
+    surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::AUTO);
+
+    QQmlComponent component(&engine);
+    component.setData(
+        QByteArrayLiteral(
+            "import QtQuick\n"
+            "Item {\n"
+            "    property var target\n"
+            "    function apply(value) { target.textRendererMode = value }\n"
+            "}\n"),
+        QUrl());
+    std::unique_ptr<QObject> holder(component.create());
+
+    bool ok = true;
+    ok &= check(holder != nullptr, "renderer-binding QML holder compiles");
+    if (holder == nullptr) {
+        std::cerr << component.errorString().toStdString() << '\n';
+        return ok;
+    }
+
+    holder->setProperty("target", QVariant::fromValue<QObject*>(&surface));
+
+    QMetaObject::invokeMethod(holder.get(), "apply", Q_ARG(QVariant, QVariant(2)));
+    pump_events(app);
+    ok &= check(
+        surface.text_renderer_mode() == VNM_TerminalSurface::Text_renderer_mode::GLYPH,
+        "assigning int 2 to textRendererMode from QML selects GLYPH");
+
+    QMetaObject::invokeMethod(holder.get(), "apply", Q_ARG(QVariant, QVariant(0)));
+    pump_events(app);
+    ok &= check(
+        surface.text_renderer_mode() == VNM_TerminalSurface::Text_renderer_mode::AUTO,
+        "assigning int 0 to textRendererMode from QML selects AUTO");
+    return ok;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -2259,6 +2302,7 @@ int main(int argc, char** argv)
     ok &= test_window_state_sync();
     ok &= test_settings_gear_button_and_window(app);
     ok &= test_settings_shortcut_requests_settings(app);
+    ok &= test_renderer_mode_enum_assignment_from_qml(app);
 #if defined(Q_OS_MACOS)
     ok &= test_macos_command_shortcuts_are_host_shortcuts(app);
 #endif
