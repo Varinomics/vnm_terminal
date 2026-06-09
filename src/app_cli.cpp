@@ -252,6 +252,35 @@ bool parse_osc52_clipboard_policy(
     return false;
 }
 
+bool parse_paste_shortcut_policy(
+    const QString&         value,
+    Paste_shortcut_policy* out_policy,
+    QString*               out_error)
+{
+    const QString normalized = value.trimmed().toLower();
+    if (normalized == QStringLiteral("disabled")) {
+        *out_policy = Paste_shortcut_policy::DISABLED;
+        return true;
+    }
+    if (normalized == QStringLiteral("ctrl-shift-v")) {
+        *out_policy = Paste_shortcut_policy::CTRL_SHIFT_V;
+        return true;
+    }
+    if (normalized == QStringLiteral("ctrl-v-and-ctrl-shift-v")) {
+        *out_policy = Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V;
+        return true;
+    }
+    if (normalized == QStringLiteral("platform-default")) {
+        *out_policy = Paste_shortcut_policy::PLATFORM_DEFAULT;
+        return true;
+    }
+
+    *out_error = QStringLiteral(
+        "--paste-shortcut supports only disabled, ctrl-shift-v, "
+        "ctrl-v-and-ctrl-shift-v, or platform-default");
+    return false;
+}
+
 QString comparable_capture_path(QString path)
 {
     path = QDir::cleanPath(std::move(path));
@@ -333,6 +362,7 @@ void print_usage()
         << "  --timeout-ms <n>                fail if the run is still active after n ms\n"
         << "  --require-output                fail if no terminal output activity is observed\n"
         << "  --osc52-clipboard <policy>      OSC 52 clipboard write policy: deny(default) or allow\n"
+        << "  --paste-shortcut <mode>         paste shortcut: platform-default(default), ctrl-shift-v, ctrl-v-and-ctrl-shift-v, or disabled\n"
         << "  --help                          show this help\n"
         << "\n"
         << "interactions:\n"
@@ -621,6 +651,17 @@ Parse_result parse_arguments(const QStringList& arguments)
             if (!take_option_value(arguments, index, &value, &result.error) ||
                 !parse_osc52_clipboard_policy(
                     value, &result.options.osc52_clipboard_policy, &result.error))
+            {
+                return result;
+            }
+
+            continue;
+        }
+
+        if (argument_is(argument, "--paste-shortcut")) {
+            if (!take_option_value(arguments, index, &value, &result.error) ||
+                !parse_paste_shortcut_policy(
+                    value, &result.options.paste_shortcut_policy, &result.error))
             {
                 return result;
             }

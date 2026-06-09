@@ -387,7 +387,8 @@ int main(int argc, char** argv)
         *scrollbar,
         titlebar_ptr,
         custom_titlebar_enabled);
-    window.installEventFilter(new Terminal_shortcut_filter(surface));
+    window.installEventFilter(
+        new Terminal_shortcut_filter(surface, options.paste_shortcut_policy));
 
     connect_terminal_metadata_to_chrome(*surface, window, titlebar_ptr);
     QObject::connect(

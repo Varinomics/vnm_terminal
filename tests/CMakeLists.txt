@@ -625,6 +625,29 @@ if(TARGET vnm_terminal_canvas_fixture)
     )
 
     add_test(
+        NAME vnm_terminal_rejects_bad_paste_shortcut
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=2"
+            "-Dexpected_output_regex=--paste-shortcut supports only disabled, ctrl-shift-v, ctrl-v-and-ctrl-shift-v, or platform-default"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--paste-shortcut" "invalid"
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--list"
+    )
+
+    set_tests_properties(vnm_terminal_rejects_bad_paste_shortcut PROPERTIES
+        TIMEOUT 30
+    )
+
+    add_test(
         NAME vnm_terminal_rejects_bad_synchronized_output_scroll_policy
         COMMAND
             "${CMAKE_COMMAND}"
@@ -917,6 +940,26 @@ add_test(
 )
 
 set_tests_properties(vnm_terminal_help_mentions_osc52_policy PROPERTIES
+    TIMEOUT 30
+)
+
+add_test(
+    NAME vnm_terminal_help_mentions_paste_shortcut
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-Dexpected_exit_code=0"
+        "-Dexpected_output_regex=paste shortcut: platform-default\\(default\\), ctrl-shift-v, ctrl-v-and-ctrl-shift-v, or disabled"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+        --
+        "${CMAKE_COMMAND}" -E env
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
+        "${vnm_terminal_qt_runtime_path}"
+        "$<TARGET_FILE:vnm_terminal>"
+        "--help"
+)
+
+set_tests_properties(vnm_terminal_help_mentions_paste_shortcut PROPERTIES
     TIMEOUT 30
 )
 

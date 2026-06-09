@@ -9,10 +9,43 @@
 
 namespace vnm_terminal::terminal_app {
 
-Terminal_shortcut_filter::Terminal_shortcut_filter(VNM_TerminalSurface* surface)
+bool paste_shortcut_should_paste(
+    Paste_shortcut_policy   policy,
+    int                     key,
+    Qt::KeyboardModifiers   modifiers)
+{
+    if (key != Qt::Key_V) {
+        return false;
+    }
+
+    const Qt::KeyboardModifiers masked =
+        modifiers &
+        (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
+    const bool ctrl_shift_v = masked == (Qt::ControlModifier | Qt::ShiftModifier);
+    const bool ctrl_or_ctrl_shift_v =
+        masked == Qt::ControlModifier || ctrl_shift_v;
+
+    switch (policy) {
+        case Paste_shortcut_policy::DISABLED:                return false;
+        case Paste_shortcut_policy::CTRL_SHIFT_V:            return ctrl_shift_v;
+        case Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V: return ctrl_or_ctrl_shift_v;
+        case Paste_shortcut_policy::PLATFORM_DEFAULT:
+#if defined(Q_OS_MACOS)
+            return ctrl_or_ctrl_shift_v || masked == Qt::MetaModifier;
+#else
+            return ctrl_or_ctrl_shift_v;
+#endif
+        default:                                             return false;
+    }
+}
+
+Terminal_shortcut_filter::Terminal_shortcut_filter(
+    VNM_TerminalSurface*  surface,
+    Paste_shortcut_policy paste_policy)
 :
     QObject(surface),
-    m_surface(surface)
+    m_surface(surface),
+    m_paste_policy(paste_policy)
 {}
 
 bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
@@ -25,18 +58,8 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
     const Qt::KeyboardModifiers modifiers =
         key_event->modifiers() &
         (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
-    const bool control_paste_shortcut =
-        key_event->key() == Qt::Key_V &&
-        (modifiers == Qt::ControlModifier ||
-         modifiers == (Qt::ControlModifier | Qt::ShiftModifier));
-#if defined(Q_OS_MACOS)
-    const bool platform_paste_shortcut =
-        key_event->key() == Qt::Key_V &&
-        modifiers       == Qt::MetaModifier;
-#else
-    constexpr bool platform_paste_shortcut = false;
-#endif
-    const bool paste_shortcut = control_paste_shortcut || platform_paste_shortcut;
+    const bool paste_shortcut =
+        paste_shortcut_should_paste(m_paste_policy, key_event->key(), modifiers);
 #if defined(Q_OS_MACOS)
     const bool copy_shortcut =
         key_event->key() == Qt::Key_C &&

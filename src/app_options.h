@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_clipboard_policy.h"
+#include "app_shortcuts.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
@@ -53,6 +54,7 @@ struct App_options
     VNM_TerminalSurface::Lcd_subpixel_order lcd_subpixel_order =
         VNM_TerminalSurface::Lcd_subpixel_order::AUTO;
     Osc52_clipboard_policy osc52_clipboard_policy = Osc52_clipboard_policy::DENY;
+    Paste_shortcut_policy paste_shortcut_policy = Paste_shortcut_policy::PLATFORM_DEFAULT;
     std::optional<int> timeout_ms;
     std::optional<int> scrollback_limit;
     bool               shell_requested                    = false;
