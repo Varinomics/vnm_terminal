@@ -36,6 +36,8 @@ add_executable(vnm_terminal
     src/app_common.h
     src/app_options.cpp
     src/app_options.h
+    src/app_profile_text.cpp
+    src/app_profile_text.h
     src/app_settings.cpp
     src/app_settings.h
     src/app_shortcuts.cpp
