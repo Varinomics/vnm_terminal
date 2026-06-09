@@ -1815,6 +1815,225 @@ bool test_window_state_sync()
     return ok;
 }
 
+bool test_paste_shortcut_should_paste_predicate()
+{
+    using chrome_test::Paste_shortcut_policy;
+    using chrome_test::paste_shortcut_should_paste;
+
+    const Qt::KeyboardModifiers ctrl = Qt::ControlModifier;
+    const Qt::KeyboardModifiers ctrl_shift = Qt::ControlModifier | Qt::ShiftModifier;
+    const Qt::KeyboardModifiers no_mods = Qt::NoModifier;
+    const Qt::KeyboardModifiers shift_only = Qt::ShiftModifier;
+
+    bool ok = true;
+
+    // DISABLED never pastes for any modifier combination.
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::DISABLED, Qt::Key_V, ctrl),
+        "disabled paste policy ignores Ctrl+V");
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::DISABLED, Qt::Key_V, ctrl_shift),
+        "disabled paste policy ignores Ctrl+Shift+V");
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::DISABLED, Qt::Key_V, no_mods),
+        "disabled paste policy ignores bare V");
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::DISABLED, Qt::Key_V, shift_only),
+        "disabled paste policy ignores Shift+V");
+
+    // CTRL_SHIFT_V pastes only on the exact Ctrl+Shift+V combination.
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::CTRL_SHIFT_V, Qt::Key_V, ctrl),
+        "ctrl-shift-v paste policy rejects plain Ctrl+V");
+    ok &= check(
+        paste_shortcut_should_paste(Paste_shortcut_policy::CTRL_SHIFT_V, Qt::Key_V, ctrl_shift),
+        "ctrl-shift-v paste policy accepts Ctrl+Shift+V");
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::CTRL_SHIFT_V, Qt::Key_V, no_mods),
+        "ctrl-shift-v paste policy rejects bare V");
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::CTRL_SHIFT_V, Qt::Key_V, shift_only),
+        "ctrl-shift-v paste policy rejects Shift+V");
+
+    // CTRL_V_AND_CTRL_SHIFT_V accepts either Ctrl combination.
+    ok &= check(
+        paste_shortcut_should_paste(
+            Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V, Qt::Key_V, ctrl),
+        "ctrl-v-and-ctrl-shift-v paste policy accepts Ctrl+V");
+    ok &= check(
+        paste_shortcut_should_paste(
+            Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V, Qt::Key_V, ctrl_shift),
+        "ctrl-v-and-ctrl-shift-v paste policy accepts Ctrl+Shift+V");
+    ok &= check(
+        !paste_shortcut_should_paste(
+            Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V, Qt::Key_V, no_mods),
+        "ctrl-v-and-ctrl-shift-v paste policy rejects bare V");
+    ok &= check(
+        !paste_shortcut_should_paste(
+            Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V, Qt::Key_V, shift_only),
+        "ctrl-v-and-ctrl-shift-v paste policy rejects Shift+V");
+
+    // PLATFORM_DEFAULT accepts the Ctrl combinations on every platform.
+    ok &= check(
+        paste_shortcut_should_paste(Paste_shortcut_policy::PLATFORM_DEFAULT, Qt::Key_V, ctrl),
+        "platform-default paste policy accepts Ctrl+V");
+    ok &= check(
+        paste_shortcut_should_paste(
+            Paste_shortcut_policy::PLATFORM_DEFAULT, Qt::Key_V, ctrl_shift),
+        "platform-default paste policy accepts Ctrl+Shift+V");
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::PLATFORM_DEFAULT, Qt::Key_V, no_mods),
+        "platform-default paste policy rejects bare V");
+    ok &= check(
+        !paste_shortcut_should_paste(
+            Paste_shortcut_policy::PLATFORM_DEFAULT, Qt::Key_V, shift_only),
+        "platform-default paste policy rejects Shift+V");
+
+    // A non-V key never pastes regardless of policy or modifiers.
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::PLATFORM_DEFAULT, Qt::Key_C, ctrl),
+        "platform-default paste policy ignores non-V keys");
+    ok &= check(
+        !paste_shortcut_should_paste(
+            Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V, Qt::Key_C, ctrl_shift),
+        "ctrl-v-and-ctrl-shift-v paste policy ignores non-V keys");
+
+#if defined(Q_OS_MACOS)
+    // Only PLATFORM_DEFAULT honors the macOS Cmd+V shortcut; the explicit
+    // Ctrl-combo policies are literal overrides that drop it.
+    const Qt::KeyboardModifiers meta = Qt::MetaModifier;
+    ok &= check(
+        paste_shortcut_should_paste(Paste_shortcut_policy::PLATFORM_DEFAULT, Qt::Key_V, meta),
+        "platform-default paste policy accepts macOS Cmd+V");
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::CTRL_SHIFT_V, Qt::Key_V, meta),
+        "ctrl-shift-v paste policy rejects macOS Cmd+V");
+    ok &= check(
+        !paste_shortcut_should_paste(
+            Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V, Qt::Key_V, meta),
+        "ctrl-v-and-ctrl-shift-v paste policy rejects macOS Cmd+V");
+    ok &= check(
+        !paste_shortcut_should_paste(Paste_shortcut_policy::DISABLED, Qt::Key_V, meta),
+        "disabled paste policy rejects macOS Cmd+V");
+#endif
+
+    return ok;
+}
+
+bool test_parse_paste_shortcut_option()
+{
+    using chrome_test::Paste_shortcut_policy;
+
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result disabled_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--paste-shortcut"),
+        QStringLiteral("disabled"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result ctrl_shift_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--paste-shortcut"),
+        QStringLiteral("ctrl-shift-v"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result ctrl_v_and_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--paste-shortcut"),
+        QStringLiteral("ctrl-v-and-ctrl-shift-v"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result platform_default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--paste-shortcut"),
+        QStringLiteral("PLATFORM-DEFAULT"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result invalid_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--paste-shortcut"),
+        QStringLiteral("bogus"),
+    });
+
+    Parse_result missing_value_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--paste-shortcut"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--paste-shortcut"),
+        QStringLiteral("disabled"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(), "paste shortcut default parse succeeds");
+    ok &= check(
+        default_result.options.paste_shortcut_policy == Paste_shortcut_policy::PLATFORM_DEFAULT,
+        "paste shortcut defaults to platform-default");
+    ok &= check(disabled_result.error.isEmpty(), "paste shortcut disabled option parses");
+    ok &= check(
+        disabled_result.options.paste_shortcut_policy == Paste_shortcut_policy::DISABLED,
+        "paste shortcut disabled option selects disabled policy");
+    ok &= check(ctrl_shift_result.error.isEmpty(), "paste shortcut ctrl-shift-v option parses");
+    ok &= check(
+        ctrl_shift_result.options.paste_shortcut_policy == Paste_shortcut_policy::CTRL_SHIFT_V,
+        "paste shortcut ctrl-shift-v option selects Ctrl+Shift+V policy");
+    ok &= check(ctrl_v_and_result.error.isEmpty(),
+        "paste shortcut ctrl-v-and-ctrl-shift-v option parses");
+    ok &= check(
+        ctrl_v_and_result.options.paste_shortcut_policy ==
+            Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V,
+        "paste shortcut ctrl-v-and-ctrl-shift-v option selects both Ctrl combinations");
+    ok &= check(platform_default_result.error.isEmpty(),
+        "paste shortcut platform-default option parses");
+    ok &= check(
+        platform_default_result.options.paste_shortcut_policy ==
+            Paste_shortcut_policy::PLATFORM_DEFAULT,
+        "paste shortcut platform-default option is case-insensitive");
+    ok &= check(!invalid_result.error.isEmpty(),
+        "paste shortcut option rejects invalid values");
+    ok &= check(
+        invalid_result.error ==
+            QStringLiteral(
+                "--paste-shortcut supports only disabled, ctrl-shift-v, "
+                "ctrl-v-and-ctrl-shift-v, or platform-default"),
+        "paste shortcut invalid value reports the documented error");
+    ok &= check(
+        invalid_result.options.paste_shortcut_policy == Paste_shortcut_policy::PLATFORM_DEFAULT,
+        "rejected paste shortcut keeps platform-default");
+    ok &= check(!missing_value_result.error.isEmpty(),
+        "paste shortcut option rejects missing values");
+    ok &= check(command_result.error.isEmpty(),
+        "paste shortcut option after command separator parses as command argv");
+    ok &= check(
+        command_result.options.paste_shortcut_policy == Paste_shortcut_policy::PLATFORM_DEFAULT,
+        "paste shortcut option after command separator leaves default");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{
+                QStringLiteral("--paste-shortcut"),
+                QStringLiteral("disabled"),
+            },
+        "paste shortcut option after command separator is preserved in command argv");
+
+    return ok;
+}
+
 #if defined(Q_OS_MACOS)
 bool test_macos_command_shortcuts_are_host_shortcuts(QGuiApplication& app)
 {
@@ -1869,6 +2088,8 @@ int main(int argc, char** argv)
     ok &= test_parse_scrollback_limit_option();
     ok &= test_parse_transcript_snapshot_diagnostics_option();
     ok &= test_parse_transcript_timing_diagnostics_option();
+    ok &= test_paste_shortcut_should_paste_predicate();
+    ok &= test_parse_paste_shortcut_option();
     ok &= test_window_state_sync();
 #if defined(Q_OS_MACOS)
     ok &= test_macos_command_shortcuts_are_host_shortcuts(app);
