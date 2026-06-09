@@ -47,12 +47,16 @@ public:
     void set_resize_enabled(bool resize_enabled);
     void pulse_wheel_delivery_indicator();
 
+signals:
+    void settings_requested();
+
 private slots:
     void handle_move_requested();
     void handle_resize_requested(int edges);
     void handle_minimize_requested();
     void handle_maximize_toggle_requested();
     void handle_close_requested();
+    void handle_settings_requested();
 
 private:
     void connect_window_commands();
