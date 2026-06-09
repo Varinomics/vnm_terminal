@@ -52,6 +52,40 @@ bool nearly_equal(qreal actual, qreal expected)
     return std::abs(actual - expected) <= 0.000001;
 }
 
+// Walks both the QObject child tree and the visual child-item tree, so it
+// reaches Repeater-created delegates (e.g. custom titlebar buttons) that
+// plain QObject::findChild does not. Mirrors the app's own find_child_object.
+QQuickItem* find_quick_item_recursive(QObject* root, const QString& object_name)
+{
+    if (root == nullptr) {
+        return nullptr;
+    }
+
+    if (root->objectName() == object_name) {
+        if (auto* item = qobject_cast<QQuickItem*>(root)) {
+            return item;
+        }
+    }
+
+    const auto object_children = root->children();
+    for (QObject* child : object_children) {
+        if (QQuickItem* found = find_quick_item_recursive(child, object_name)) {
+            return found;
+        }
+    }
+
+    if (auto* item = qobject_cast<QQuickItem*>(root)) {
+        const auto child_items = item->childItems();
+        for (QQuickItem* child : child_items) {
+            if (QQuickItem* found = find_quick_item_recursive(child, object_name)) {
+                return found;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
 bool check_rect_equal(
     const QRectF&      actual,
     const QRectF&      expected,
@@ -2091,8 +2125,8 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     window.show();
     pump_events(app);
 
-    auto* gear = titlebar.root_item()->findChild<QQuickItem*>(
-        QStringLiteral("settings_button"));
+    auto* gear = find_quick_item_recursive(
+        titlebar.root_item(), QStringLiteral("settings_button"));
     ok &= check(gear != nullptr, "titlebar exposes a settings gear button");
     if (gear == nullptr) {
         return ok;
