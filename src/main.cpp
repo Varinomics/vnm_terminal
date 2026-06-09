@@ -12,6 +12,12 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+// Privileged first-party use of surface internal headers for profiler wiring
+// (render-profiler attachment + the app's own GUI-thread profiler; profiling
+// builds only). vnm_terminal builds the surface in-tree and is a documented
+// privileged consumer -- see vnm_terminal_surface docs/public_surface.md,
+// "Internal Headers And Privileged First-Party Consumers". Installed embedders
+// cannot include these headers.
 #include "vnm_terminal/internal/hierarchical_profiler.h"
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
 
