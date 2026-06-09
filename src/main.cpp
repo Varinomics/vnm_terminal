@@ -322,9 +322,7 @@ int main(int argc, char** argv)
     auto* titlebar_ptr = titlebar.get();
 
     auto* surface = new VNM_TerminalSurface(window.contentItem());
-    term::VNM_TerminalSurface_render_bridge::set_selection_trace_enabled(
-        *surface,
-        options.selection_trace_enabled);
+    surface->set_selection_trace_enabled(options.selection_trace_enabled);
 #if VNM_TERMINAL_PROFILING_ENABLED
     std::unique_ptr<term::Hierarchical_profiler> gui_profiler;
     std::unique_ptr<term::Active_profiler_binding> gui_profiler_binding;
@@ -337,9 +335,7 @@ int main(int argc, char** argv)
         term::VNM_TerminalSurface_render_bridge::set_render_profiler(
             *surface,
             render_profiler);
-        term::VNM_TerminalSurface_render_bridge::set_dirty_row_stats_enabled(
-            *surface,
-            true);
+        surface->set_dirty_row_stats_enabled(true);
     }
 #endif
     auto* scrollbar = new chrome::Terminal_scrollbar(window.contentItem());
