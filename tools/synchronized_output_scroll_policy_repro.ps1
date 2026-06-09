@@ -212,7 +212,7 @@ Assert-TerminalDeployment -ResolvedTerminalExe $resolvedTerminalExe
 $scriptPath = (Resolve-Path -LiteralPath $PSCommandPath).ProviderPath
 $captureTranscriptPath = Resolve-OptionalOutputPath -Path $CaptureTranscript
 
-$terminalArguments = @("--synchronized-output-scroll-policy=$Policy")
+$terminalArguments = @("--synchronized-output-scroll-policy", $Policy)
 if (![string]::IsNullOrWhiteSpace($captureTranscriptPath)) {
     $terminalArguments += @("--capture-transcript", $captureTranscriptPath)
 }

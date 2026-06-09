@@ -1153,35 +1153,40 @@ bool test_parse_synchronized_output_scroll_policy_option()
 
     Parse_result defer_result = parse_arguments({
         QStringLiteral("vnm_terminal"),
-        QStringLiteral("--synchronized-output-scroll-policy=defer"),
+        QStringLiteral("--synchronized-output-scroll-policy"),
+        QStringLiteral("defer"),
         QStringLiteral("--"),
         QStringLiteral("fixture-command"),
     });
 
     Parse_result immediate_result = parse_arguments({
         QStringLiteral("vnm_terminal"),
-        QStringLiteral("--synchronized-output-scroll-policy=immediate-public"),
+        QStringLiteral("--synchronized-output-scroll-policy"),
+        QStringLiteral("immediate-public"),
         QStringLiteral("--"),
         QStringLiteral("fixture-command"),
     });
 
     Parse_result mixed_case_result = parse_arguments({
         QStringLiteral("vnm_terminal"),
-        QStringLiteral("--synchronized-output-scroll-policy=ImMeDiAtE-PuBlIc"),
+        QStringLiteral("--synchronized-output-scroll-policy"),
+        QStringLiteral("ImMeDiAtE-PuBlIc"),
         QStringLiteral("--"),
         QStringLiteral("fixture-command"),
     });
 
     Parse_result invalid_result = parse_arguments({
         QStringLiteral("vnm_terminal"),
-        QStringLiteral("--synchronized-output-scroll-policy=hidden-live"),
+        QStringLiteral("--synchronized-output-scroll-policy"),
+        QStringLiteral("hidden-live"),
         QStringLiteral("--"),
         QStringLiteral("fixture-command"),
     });
 
     Parse_result empty_value_result = parse_arguments({
         QStringLiteral("vnm_terminal"),
-        QStringLiteral("--synchronized-output-scroll-policy="),
+        QStringLiteral("--synchronized-output-scroll-policy"),
+        QStringLiteral(""),
         QStringLiteral("--"),
         QStringLiteral("fixture-command"),
     });
@@ -1189,14 +1194,13 @@ bool test_parse_synchronized_output_scroll_policy_option()
     Parse_result missing_value_result = parse_arguments({
         QStringLiteral("vnm_terminal"),
         QStringLiteral("--synchronized-output-scroll-policy"),
-        QStringLiteral("--"),
-        QStringLiteral("fixture-command"),
     });
 
     Parse_result command_result = parse_arguments({
         QStringLiteral("vnm_terminal"),
         QStringLiteral("--"),
-        QStringLiteral("--synchronized-output-scroll-policy=immediate-public"),
+        QStringLiteral("--synchronized-output-scroll-policy"),
+        QStringLiteral("immediate-public"),
     });
 
     bool ok = true;
@@ -1246,7 +1250,10 @@ bool test_parse_synchronized_output_scroll_policy_option()
         "synchronized-output scroll policy after command separator leaves default");
     ok &= check(
         command_result.options.command ==
-            QStringList{QStringLiteral("--synchronized-output-scroll-policy=immediate-public")},
+            QStringList{
+                QStringLiteral("--synchronized-output-scroll-policy"),
+                QStringLiteral("immediate-public"),
+            },
         "synchronized-output scroll policy after command separator is preserved in command argv");
 
     VNM_TerminalSurface default_surface;

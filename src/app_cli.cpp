@@ -252,27 +252,6 @@ bool parse_osc52_clipboard_policy(
     return false;
 }
 
-bool take_synchronized_output_scroll_policy_value(
-    const QString&  argument,
-    QString*        out_value,
-    QString*        out_error)
-{
-    if (argument_is(argument, "--synchronized-output-scroll-policy")) {
-        *out_error = QStringLiteral(
-            "--synchronized-output-scroll-policy requires =defer or =immediate-public");
-        return false;
-    }
-
-    const QString prefix =
-        QStringLiteral("--synchronized-output-scroll-policy=");
-    if (!argument.startsWith(prefix)) {
-        return false;
-    }
-
-    *out_value = argument.mid(prefix.size());
-    return true;
-}
-
 QString comparable_capture_path(QString path)
 {
     path = QDir::cleanPath(std::move(path));
@@ -332,7 +311,7 @@ void print_usage()
         << "  --alternate-wheel <mode>        alternate-screen wheel: mouse(default), cursor, or page\n"
         << "  --text-renderer <mode>          text renderer: auto(default), msdf, or glyph\n"
         << "  --lcd-subpixel <order>          MSDF LCD order: auto(default), none, rgb, bgr, vrgb, or vbgr\n"
-        << "  --synchronized-output-scroll-policy=<policy>\n"
+        << "  --synchronized-output-scroll-policy <policy>\n"
         << "                                  DEC synchronized-output scroll: defer(default) "
         << "or immediate-public (case-insensitive)\n"
         << "  --disable-primary-repaint-recovery\n"
@@ -503,12 +482,6 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--exit-when-process-exits")) {
-            result.options.keep_open_after_process_exits = false;
-            ++index;
-            continue;
-        }
-
         if (argument_is(argument, "--keep-open-after-process-exits")) {
             result.options.keep_open_after_process_exits = true;
             ++index;
@@ -655,20 +628,15 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (take_synchronized_output_scroll_policy_value(
-                argument, &value, &result.error))
-        {
-            if (!parse_synchronized_output_scroll_policy(
+        if (argument_is(argument, "--synchronized-output-scroll-policy")) {
+            if (!take_option_value(arguments, index, &value, &result.error) ||
+                !parse_synchronized_output_scroll_policy(
                     value, &result.options.synchronized_output_scroll_policy, &result.error))
             {
                 return result;
             }
 
-            ++index;
             continue;
-        }
-        if (!result.error.isEmpty()) {
-            return result;
         }
 
         if (argument_is(argument, "--capture-output")) {
