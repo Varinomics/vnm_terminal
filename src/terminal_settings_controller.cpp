@@ -10,6 +10,14 @@
 
 namespace settings = vnm_terminal::terminal_app;
 
+namespace {
+
+// Long enough to coalesce a live font-size drag into one disk sync, short
+// enough that the settings hit disk well before the user could exit.
+constexpr int k_persist_debounce_ms = 400;
+
+}
+
 settings::Terminal_settings_controller::Terminal_settings_controller(
     VNM_TerminalSurface& surface,
     QObject*             parent)
@@ -17,7 +25,22 @@ settings::Terminal_settings_controller::Terminal_settings_controller(
     QObject(parent),
     m_surface(&surface)
 {
+    m_persist_debounce_timer.setSingleShot(true);
+    m_persist_debounce_timer.setInterval(k_persist_debounce_ms);
+    QObject::connect(
+        &m_persist_debounce_timer,
+        &QTimer::timeout,
+        this,
+        [this] { persist_appearance(); });
     connect_persistence();
+}
+
+settings::Terminal_settings_controller::~Terminal_settings_controller()
+{
+    // A change inside the debounce window must not be lost to app exit.
+    if (m_persist_debounce_timer.isActive()) {
+        persist_appearance();
+    }
 }
 
 QStringList settings::Terminal_settings_controller::available_font_families() const
@@ -44,7 +67,7 @@ void settings::Terminal_settings_controller::connect_persistence()
         return;
     }
 
-    const auto persist = [this] { persist_appearance(); };
+    const auto persist = [this] { m_persist_debounce_timer.start(); };
     QObject::connect(m_surface, &VNM_TerminalSurface::color_scheme_changed,                  this, persist);
     QObject::connect(m_surface, &VNM_TerminalSurface::font_family_changed,                   this, persist);
     QObject::connect(m_surface, &VNM_TerminalSurface::font_size_changed,                     this, persist);
