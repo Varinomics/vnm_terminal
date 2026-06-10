@@ -25,12 +25,13 @@ constexpr char k_window_settings_width[]     = "width";
 constexpr char k_window_settings_x[]         = "x";
 constexpr char k_window_settings_y[]         = "y";
 
-constexpr char k_appearance_settings_group[]     = "appearance";
-constexpr char k_appearance_color_scheme[]       = "color_scheme";
-constexpr char k_appearance_font_family[]        = "font_family";
-constexpr char k_appearance_text_renderer_mode[] = "text_renderer_mode";
-constexpr char k_appearance_lcd_subpixel_order[] = "lcd_subpixel_order";
-constexpr char k_appearance_scrollback_limit[]   = "scrollback_limit";
+constexpr char k_appearance_settings_group[]        = "appearance";
+constexpr char k_appearance_color_scheme[]          = "color_scheme";
+constexpr char k_appearance_font_family[]           = "font_family";
+constexpr char k_appearance_text_renderer_mode[]    = "text_renderer_mode";
+constexpr char k_appearance_lcd_subpixel_order[]    = "lcd_subpixel_order";
+constexpr char k_appearance_row_timestamp_tooltip[] = "row_timestamp_tooltip";
+constexpr char k_appearance_scrollback_limit[]      = "scrollback_limit";
 
 struct Persisted_terminal_window_state
 {
@@ -46,12 +47,14 @@ struct Persisted_appearance_settings
     std::optional<QString> font_family;
     std::optional<int>     text_renderer_mode;
     std::optional<int>     lcd_subpixel_order;
+    std::optional<bool>    row_timestamp_tooltip;
     std::optional<int>     scrollback_limit;
 };
 
 bool persisted_window_axis_is_valid(int value);
 
 std::optional<int>    settings_int_value(QSettings& settings, const char* key);
+std::optional<bool>   settings_bool_value(QSettings& settings, const char* key);
 std::optional<qreal>  settings_font_size(QSettings& settings);
 std::optional<QSize>  settings_window_size(QSettings& settings);
 std::optional<QPoint> settings_window_position(QSettings& settings);

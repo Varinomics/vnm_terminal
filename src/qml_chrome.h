@@ -1,7 +1,9 @@
 #pragma once
 
 #include <QColor>
+#include <QDateTime>
 #include <QObject>
+#include <QPointF>
 #include <QPointer>
 #include <QRectF>
 #include <QSizeF>
@@ -46,6 +48,8 @@ public:
     void set_maximized(bool maximized);
     void set_resize_enabled(bool resize_enabled);
     void pulse_wheel_delivery_indicator();
+    void show_row_timestamp_tooltip(const QPointF& position, const QDateTime& timestamp);
+    void hide_row_timestamp_tooltip();
 
 signals:
     void settings_requested();

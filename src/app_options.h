@@ -63,12 +63,14 @@ struct App_options
     bool               transcript_snapshot_diagnostics    = false;
     bool               transcript_timing_diagnostics      = false;
     bool               wheel_trace_enabled                 = false;
+    bool               row_timestamp_tooltip_enabled      = true;
     std::optional<bool> primary_repaint_recovery_enabled;
     bool               font_size_explicit                 = false;
     bool               font_family_explicit               = false;
     bool               color_scheme_explicit              = false;
     bool               text_renderer_mode_explicit        = false;
     bool               lcd_subpixel_order_explicit        = false;
+    bool               row_timestamp_tooltip_explicit     = false;
     bool               window_size_explicit               = false;
     bool               restore_maximized_window_state     = false;
 };
