@@ -133,15 +133,17 @@ bool parse_scrollback_limit(
 // keyword cannot drift the parser and its diagnostics apart. Help text stays
 // handwritten in print_usage (its wording and grouping are not table-shaped).
 template <typename Value_type>
-struct Cli_enum_choice {
+struct cli_enum_choice_t
+{
     const char* keyword;
     Value_type  value;
 };
 
 template <typename Value_type, std::size_t Choice_count>
-struct Cli_enum_option {
-    const char*                                           name;
-    std::array<Cli_enum_choice<Value_type>, Choice_count> choices;
+struct cli_enum_option_t
+{
+    const char*                                             name;
+    std::array<cli_enum_choice_t<Value_type>, Choice_count> choices;
 };
 
 QString cli_enum_option_error(const char* option_name, const QStringList& keywords)
@@ -162,13 +164,13 @@ QString cli_enum_option_error(const char* option_name, const QStringList& keywor
 
 template <typename Value_type, std::size_t Choice_count>
 bool parse_cli_enum_option(
-    const Cli_enum_option<Value_type, Choice_count>& option,
-    const QString&                                   value,
-    Value_type*                                      out_value,
-    QString*                                         out_error)
+    const cli_enum_option_t<Value_type, Choice_count>& option,
+    const QString&                                     value,
+    Value_type*                                        out_value,
+    QString*                                           out_error)
 {
     const QString normalized = value.trimmed().toLower();
-    for (const Cli_enum_choice<Value_type>& choice : option.choices) {
+    for (const cli_enum_choice_t<Value_type>& choice : option.choices) {
         if (normalized == QLatin1String(choice.keyword)) {
             *out_value = choice.value;
             return true;
@@ -176,14 +178,14 @@ bool parse_cli_enum_option(
     }
 
     QStringList keywords;
-    for (const Cli_enum_choice<Value_type>& choice : option.choices) {
+    for (const cli_enum_choice_t<Value_type>& choice : option.choices) {
         keywords << QLatin1String(choice.keyword);
     }
     *out_error = cli_enum_option_error(option.name, keywords);
     return false;
 }
 
-constexpr Cli_enum_option<VNM_TerminalSurface::Alternate_screen_wheel_policy, 3>
+constexpr cli_enum_option_t<VNM_TerminalSurface::Alternate_screen_wheel_policy, 3>
 k_alternate_wheel_option{
     "--alternate-wheel",
     {{
@@ -193,7 +195,7 @@ k_alternate_wheel_option{
     }},
 };
 
-constexpr Cli_enum_option<VNM_TerminalSurface::Synchronized_output_scroll_policy, 2>
+constexpr cli_enum_option_t<VNM_TerminalSurface::Synchronized_output_scroll_policy, 2>
 k_synchronized_output_scroll_policy_option{
     "--synchronized-output-scroll-policy",
     {{
@@ -206,7 +208,7 @@ k_synchronized_output_scroll_policy_option{
     }},
 };
 
-constexpr Cli_enum_option<VNM_TerminalSurface::Text_renderer_mode, 3>
+constexpr cli_enum_option_t<VNM_TerminalSurface::Text_renderer_mode, 3>
 k_text_renderer_option{
     "--text-renderer",
     {{
@@ -216,7 +218,7 @@ k_text_renderer_option{
     }},
 };
 
-constexpr Cli_enum_option<VNM_TerminalSurface::Lcd_subpixel_order, 6>
+constexpr cli_enum_option_t<VNM_TerminalSurface::Lcd_subpixel_order, 6>
 k_lcd_subpixel_option{
     "--lcd-subpixel",
     {{
@@ -229,7 +231,7 @@ k_lcd_subpixel_option{
     }},
 };
 
-constexpr Cli_enum_option<bool, 2> k_row_timestamps_option{
+constexpr cli_enum_option_t<bool, 2> k_row_timestamps_option{
     "--row-timestamps",
     {{
         {"on",  true},
@@ -237,7 +239,7 @@ constexpr Cli_enum_option<bool, 2> k_row_timestamps_option{
     }},
 };
 
-constexpr Cli_enum_option<Osc52_clipboard_policy, 2> k_osc52_clipboard_option{
+constexpr cli_enum_option_t<Osc52_clipboard_policy, 2> k_osc52_clipboard_option{
     "--osc52-clipboard",
     {{
         {"deny",  Osc52_clipboard_policy::DENY},
@@ -245,7 +247,7 @@ constexpr Cli_enum_option<Osc52_clipboard_policy, 2> k_osc52_clipboard_option{
     }},
 };
 
-constexpr Cli_enum_option<Paste_shortcut_policy, 4> k_paste_shortcut_option{
+constexpr cli_enum_option_t<Paste_shortcut_policy, 4> k_paste_shortcut_option{
     "--paste-shortcut",
     {{
         {"disabled",                Paste_shortcut_policy::DISABLED},
