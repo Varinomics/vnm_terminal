@@ -187,11 +187,73 @@ if exist "%RUNTIME_DIR%\vc_redist.x64.exe" (
     exit /b 1
 )
 
-for %%D in (
-    qmltooling
-    qml
+REM Strip the QML debug-tooling plugins (qmltooling\): they are only used by the
+REM QML debugger/profiler and are not needed in a distribution build.
+if exist "%RUNTIME_DIR%\qmltooling" rmdir /s /q "%RUNTIME_DIR%\qmltooling"
+
+REM Deploy the QtQml and QtQuick QML module trees.
+REM windeployqt cannot discover the chrome's QML imports: the chrome QML is a
+REM C++ raw-string literal (see k_terminal_chrome_qml in src\qml_chrome.cpp),
+REM loaded via QQmlComponent with a synthetic qrc: URL, so there is no .qml file
+REM for windeployqt's import scanner to read, and it leaves qml\ empty. The chrome
+REM imports QtQuick and QtQuick.Window (QtQuick.Window lives under the QtQuick
+REM module tree). Mirror the regular build's post-build step
+REM (vnm_terminal_copy_qt_qml_module for QtQml and QtQuick in CMakeLists.txt) by
+REM copying those module trees from the Qt kit. Without them the portable app
+REM exits immediately with: module "QtQuick.Window" is not installed
+for %%M in (
+    QtQml
+    QtQuick
 ) do (
-    if exist "%RUNTIME_DIR%\%%D" rmdir /s /q "%RUNTIME_DIR%\%%D"
+    if not exist "%QT_PREFIX%\qml\%%M" (
+        echo ERROR: Qt QML module %%M not found at "%QT_PREFIX%\qml\%%M".
+        exit /b 1
+    )
+    "%CMAKE%" -E copy_directory "%QT_PREFIX%\qml\%%M" "%RUNTIME_DIR%\qml\%%M"
+    if errorlevel 1 (
+        echo ERROR: Failed to deploy Qt QML module %%M into the runtime.
+        exit /b 1
+    )
+)
+if not exist "%RUNTIME_DIR%\qml\QtQuick\Window" (
+    echo ERROR: QtQuick.Window QML module missing after deployment.
+    exit /b 1
+)
+
+REM Deploy the QtQuick.Controls / Templates / Layouts runtime DLLs.
+REM The chrome QML and the VNM_Chrome module it loads import QtQuick.Controls,
+REM QtQuick.Controls.Basic and QtQuick.Layouts. windeployqt cannot see these
+REM imports (the chrome QML is a C++ string and the VNM_Chrome QML is qrc-embedded
+REM in the vnm_qml_chrome library), so it does not deploy the C++ libraries that
+REM the QtQuick.Controls QML plugins load dynamically. A local dev build resolves
+REM them from the Qt bin on PATH; a portable build has no such fallback. Mirror the
+REM regular build's explicit list (vnm_terminal_copy_qt_runtime_library for the
+REM QuickControls2 libraries in CMakeLists.txt) and add the QuickControls2 /
+REM QuickTemplates2 base libraries and QuickLayouts that those plugins depend on.
+REM Without them the portable app exits immediately with:
+REM   Cannot load library ...qtquickcontrols2plugin.dll
+REM The chrome forces the Basic style (QT_QUICK_CONTROLS_STYLE=Basic in the
+REM vnm_qml_chrome build); the wider style set matches the regular build.
+for %%F in (
+    Qt6QuickControls2.dll
+    Qt6QuickControls2Impl.dll
+    Qt6QuickControls2Basic.dll
+    Qt6QuickControls2BasicStyleImpl.dll
+    Qt6QuickControls2Fusion.dll
+    Qt6QuickControls2FusionStyleImpl.dll
+    Qt6QuickControls2WindowsStyleImpl.dll
+    Qt6QuickTemplates2.dll
+    Qt6QuickLayouts.dll
+) do (
+    if not exist "%QT_PREFIX%\bin\%%F" (
+        echo ERROR: Required Qt runtime DLL %%F not found at "%QT_PREFIX%\bin\%%F".
+        exit /b 1
+    )
+    copy /y "%QT_PREFIX%\bin\%%F" "%RUNTIME_DIR%\%%F" >nul
+    if errorlevel 1 (
+        echo ERROR: Failed to copy Qt runtime DLL %%F into the runtime.
+        exit /b 1
+    )
 )
 
 echo.
