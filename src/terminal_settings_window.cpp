@@ -297,17 +297,58 @@ Window {
                     }
 
                     Basic.ComboBox {
+                        id: renderer_mode_combo
                         objectName: "renderer_mode_combo"
                         Layout.fillWidth: true
-                        // Auto (Text_renderer_mode 0) already renders crisp,
-                        // resolution-independent MSDF text with automatic glyph
-                        // fallback; forcing raw MSDF (1) is a CLI-only diagnostic
-                        // that drops glyphs the MSDF atlas lacks. The panel offers
-                        // the two safe, visibly distinct outcomes: MSDF (= Auto)
-                        // and the bitmap glyph atlas (Glyph = 2).
-                        model: ["MSDF", "Glyph"]
+                        // "MSDF" maps to Auto (Text_renderer_mode 0): crisp,
+                        // resolution-independent MSDF with automatic per-glyph
+                        // glyph-atlas fallback. "Glyph" forces the bitmap atlas
+                        // (2). The MSDF entry is disabled when MSDF cannot render
+                        // the selected font, so the panel never offers a renderer
+                        // that would silently do nothing.
+                        textRole: "label"
+                        model: [
+                            { label: "MSDF",  is_glyph: false },
+                            { label: "Glyph", is_glyph: true }
+                        ]
                         currentIndex: surface.textRendererMode === 2 ? 1 : 0
                         onActivated: surface.textRendererMode = currentIndex === 1 ? 2 : 0
+
+                        delegate: Basic.ItemDelegate {
+                            width: renderer_mode_combo.width
+                            text: modelData.label
+                            enabled: modelData.is_glyph || surface.msdfTextAvailable
+                            highlighted: renderer_mode_combo.highlightedIndex === index
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 86
+                    spacing: 4
+
+                    Text {
+                        objectName: "renderer_status_label"
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        font.pointSize: 9
+                        color: win.label_color
+                        text: {
+                            if (surface.msdfTextChecking)
+                                return "Checking whether MSDF can render this font..."
+                            if (!surface.msdfTextAvailable)
+                                return "MSDF is not available for this font; rendering with the glyph atlas."
+                            if (surface.textRendererMode === 2)
+                                return "Rendering: glyph atlas."
+                            return "Rendering: MSDF."
+                        }
+                    }
+
+                    Basic.ProgressBar {
+                        Layout.fillWidth: true
+                        indeterminate: true
+                        visible: surface.msdfTextChecking
                     }
                 }
 
