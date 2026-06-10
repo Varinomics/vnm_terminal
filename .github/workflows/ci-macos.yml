@@ -139,4 +139,5 @@ jobs:
           gh release upload \
             "${GITHUB_REF_NAME}" \
             "dist/${{ needs.build-and-test.outputs.zip_name }}" \
+            --repo "${{ github.repository }}" \
             --clobber
