@@ -2,10 +2,37 @@
 
 [![CI Linux](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml) [![CI Windows](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml) [![CI macOS](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-macos.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-macos.yml)
 
-`vnm_terminal` is the Varinomics Qt terminal application. It uses
-`vnm_terminal_surface` for terminal parsing, process hosting, screen state, and
-rendering, while this repository owns the application window, command-line
-options, window chrome, and packaging-facing behavior.
+`vnm_terminal` is a cross-platform terminal emulator for Windows, macOS, and
+Linux. It is built on
+[`vnm_terminal_surface`](https://github.com/Varinomics/vnm_terminal_surface),
+which provides terminal parsing, process hosting (ConPTY/PTY), screen state,
+and GPU-accelerated rendering, while this repository owns the application
+window, command-line options, window chrome, and packaging-facing behavior.
+
+Notable behavior:
+
+- GPU glyph-atlas text rendering with MSDF and glyph renderers and LCD
+  subpixel modes.
+- Built-in window chrome on validated platforms, with `--native-titlebar` to
+  use the platform frame instead.
+- Safe clipboard defaults: OSC 52 clipboard writes from the hosted program are
+  denied unless explicitly allowed with `--osc52-clipboard allow`.
+- Configurable paste shortcuts (`--paste-shortcut`) and DEC
+  synchronized-output scroll policy
+  (`--synchronized-output-scroll-policy`).
+
+## Download
+
+Prebuilt packages are attached to each
+[GitHub release](https://github.com/Varinomics/vnm_terminal/releases):
+
+- Windows: `vnm_terminal_v<version>_w64.zip` is a portable distribution.
+  Unpack it and run the top-level `vnm_terminal.exe` launcher.
+- macOS: `vnm_terminal_v<version>_macos_x64_unnotarized.zip` contains the app
+  bundle. It is not Apple-notarized; see the macOS Bundle Build section for
+  the Gatekeeper quarantine step.
+
+On Linux, build from source as described below.
 
 ## Build
 
@@ -159,3 +186,7 @@ Users who trust the downloaded build can remove the quarantine attribute:
 xattr -dr com.apple.quarantine /path/to/vnm_terminal.app
 open /path/to/vnm_terminal.app
 ```
+
+## License
+
+BSD 2-Clause. See [LICENSE](LICENSE).
