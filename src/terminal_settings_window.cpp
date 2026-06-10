@@ -67,6 +67,7 @@ Window {
     readonly property color section_color: "#c7ced8"
     readonly property color label_color: "#9aa4b2"
     readonly property color value_color: "#dfe5ee"
+    readonly property color warning_color: "#d6b25a"
 
     VNM_ChromeTheme {
         id: settings_theme
@@ -311,14 +312,36 @@ Window {
                             { label: "MSDF",  is_glyph: false },
                             { label: "Glyph", is_glyph: true }
                         ]
-                        currentIndex: surface.textRendererMode === 2 ? 1 : 0
-                        onActivated: surface.textRendererMode = currentIndex === 1 ? 2 : 0
+                        // Read the renderer actually in effect: when MSDF cannot
+                        // render the font, the combo shows Glyph (the real
+                        // fallback) instead of claiming MSDF. The mode preference
+                        // is left untouched, so a capable font shows MSDF again.
+                        currentIndex: (surface.textRendererMode === 2
+                            || !surface.msdfTextAvailable) ? 1 : 0
+                        onActivated: (index) =>
+                            surface.textRendererMode = index === 1 ? 2 : 0
 
                         delegate: Basic.ItemDelegate {
                             width: renderer_mode_combo.width
                             text: modelData.label
                             enabled: modelData.is_glyph || surface.msdfTextAvailable
                             highlighted: renderer_mode_combo.highlightedIndex === index
+                        }
+
+                        // Discrete warning sign anchored to the LEFT of the combo,
+                        // outside its bounds, so the combo never shifts to make
+                        // room. Shown only when MSDF is unavailable for the font.
+                        Text {
+                            objectName: "renderer_warning_glyph"
+                            anchors.right: parent.left
+                            anchors.rightMargin: 6
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: !surface.msdfTextChecking
+                                && !surface.msdfTextAvailable
+                            text: "\uE7BA"
+                            font.family: "Segoe Fluent Icons"
+                            font.pixelSize: 13
+                            color: win.warning_color
                         }
                     }
                 }
@@ -333,7 +356,8 @@ Window {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         font.pointSize: 9
-                        color: win.label_color
+                        color: (!surface.msdfTextChecking && !surface.msdfTextAvailable)
+                            ? win.warning_color : win.label_color
                         text: {
                             if (surface.msdfTextChecking)
                                 return "Checking whether MSDF can render this font..."
