@@ -17,7 +17,9 @@
 #include <QString>
 #include <QStringList>
 
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <limits>
 #include <optional>
@@ -125,181 +127,133 @@ bool parse_scrollback_limit(
     return true;
 }
 
-bool parse_alternate_wheel_policy(
-    const QString&         value,
-    VNM_TerminalSurface::Alternate_screen_wheel_policy*
-                           out_policy,
-    QString*               out_error)
+// Keyword-valued options parse through one descriptor table per option: the
+// table is the single source of truth for the accepted keywords, the mapped
+// values, and the derived "supports only ..." reject message, so adding a
+// keyword cannot drift the parser and its diagnostics apart. Help text stays
+// handwritten in print_usage (its wording and grouping are not table-shaped).
+template <typename Value_type>
+struct Cli_enum_choice {
+    const char* keyword;
+    Value_type  value;
+};
+
+template <typename Value_type, std::size_t Choice_count>
+struct Cli_enum_option {
+    const char*                                           name;
+    std::array<Cli_enum_choice<Value_type>, Choice_count> choices;
+};
+
+QString cli_enum_option_error(const char* option_name, const QStringList& keywords)
 {
-    const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("page")) {
-        *out_policy = VNM_TerminalSurface::Alternate_screen_wheel_policy::PAGE_KEYS;
-        return true;
-    }
-    if (normalized == QStringLiteral("cursor")) {
-        *out_policy = VNM_TerminalSurface::Alternate_screen_wheel_policy::CURSOR_KEYS;
-        return true;
-    }
-    if (normalized == QStringLiteral("mouse")) {
-        *out_policy =
-            VNM_TerminalSurface::Alternate_screen_wheel_policy::MOUSE_REPORTING_FIRST;
-        return true;
+    QString choices_text;
+    for (qsizetype i = 0; i < keywords.size(); ++i) {
+        if (i > 0) {
+            choices_text += i + 1 == keywords.size()
+                ? (keywords.size() == 2 ? QStringLiteral(" or ") : QStringLiteral(", or "))
+                : QStringLiteral(", ");
+        }
+        choices_text += keywords[i];
     }
 
-    *out_error = QStringLiteral("--alternate-wheel supports only page, cursor, or mouse");
+    return QStringLiteral("%1 supports only %2")
+        .arg(QLatin1String(option_name), choices_text);
+}
+
+template <typename Value_type, std::size_t Choice_count>
+bool parse_cli_enum_option(
+    const Cli_enum_option<Value_type, Choice_count>& option,
+    const QString&                                   value,
+    Value_type*                                      out_value,
+    QString*                                         out_error)
+{
+    const QString normalized = value.trimmed().toLower();
+    for (const Cli_enum_choice<Value_type>& choice : option.choices) {
+        if (normalized == QLatin1String(choice.keyword)) {
+            *out_value = choice.value;
+            return true;
+        }
+    }
+
+    QStringList keywords;
+    for (const Cli_enum_choice<Value_type>& choice : option.choices) {
+        keywords << QLatin1String(choice.keyword);
+    }
+    *out_error = cli_enum_option_error(option.name, keywords);
     return false;
 }
 
-bool parse_synchronized_output_scroll_policy(
-    const QString&         value,
-    VNM_TerminalSurface::Synchronized_output_scroll_policy*
-                           out_policy,
-    QString*               out_error)
-{
-    const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("defer")) {
-        *out_policy = VNM_TerminalSurface::Synchronized_output_scroll_policy::
-            DEFER_UNTIL_CONTENT_PUBLICATION;
-        return true;
-    }
-    if (normalized == QStringLiteral("immediate-public")) {
-        *out_policy = VNM_TerminalSurface::Synchronized_output_scroll_policy::
-            IMMEDIATE_PUBLIC_PROJECTION;
-        return true;
-    }
+constexpr Cli_enum_option<VNM_TerminalSurface::Alternate_screen_wheel_policy, 3>
+k_alternate_wheel_option{
+    "--alternate-wheel",
+    {{
+        {"page",   VNM_TerminalSurface::Alternate_screen_wheel_policy::PAGE_KEYS},
+        {"cursor", VNM_TerminalSurface::Alternate_screen_wheel_policy::CURSOR_KEYS},
+        {"mouse",  VNM_TerminalSurface::Alternate_screen_wheel_policy::MOUSE_REPORTING_FIRST},
+    }},
+};
 
-    *out_error = QStringLiteral(
-        "--synchronized-output-scroll-policy supports only defer or immediate-public");
-    return false;
-}
+constexpr Cli_enum_option<VNM_TerminalSurface::Synchronized_output_scroll_policy, 2>
+k_synchronized_output_scroll_policy_option{
+    "--synchronized-output-scroll-policy",
+    {{
+        {"defer",
+            VNM_TerminalSurface::Synchronized_output_scroll_policy::
+                DEFER_UNTIL_CONTENT_PUBLICATION},
+        {"immediate-public",
+            VNM_TerminalSurface::Synchronized_output_scroll_policy::
+                IMMEDIATE_PUBLIC_PROJECTION},
+    }},
+};
 
-bool parse_text_renderer_mode(
-    const QString&                         value,
-    VNM_TerminalSurface::Text_renderer_mode*
-                                           out_mode,
-    QString*                               out_error)
-{
-    const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("auto")) {
-        *out_mode = VNM_TerminalSurface::Text_renderer_mode::AUTO;
-        return true;
-    }
-    if (normalized == QStringLiteral("msdf")) {
-        *out_mode = VNM_TerminalSurface::Text_renderer_mode::MSDF;
-        return true;
-    }
-    if (normalized == QStringLiteral("glyph")) {
-        *out_mode = VNM_TerminalSurface::Text_renderer_mode::GLYPH;
-        return true;
-    }
+constexpr Cli_enum_option<VNM_TerminalSurface::Text_renderer_mode, 3>
+k_text_renderer_option{
+    "--text-renderer",
+    {{
+        {"auto",  VNM_TerminalSurface::Text_renderer_mode::AUTO},
+        {"msdf",  VNM_TerminalSurface::Text_renderer_mode::MSDF},
+        {"glyph", VNM_TerminalSurface::Text_renderer_mode::GLYPH},
+    }},
+};
 
-    *out_error = QStringLiteral("--text-renderer supports only auto, msdf, or glyph");
-    return false;
-}
+constexpr Cli_enum_option<VNM_TerminalSurface::Lcd_subpixel_order, 6>
+k_lcd_subpixel_option{
+    "--lcd-subpixel",
+    {{
+        {"auto", VNM_TerminalSurface::Lcd_subpixel_order::AUTO},
+        {"none", VNM_TerminalSurface::Lcd_subpixel_order::NONE},
+        {"rgb",  VNM_TerminalSurface::Lcd_subpixel_order::RGB},
+        {"bgr",  VNM_TerminalSurface::Lcd_subpixel_order::BGR},
+        {"vrgb", VNM_TerminalSurface::Lcd_subpixel_order::VRGB},
+        {"vbgr", VNM_TerminalSurface::Lcd_subpixel_order::VBGR},
+    }},
+};
 
-bool parse_lcd_subpixel_order(
-    const QString&                         value,
-    VNM_TerminalSurface::Lcd_subpixel_order*
-                                           out_order,
-    QString*                               out_error)
-{
-    const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("auto")) {
-        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::AUTO;
-        return true;
-    }
-    if (normalized == QStringLiteral("none")) {
-        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::NONE;
-        return true;
-    }
-    if (normalized == QStringLiteral("rgb")) {
-        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::RGB;
-        return true;
-    }
-    if (normalized == QStringLiteral("bgr")) {
-        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::BGR;
-        return true;
-    }
-    if (normalized == QStringLiteral("vrgb")) {
-        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::VRGB;
-        return true;
-    }
-    if (normalized == QStringLiteral("vbgr")) {
-        *out_order = VNM_TerminalSurface::Lcd_subpixel_order::VBGR;
-        return true;
-    }
+constexpr Cli_enum_option<bool, 2> k_row_timestamps_option{
+    "--row-timestamps",
+    {{
+        {"on",  true},
+        {"off", false},
+    }},
+};
 
-    *out_error = QStringLiteral(
-        "--lcd-subpixel supports only auto, none, rgb, bgr, vrgb, or vbgr");
-    return false;
-}
+constexpr Cli_enum_option<Osc52_clipboard_policy, 2> k_osc52_clipboard_option{
+    "--osc52-clipboard",
+    {{
+        {"deny",  Osc52_clipboard_policy::DENY},
+        {"allow", Osc52_clipboard_policy::ALLOW},
+    }},
+};
 
-bool parse_row_timestamps(
-    const QString&         value,
-    bool*                  out_enabled,
-    QString*               out_error)
-{
-    const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("on")) {
-        *out_enabled = true;
-        return true;
-    }
-    if (normalized == QStringLiteral("off")) {
-        *out_enabled = false;
-        return true;
-    }
-
-    *out_error = QStringLiteral("--row-timestamps supports only on or off");
-    return false;
-}
-
-bool parse_osc52_clipboard_policy(
-    const QString&          value,
-    Osc52_clipboard_policy* out_policy,
-    QString*                out_error)
-{
-    const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("deny")) {
-        *out_policy = Osc52_clipboard_policy::DENY;
-        return true;
-    }
-    if (normalized == QStringLiteral("allow")) {
-        *out_policy = Osc52_clipboard_policy::ALLOW;
-        return true;
-    }
-
-    *out_error = QStringLiteral("--osc52-clipboard supports only deny or allow");
-    return false;
-}
-
-bool parse_paste_shortcut_policy(
-    const QString&         value,
-    Paste_shortcut_policy* out_policy,
-    QString*               out_error)
-{
-    const QString normalized = value.trimmed().toLower();
-    if (normalized == QStringLiteral("disabled")) {
-        *out_policy = Paste_shortcut_policy::DISABLED;
-        return true;
-    }
-    if (normalized == QStringLiteral("ctrl-shift-v")) {
-        *out_policy = Paste_shortcut_policy::CTRL_SHIFT_V;
-        return true;
-    }
-    if (normalized == QStringLiteral("ctrl-v-and-ctrl-shift-v")) {
-        *out_policy = Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V;
-        return true;
-    }
-    if (normalized == QStringLiteral("platform-default")) {
-        *out_policy = Paste_shortcut_policy::PLATFORM_DEFAULT;
-        return true;
-    }
-
-    *out_error = QStringLiteral(
-        "--paste-shortcut supports only disabled, ctrl-shift-v, "
-        "ctrl-v-and-ctrl-shift-v, or platform-default");
-    return false;
-}
+constexpr Cli_enum_option<Paste_shortcut_policy, 4> k_paste_shortcut_option{
+    "--paste-shortcut",
+    {{
+        {"disabled",                Paste_shortcut_policy::DISABLED},
+        {"ctrl-shift-v",            Paste_shortcut_policy::CTRL_SHIFT_V},
+        {"ctrl-v-and-ctrl-shift-v", Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V},
+        {"platform-default",        Paste_shortcut_policy::PLATFORM_DEFAULT},
+    }},
+};
 
 QString comparable_capture_path(QString path)
 {
@@ -637,9 +591,10 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--alternate-wheel")) {
+        if (argument_is(argument, k_alternate_wheel_option.name)) {
             if (!take_option_value(arguments, index, &value, &result.error) ||
-                !parse_alternate_wheel_policy(
+                !parse_cli_enum_option(
+                    k_alternate_wheel_option,
                     value, &result.options.alternate_screen_wheel_policy, &result.error))
             {
                 return result;
@@ -648,9 +603,10 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--text-renderer")) {
+        if (argument_is(argument, k_text_renderer_option.name)) {
             if (!take_option_value(arguments, index, &value, &result.error) ||
-                !parse_text_renderer_mode(
+                !parse_cli_enum_option(
+                    k_text_renderer_option,
                     value, &result.options.text_renderer_mode, &result.error))
             {
                 return result;
@@ -660,9 +616,10 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--lcd-subpixel")) {
+        if (argument_is(argument, k_lcd_subpixel_option.name)) {
             if (!take_option_value(arguments, index, &value, &result.error) ||
-                !parse_lcd_subpixel_order(
+                !parse_cli_enum_option(
+                    k_lcd_subpixel_option,
                     value, &result.options.lcd_subpixel_order, &result.error))
             {
                 return result;
@@ -672,9 +629,10 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--row-timestamps")) {
+        if (argument_is(argument, k_row_timestamps_option.name)) {
             if (!take_option_value(arguments, index, &value, &result.error) ||
-                !parse_row_timestamps(
+                !parse_cli_enum_option(
+                    k_row_timestamps_option,
                     value, &result.options.row_timestamp_tooltip_enabled, &result.error))
             {
                 return result;
@@ -684,9 +642,10 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--osc52-clipboard")) {
+        if (argument_is(argument, k_osc52_clipboard_option.name)) {
             if (!take_option_value(arguments, index, &value, &result.error) ||
-                !parse_osc52_clipboard_policy(
+                !parse_cli_enum_option(
+                    k_osc52_clipboard_option,
                     value, &result.options.osc52_clipboard_policy, &result.error))
             {
                 return result;
@@ -695,9 +654,10 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--paste-shortcut")) {
+        if (argument_is(argument, k_paste_shortcut_option.name)) {
             if (!take_option_value(arguments, index, &value, &result.error) ||
-                !parse_paste_shortcut_policy(
+                !parse_cli_enum_option(
+                    k_paste_shortcut_option,
                     value, &result.options.paste_shortcut_policy, &result.error))
             {
                 return result;
@@ -706,9 +666,10 @@ Parse_result parse_arguments(const QStringList& arguments)
             continue;
         }
 
-        if (argument_is(argument, "--synchronized-output-scroll-policy")) {
+        if (argument_is(argument, k_synchronized_output_scroll_policy_option.name)) {
             if (!take_option_value(arguments, index, &value, &result.error) ||
-                !parse_synchronized_output_scroll_policy(
+                !parse_cli_enum_option(
+                    k_synchronized_output_scroll_policy_option,
                     value, &result.options.synchronized_output_scroll_policy, &result.error))
             {
                 return result;
