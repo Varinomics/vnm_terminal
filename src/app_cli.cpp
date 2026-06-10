@@ -234,6 +234,25 @@ bool parse_lcd_subpixel_order(
     return false;
 }
 
+bool parse_row_timestamps(
+    const QString&         value,
+    bool*                  out_enabled,
+    QString*               out_error)
+{
+    const QString normalized = value.trimmed().toLower();
+    if (normalized == QStringLiteral("on")) {
+        *out_enabled = true;
+        return true;
+    }
+    if (normalized == QStringLiteral("off")) {
+        *out_enabled = false;
+        return true;
+    }
+
+    *out_error = QStringLiteral("--row-timestamps supports only on or off");
+    return false;
+}
+
 bool parse_osc52_clipboard_policy(
     const QString&          value,
     Osc52_clipboard_policy* out_policy,
@@ -341,6 +360,7 @@ void print_usage()
         << "  --alternate-wheel <mode>        alternate-screen wheel: mouse(default), cursor, or page\n"
         << "  --text-renderer <mode>          text renderer: auto(default), msdf, or glyph\n"
         << "  --lcd-subpixel <order>          MSDF LCD order: auto(default), none, rgb, bgr, vrgb, or vbgr\n"
+        << "  --row-timestamps <mode>         row hover timestamp tooltip: on(default) or off\n"
         << "  --synchronized-output-scroll-policy <policy>\n"
         << "                                  DEC synchronized-output scroll: defer(default) "
         << "or immediate-public (case-insensitive)\n"
@@ -649,6 +669,18 @@ Parse_result parse_arguments(const QStringList& arguments)
             }
 
             result.options.lcd_subpixel_order_explicit = true;
+            continue;
+        }
+
+        if (argument_is(argument, "--row-timestamps")) {
+            if (!take_option_value(arguments, index, &value, &result.error) ||
+                !parse_row_timestamps(
+                    value, &result.options.row_timestamp_tooltip_enabled, &result.error))
+            {
+                return result;
+            }
+
+            result.options.row_timestamp_tooltip_explicit = true;
             continue;
         }
 

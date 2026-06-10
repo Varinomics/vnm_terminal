@@ -13,6 +13,7 @@
 #include <QByteArray>
 #include <QColor>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QEventLoop>
 #include <QGuiApplication>
 #include <QJsonObject>
@@ -1579,6 +1580,173 @@ bool test_parse_lcd_subpixel_option()
     return ok;
 }
 
+bool test_parse_row_timestamps_option()
+{
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result on_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--row-timestamps"),
+        QStringLiteral("on"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result off_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--row-timestamps"),
+        QStringLiteral("off"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result mixed_case_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--row-timestamps"),
+        QStringLiteral("OFF"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result invalid_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--row-timestamps"),
+        QStringLiteral("sometimes"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--row-timestamps"),
+        QStringLiteral("off"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(), "row timestamps default parse succeeds");
+    ok &= check(default_result.options.row_timestamp_tooltip_enabled,
+        "row timestamps default leaves the tooltip enabled");
+    ok &= check(!default_result.options.row_timestamp_tooltip_explicit,
+        "row timestamps default is not marked explicit");
+    ok &= check(on_result.error.isEmpty(), "row timestamps on option parses");
+    ok &= check(on_result.options.row_timestamp_tooltip_enabled,
+        "row timestamps on option keeps the tooltip enabled");
+    ok &= check(on_result.options.row_timestamp_tooltip_explicit,
+        "row timestamps on option is marked explicit");
+    ok &= check(off_result.error.isEmpty(), "row timestamps off option parses");
+    ok &= check(!off_result.options.row_timestamp_tooltip_enabled,
+        "row timestamps off option disables the tooltip");
+    ok &= check(off_result.options.row_timestamp_tooltip_explicit,
+        "row timestamps off option is marked explicit");
+    ok &= check(mixed_case_result.error.isEmpty(),
+        "row timestamps mixed-case option parses");
+    ok &= check(!mixed_case_result.options.row_timestamp_tooltip_enabled,
+        "row timestamps option is case-insensitive");
+    ok &= check(!invalid_result.error.isEmpty(),
+        "row timestamps option rejects invalid values");
+    ok &= check(command_result.error.isEmpty(),
+        "row timestamps option after command separator parses as command argv");
+    ok &= check(command_result.options.row_timestamp_tooltip_enabled,
+        "row timestamps option after command separator leaves default");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{
+                QStringLiteral("--row-timestamps"),
+                QStringLiteral("off"),
+            },
+        "row timestamps option after command separator is preserved in command argv");
+
+    VNM_TerminalSurface surface;
+    surface.set_row_timestamp_tooltip_enabled(off_result.options.row_timestamp_tooltip_enabled);
+    ok &= check(!surface.row_timestamp_tooltip_enabled(),
+        "row timestamps off option reaches surface config");
+
+    return ok;
+}
+
+bool test_row_timestamp_tooltip_chrome(QGuiApplication& app)
+{
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(800, 480);
+
+    chrome_test::Terminal_qml_chrome titlebar(engine, window);
+    VNM_TerminalSurface surface(window.contentItem());
+    chrome_test::Terminal_scrollbar scrollbar(window.contentItem());
+
+    bool ok = true;
+    ok &= check(titlebar.is_valid(), "row timestamp tooltip chrome initializes");
+    if (!titlebar.is_valid()) {
+        std::cerr << titlebar.error_string().toStdString() << '\n';
+        return ok;
+    }
+
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    connect_row_timestamp_tooltip_to_chrome(surface, &titlebar);
+    window.show();
+    pump_events(app);
+
+    auto* tooltip = find_quick_item_recursive(
+        titlebar.root_item(), QStringLiteral("row_timestamp_tooltip"));
+    ok &= check(tooltip != nullptr, "chrome builds the row timestamp tooltip");
+    if (tooltip == nullptr) {
+        return ok;
+    }
+
+    ok &= check(!tooltip->isVisible(), "row timestamp tooltip starts hidden");
+    ok &= check(!tooltip->isEnabled(),
+        "row timestamp tooltip never accepts pointer input");
+
+    // Drive the real wiring: emitting the surface signal must place the
+    // tooltip in chrome coordinates. The surface sits at (5, 31) in this
+    // 800x480 fixture (see test_custom_titlebar_geometry), and the tooltip
+    // anchors 12px down-right of the pointer.
+    const QDateTime timestamp(QDate(2026, 6, 10), QTime(14, 30, 5));
+    QMetaObject::invokeMethod(
+        &surface,
+        "row_timestamp_tooltip_requested",
+        Q_ARG(qreal, 40.0),
+        Q_ARG(qreal, 20.0),
+        Q_ARG(QDateTime, timestamp));
+    pump_events(app);
+
+    ok &= check(
+        titlebar.root_item()->property("row_timestamp_tooltip_visible").toBool(),
+        "tooltip request raises the chrome visibility flag");
+    ok &= check(nearly_equal(tooltip->x(), 40.0 + 5.0 + 12.0),
+        "tooltip anchors right of the reported pointer position");
+    ok &= check(nearly_equal(tooltip->y(), 20.0 + 31.0 + 12.0),
+        "tooltip anchors below the reported pointer position");
+
+    auto* tooltip_text = find_quick_item_recursive(
+        tooltip, QStringLiteral("row_timestamp_tooltip_text"));
+    ok &= check(tooltip_text != nullptr, "tooltip exposes its timestamp text");
+    if (tooltip_text != nullptr) {
+        ok &= check(
+            tooltip_text->property("text").toString() ==
+                QStringLiteral("2026-06-10 14:30:05"),
+            "tooltip formats the timestamp as a concrete local date and time");
+    }
+
+    titlebar.show_row_timestamp_tooltip(QPointF(795.0, 475.0), timestamp);
+    pump_events(app);
+    ok &= check(nearly_equal(tooltip->x(), 800.0 - tooltip->width()  - 4.0),
+        "tooltip clamps to the right window edge");
+    ok &= check(nearly_equal(tooltip->y(), 480.0 - tooltip->height() - 4.0),
+        "tooltip clamps to the bottom window edge");
+
+    QMetaObject::invokeMethod(&surface, "row_timestamp_tooltip_dismissed");
+    pump_events(app);
+    ok &= check(
+        !titlebar.root_item()->property("row_timestamp_tooltip_visible").toBool(),
+        "tooltip dismissal clears the chrome visibility flag");
+
+    return ok;
+}
+
 bool test_parse_scrollback_limit_option()
 {
     Parse_result default_result = parse_arguments({
@@ -2205,6 +2373,11 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
                     surface.available_color_schemes().size(),
                 "color-scheme picker lists every bundled scheme");
         }
+
+        ok &= check(
+            settings_qml_window->findChild<QQuickItem*>(
+                QStringLiteral("row_timestamp_switch")) != nullptr,
+            "settings panel builds the row-timestamp switch");
     }
 
     ok &= check(surface.color_scheme() == QStringLiteral("Campbell"),
@@ -2328,6 +2501,8 @@ int main(int argc, char** argv)
     ok &= test_parse_disable_primary_repaint_recovery_option();
     ok &= test_parse_text_renderer_option();
     ok &= test_parse_lcd_subpixel_option();
+    ok &= test_parse_row_timestamps_option();
+    ok &= test_row_timestamp_tooltip_chrome(app);
     ok &= test_parse_scrollback_limit_option();
     ok &= test_parse_transcript_snapshot_diagnostics_option();
     ok &= test_parse_transcript_timing_diagnostics_option();

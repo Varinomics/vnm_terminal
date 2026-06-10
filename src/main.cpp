@@ -69,6 +69,7 @@ using chrome::apply_primary_repaint_recovery_option;
 using chrome::apply_scrollback_limit_option;
 using chrome::apply_synchronized_output_scroll_policy_option;
 using chrome::apply_terminal_shell_geometry;
+using chrome::connect_row_timestamp_tooltip_to_chrome;
 using chrome::connect_terminal_metadata_to_chrome;
 using chrome::custom_titlebar_resize_border_active;
 using chrome::custom_titlebar_supported_on_platform;
@@ -97,6 +98,7 @@ using chrome::k_timeout_force_exit_grace_ms;
 using chrome::k_appearance_color_scheme;
 using chrome::k_appearance_font_family;
 using chrome::k_appearance_lcd_subpixel_order;
+using chrome::k_appearance_row_timestamp_tooltip;
 using chrome::k_appearance_scrollback_limit;
 using chrome::k_appearance_settings_group;
 using chrome::k_appearance_text_renderer_mode;
@@ -373,6 +375,7 @@ int main(int argc, char** argv)
     surface->set_alternate_screen_wheel_policy(options.alternate_screen_wheel_policy);
     surface->set_text_renderer_mode(options.text_renderer_mode);
     surface->set_lcd_subpixel_order(options.lcd_subpixel_order);
+    surface->set_row_timestamp_tooltip_enabled(options.row_timestamp_tooltip_enabled);
     apply_synchronized_output_scroll_policy_option(*surface, options);
     apply_primary_repaint_recovery_option(*surface, options);
     surface->set_backend_output_capture_path(options.backend_output_capture_path);
@@ -438,6 +441,7 @@ int main(int argc, char** argv)
     }
 
     connect_terminal_metadata_to_chrome(*surface, window, titlebar_ptr);
+    connect_row_timestamp_tooltip_to_chrome(*surface, titlebar_ptr);
     QObject::connect(
         surface,
         &VNM_TerminalSurface::clipboard_write_requested,

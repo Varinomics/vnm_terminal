@@ -168,6 +168,7 @@ bool test_appearance_settings_round_trip()
     writer.setValue(
         QLatin1String(k_appearance_lcd_subpixel_order),
         static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::NONE));
+    writer.setValue(QLatin1String(k_appearance_row_timestamp_tooltip), false);
     writer.setValue(QLatin1String(k_appearance_scrollback_limit), 25000);
     writer.endGroup();
     writer.sync();
@@ -187,6 +188,8 @@ bool test_appearance_settings_round_trip()
         state.lcd_subpixel_order.value_or(-1) ==
             static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::NONE),
         "persisted lcd subpixel order round-trips");
+    ok &= check(state.row_timestamp_tooltip.has_value() && !*state.row_timestamp_tooltip,
+        "persisted row timestamp toggle round-trips");
     ok &= check(state.scrollback_limit.value_or(-1) == 25000,
         "persisted scrollback limit round-trips");
 
@@ -202,19 +205,23 @@ bool test_appearance_settings_round_trip()
     ok &= check(
         options.lcd_subpixel_order == VNM_TerminalSurface::Lcd_subpixel_order::NONE,
         "persisted lcd subpixel order is applied without command-line override");
+    ok &= check(!options.row_timestamp_tooltip_enabled,
+        "persisted row timestamp toggle is applied without command-line override");
     ok &= check(options.scrollback_limit.value_or(0) == 25000,
         "persisted scrollback limit is applied without command-line override");
 
     App_options explicit_options;
-    explicit_options.color_scheme                = QStringLiteral("Campbell");
-    explicit_options.color_scheme_explicit       = true;
-    explicit_options.font_family                 = QStringLiteral("Consolas");
-    explicit_options.font_family_explicit        = true;
-    explicit_options.text_renderer_mode          = VNM_TerminalSurface::Text_renderer_mode::MSDF;
-    explicit_options.text_renderer_mode_explicit = true;
-    explicit_options.lcd_subpixel_order          = VNM_TerminalSurface::Lcd_subpixel_order::RGB;
-    explicit_options.lcd_subpixel_order_explicit = true;
-    explicit_options.scrollback_limit            = 4000;
+    explicit_options.color_scheme                   = QStringLiteral("Campbell");
+    explicit_options.color_scheme_explicit          = true;
+    explicit_options.font_family                    = QStringLiteral("Consolas");
+    explicit_options.font_family_explicit           = true;
+    explicit_options.text_renderer_mode             = VNM_TerminalSurface::Text_renderer_mode::MSDF;
+    explicit_options.text_renderer_mode_explicit    = true;
+    explicit_options.lcd_subpixel_order             = VNM_TerminalSurface::Lcd_subpixel_order::RGB;
+    explicit_options.lcd_subpixel_order_explicit    = true;
+    explicit_options.row_timestamp_tooltip_enabled  = true;
+    explicit_options.row_timestamp_tooltip_explicit = true;
+    explicit_options.scrollback_limit               = 4000;
     apply_persisted_appearance_settings(state, &explicit_options);
     ok &= check(explicit_options.color_scheme == QStringLiteral("Campbell"),
         "explicit color scheme overrides persisted scheme");
@@ -226,6 +233,8 @@ bool test_appearance_settings_round_trip()
     ok &= check(
         explicit_options.lcd_subpixel_order == VNM_TerminalSurface::Lcd_subpixel_order::RGB,
         "explicit lcd subpixel order overrides persisted order");
+    ok &= check(explicit_options.row_timestamp_tooltip_enabled,
+        "explicit row timestamp flag overrides persisted toggle");
     ok &= check(explicit_options.scrollback_limit.value_or(0) == 4000,
         "explicit scrollback limit overrides persisted limit");
 

@@ -45,12 +45,13 @@ void settings::Terminal_settings_controller::connect_persistence()
     }
 
     const auto persist = [this] { persist_appearance(); };
-    QObject::connect(m_surface, &VNM_TerminalSurface::color_scheme_changed,       this, persist);
-    QObject::connect(m_surface, &VNM_TerminalSurface::font_family_changed,        this, persist);
-    QObject::connect(m_surface, &VNM_TerminalSurface::font_size_changed,          this, persist);
-    QObject::connect(m_surface, &VNM_TerminalSurface::text_renderer_mode_changed, this, persist);
-    QObject::connect(m_surface, &VNM_TerminalSurface::lcd_subpixel_order_changed,  this, persist);
-    QObject::connect(m_surface, &VNM_TerminalSurface::scrollback_limit_changed,   this, persist);
+    QObject::connect(m_surface, &VNM_TerminalSurface::color_scheme_changed,                  this, persist);
+    QObject::connect(m_surface, &VNM_TerminalSurface::font_family_changed,                   this, persist);
+    QObject::connect(m_surface, &VNM_TerminalSurface::font_size_changed,                     this, persist);
+    QObject::connect(m_surface, &VNM_TerminalSurface::text_renderer_mode_changed,            this, persist);
+    QObject::connect(m_surface, &VNM_TerminalSurface::lcd_subpixel_order_changed,            this, persist);
+    QObject::connect(m_surface, &VNM_TerminalSurface::row_timestamp_tooltip_enabled_changed, this, persist);
+    QObject::connect(m_surface, &VNM_TerminalSurface::scrollback_limit_changed,              this, persist);
 }
 
 void settings::Terminal_settings_controller::persist_appearance() const
@@ -69,6 +70,9 @@ void settings::Terminal_settings_controller::persist_appearance() const
     settings.setValue(
         QLatin1String(k_appearance_lcd_subpixel_order),
         static_cast<int>(m_surface->lcd_subpixel_order()));
+    settings.setValue(
+        QLatin1String(k_appearance_row_timestamp_tooltip),
+        m_surface->row_timestamp_tooltip_enabled());
     settings.setValue(QLatin1String(k_appearance_scrollback_limit), m_surface->scrollback_limit());
     settings.endGroup();
 

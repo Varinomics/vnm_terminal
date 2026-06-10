@@ -606,6 +606,29 @@ if(TARGET vnm_terminal_canvas_fixture)
     )
 
     add_test(
+        NAME vnm_terminal_rejects_bad_row_timestamps
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dexpected_exit_code=2"
+            "-Dexpected_output_regex=--row-timestamps supports only on or off"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--row-timestamps" "invalid"
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--list"
+    )
+
+    set_tests_properties(vnm_terminal_rejects_bad_row_timestamps PROPERTIES
+        TIMEOUT 30
+    )
+
+    add_test(
         NAME vnm_terminal_rejects_bad_osc52_clipboard
         COMMAND
             "${CMAKE_COMMAND}"
@@ -732,6 +755,26 @@ add_test(
 )
 
 set_tests_properties(vnm_terminal_help_mentions_text_renderer PROPERTIES
+    TIMEOUT 30
+)
+
+add_test(
+    NAME vnm_terminal_help_mentions_row_timestamps
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-Dexpected_exit_code=0"
+        "-Dexpected_output_regex=row hover timestamp tooltip: on\\(default\\) or off"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+        --
+        "${CMAKE_COMMAND}" -E env
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
+        "${vnm_terminal_qt_runtime_path}"
+        "$<TARGET_FILE:vnm_terminal>"
+        "--help"
+)
+
+set_tests_properties(vnm_terminal_help_mentions_row_timestamps PROPERTIES
     TIMEOUT 30
 )
 

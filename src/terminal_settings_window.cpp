@@ -743,6 +743,20 @@ R"qml(
                         elide: Text.ElideRight
                     }
                 }
+
+                S_SectionHeader {
+                    text: "Behavior"
+                    Layout.columnSpan: 2
+                    Layout.topMargin: 10
+                }
+
+                S_Label { text: "Row timestamps" }
+
+                S_Switch {
+                    objectName: "row_timestamp_switch"
+                    checked: surface.rowTimestampTooltipEnabled
+                    onToggled: surface.rowTimestampTooltipEnabled = checked
+                }
             }
         }
     }

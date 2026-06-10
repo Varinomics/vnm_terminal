@@ -2,10 +2,12 @@
 
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
 
+#include <QDateTime>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQmlError>
 #include <QList>
+#include <QPointF>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QStringList>
@@ -80,6 +82,10 @@ Item {
     property real content_border_width: 0
     property real content_border_height: 0
     property real content_border_line_width: 0
+    property bool row_timestamp_tooltip_visible: false
+    property real row_timestamp_tooltip_anchor_x: 0
+    property real row_timestamp_tooltip_anchor_y: 0
+    property date row_timestamp_tooltip_timestamp: new Date()
     property real device_pixel_ratio: Screen.devicePixelRatio
     readonly property real base_resize_border_width: 6
     readonly property real resize_border_physical_reduction: 2
@@ -243,6 +249,48 @@ Item {
         color: root.content_border_color
         visible: root.content_border_visible
     }
+
+    // Row-timestamp hover tooltip. It lives in the chrome because the chrome
+    // root is the always-on-top layer over the terminal surface, so the
+    // tooltip can float at any pointer position without a second overlay
+    // mechanism. Palette matches the settings dialog.
+    Rectangle {
+        id: row_timestamp_tooltip
+        objectName: "row_timestamp_tooltip"
+
+        readonly property real anchor_offset: 12
+        readonly property real edge_margin: 4
+
+        x: Math.max(edge_margin, Math.min(
+            root.row_timestamp_tooltip_anchor_x + anchor_offset,
+            root.width  - width  - edge_margin))
+        y: Math.max(edge_margin, Math.min(
+            root.row_timestamp_tooltip_anchor_y + anchor_offset,
+            root.height - height - edge_margin))
+        width: row_timestamp_tooltip_text.implicitWidth + 12
+        height: row_timestamp_tooltip_text.implicitHeight + 8
+        radius: 5
+        color: "#161c26"
+        border.width: 1
+        border.color: "#2c3645"
+        opacity: root.row_timestamp_tooltip_visible ? 1 : 0
+        visible: opacity > 0
+        // Pure feedback: the tooltip must never steal pointer events from
+        // the terminal underneath it.
+        enabled: false
+
+        Behavior on opacity { NumberAnimation { duration: 100 } }
+
+        Text {
+            id: row_timestamp_tooltip_text
+            objectName: "row_timestamp_tooltip_text"
+            anchors.centerIn: parent
+            text: Qt.formatDateTime(
+                root.row_timestamp_tooltip_timestamp, "yyyy-MM-dd hh:mm:ss")
+            color: "#dfe5ee"
+            font.pixelSize: 11
+        }
+    }
 }
 )";
 
@@ -388,6 +436,23 @@ void chrome::Terminal_qml_chrome::pulse_wheel_delivery_indicator()
 {
     set_wheel_delivery_indicator_visible(true);
     m_wheel_delivery_indicator_timer.start();
+}
+
+void chrome::Terminal_qml_chrome::show_row_timestamp_tooltip(
+    const QPointF&   position,
+    const QDateTime& timestamp)
+{
+    // The timestamp and anchor go in before the visibility flip so the
+    // tooltip never fades in showing stale content.
+    set_property("row_timestamp_tooltip_timestamp", timestamp);
+    set_property("row_timestamp_tooltip_anchor_x", position.x());
+    set_property("row_timestamp_tooltip_anchor_y", position.y());
+    set_property("row_timestamp_tooltip_visible", true);
+}
+
+void chrome::Terminal_qml_chrome::hide_row_timestamp_tooltip()
+{
+    set_property("row_timestamp_tooltip_visible", false);
 }
 
 void chrome::Terminal_qml_chrome::connect_window_commands()

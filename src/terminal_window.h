@@ -117,6 +117,10 @@ void connect_terminal_metadata_to_chrome(
     QQuickWindow&                  window,
     Terminal_qml_chrome*           titlebar);
 
+void connect_row_timestamp_tooltip_to_chrome(
+    VNM_TerminalSurface&           surface,
+    Terminal_qml_chrome*           titlebar);
+
 void sync_chrome_window_state(
     Terminal_qml_chrome&           titlebar,
     QQuickWindow&                  window);

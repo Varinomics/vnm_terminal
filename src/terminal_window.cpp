@@ -7,7 +7,9 @@
 
 #include "vnm_terminal/font_metrics.h"
 
+#include <QDateTime>
 #include <QEvent>
+#include <QPointF>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSize>
@@ -339,6 +341,36 @@ void connect_terminal_metadata_to_chrome(
         &window,
         sync_metadata);
     sync_metadata();
+}
+
+void connect_row_timestamp_tooltip_to_chrome(
+    VNM_TerminalSurface&           surface,
+    Terminal_qml_chrome*           titlebar)
+{
+    // Without the built-in chrome there is no overlay layer to host the
+    // tooltip, so the surface's hover signals stay unconsumed.
+    if (titlebar == nullptr) {
+        return;
+    }
+
+    QObject::connect(
+        &surface,
+        &VNM_TerminalSurface::row_timestamp_tooltip_requested,
+        titlebar,
+        [titlebar, &surface](qreal x, qreal y, const QDateTime& timestamp) {
+            // The surface reports the pointer in its own item coordinates;
+            // the chrome root spans the window, so map before anchoring.
+            titlebar->show_row_timestamp_tooltip(
+                surface.mapToItem(titlebar->root_item(), QPointF(x, y)),
+                timestamp);
+        });
+    QObject::connect(
+        &surface,
+        &VNM_TerminalSurface::row_timestamp_tooltip_dismissed,
+        titlebar,
+        [titlebar] {
+            titlebar->hide_row_timestamp_tooltip();
+        });
 }
 
 void sync_chrome_window_state(

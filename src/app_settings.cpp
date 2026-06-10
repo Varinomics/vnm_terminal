@@ -37,6 +37,15 @@ std::optional<int> settings_int_value(QSettings& settings, const char* key)
     return value;
 }
 
+std::optional<bool> settings_bool_value(QSettings& settings, const char* key)
+{
+    if (!settings.contains(QLatin1String(key))) {
+        return std::nullopt;
+    }
+
+    return settings.value(QLatin1String(key)).toBool();
+}
+
 std::optional<qreal> settings_font_size(QSettings& settings)
 {
     if (!settings.contains(QLatin1String(k_window_settings_font_size))) {
@@ -142,9 +151,10 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
         state.font_family = font_family;
     }
 
-    state.text_renderer_mode = settings_int_value(settings, k_appearance_text_renderer_mode);
-    state.lcd_subpixel_order = settings_int_value(settings, k_appearance_lcd_subpixel_order);
-    state.scrollback_limit   = settings_int_value(settings, k_appearance_scrollback_limit);
+    state.text_renderer_mode    = settings_int_value(settings, k_appearance_text_renderer_mode);
+    state.lcd_subpixel_order    = settings_int_value(settings, k_appearance_lcd_subpixel_order);
+    state.row_timestamp_tooltip = settings_bool_value(settings, k_appearance_row_timestamp_tooltip);
+    state.scrollback_limit      = settings_int_value(settings, k_appearance_scrollback_limit);
 
     settings.endGroup();
     return state;
@@ -183,6 +193,10 @@ void apply_persisted_appearance_settings(
             options->lcd_subpixel_order =
                 static_cast<VNM_TerminalSurface::Lcd_subpixel_order>(order);
         }
+    }
+
+    if (!options->row_timestamp_tooltip_explicit && state.row_timestamp_tooltip.has_value()) {
+        options->row_timestamp_tooltip_enabled = *state.row_timestamp_tooltip;
     }
 
     if (!options->scrollback_limit.has_value() &&
