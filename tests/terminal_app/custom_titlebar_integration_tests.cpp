@@ -1667,6 +1667,119 @@ bool test_parse_row_timestamps_option()
     return ok;
 }
 
+bool test_parse_alternate_wheel_option()
+{
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result page_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--alternate-wheel"),
+        QStringLiteral("page"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result cursor_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--alternate-wheel"),
+        QStringLiteral("cursor"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result mixed_case_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--alternate-wheel"),
+        QStringLiteral("MOUSE"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result invalid_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--alternate-wheel"),
+        QStringLiteral("diagonal"),
+    });
+
+    using Wheel_policy = VNM_TerminalSurface::Alternate_screen_wheel_policy;
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(), "alternate wheel default parse succeeds");
+    ok &= check(
+        default_result.options.alternate_screen_wheel_policy ==
+            Wheel_policy::MOUSE_REPORTING_FIRST,
+        "alternate wheel defaults to mouse-reporting-first");
+    ok &= check(page_result.error.isEmpty(), "alternate wheel page option parses");
+    ok &= check(
+        page_result.options.alternate_screen_wheel_policy == Wheel_policy::PAGE_KEYS,
+        "alternate wheel page maps to page keys");
+    ok &= check(cursor_result.error.isEmpty(), "alternate wheel cursor option parses");
+    ok &= check(
+        cursor_result.options.alternate_screen_wheel_policy == Wheel_policy::CURSOR_KEYS,
+        "alternate wheel cursor maps to cursor keys");
+    ok &= check(mixed_case_result.error.isEmpty(), "alternate wheel mixed-case option parses");
+    ok &= check(
+        mixed_case_result.options.alternate_screen_wheel_policy ==
+            Wheel_policy::MOUSE_REPORTING_FIRST,
+        "alternate wheel option is case-insensitive");
+    ok &= check(!invalid_result.error.isEmpty(),
+        "alternate wheel option rejects invalid values");
+
+    return ok;
+}
+
+bool test_parse_osc52_clipboard_option()
+{
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result allow_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--osc52-clipboard"),
+        QStringLiteral("allow"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result deny_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--osc52-clipboard"),
+        QStringLiteral("DENY"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result invalid_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--osc52-clipboard"),
+        QStringLiteral("ask"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(), "osc52 clipboard default parse succeeds");
+    ok &= check(
+        default_result.options.osc52_clipboard_policy == Osc52_clipboard_policy::DENY,
+        "osc52 clipboard defaults to deny");
+    ok &= check(allow_result.error.isEmpty(), "osc52 clipboard allow option parses");
+    ok &= check(
+        allow_result.options.osc52_clipboard_policy == Osc52_clipboard_policy::ALLOW,
+        "osc52 clipboard allow maps to allow");
+    ok &= check(deny_result.error.isEmpty(), "osc52 clipboard mixed-case deny option parses");
+    ok &= check(
+        deny_result.options.osc52_clipboard_policy == Osc52_clipboard_policy::DENY,
+        "osc52 clipboard option is case-insensitive");
+    ok &= check(!invalid_result.error.isEmpty(),
+        "osc52 clipboard option rejects invalid values");
+
+    return ok;
+}
+
 bool test_row_timestamp_tooltip_chrome(QGuiApplication& app)
 {
     QQmlEngine engine;
@@ -2502,6 +2615,8 @@ int main(int argc, char** argv)
     ok &= test_parse_text_renderer_option();
     ok &= test_parse_lcd_subpixel_option();
     ok &= test_parse_row_timestamps_option();
+    ok &= test_parse_alternate_wheel_option();
+    ok &= test_parse_osc52_clipboard_option();
     ok &= test_row_timestamp_tooltip_chrome(app);
     ok &= test_parse_scrollback_limit_option();
     ok &= test_parse_transcript_snapshot_diagnostics_option();
