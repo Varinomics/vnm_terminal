@@ -104,6 +104,11 @@ Item {
         && content_border_height > 0
         && content_border_line_width > 0
     readonly property color content_border_color: active ? "#2a313c" : "#1f242c"
+    readonly property bool window_frame_visible:
+        width > 0
+        && height > 0
+        && content_border_line_width > 0
+        && (!Window.window || Window.window.visibility !== Window.FullScreen)
 
     function reduced_chrome_width(logical_width, physical_reduction) {
         var dpr = VNM_chrome_geometry.normalized_device_pixel_ratio(device_pixel_ratio)
@@ -133,6 +138,17 @@ Item {
         titlebar_activity_marker: root.active ? "#71b4ff" : "#5f7793"
         titlebar_content_border: "transparent"
         window_frame_border: root.content_border_color
+    }
+
+    VNM_ChromeWindowFrame {
+        id: window_frame
+        objectName: "terminal_chrome_window_frame"
+
+        anchors.fill: parent
+        theme: terminal_chrome_theme
+        frame_visible: root.window_frame_visible
+        frame_width: root.content_border_line_width
+        top_edge_visible: false
     }
 
     VNM_ChromeSideResizeLayer {
@@ -168,6 +184,8 @@ Item {
         maximized: root.maximized
         resize_enabled: root.resize_enabled
         resize_border_width: root.reduced_resize_border_width
+        window_frame_top_visible: root.window_frame_visible
+        window_frame_width: root.content_border_line_width
         activity_marker_text: root.activity_marker_text
         trailing_action_component:
             root.wheel_delivery_indicator_visible ? trailing_actions_component : null
