@@ -32,6 +32,8 @@ add_executable(vnm_terminal
     src/main.cpp
     src/app_cli.cpp
     src/app_cli.h
+    src/app_clipboard_reader.cpp
+    src/app_clipboard_reader.h
     src/app_clipboard_policy.cpp
     src/app_clipboard_policy.h
     src/app_common.cpp

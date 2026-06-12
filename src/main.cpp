@@ -1,4 +1,5 @@
 #include "app_cli.h"
+#include "app_clipboard_reader.h"
 #include "app_clipboard_policy.h"
 #include "app_common.h"
 #include "app_metrics.h"
@@ -69,6 +70,7 @@ using chrome::apply_primary_repaint_recovery_option;
 using chrome::apply_scrollback_limit_option;
 using chrome::apply_synchronized_output_scroll_policy_option;
 using chrome::apply_terminal_shell_geometry;
+using chrome::clipboard_broker_mode_requested;
 using chrome::connect_row_timestamp_tooltip_to_chrome;
 using chrome::connect_terminal_metadata_to_chrome;
 using chrome::custom_titlebar_resize_border_active;
@@ -121,6 +123,7 @@ using chrome::persisted_window_axis_is_valid;
 using chrome::prepare_profile_text_file;
 #endif
 using chrome::print_error;
+using chrome::read_clipboard_text_with_broker;
 using chrome::reduced_chrome_span;
 using chrome::reduced_custom_titlebar_height;
 using chrome::reduced_frameless_resize_border_width;
@@ -241,6 +244,10 @@ int app_status_after_process_exit(
 int main(int argc, char** argv)
 {
     const QStringList arguments = raw_arguments(argc, argv);
+    if (clipboard_broker_mode_requested(arguments)) {
+        return chrome::run_clipboard_text_broker(argc, argv);
+    }
+
     request_vsync_surface_format();
 
     Qt_arguments qt_arguments = make_qt_arguments(argc, argv);
@@ -344,6 +351,7 @@ int main(int argc, char** argv)
     auto* titlebar_ptr = titlebar.get();
 
     auto* surface = new VNM_TerminalSurface(window.contentItem());
+    surface->set_clipboard_text_reader(read_clipboard_text_with_broker);
     surface->set_selection_trace_enabled(options.selection_trace_enabled);
 #if VNM_TERMINAL_PROFILING_ENABLED
     std::unique_ptr<term::Hierarchical_profiler> gui_profiler;

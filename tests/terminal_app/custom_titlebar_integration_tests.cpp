@@ -2459,6 +2459,63 @@ bool test_parse_paste_shortcut_option()
     return ok;
 }
 
+bool test_clipboard_broker_mode_argument_detection()
+{
+    using chrome_test::clipboard_broker_mode_requested;
+
+    bool ok = true;
+    ok &= check(
+        clipboard_broker_mode_requested({
+            QStringLiteral("vnm_terminal"),
+            QStringLiteral("--vnm-terminal-internal-read-clipboard-text"),
+        }),
+        "clipboard broker mode accepts the exact internal invocation");
+    ok &= check(
+        !clipboard_broker_mode_requested({
+            QStringLiteral("vnm_terminal"),
+            QStringLiteral("--"),
+            QStringLiteral("--vnm-terminal-internal-read-clipboard-text"),
+        }),
+        "clipboard broker mode ignores the internal flag after the command separator");
+    ok &= check(
+        !clipboard_broker_mode_requested({
+            QStringLiteral("vnm_terminal"),
+            QStringLiteral("--help"),
+            QStringLiteral("--vnm-terminal-internal-read-clipboard-text"),
+        }),
+        "clipboard broker mode ignores mixed user options");
+    return ok;
+}
+
+bool test_paste_shortcut_consumes_null_clipboard_reader(QGuiApplication& app)
+{
+    QQuickWindow window;
+    window.resize(360, 240);
+    VNM_TerminalSurface surface(window.contentItem());
+    surface.set_clipboard_text_reader([]() -> std::optional<QString> {
+        return std::nullopt;
+    });
+
+    Recording_event_filter key_filter(QEvent::KeyPress);
+    Terminal_shortcut_filter shortcut_filter(&surface);
+    window.installEventFilter(&key_filter);
+    window.installEventFilter(&shortcut_filter);
+    window.show();
+    pump_events(app);
+    surface.forceActiveFocus();
+    pump_events(app);
+
+    QKeyEvent paste_event(QEvent::KeyPress, Qt::Key_V, Qt::ControlModifier);
+    paste_event.setAccepted(false);
+    const bool paste_sent = QCoreApplication::sendEvent(&window, &paste_event);
+
+    bool ok = true;
+    ok &= check(paste_sent, "null-reader paste shortcut event is delivered");
+    ok &= check(key_filter.recorded_count == 0,
+        "null-reader paste shortcut is consumed before reaching the terminal");
+    return ok;
+}
+
 #if defined(Q_OS_MACOS)
 bool test_macos_command_shortcuts_are_host_shortcuts(QGuiApplication& app)
 {
@@ -2730,6 +2787,8 @@ int main(int argc, char** argv)
     ok &= test_parse_transcript_timing_diagnostics_option();
     ok &= test_paste_shortcut_should_paste_predicate();
     ok &= test_parse_paste_shortcut_option();
+    ok &= test_clipboard_broker_mode_argument_detection();
+    ok &= test_paste_shortcut_consumes_null_clipboard_reader(app);
     ok &= test_window_state_sync();
     ok &= test_settings_gear_button_and_window(app);
     ok &= test_settings_shortcut_requests_settings(app);
