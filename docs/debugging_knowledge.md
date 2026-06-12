@@ -73,6 +73,23 @@ compaction or future agent sessions.
   debugging should use the canonical atlas path and explicit Qt/RHI environment
   controls when hardware backend selection needs to be constrained.
 
+## Clipboard / right-click paste hang
+
+- A `vnm_terminal` window can appear hung after right-click paste when
+  `VNM_TerminalSurface::mousePressEvent` synchronously calls
+  `QGuiApplication::clipboard()->text()` and the Windows clipboard owner is
+  another process that is not servicing OLE clipboard requests.
+- One observed case: the requesting packaged app was blocked in
+  `QClipboard::text -> ole32!CClipDataObject::GetData` while the clipboard owner
+  was another `vnm_terminal.exe` benchmark process stuck during shutdown, with
+  the GUI thread joining ConPTY backend worker threads and another thread inside
+  `ClosePseudoConsole`.
+- For this class of hang, inspect the clipboard owner with `GetClipboardOwner`
+  / `GetWindowThreadProcessId` before assuming the requesting terminal's backend
+  or hosted shell is the root cause. Replacing the clipboard contents or ending
+  the stale owner can unblock the waiting paste, but do not do that without user
+  intent because it changes external state.
+
 ## Debugging policy reminders
 
 - For concrete deterministic failures, first reproduce the exact behavior.

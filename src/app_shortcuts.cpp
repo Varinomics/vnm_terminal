@@ -95,7 +95,8 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
         return copy_selected_text();
     }
 
-    return paste_clipboard_text();
+    (void)paste_clipboard_text();
+    return true;
 }
 
 bool Terminal_shortcut_filter::copy_selected_text()
@@ -114,13 +115,7 @@ bool Terminal_shortcut_filter::copy_selected_text()
 
 bool Terminal_shortcut_filter::paste_clipboard_text()
 {
-    QClipboard* clipboard = QGuiApplication::clipboard();
-    if (clipboard != nullptr) {
-        m_surface->paste_text(clipboard->text());
-        return true;
-    }
-
-    return false;
+    return m_surface->paste_clipboard_text();
 }
 
 } // namespace vnm_terminal::terminal_app
