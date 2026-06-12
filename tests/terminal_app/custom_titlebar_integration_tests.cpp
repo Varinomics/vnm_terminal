@@ -56,21 +56,19 @@ bool nearly_equal(qreal actual, qreal expected)
 // Walks both the QObject child tree and the visual child-item tree, so it
 // reaches Repeater-created delegates (e.g. custom titlebar buttons) that
 // plain QObject::findChild does not. Mirrors the app's own find_child_object.
-QQuickItem* find_quick_item_recursive(QObject* root, const QString& object_name)
+QObject* find_object_recursive(QObject* root, const QString& object_name)
 {
     if (root == nullptr) {
         return nullptr;
     }
 
     if (root->objectName() == object_name) {
-        if (auto* item = qobject_cast<QQuickItem*>(root)) {
-            return item;
-        }
+        return root;
     }
 
     const auto object_children = root->children();
     for (QObject* child : object_children) {
-        if (QQuickItem* found = find_quick_item_recursive(child, object_name)) {
+        if (QObject* found = find_object_recursive(child, object_name)) {
             return found;
         }
     }
@@ -78,13 +76,18 @@ QQuickItem* find_quick_item_recursive(QObject* root, const QString& object_name)
     if (auto* item = qobject_cast<QQuickItem*>(root)) {
         const auto child_items = item->childItems();
         for (QQuickItem* child : child_items) {
-            if (QQuickItem* found = find_quick_item_recursive(child, object_name)) {
+            if (QObject* found = find_object_recursive(child, object_name)) {
                 return found;
             }
         }
     }
 
     return nullptr;
+}
+
+QQuickItem* find_quick_item_recursive(QObject* root, const QString& object_name)
+{
+    return qobject_cast<QQuickItem*>(find_object_recursive(root, object_name));
 }
 
 bool check_rect_equal(
@@ -417,6 +420,110 @@ bool test_custom_titlebar_geometry()
         "shared chrome records content border width");
     ok &= check(nearly_equal(titlebar.root_item()->property("content_border_height").toReal(), 446.0),
         "shared chrome records content border height");
+
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_native_window_frame")) == nullptr,
+        "terminal chrome does not create an app-local native window frame");
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_window_frame_top")) == nullptr,
+        "terminal chrome does not create an app-local top window frame strip");
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_window_frame_bottom")) == nullptr,
+        "terminal chrome does not create an app-local bottom window frame strip");
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_window_frame_left")) == nullptr,
+        "terminal chrome does not create an app-local left window frame strip");
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_window_frame_right")) == nullptr,
+        "terminal chrome does not create an app-local right window frame strip");
+
+    auto* window_frame = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("terminal_chrome_window_frame"));
+    ok &= check(window_frame != nullptr, "terminal chrome creates shared window frame overlay");
+    if (window_frame != nullptr) {
+        ok &= check(nearly_equal(window_frame->property("frame_width").toReal(), 1.0),
+            "shared window frame uses the content border line width");
+        ok &= check(
+            window_frame->property("top_edge_visible").toBool() == false,
+            "shared window frame delegates the top edge to the titlebar");
+        ok &= check(
+            window_frame->property("enabled").toBool() == false,
+            "shared window frame overlay is non-interactive");
+        ok &= check(
+            window_frame->z() > titlebar.titlebar_item()->z(),
+            "shared window frame overlays the titlebar side and bottom edges");
+    }
+
+    auto* frame_top = window_frame == nullptr
+        ? nullptr
+        : find_quick_item_recursive(
+            window_frame,
+            QStringLiteral("chrome_window_frame_top"));
+    auto* frame_bottom = window_frame == nullptr
+        ? nullptr
+        : find_quick_item_recursive(
+            window_frame,
+            QStringLiteral("chrome_window_frame_bottom"));
+    auto* frame_left = window_frame == nullptr
+        ? nullptr
+        : find_quick_item_recursive(
+            window_frame,
+            QStringLiteral("chrome_window_frame_left"));
+    auto* frame_right = window_frame == nullptr
+        ? nullptr
+        : find_quick_item_recursive(
+            window_frame,
+            QStringLiteral("chrome_window_frame_right"));
+    ok &= check(frame_top    != nullptr, "shared chrome creates top window frame edge");
+    ok &= check(frame_bottom != nullptr, "shared chrome creates bottom window frame edge");
+    ok &= check(frame_left   != nullptr, "shared chrome creates left window frame edge");
+    ok &= check(frame_right  != nullptr, "shared chrome creates right window frame edge");
+    if (frame_top != nullptr && frame_bottom != nullptr &&
+        frame_left != nullptr && frame_right != nullptr)
+    {
+        ok &= check(!frame_top->isVisible(),
+            "shared window frame top edge is disabled for terminal titlebar ownership");
+        ok &= check_rect_equal(item_rect(*frame_bottom), QRectF(0.0, 479.0, 800.0, 1.0),
+            "shared bottom window frame overlays the outer bottom edge");
+        ok &= check_rect_equal(item_rect(*frame_left), QRectF(0.0, 0.0, 1.0, 480.0),
+            "shared left window frame overlays the full outer left edge");
+        ok &= check_rect_equal(item_rect(*frame_right), QRectF(799.0, 0.0, 1.0, 480.0),
+            "shared right window frame overlays the full outer right edge");
+    }
+
+    auto* titlebar_frame_top = find_quick_item_recursive(
+        titlebar.titlebar_item(),
+        QStringLiteral("titlebar_window_frame_top"));
+    ok &= check(titlebar_frame_top != nullptr,
+        "shared titlebar creates the top window frame edge");
+    if (titlebar_frame_top != nullptr) {
+        ok &= check_rect_equal(item_rect(*titlebar_frame_top), QRectF(0.0, 0.0, 800.0, 1.0),
+            "shared titlebar top window frame overlays the outer top edge");
+        ok &= check(
+            titlebar_frame_top->property("color").value<QColor>() ==
+                chrome_test::terminal_chrome_content_border_color(true),
+            "shared titlebar top window frame uses the content border color");
+
+        auto* mark = find_quick_item_recursive(
+            titlebar.titlebar_item(),
+            QStringLiteral("vnm_animated_mark"));
+        if (mark != nullptr && mark->parentItem() != nullptr) {
+            ok &= check(mark->parentItem()->z() > titlebar_frame_top->z(),
+                "titlebar top window frame is below the titlebar content layer");
+        }
+    }
+
     ok &= check_rect_equal(item_rect(surface), QRectF(5.0, 31.0, 778.0, 444.0),
         "custom terminal is inset inside the content border");
     ok &= check_rect_equal(item_rect(scrollbar), QRectF(783.0, 31.0, 12.0, 444.0),
