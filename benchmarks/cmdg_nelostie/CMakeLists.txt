@@ -37,8 +37,12 @@ set(VNM_TERMINAL_CMDG_NELOSTIE_TIMEOUT_SECONDS "180" CACHE STRING
     "Timeout for the CMDG Nelostie benchmark.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_BUILD_TIMEOUT_SECONDS "600" CACHE STRING
     "Timeout for the one-time CMDG source build fixture.")
-set(VNM_TERMINAL_CMDG_NELOSTIE_FRAMES "300" CACHE STRING
+set(VNM_TERMINAL_CMDG_NELOSTIE_FRAMES "1000" CACHE STRING
     "Number of CMDG scene frames to run before exiting.")
+set(VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS "5000" CACHE STRING
+    "Wall-clock interval for CMDG benchmark windows and terminal metrics timeline samples.")
+set(VNM_TERMINAL_CMDG_BENCHMARK_MIN_WINDOWS "3" CACHE STRING
+    "Minimum comparable CMDG benchmark windows and terminal timeline samples required.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE "1920x1080" CACHE STRING
     "vnm_terminal window size for the CMDG Nelostie benchmark.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE "10" CACHE STRING
@@ -61,6 +65,18 @@ if(NOT VNM_TERMINAL_CMDG_ARTIFACT_TAG STREQUAL "" AND
         "VNM_TERMINAL_CMDG_ARTIFACT_TAG must match ^[A-Za-z][A-Za-z0-9_]*$ "
         "(got '${VNM_TERMINAL_CMDG_ARTIFACT_TAG}').")
 endif()
+
+function(vnm_terminal_cmdg_validate_positive_int32 option_name option_value)
+    if(NOT "${option_value}" MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "${option_name} must be an integer in 1..2147483647")
+    endif()
+
+    string(LENGTH "${option_value}" option_length)
+    if(option_length GREATER 10 OR
+        (option_length EQUAL 10 AND "${option_value}" STRGREATER "2147483647"))
+        message(FATAL_ERROR "${option_name} must be an integer in 1..2147483647")
+    endif()
+endfunction()
 
 if(VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN)
     find_package(Qt6Gui 6.7 REQUIRED COMPONENTS QOffscreenIntegrationPlugin)
@@ -104,6 +120,13 @@ if(NOT VNM_TERMINAL_CMDG_NELOSTIE_FRAMES MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR
         "VNM_TERMINAL_CMDG_NELOSTIE_FRAMES must be a positive integer")
 endif()
+
+vnm_terminal_cmdg_validate_positive_int32(
+    VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS
+    "${VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS}")
+vnm_terminal_cmdg_validate_positive_int32(
+    VNM_TERMINAL_CMDG_BENCHMARK_MIN_WINDOWS
+    "${VNM_TERMINAL_CMDG_BENCHMARK_MIN_WINDOWS}")
 
 if(NOT VNM_TERMINAL_CMDG_NELOSTIE_TIMEOUT_SECONDS MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR
@@ -255,6 +278,8 @@ if(vnm_terminal_cmdg_nelostie_exe)
                     "-Dprofile_text=${vnm_terminal_cmdg_profile_text}"
                     "-Dtimeout_seconds=${VNM_TERMINAL_CMDG_NELOSTIE_TIMEOUT_SECONDS}"
                     "-Dframe_limit=${VNM_TERMINAL_CMDG_NELOSTIE_FRAMES}"
+                    "-Dmetrics_interval_ms=${VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS}"
+                    "-Dbenchmark_min_windows=${VNM_TERMINAL_CMDG_BENCHMARK_MIN_WINDOWS}"
                     "-Dwindow_size=${VNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE}"
                     "-Dfont_size=${VNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE}"
                     "-Dhide_cursor=$<BOOL:${VNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR}>"

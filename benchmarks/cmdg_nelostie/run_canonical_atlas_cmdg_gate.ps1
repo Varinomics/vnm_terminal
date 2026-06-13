@@ -7,7 +7,9 @@ param(
     [string] $SceneList = "AssemblyWinter2025;Example2D;Plasma;JuliaSetTest;ParticleVortex;Example3D",
     [string] $MotivatingScenes = "Plasma;ParticleVortex",
     [int] $RepeatCount = 3,
-    [int] $FrameLimit = 300,
+    [int] $FrameLimit = 1000,
+    [int] $BenchmarkWindowMs = 5000,
+    [int] $BenchmarkMinWindows = 3,
     [string] $WindowSize = "1920x1080",
     [string] $FontSize = "10",
     [string] $ArchivedBaselineComparisonJson = "",
@@ -444,6 +446,8 @@ function Configure-CmdgBuild {
         "-DVNM_TERMINAL_CMDG_SCENES=$SceneList",
         "-DVNM_TERMINAL_CMDG_REPEAT_COUNT=$RepeatCount",
         "-DVNM_TERMINAL_CMDG_NELOSTIE_FRAMES=$FrameLimit",
+        "-DVNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS=$BenchmarkWindowMs",
+        "-DVNM_TERMINAL_CMDG_BENCHMARK_MIN_WINDOWS=$BenchmarkMinWindows",
         "-DVNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE=$WindowSize",
         "-DVNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE=$FontSize",
         "-DVNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN=OFF",
@@ -494,6 +498,7 @@ function Read-CmdgRecord {
     $runDir = Join-Path $buildDir "benchmarks\cmdg_nelostie\$Scene\$ArtifactTag\repeat_$Repeat"
     $cmdgMetricsPath = Join-Path $runDir "vnm_terminal_cmdg_${runId}_cmdg_metrics.json"
     $terminalMetricsPath = Join-Path $runDir "vnm_terminal_cmdg_${runId}_terminal_metrics.json"
+    $terminalTimelinePath = Join-Path $runDir "vnm_terminal_cmdg_${runId}_terminal_timeline.jsonl"
     $errors = New-Object System.Collections.Generic.List[string]
 
     $cmdgMetrics = $null
@@ -520,6 +525,10 @@ function Read-CmdgRecord {
     }
     else {
         $errors.Add("missing terminal metrics JSON")
+    }
+
+    if (!(Test-Path $terminalTimelinePath)) {
+        $errors.Add("missing terminal metrics timeline JSONL")
     }
 
     $rendererMetrics = Get-ObjectProperty $terminalMetrics "renderer"
@@ -723,6 +732,10 @@ function Read-CmdgRecord {
         -SourcePath $cmdgMetricsPath `
         -Scene $Scene `
         -Repeat $Repeat
+    $terminalTimelineArtifactPath = Copy-RunMetricArtifact `
+        -SourcePath $terminalTimelinePath `
+        -Scene $Scene `
+        -Repeat $Repeat
 
     $frameEvidenceCounterMatches = $false
     if ($frameEvidenceCounterPath -eq "renderer.paint_completed_frames") {
@@ -820,8 +833,10 @@ function Read-CmdgRecord {
         run_dir = $runDir
         cmdg_metrics_path = $cmdgMetricsPath
         terminal_metrics_path = $terminalMetricsPath
+        terminal_timeline_path = $terminalTimelinePath
         cmdg_metrics_artifact_path = $cmdgMetricsArtifactPath
         terminal_metrics_artifact_path = $terminalMetricsArtifactPath
+        terminal_timeline_artifact_path = $terminalTimelineArtifactPath
         startup_latency_ms = $firstOutputElapsedMs
         app_elapsed_ms = $terminalElapsedMs
         paint_frames_per_second = $paintFramesPerSecond
@@ -958,13 +973,19 @@ function Write-GateReport {
         "- Require zero backend errors/timeouts, positive renderer frame evidence, " +
         "the minimum renderer FPS floor, canonical qsg_atlas metrics with atlas " +
         "budget counters, and complete warm/lazy atlas diagnostics.")
+    $lines.Add(
+        "- Require at least $($Summary.settings.benchmark_min_windows) comparable " +
+        "$($Summary.settings.benchmark_window_ms) ms CMDG windows and terminal " +
+        "timeline samples for phase diagnostics.")
     if ($Summary.archived_baseline_comparison.enabled) {
         $lines.Add("- Compare canonical atlas metrics against the archived retired-renderer baseline.")
     }
     else {
         $lines.Add("- No archived retired-renderer baseline was supplied for this canonical-only run.")
     }
-    $lines.Add("- Per-run terminal and CMDG metrics JSONs are copied under `per_run_metrics/`.")
+    $lines.Add(
+        "- Per-run terminal/CMDG aggregate JSONs and terminal timeline JSONLs " +
+        "are copied under `per_run_metrics/`.")
     $lines.Add("")
     $lines.Add("| Scene | Renderer Frame FPS | Frame Time ms | Frame Counter | Shaped Built | Shaped Reused | Draw FPS | Scene FPS | Atlas Used Bytes | Page Pressure | Warm Complete | Warm Failed | Lazy Failed | Incomplete Frames | Glyph Misses | First Output ms | Run OK |")
     $lines.Add("| --- | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |")
@@ -1115,6 +1136,8 @@ $summary = [ordered]@{
         motivating_scenes = $MotivatingScenes
         repeat_count = $RepeatCount
         frame_limit = $FrameLimit
+        benchmark_window_ms = $BenchmarkWindowMs
+        benchmark_min_windows = $BenchmarkMinWindows
         window_size = $WindowSize
         font_size = $FontSize
         minimum_renderer_frame_fps = $MinimumRendererFrameFps
@@ -1153,6 +1176,7 @@ Write-RepoBaseline -Path $SurfaceRepo -Name "vnm_terminal_surface_end"
 Write-Host "Canonical atlas CMDG gate artifacts written to $artifactRoot"
 Write-Host "Gate JSON: $($reportPaths.json)"
 Write-Host "Gate report: $($reportPaths.markdown)"
+Write-Host "Per-run terminal timeline JSONLs are copied under per_run_metrics."
 Write-Host "Gate result: $($summary.gate_result)"
 
 if (!$gatePass) {

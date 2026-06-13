@@ -329,6 +329,35 @@ if(TARGET vnm_terminal_canvas_fixture)
         TIMEOUT 30
     )
 
+    add_test(
+        NAME vnm_terminal_metrics_timeline_jsonl_smoke
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-Dtimeline_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_timeline_$<CONFIG>.jsonl"
+            "-Dexpected_exit_code=5"
+            "-Dexpected_interval_ms=100"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_metrics_timeline_jsonl.cmake"
+            --
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:vnm_terminal>"
+            "--window-size" "800x480"
+            "--font-size" "10"
+            "--metrics-timeline-jsonl" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_timeline_$<CONFIG>.jsonl"
+            "--metrics-timeline-interval-ms" "100"
+            "--timeout-ms" "350"
+            "--require-output"
+            "--"
+            "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
+            "--hold-open-no-read"
+    )
+
+    set_tests_properties(vnm_terminal_metrics_timeline_jsonl_smoke PROPERTIES
+        TIMEOUT 30
+    )
+
     if(VNM_TERMINAL_ENABLE_PROFILING)
         add_test(
             NAME vnm_terminal_metrics_profile_text_smoke
