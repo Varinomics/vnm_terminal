@@ -1,4 +1,4 @@
-﻿namespace CMDG
+namespace CMDG
 {
     // Constant configuration values
     public static class Config
@@ -30,6 +30,7 @@
         public static bool BenchmarkMode = EnvFlag("CMDG_BENCHMARK", false);
         public static int BenchmarkFrameLimit = EnvInt("CMDG_BENCHMARK_FRAME_LIMIT", 0);
         public static string BenchmarkMetricsPath = EnvString("CMDG_BENCHMARK_METRICS", "");
+        public static int BenchmarkWindowMs = EnvPositiveInt("CMDG_BENCHMARK_WINDOW_MS", 5000);
         public static bool BenchmarkHideCursor = EnvFlag("CMDG_BENCHMARK_HIDE_CURSOR", false);
         public static bool DisableAudio = EnvFlag("CMDG_DISABLE_AUDIO", BenchmarkMode);
         public static bool AdjustScreen = EnvFlag("CMDG_ADJUST_SCREEN", false); // Instructions to adjust screen at startup
@@ -73,6 +74,12 @@
         {
             string? value = Environment.GetEnvironmentVariable(name);
             return int.TryParse(value, out int parsed) ? parsed : fallback;
+        }
+
+        private static int EnvPositiveInt(string name, int fallback)
+        {
+            string? value = Environment.GetEnvironmentVariable(name);
+            return int.TryParse(value, out int parsed) && parsed > 0 ? parsed : fallback;
         }
     }
 }

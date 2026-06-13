@@ -9,6 +9,60 @@ function(vnm_terminal_read_json_field out_value json_text source_path)
     set(${out_value} "${value}" PARENT_SCOPE)
 endfunction()
 
+function(vnm_terminal_read_json_type out_value json_text source_path)
+    set(json_path ${ARGN})
+    string(JSON value ERROR_VARIABLE json_error TYPE "${json_text}" ${json_path})
+    if(NOT json_error STREQUAL "NOTFOUND")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "${source_path} is missing JSON field '${json_path_text}': ${json_error}")
+    endif()
+    set(${out_value} "${value}" PARENT_SCOPE)
+endfunction()
+
+function(vnm_terminal_read_json_length out_value json_text source_path)
+    set(json_path ${ARGN})
+    string(JSON value ERROR_VARIABLE json_error LENGTH "${json_text}" ${json_path})
+    if(NOT json_error STREQUAL "NOTFOUND")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "${source_path} is missing JSON object '${json_path_text}': ${json_error}")
+    endif()
+    set(${out_value} "${value}" PARENT_SCOPE)
+endfunction()
+
+function(vnm_terminal_expect_json_number json_text source_path)
+    set(json_path ${ARGN})
+    vnm_terminal_read_json_type(field_type "${json_text}" "${source_path}" ${json_path})
+    if(NOT field_type STREQUAL "NUMBER")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "${source_path} JSON field '${json_path_text}' should be a number, got ${field_type}")
+    endif()
+endfunction()
+
+function(vnm_terminal_expect_json_missing json_text source_path)
+    set(json_path ${ARGN})
+    string(JSON value ERROR_VARIABLE json_error TYPE "${json_text}" ${json_path})
+    if(json_error STREQUAL "NOTFOUND")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "${source_path} JSON field '${json_path_text}' should be absent")
+    endif()
+endfunction()
+
+function(vnm_terminal_validate_positive_int32 option_name option_value)
+    if(NOT "${option_value}" MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR "${option_name} must be an integer in 1..2147483647")
+    endif()
+
+    string(LENGTH "${option_value}" option_length)
+    if(option_length GREATER 10 OR
+        (option_length EQUAL 10 AND "${option_value}" STRGREATER "2147483647"))
+        message(FATAL_ERROR "${option_name} must be an integer in 1..2147483647")
+    endif()
+endfunction()
+
 function(vnm_terminal_expect_renderer_frame_evidence json_text source_path)
     vnm_terminal_read_json_field(evidence_counter_path
         "${json_text}" "${source_path}" renderer_frame_evidence counter_path)
@@ -96,6 +150,22 @@ if(NOT build_only)
         message(FATAL_ERROR "CMDG benchmark frame_limit must be a positive integer")
     endif()
 
+    if(NOT DEFINED metrics_interval_ms OR metrics_interval_ms STREQUAL "")
+        set(metrics_interval_ms "5000")
+    endif()
+
+    vnm_terminal_validate_positive_int32(
+        "CMDG benchmark metrics_interval_ms"
+        "${metrics_interval_ms}")
+
+    if(NOT DEFINED benchmark_min_windows OR benchmark_min_windows STREQUAL "")
+        set(benchmark_min_windows "3")
+    endif()
+
+    vnm_terminal_validate_positive_int32(
+        "CMDG benchmark benchmark_min_windows"
+        "${benchmark_min_windows}")
+
     if(NOT DEFINED timeout_seconds OR
         NOT timeout_seconds MATCHES "^[1-9][0-9]*$")
         message(FATAL_ERROR "CMDG benchmark timeout_seconds must be a positive integer")
@@ -161,12 +231,14 @@ endif()
 file(MAKE_DIRECTORY "${output_dir}")
 if(use_legacy_output_names)
     set(terminal_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_terminal_metrics.json")
+    set(terminal_timeline "${output_dir}/vnm_terminal_cmdg_nelostie_terminal_timeline.jsonl")
     set(cmdg_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_cmdg_metrics.json")
 else()
     set(terminal_metrics "${output_dir}/vnm_terminal_cmdg_${run_id}_terminal_metrics.json")
+    set(terminal_timeline "${output_dir}/vnm_terminal_cmdg_${run_id}_terminal_timeline.jsonl")
     set(cmdg_metrics "${output_dir}/vnm_terminal_cmdg_${run_id}_cmdg_metrics.json")
 endif()
-file(REMOVE "${terminal_metrics}" "${cmdg_metrics}")
+file(REMOVE "${terminal_metrics}" "${terminal_timeline}" "${cmdg_metrics}")
 if(profile_text)
     file(REMOVE "${profile_text}")
 endif()
@@ -176,6 +248,8 @@ math(EXPR timeout_ms "${timeout_seconds} * 1000")
 set(terminal_arguments
     "${terminal_exe}"
     "--metrics-json" "${terminal_metrics}"
+    "--metrics-timeline-jsonl" "${terminal_timeline}"
+    "--metrics-timeline-interval-ms" "${metrics_interval_ms}"
     "--font-size" "${font_size}"
     "--window-size" "${window_size}"
     "--timeout-ms" "${timeout_ms}"
@@ -205,6 +279,7 @@ set(ENV{CMDG_ADJUST_SCREEN} "0")
 set(ENV{CMDG_SPLASH_SCREEN} "0")
 set(ENV{CMDG_BENCHMARK_FRAME_LIMIT} "${frame_limit}")
 set(ENV{CMDG_BENCHMARK_METRICS} "${cmdg_metrics}")
+set(ENV{CMDG_BENCHMARK_WINDOW_MS} "${metrics_interval_ms}")
 set(ENV{CMDG_BENCHMARK_HIDE_CURSOR} "${hide_cursor}")
 
 if(offscreen)
@@ -232,6 +307,10 @@ if(NOT EXISTS "${terminal_metrics}")
     message(FATAL_ERROR "terminal metrics JSON was not written: ${terminal_metrics}")
 endif()
 
+if(NOT EXISTS "${terminal_timeline}")
+    message(FATAL_ERROR "terminal metrics timeline JSONL was not written: ${terminal_timeline}")
+endif()
+
 if(NOT EXISTS "${cmdg_metrics}")
     message(FATAL_ERROR "CMDG metrics JSON was not written: ${cmdg_metrics}")
 endif()
@@ -241,7 +320,14 @@ if(profile_text AND NOT EXISTS "${profile_text}")
 endif()
 
 file(READ "${terminal_metrics}" terminal_metrics_text)
+file(STRINGS "${terminal_timeline}" terminal_timeline_lines ENCODING UTF-8)
 file(READ "${cmdg_metrics}" cmdg_metrics_text)
+
+list(LENGTH terminal_timeline_lines terminal_timeline_line_count)
+if(NOT terminal_timeline_line_count GREATER 0)
+    message(FATAL_ERROR
+        "terminal metrics timeline JSONL has no samples: ${terminal_timeline}")
+endif()
 
 vnm_terminal_read_json_field(terminal_backend_error_count
     "${terminal_metrics_text}" "${terminal_metrics}" backend_error_count)
@@ -258,6 +344,135 @@ if(terminal_timeout_expired)
 endif()
 
 vnm_terminal_expect_renderer_frame_evidence("${terminal_metrics_text}" "${terminal_metrics}")
+
+set(terminal_timeline_periodic_count 0)
+math(EXPR terminal_timeline_last_index "${terminal_timeline_line_count} - 1")
+foreach(terminal_timeline_index RANGE 0 ${terminal_timeline_last_index})
+    list(GET terminal_timeline_lines ${terminal_timeline_index} terminal_timeline_sample_text)
+
+    vnm_terminal_read_json_field(terminal_timeline_schema
+        "${terminal_timeline_sample_text}" "${terminal_timeline}" schema)
+    vnm_terminal_read_json_field(terminal_timeline_sample_index
+        "${terminal_timeline_sample_text}" "${terminal_timeline}" sample_index)
+    vnm_terminal_read_json_field(terminal_timeline_kind
+        "${terminal_timeline_sample_text}" "${terminal_timeline}" kind)
+    vnm_terminal_read_json_field(terminal_timeline_interval_ms
+        "${terminal_timeline_sample_text}" "${terminal_timeline}" interval_ms)
+    vnm_terminal_read_json_field(terminal_timeline_elapsed_ms
+        "${terminal_timeline_sample_text}" "${terminal_timeline}" elapsed_ms)
+    vnm_terminal_read_json_field(terminal_timeline_runtime_elapsed_ms
+        "${terminal_timeline_sample_text}" "${terminal_timeline}" runtime_metrics elapsed_ms)
+    vnm_terminal_read_json_field(terminal_timeline_runtime_schema
+        "${terminal_timeline_sample_text}" "${terminal_timeline}" runtime_metrics schema)
+    vnm_terminal_read_json_field(terminal_timeline_app_result_available
+        "${terminal_timeline_sample_text}" "${terminal_timeline}" app_result_available)
+
+    if(NOT terminal_timeline_schema STREQUAL "vnm_terminal_metrics_timeline_sample_v1")
+        message(FATAL_ERROR
+            "terminal metrics timeline reports unexpected schema: ${terminal_timeline_schema}")
+    endif()
+
+    if(NOT terminal_timeline_runtime_schema STREQUAL "vnm_terminal_runtime_metrics_v2")
+        message(FATAL_ERROR
+            "terminal metrics timeline reports unexpected runtime_metrics schema: "
+            "${terminal_timeline_runtime_schema}")
+    endif()
+
+    if(NOT terminal_timeline_sample_index STREQUAL "${terminal_timeline_index}")
+        message(FATAL_ERROR
+            "terminal metrics timeline sample_index=${terminal_timeline_sample_index}, "
+            "expected ${terminal_timeline_index}")
+    endif()
+
+    if(NOT terminal_timeline_interval_ms STREQUAL "${metrics_interval_ms}")
+        message(FATAL_ERROR
+            "terminal metrics timeline interval_ms=${terminal_timeline_interval_ms}, "
+            "expected ${metrics_interval_ms}")
+    endif()
+
+    if(NOT terminal_timeline_runtime_elapsed_ms STREQUAL "${terminal_timeline_elapsed_ms}")
+        message(FATAL_ERROR
+            "terminal metrics timeline sample elapsed_ms=${terminal_timeline_elapsed_ms}, "
+            "runtime_metrics.elapsed_ms=${terminal_timeline_runtime_elapsed_ms}")
+    endif()
+
+    if(terminal_timeline_index LESS terminal_timeline_last_index)
+        if(NOT terminal_timeline_kind STREQUAL "periodic")
+            message(FATAL_ERROR
+                "terminal metrics timeline sample ${terminal_timeline_index} has "
+                "kind='${terminal_timeline_kind}', expected periodic")
+        endif()
+
+        if(terminal_timeline_app_result_available)
+            message(FATAL_ERROR
+                "terminal metrics timeline periodic sample ${terminal_timeline_index} "
+                "reports app_result_available=true")
+        endif()
+
+        vnm_terminal_expect_json_missing(
+            "${terminal_timeline_sample_text}"
+            "${terminal_timeline}"
+            runtime_metrics app_result)
+        math(EXPR terminal_timeline_periodic_count
+            "${terminal_timeline_periodic_count} + 1")
+    else()
+        if(NOT terminal_timeline_kind STREQUAL "final")
+            message(FATAL_ERROR
+                "terminal metrics timeline final sample has kind='${terminal_timeline_kind}'")
+        endif()
+
+        if(NOT terminal_timeline_app_result_available)
+            message(FATAL_ERROR
+                "terminal metrics timeline final sample reports app_result_available=false")
+        endif()
+
+        vnm_terminal_expect_json_number(
+            "${terminal_timeline_sample_text}"
+            "${terminal_timeline}"
+            runtime_metrics app_result)
+    endif()
+endforeach()
+
+if(terminal_timeline_periodic_count LESS benchmark_min_windows)
+    message(FATAL_ERROR
+        "terminal metrics timeline produced ${terminal_timeline_periodic_count} "
+        "periodic samples, expected at least ${benchmark_min_windows} to compare "
+        "the same number of benchmark windows. Increase "
+        "VNM_TERMINAL_CMDG_NELOSTIE_FRAMES or reduce "
+        "VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS.")
+endif()
+
+list(GET terminal_timeline_lines ${terminal_timeline_last_index} terminal_timeline_final_text)
+
+vnm_terminal_read_json_field(terminal_timeline_sample_index
+    "${terminal_timeline_final_text}" "${terminal_timeline}" sample_index)
+vnm_terminal_read_json_field(terminal_elapsed_ms
+    "${terminal_metrics_text}" "${terminal_metrics}" elapsed_ms)
+vnm_terminal_read_json_field(terminal_timeline_elapsed_ms
+    "${terminal_timeline_final_text}" "${terminal_timeline}" runtime_metrics elapsed_ms)
+vnm_terminal_read_json_field(terminal_evidence_frame_count
+    "${terminal_metrics_text}" "${terminal_metrics}" renderer_frame_evidence frame_count)
+vnm_terminal_read_json_field(terminal_timeline_evidence_frame_count
+    "${terminal_timeline_final_text}" "${terminal_timeline}"
+    runtime_metrics renderer_frame_evidence frame_count)
+
+if(NOT terminal_timeline_sample_index STREQUAL "${terminal_timeline_last_index}")
+    message(FATAL_ERROR
+        "terminal metrics timeline final sample_index=${terminal_timeline_sample_index}, "
+        "expected ${terminal_timeline_last_index}")
+endif()
+
+if(NOT terminal_timeline_elapsed_ms STREQUAL "${terminal_elapsed_ms}")
+    message(FATAL_ERROR
+        "terminal metrics timeline final runtime elapsed_ms=${terminal_timeline_elapsed_ms}, "
+        "expected aggregate elapsed_ms=${terminal_elapsed_ms}")
+endif()
+
+if(NOT terminal_timeline_evidence_frame_count STREQUAL "${terminal_evidence_frame_count}")
+    message(FATAL_ERROR
+        "terminal metrics timeline renderer evidence frame_count="
+        "${terminal_timeline_evidence_frame_count}, expected ${terminal_evidence_frame_count}")
+endif()
 
 vnm_terminal_read_json_field(cmdg_scene
     "${cmdg_metrics_text}" "${cmdg_metrics}" scene)
@@ -294,8 +509,197 @@ if(NOT cmdg_scene_frames STREQUAL "${frame_limit}")
         "expected ${frame_limit}")
 endif()
 
+vnm_terminal_read_json_field(cmdg_window_schema
+    "${cmdg_metrics_text}" "${cmdg_metrics}" benchmark_windows schema)
+vnm_terminal_read_json_field(cmdg_window_interval_ms
+    "${cmdg_metrics_text}" "${cmdg_metrics}" benchmark_windows interval_ms)
+vnm_terminal_read_json_length(cmdg_window_count
+    "${cmdg_metrics_text}" "${cmdg_metrics}" benchmark_windows samples)
+
+if(NOT cmdg_window_schema STREQUAL "cmdg_benchmark_windows_v1")
+    message(FATAL_ERROR
+        "CMDG metrics JSON reports unexpected benchmark_windows.schema: "
+        "${cmdg_window_schema}")
+endif()
+
+if(NOT cmdg_window_interval_ms STREQUAL "${metrics_interval_ms}")
+    message(FATAL_ERROR
+        "CMDG metrics JSON reports benchmark_windows.interval_ms="
+        "${cmdg_window_interval_ms}, expected ${metrics_interval_ms}")
+endif()
+
+if(NOT cmdg_window_count GREATER 0)
+    message(FATAL_ERROR "CMDG metrics JSON reports no benchmark windows")
+endif()
+
+if(cmdg_window_count LESS benchmark_min_windows)
+    message(FATAL_ERROR
+        "CMDG metrics JSON reports ${cmdg_window_count} benchmark windows, expected "
+        "at least ${benchmark_min_windows}. Increase "
+        "VNM_TERMINAL_CMDG_NELOSTIE_FRAMES or reduce "
+        "VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS.")
+endif()
+
+vnm_terminal_read_json_field(cmdg_draw_frames
+    "${cmdg_metrics_text}" "${cmdg_metrics}" draw_frames)
+vnm_terminal_read_json_field(cmdg_scene_calc_ms_total
+    "${cmdg_metrics_text}" "${cmdg_metrics}" scene_calc_ms_total)
+vnm_terminal_read_json_field(cmdg_scene_wait_ms_total
+    "${cmdg_metrics_text}" "${cmdg_metrics}" scene_wait_ms_total)
+vnm_terminal_read_json_field(cmdg_draw_ms_total
+    "${cmdg_metrics_text}" "${cmdg_metrics}" draw_ms_total)
+vnm_terminal_read_json_field(cmdg_draw_wait_ms_total
+    "${cmdg_metrics_text}" "${cmdg_metrics}" draw_wait_ms_total)
+vnm_terminal_read_json_field(cmdg_draw_output_bytes
+    "${cmdg_metrics_text}" "${cmdg_metrics}" draw_output_bytes)
+vnm_terminal_read_json_field(cmdg_changed_rows
+    "${cmdg_metrics_text}" "${cmdg_metrics}" changed_rows)
+vnm_terminal_read_json_field(cmdg_changed_cells
+    "${cmdg_metrics_text}" "${cmdg_metrics}" changed_cells)
+
+set(cmdg_window_scene_frames 0)
+set(cmdg_window_draw_frames 0)
+set(cmdg_window_scene_calc_ms_total 0)
+set(cmdg_window_scene_wait_ms_total 0)
+set(cmdg_window_draw_ms_total 0)
+set(cmdg_window_draw_wait_ms_total 0)
+set(cmdg_window_draw_output_bytes 0)
+set(cmdg_window_changed_rows 0)
+set(cmdg_window_changed_cells 0)
+math(EXPR cmdg_window_last_index "${cmdg_window_count} - 1")
+foreach(cmdg_window_index RANGE 0 ${cmdg_window_last_index})
+    vnm_terminal_read_json_field(window_index
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} index)
+    if(NOT window_index STREQUAL "${cmdg_window_index}")
+        message(FATAL_ERROR
+            "CMDG metrics JSON reports benchmark window index=${window_index}, "
+            "expected ${cmdg_window_index}")
+    endif()
+
+    foreach(window_number_field IN ITEMS
+        start_elapsed_ms
+        end_elapsed_ms
+        scene_frames
+        draw_frames
+        scene_elapsed_seconds_start
+        scene_elapsed_seconds_end
+        scene_calc_ms_total
+        scene_wait_ms_total
+        draw_ms_total
+        draw_wait_ms_total
+        draw_output_bytes
+        changed_rows
+        changed_cells
+        scene_frames_per_second
+        draw_frames_per_second)
+        vnm_terminal_expect_json_number(
+            "${cmdg_metrics_text}"
+            "${cmdg_metrics}"
+            benchmark_windows samples ${cmdg_window_index} ${window_number_field})
+    endforeach()
+
+    vnm_terminal_read_json_field(window_start_elapsed_ms
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} start_elapsed_ms)
+    vnm_terminal_read_json_field(window_end_elapsed_ms
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} end_elapsed_ms)
+    if(window_end_elapsed_ms LESS window_start_elapsed_ms)
+        message(FATAL_ERROR
+            "CMDG metrics JSON benchmark window ${cmdg_window_index} has "
+            "end_elapsed_ms=${window_end_elapsed_ms} before "
+            "start_elapsed_ms=${window_start_elapsed_ms}")
+    endif()
+
+    vnm_terminal_read_json_field(window_scene_frames
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} scene_frames)
+    vnm_terminal_read_json_field(window_draw_frames
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} draw_frames)
+    vnm_terminal_read_json_field(window_scene_calc_ms_total
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} scene_calc_ms_total)
+    vnm_terminal_read_json_field(window_scene_wait_ms_total
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} scene_wait_ms_total)
+    vnm_terminal_read_json_field(window_draw_ms_total
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} draw_ms_total)
+    vnm_terminal_read_json_field(window_draw_wait_ms_total
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} draw_wait_ms_total)
+    vnm_terminal_read_json_field(window_draw_output_bytes
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} draw_output_bytes)
+    vnm_terminal_read_json_field(window_changed_rows
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} changed_rows)
+    vnm_terminal_read_json_field(window_changed_cells
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} changed_cells)
+    vnm_terminal_read_json_field(window_scene_frames_per_second
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} scene_frames_per_second)
+    vnm_terminal_read_json_field(window_draw_frames_per_second
+        "${cmdg_metrics_text}" "${cmdg_metrics}"
+        benchmark_windows samples ${cmdg_window_index} draw_frames_per_second)
+
+    if(window_scene_frames GREATER 0 AND
+        NOT window_scene_frames_per_second GREATER 0)
+        message(FATAL_ERROR
+            "CMDG metrics JSON benchmark window ${cmdg_window_index} has "
+            "scene_frames=${window_scene_frames} but non-positive scene FPS")
+    endif()
+
+    if(window_draw_frames GREATER 0 AND
+        NOT window_draw_frames_per_second GREATER 0)
+        message(FATAL_ERROR
+            "CMDG metrics JSON benchmark window ${cmdg_window_index} has "
+            "draw_frames=${window_draw_frames} but non-positive draw FPS")
+    endif()
+
+    math(EXPR cmdg_window_scene_frames
+        "${cmdg_window_scene_frames} + ${window_scene_frames}")
+    math(EXPR cmdg_window_draw_frames
+        "${cmdg_window_draw_frames} + ${window_draw_frames}")
+    math(EXPR cmdg_window_scene_calc_ms_total
+        "${cmdg_window_scene_calc_ms_total} + ${window_scene_calc_ms_total}")
+    math(EXPR cmdg_window_scene_wait_ms_total
+        "${cmdg_window_scene_wait_ms_total} + ${window_scene_wait_ms_total}")
+    math(EXPR cmdg_window_draw_ms_total
+        "${cmdg_window_draw_ms_total} + ${window_draw_ms_total}")
+    math(EXPR cmdg_window_draw_wait_ms_total
+        "${cmdg_window_draw_wait_ms_total} + ${window_draw_wait_ms_total}")
+    math(EXPR cmdg_window_draw_output_bytes
+        "${cmdg_window_draw_output_bytes} + ${window_draw_output_bytes}")
+    math(EXPR cmdg_window_changed_rows
+        "${cmdg_window_changed_rows} + ${window_changed_rows}")
+    math(EXPR cmdg_window_changed_cells
+        "${cmdg_window_changed_cells} + ${window_changed_cells}")
+endforeach()
+
+foreach(cmdg_counter_name IN ITEMS
+    scene_frames
+    draw_frames
+    scene_calc_ms_total
+    scene_wait_ms_total
+    draw_ms_total
+    draw_wait_ms_total
+    draw_output_bytes
+    changed_rows
+    changed_cells)
+    if(NOT cmdg_window_${cmdg_counter_name} STREQUAL "${cmdg_${cmdg_counter_name}}")
+        message(FATAL_ERROR
+            "CMDG benchmark window ${cmdg_counter_name} sum="
+            "${cmdg_window_${cmdg_counter_name}}, expected ${cmdg_${cmdg_counter_name}}")
+    endif()
+endforeach()
+
 message(STATUS "CMDG scene: ${scene} (${run_id})")
 message(STATUS "terminal metrics: ${terminal_metrics}")
+message(STATUS "terminal timeline: ${terminal_timeline}")
 message(STATUS "CMDG metrics: ${cmdg_metrics}")
 if(profile_text)
     message(STATUS "terminal profile: ${profile_text}")

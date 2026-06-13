@@ -24,6 +24,7 @@ constexpr bool k_custom_titlebar_supported_on_platform = false;
 
 constexpr bool k_custom_titlebar_default_enabled =
     k_custom_titlebar_supported_on_platform;
+constexpr int k_default_metrics_timeline_interval_ms = 5000;
 
 bool custom_titlebar_supported_on_platform();
 
@@ -38,6 +39,8 @@ struct App_options
     QString            transcript_capture_path;
     QString            profile_text_path;
     QString            metrics_json_path;
+    QString            metrics_timeline_jsonl_path;
+    int                metrics_timeline_interval_ms = k_default_metrics_timeline_interval_ms;
     QString            font_family  = vnm_terminal::default_monospace_font_family();
     qreal              font_size    = vnm_terminal::k_default_font_pixel_size;
     QString            color_scheme = QStringLiteral("Campbell");

@@ -114,6 +114,8 @@ using chrome::k_window_settings_y;
 using chrome::load_persisted_appearance_settings;
 using chrome::load_persisted_terminal_window_state;
 using chrome::logical_device_pixel_width;
+using chrome::Metrics_timeline_jsonl_writer;
+using chrome::Metrics_timeline_sample_kind;
 using chrome::metrics_timing_t;
 using chrome::Osc52_clipboard_policy;
 using chrome::Persisted_appearance_settings;
@@ -303,6 +305,14 @@ int main(int argc, char** argv)
         print_error(parse_result.error);
         return k_exit_usage_error;
     }
+    if (!options.metrics_timeline_jsonl_path.isEmpty() &&
+        !prepare_capture_file(
+            QStringLiteral("--metrics-timeline-jsonl"),
+            options.metrics_timeline_jsonl_path, &parse_result.error))
+    {
+        print_error(parse_result.error);
+        return k_exit_usage_error;
+    }
 #if VNM_TERMINAL_PROFILING_ENABLED
     if (!options.profile_text_path.isEmpty() &&
         !prepare_profile_text_file(options.profile_text_path, &parse_result.error))
@@ -311,6 +321,14 @@ int main(int argc, char** argv)
         return k_exit_usage_error;
     }
 #endif
+
+    Metrics_timeline_jsonl_writer metrics_timeline_writer;
+    if (!options.metrics_timeline_jsonl_path.isEmpty() &&
+        !metrics_timeline_writer.open(options.metrics_timeline_jsonl_path, &parse_result.error))
+    {
+        print_error(parse_result.error);
+        return k_exit_usage_error;
+    }
 
     const bool persistence_enabled = terminal_window_persistence_enabled();
     if (persistence_enabled) {
@@ -655,6 +673,7 @@ int main(int argc, char** argv)
 
     QTimer timeout_timer(&app);
     QTimer timeout_force_exit_timer(&app);
+    QTimer metrics_timeline_timer(&app);
     timeout_timer.setSingleShot(true);
     timeout_force_exit_timer.setSingleShot(true);
     QObject::connect(
@@ -684,6 +703,44 @@ int main(int argc, char** argv)
             QCoreApplication::exit(k_exit_timeout);
         });
 
+    QElapsedTimer app_elapsed_timer;
+    bool metrics_timeline_error_seen = false;
+    if (!options.metrics_timeline_jsonl_path.isEmpty()) {
+        metrics_timeline_timer.setInterval(options.metrics_timeline_interval_ms);
+        QObject::connect(
+            &metrics_timeline_timer,
+            &QTimer::timeout,
+            &app,
+            [
+                &app_elapsed_timer,
+                &metrics_timeline_error_seen,
+                &metrics_timeline_timer,
+                &metrics_timeline_writer,
+                &options,
+                &state,
+                surface
+            ] {
+                metrics_timing_t sample_timing;
+                sample_timing.app_elapsed_ms         = app_elapsed_timer.elapsed();
+                sample_timing.profile_text_requested = !options.profile_text_path.isEmpty();
+
+                QString metrics_error;
+                if (!metrics_timeline_writer.write_sample(
+                        Metrics_timeline_sample_kind::PERIODIC,
+                        *surface,
+                        state,
+                        sample_timing,
+                        std::nullopt,
+                        options.metrics_timeline_interval_ms,
+                        &metrics_error))
+                {
+                    metrics_timeline_error_seen = true;
+                    metrics_timeline_timer.stop();
+                    print_error(metrics_error);
+                }
+            });
+    }
+
     window.show();
     if (options.restore_maximized_window_state) {
         window.setWindowState(Qt::WindowMaximized);
@@ -705,9 +762,12 @@ int main(int argc, char** argv)
         }
     });
 
-    QElapsedTimer app_elapsed_timer;
     app_elapsed_timer.start();
+    if (!options.metrics_timeline_jsonl_path.isEmpty()) {
+        metrics_timeline_timer.start();
+    }
     int app_result = app.exec();
+    metrics_timeline_timer.stop();
     metrics_timing_t metrics_timing;
     metrics_timing.app_elapsed_ms         = app_elapsed_timer.elapsed();
     metrics_timing.profile_text_requested = !options.profile_text_path.isEmpty();
@@ -728,6 +788,10 @@ int main(int argc, char** argv)
     }
 #endif
 
+    if (metrics_timeline_error_seen && app_result == 0) {
+        app_result = k_exit_usage_error;
+    }
+
     if (!options.metrics_json_path.isEmpty()) {
         QString metrics_error;
         if (!write_metrics_json(
@@ -736,6 +800,24 @@ int main(int argc, char** argv)
                 state,
                 metrics_timing,
                 app_result,
+                &metrics_error))
+        {
+            print_error(metrics_error);
+            if (app_result == 0) {
+                app_result = k_exit_usage_error;
+            }
+        }
+    }
+
+    if (!options.metrics_timeline_jsonl_path.isEmpty()) {
+        QString metrics_error;
+        if (!metrics_timeline_writer.write_sample(
+                Metrics_timeline_sample_kind::FINAL,
+                *surface,
+                state,
+                metrics_timing,
+                app_result,
+                options.metrics_timeline_interval_ms,
                 &metrics_error))
         {
             print_error(metrics_error);

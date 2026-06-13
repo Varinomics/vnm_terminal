@@ -111,6 +111,26 @@ bool parse_timeout_ms(
     return true;
 }
 
+bool parse_metrics_timeline_interval_ms(
+    const QString&         value,
+    int*                   out_interval_ms,
+    QString*               out_error)
+{
+    bool ok = false;
+    const qlonglong interval_ms = value.toLongLong(&ok);
+    if (!ok ||
+        interval_ms <= 0 ||
+        interval_ms >  static_cast<qlonglong>(std::numeric_limits<int>::max()))
+    {
+        *out_error = QStringLiteral(
+            "--metrics-timeline-interval-ms requires a positive integer");
+        return false;
+    }
+
+    *out_interval_ms = static_cast<int>(interval_ms);
+    return true;
+}
+
 bool parse_scrollback_limit(
     const QString&         value,
     std::optional<int>*    out_scrollback_limit,
@@ -325,6 +345,9 @@ void print_usage()
         << "when enabled\n"
         << "  --capture-output <path>         write raw backend output bytes to a file\n"
         << "  --metrics-json <path>           write lightweight terminal runtime metrics\n"
+        << "  --metrics-timeline-jsonl <path> write periodic terminal metrics JSONL samples\n"
+        << "  --metrics-timeline-interval-ms <n>\n"
+        << "                                  metrics timeline sample interval, default 5000\n"
 #if VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED
         << "  --capture-transcript <path>     write sensitive NDJSON replay transcript\n"
         << "  --transcript-snapshot-diagnostics include visible row text/provenance snapshots\n"
@@ -387,6 +410,16 @@ bool validate_capture_paths(App_options* options, QString* out_error)
         return false;
     }
 
+    if (!options->metrics_timeline_jsonl_path.isEmpty() &&
+        !validate_capture_path(
+            QStringLiteral("--metrics-timeline-jsonl"),
+            options->metrics_timeline_jsonl_path,
+            &options->metrics_timeline_jsonl_path,
+            out_error))
+    {
+        return false;
+    }
+
 #if VNM_TERMINAL_PROFILING_ENABLED
     if (!options->profile_text_path.isEmpty() &&
         !validate_capture_path(
@@ -421,6 +454,17 @@ bool validate_capture_paths(App_options* options, QString* out_error)
         return false;
     }
 
+    if (!options->backend_output_capture_path.isEmpty() &&
+        !options->metrics_timeline_jsonl_path.isEmpty() &&
+        comparable_capture_path(options->backend_output_capture_path) ==
+            comparable_capture_path(options->metrics_timeline_jsonl_path))
+    {
+        *out_error = QStringLiteral(
+            "--capture-output and --metrics-timeline-jsonl must use different paths: %1")
+            .arg(options->backend_output_capture_path);
+        return false;
+    }
+
     if (!options->transcript_capture_path.isEmpty() &&
         !options->metrics_json_path.isEmpty() &&
         comparable_capture_path(options->transcript_capture_path) ==
@@ -432,6 +476,28 @@ bool validate_capture_paths(App_options* options, QString* out_error)
         return false;
     }
 
+    if (!options->transcript_capture_path.isEmpty() &&
+        !options->metrics_timeline_jsonl_path.isEmpty() &&
+        comparable_capture_path(options->transcript_capture_path) ==
+            comparable_capture_path(options->metrics_timeline_jsonl_path))
+    {
+        *out_error = QStringLiteral(
+            "--capture-transcript and --metrics-timeline-jsonl must use different paths: %1")
+            .arg(options->transcript_capture_path);
+        return false;
+    }
+
+    if (!options->metrics_json_path.isEmpty() &&
+        !options->metrics_timeline_jsonl_path.isEmpty() &&
+        comparable_capture_path(options->metrics_json_path) ==
+            comparable_capture_path(options->metrics_timeline_jsonl_path))
+    {
+        *out_error = QStringLiteral(
+            "--metrics-json and --metrics-timeline-jsonl must use different paths: %1")
+            .arg(options->metrics_json_path);
+        return false;
+    }
+
 #if VNM_TERMINAL_PROFILING_ENABLED
     if (!options->profile_text_path.isEmpty() &&
         !options->metrics_json_path.isEmpty() &&
@@ -440,6 +506,17 @@ bool validate_capture_paths(App_options* options, QString* out_error)
     {
         *out_error = QStringLiteral(
             "--profile-text and --metrics-json must use different paths: %1")
+            .arg(options->profile_text_path);
+        return false;
+    }
+
+    if (!options->profile_text_path.isEmpty() &&
+        !options->metrics_timeline_jsonl_path.isEmpty() &&
+        comparable_capture_path(options->profile_text_path) ==
+            comparable_capture_path(options->metrics_timeline_jsonl_path))
+    {
+        *out_error = QStringLiteral(
+            "--profile-text and --metrics-timeline-jsonl must use different paths: %1")
             .arg(options->profile_text_path);
         return false;
     }
@@ -777,6 +854,32 @@ Parse_result parse_arguments(const QStringList& arguments)
             }
 
             result.options.metrics_json_path = value;
+            continue;
+        }
+
+        if (argument_is(argument, "--metrics-timeline-jsonl")) {
+            if (!take_option_value(arguments, index, &value, &result.error)) {
+                return result;
+            }
+            if (value.trimmed().isEmpty()) {
+                result.error = QStringLiteral("--metrics-timeline-jsonl requires a non-empty path");
+                return result;
+            }
+
+            result.options.metrics_timeline_jsonl_path = value;
+            continue;
+        }
+
+        if (argument_is(argument, "--metrics-timeline-interval-ms")) {
+            if (!take_option_value(arguments, index, &value, &result.error) ||
+                !parse_metrics_timeline_interval_ms(
+                    value,
+                    &result.options.metrics_timeline_interval_ms,
+                    &result.error))
+            {
+                return result;
+            }
+
             continue;
         }
 

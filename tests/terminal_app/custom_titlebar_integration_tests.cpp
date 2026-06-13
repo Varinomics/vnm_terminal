@@ -2046,6 +2046,121 @@ bool test_parse_scrollback_limit_option()
     return ok;
 }
 
+bool test_parse_metrics_timeline_options()
+{
+    Parse_result default_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result timeline_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--metrics-timeline-jsonl"),
+        QStringLiteral("timeline.jsonl"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result interval_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--metrics-timeline-jsonl"),
+        QStringLiteral("timeline.jsonl"),
+        QStringLiteral("--metrics-timeline-interval-ms"),
+        QStringLiteral("250"),
+        QStringLiteral("--"),
+        QStringLiteral("fixture-command"),
+    });
+
+    Parse_result invalid_interval_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--metrics-timeline-interval-ms"),
+        QStringLiteral("0"),
+    });
+
+    Parse_result overflowing_interval_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--metrics-timeline-interval-ms"),
+        QStringLiteral("2147483648"),
+    });
+
+    Parse_result command_result = parse_arguments({
+        QStringLiteral("vnm_terminal"),
+        QStringLiteral("--"),
+        QStringLiteral("--metrics-timeline-jsonl"),
+        QStringLiteral("timeline.jsonl"),
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(),
+        "metrics timeline default parse succeeds");
+    ok &= check(default_result.options.metrics_timeline_jsonl_path.isEmpty(),
+        "metrics timeline path defaults empty");
+    ok &= check(
+        default_result.options.metrics_timeline_interval_ms ==
+            chrome_test::k_default_metrics_timeline_interval_ms,
+        "metrics timeline interval defaults to 5000 ms");
+    ok &= check(timeline_result.error.isEmpty(),
+        "metrics timeline path option parses");
+    ok &= check(
+        timeline_result.options.metrics_timeline_jsonl_path == QStringLiteral("timeline.jsonl"),
+        "metrics timeline path option stores the requested path");
+    ok &= check(
+        timeline_result.options.metrics_timeline_interval_ms ==
+            chrome_test::k_default_metrics_timeline_interval_ms,
+        "metrics timeline path option keeps the default interval");
+    ok &= check(interval_result.error.isEmpty(),
+        "metrics timeline interval option parses");
+    ok &= check(interval_result.options.metrics_timeline_interval_ms == 250,
+        "metrics timeline interval option stores the requested interval");
+    ok &= check(!invalid_interval_result.error.isEmpty(),
+        "metrics timeline interval rejects zero");
+    ok &= check(
+        invalid_interval_result.error ==
+            QStringLiteral("--metrics-timeline-interval-ms requires a positive integer"),
+        "metrics timeline interval reports the documented error");
+    ok &= check(!overflowing_interval_result.error.isEmpty(),
+        "metrics timeline interval rejects values beyond int32");
+    ok &= check(command_result.error.isEmpty(),
+        "metrics timeline option after command separator parses as command argv");
+    ok &= check(command_result.options.metrics_timeline_jsonl_path.isEmpty(),
+        "metrics timeline option after command separator leaves default path");
+    ok &= check(
+        command_result.options.command ==
+            QStringList{
+                QStringLiteral("--metrics-timeline-jsonl"),
+                QStringLiteral("timeline.jsonl"),
+            },
+        "metrics timeline option after command separator is preserved in command argv");
+
+    QTemporaryDir temp_dir;
+    ok &= check(temp_dir.isValid(), "metrics timeline conflict test creates temp directory");
+    if (temp_dir.isValid()) {
+        const QString shared_path = temp_dir.filePath(QStringLiteral("metrics.json"));
+        Parse_result conflict_result = parse_arguments({
+            QStringLiteral("vnm_terminal"),
+            QStringLiteral("--metrics-json"),
+            shared_path,
+            QStringLiteral("--metrics-timeline-jsonl"),
+            shared_path,
+            QStringLiteral("--"),
+            QStringLiteral("fixture-command"),
+        });
+
+        QString validation_error;
+        ok &= check(conflict_result.error.isEmpty(),
+            "metrics timeline conflict input parses before path validation");
+        ok &= check(!validate_capture_paths(&conflict_result.options, &validation_error),
+            "metrics timeline rejects sharing the aggregate metrics path");
+        ok &= check(
+            validation_error.contains(
+                QStringLiteral("--metrics-json and --metrics-timeline-jsonl")),
+            "metrics timeline conflict reports the conflicting options");
+    }
+
+    return ok;
+}
+
 bool test_parse_transcript_snapshot_diagnostics_option()
 {
     Parse_result snapshot_result = parse_arguments({
@@ -2783,6 +2898,7 @@ int main(int argc, char** argv)
     ok &= test_parse_osc52_clipboard_option();
     ok &= test_row_timestamp_tooltip_chrome(app);
     ok &= test_parse_scrollback_limit_option();
+    ok &= test_parse_metrics_timeline_options();
     ok &= test_parse_transcript_snapshot_diagnostics_option();
     ok &= test_parse_transcript_timing_diagnostics_option();
     ok &= test_paste_shortcut_should_paste_predicate();

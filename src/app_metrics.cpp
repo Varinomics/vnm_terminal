@@ -14,6 +14,7 @@
 #include <QString>
 
 #include <cstdint>
+#include <optional>
 
 namespace vnm_terminal::terminal_app {
 
@@ -32,6 +33,9 @@ void insert_json_counter(
 
 constexpr const char* k_runtime_frame_rate_elapsed_basis =
     "app_exec_elapsed_ms_including_process_startup_excluding_profile_write";
+constexpr const char* k_runtime_metrics_schema = "vnm_terminal_runtime_metrics_v2";
+constexpr const char* k_metrics_timeline_sample_schema =
+    "vnm_terminal_metrics_timeline_sample_v1";
 constexpr const char* k_paint_completed_frame_counter_path =
     "renderer.paint_completed_frames";
 constexpr const char* k_qsg_atlas_render_frame_counter_path =
@@ -67,6 +71,15 @@ renderer_frame_evidence_t renderer_frame_evidence(
         k_paint_completed_frame_counter_path,
         paint_completed_frame_count,
     };
+}
+
+const char* metrics_timeline_sample_kind_text(Metrics_timeline_sample_kind kind)
+{
+    switch (kind) {
+        case Metrics_timeline_sample_kind::PERIODIC: return "periodic";
+        case Metrics_timeline_sample_kind::FINAL:    return "final";
+        default:                                     return "unknown";
+    }
 }
 
 QJsonObject renderer_frame_evidence_json(
@@ -138,7 +151,7 @@ QJsonObject terminal_metrics_json(
     const VNM_TerminalSurface&  surface,
     const Runtime_state&        state,
     const metrics_timing_t&     timing,
-    int                         app_result)
+    std::optional<int>          app_result)
 {
     const std::uint64_t paint_completed_frame_count =
         static_cast<std::uint64_t>(surface.paint_completed_frame_count());
@@ -154,9 +167,11 @@ QJsonObject terminal_metrics_json(
     vnm_terminal::diagnostics::append_atlas_metrics_json(surface, qsg_atlas);
 
     QJsonObject root;
-    root.insert(QStringLiteral("schema"), QStringLiteral("vnm_terminal_runtime_metrics_v2"));
+    root.insert(QStringLiteral("schema"), QString::fromLatin1(k_runtime_metrics_schema));
     root.insert(QStringLiteral("elapsed_ms"), timing.app_elapsed_ms);
-    root.insert(QStringLiteral("app_result"), app_result);
+    if (app_result.has_value()) {
+        root.insert(QStringLiteral("app_result"), *app_result);
+    }
     root.insert(QStringLiteral("process_exit_code"), state.process_exit_code);
     root.insert(QStringLiteral("process_exit_reason"), enum_key(state.process_exit_reason));
     root.insert(QStringLiteral("backend_error_count"), state.backend_error_count);
@@ -183,7 +198,86 @@ QJsonObject terminal_metrics_json(
     return root;
 }
 
+QJsonObject metrics_timeline_sample_json(
+    Metrics_timeline_sample_kind kind,
+    int                          sample_index,
+    const VNM_TerminalSurface&   surface,
+    const Runtime_state&         state,
+    const metrics_timing_t&      timing,
+    std::optional<int>           app_result,
+    int                          interval_ms)
+{
+    QJsonObject root;
+    root.insert(QStringLiteral("schema"), QString::fromLatin1(k_metrics_timeline_sample_schema));
+    root.insert(QStringLiteral("sample_index"), sample_index);
+    root.insert(QStringLiteral("elapsed_ms"), timing.app_elapsed_ms);
+    root.insert(
+        QStringLiteral("kind"),
+        QString::fromLatin1(metrics_timeline_sample_kind_text(kind)));
+    root.insert(QStringLiteral("interval_ms"), interval_ms);
+    root.insert(QStringLiteral("app_result_available"), app_result.has_value());
+    root.insert(
+        QStringLiteral("runtime_metrics"),
+        terminal_metrics_json(
+            surface,
+            state,
+            timing,
+            app_result));
+    return root;
+}
+
 } // namespace
+
+bool Metrics_timeline_jsonl_writer::open(const QString& path, QString* out_error)
+{
+    m_file.setFileName(path);
+    if (!m_file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        *out_error = QStringLiteral("could not write metrics timeline JSONL %1: %2")
+            .arg(path, m_file.errorString());
+        return false;
+    }
+
+    m_sample_index = 0;
+    return true;
+}
+
+bool Metrics_timeline_jsonl_writer::write_sample(
+    Metrics_timeline_sample_kind kind,
+    const VNM_TerminalSurface&   surface,
+    const Runtime_state&         state,
+    const metrics_timing_t&      timing,
+    std::optional<int>           app_result,
+    int                          interval_ms,
+    QString*                     out_error)
+{
+    QByteArray json = QJsonDocument(
+        metrics_timeline_sample_json(
+            kind,
+            m_sample_index,
+            surface,
+            state,
+            timing,
+            app_result,
+            interval_ms))
+            .toJson(QJsonDocument::Compact);
+    json.append('\n');
+
+    const qint64 written = m_file.write(json);
+    if (written != json.size()) {
+        *out_error = QStringLiteral("could not write metrics timeline JSONL %1: %2")
+            .arg(m_file.fileName(), m_file.errorString());
+        return false;
+    }
+
+    if (!m_file.flush()) {
+        *out_error = QStringLiteral("could not flush metrics timeline JSONL %1: %2")
+            .arg(m_file.fileName(), m_file.errorString());
+        return false;
+    }
+
+    ++m_sample_index;
+    return true;
+}
 
 bool write_metrics_json(
     const QString&              path,
