@@ -116,6 +116,48 @@ set_tests_properties(vnm_terminal_app_presentation_metrics PROPERTIES
     TIMEOUT 30
 )
 
+add_executable(vnm_terminal_input_echo_timing_probe
+    terminal_app/input_echo_timing_probe.cpp
+    "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_metrics.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_presentation_metrics.cpp"
+)
+
+target_link_libraries(vnm_terminal_input_echo_timing_probe PRIVATE
+    vnm_terminal_surface::vnm_terminal_surface
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Quick
+)
+
+vnm_terminal_configure_test_process(vnm_terminal_input_echo_timing_probe)
+
+set_target_properties(vnm_terminal_input_echo_timing_probe PROPERTIES
+    AUTOMOC OFF
+)
+
+add_test(
+    NAME vnm_terminal_input_echo_timing_probe
+    COMMAND
+        "${CMAKE_COMMAND}" -E env
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
+        "${vnm_terminal_qt_runtime_path}"
+        "$<TARGET_FILE:vnm_terminal_input_echo_timing_probe>"
+        "--metrics-timeline-jsonl"
+        "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_input_echo_timing_metrics_$<CONFIG>.jsonl"
+        "--evidence-jsonl"
+        "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_input_echo_timing_evidence_$<CONFIG>.jsonl"
+        "--evidence-mode" "offscreen-ci"
+        "--burst-count" "3"
+        "--burst-length" "14"
+)
+
+set_tests_properties(vnm_terminal_input_echo_timing_probe PROPERTIES
+    LABELS "readiness;benchmark;input-echo"
+    TIMEOUT 30
+)
+
 add_executable(vnm_terminal_custom_titlebar_integration
     terminal_app/custom_titlebar_integration_tests.cpp
     "${PROJECT_SOURCE_DIR}/src/app_cli.cpp"

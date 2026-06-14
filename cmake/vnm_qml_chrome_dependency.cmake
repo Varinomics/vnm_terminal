@@ -1,6 +1,8 @@
 set(VNM_QML_CHROME_SOURCE_DIR "" CACHE PATH
     "Path to a source checkout of vnm_qml_chrome.")
 
+set(VNM_QML_CHROME_MIN_VERSION "${PROJECT_VERSION}")
+
 if(NOT VNM_QML_CHROME_SOURCE_DIR)
     get_filename_component(vnm_terminal_default_qml_chrome_dir
         "${CMAKE_CURRENT_SOURCE_DIR}/../../bsd_licensed/vnm_qml_chrome"
@@ -20,6 +22,37 @@ if(VNM_QML_CHROME_SOURCE_DIR)
     add_subdirectory(
         "${VNM_QML_CHROME_SOURCE_DIR}"
         "${CMAKE_BINARY_DIR}/_deps/vnm_qml_chrome")
+
+    get_directory_property(vnm_qml_chrome_source_version
+        DIRECTORY "${CMAKE_BINARY_DIR}/_deps/vnm_qml_chrome"
+        DEFINITION vnm_qml_chrome_VERSION)
+    get_directory_property(vnm_qml_chrome_source_version_major
+        DIRECTORY "${CMAKE_BINARY_DIR}/_deps/vnm_qml_chrome"
+        DEFINITION vnm_qml_chrome_VERSION_MAJOR)
+
+    if(NOT vnm_qml_chrome_source_version)
+        message(FATAL_ERROR
+            "vnm_qml_chrome source checkout did not declare a project "
+            "version: ${VNM_QML_CHROME_SOURCE_DIR}")
+    endif()
+
+    if(NOT "${vnm_qml_chrome_source_version_major}" STREQUAL
+        "${PROJECT_VERSION_MAJOR}")
+        message(FATAL_ERROR
+            "vnm_qml_chrome source checkout version "
+            "${vnm_qml_chrome_source_version} is not same-major "
+            "compatible with vnm_terminal ${PROJECT_VERSION}: "
+            "${VNM_QML_CHROME_SOURCE_DIR}")
+    endif()
+
+    if("${vnm_qml_chrome_source_version}" VERSION_LESS
+        "${VNM_QML_CHROME_MIN_VERSION}")
+        message(FATAL_ERROR
+            "vnm_qml_chrome source checkout version "
+            "${vnm_qml_chrome_source_version} is older than the "
+            "required minimum ${VNM_QML_CHROME_MIN_VERSION}: "
+            "${VNM_QML_CHROME_SOURCE_DIR}")
+    endif()
 else()
-    find_package(vnm_qml_chrome CONFIG REQUIRED)
+    find_package(vnm_qml_chrome ${VNM_QML_CHROME_MIN_VERSION} CONFIG REQUIRED)
 endif()

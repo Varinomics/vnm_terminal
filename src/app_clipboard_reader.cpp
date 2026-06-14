@@ -23,7 +23,7 @@ namespace vnm_terminal::terminal_app {
 
 namespace {
 
-constexpr int k_clipboard_broker_timeout_ms = 750;
+constexpr int k_clipboard_broker_timeout_ms = 2000;
 constexpr int k_clipboard_broker_kill_grace_ms = 50;
 
 QString internal_clipboard_read_argument()
@@ -140,11 +140,13 @@ std::optional<QString> read_clipboard_text_with_broker()
     process->start();
     if (!process->waitForStarted(k_clipboard_broker_timeout_ms)) {
         const QString error_string = process->errorString();
+        const qint64 elapsed_ms = elapsed.elapsed();
         if (!kill_clipboard_broker(*process)) {
             release_running_clipboard_broker(process);
         }
         qWarning(
-            "vnm_terminal: clipboard broker failed to start: %s",
+            "vnm_terminal: clipboard broker failed to start after %lld ms: %s",
+            static_cast<long long>(elapsed_ms),
             qPrintable(error_string));
         return std::nullopt;
     }
@@ -154,10 +156,16 @@ std::optional<QString> read_clipboard_text_with_broker()
     while (process->state() != QProcess::NotRunning) {
         const qint64 remaining = k_clipboard_broker_timeout_ms - elapsed.elapsed();
         if (remaining <= 0) {
+            const qint64 elapsed_ms = elapsed.elapsed();
             if (!kill_clipboard_broker(*process)) {
                 release_running_clipboard_broker(process);
             }
-            qWarning("vnm_terminal: clipboard broker timed out");
+            qWarning(
+                "vnm_terminal: clipboard broker timed out after %lld ms "
+                "(stdout_bytes=%lld stderr_bytes=%lld)",
+                static_cast<long long>(elapsed_ms),
+                static_cast<long long>(output.size()),
+                static_cast<long long>(error_output.size()));
             return std::nullopt;
         }
 
@@ -174,9 +182,13 @@ std::optional<QString> read_clipboard_text_with_broker()
 
     if (process->exitStatus() != QProcess::NormalExit || process->exitCode() != 0) {
         qWarning(
-            "vnm_terminal: clipboard broker failed with status %d code %d: %s",
+            "vnm_terminal: clipboard broker failed after %lld ms with status %d "
+            "code %d (stdout_bytes=%lld stderr_bytes=%lld): %s",
+            static_cast<long long>(elapsed.elapsed()),
             static_cast<int>(process->exitStatus()),
             process->exitCode(),
+            static_cast<long long>(output.size()),
+            static_cast<long long>(error_output.size()),
             error_output.constData());
         return std::nullopt;
     }
