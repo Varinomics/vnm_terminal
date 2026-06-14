@@ -51,6 +51,38 @@ function(vnm_terminal_expect_json_missing json_text source_path)
     endif()
 endfunction()
 
+function(vnm_terminal_expect_presentation_counter_metadata json_text source_path)
+    set(json_path ${ARGN})
+    vnm_terminal_read_json_field(presentation_counter_source
+        "${json_text}" "${source_path}" ${json_path} primary_counter_source)
+    vnm_terminal_read_json_field(presentation_counter_semantics
+        "${json_text}" "${source_path}" ${json_path} primary_counter_semantics)
+    vnm_terminal_read_json_field(presentation_scanout_verified
+        "${json_text}" "${source_path}" ${json_path} scanout_verified)
+
+    if(NOT presentation_counter_source STREQUAL "QQuickWindow::frameSwapped")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "terminal metrics JSON reports unexpected "
+            "${json_path_text}.primary_counter_source: "
+            "${presentation_counter_source}")
+    endif()
+
+    if(NOT presentation_counter_semantics STREQUAL "qt_frame_swapped_proxy")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "terminal metrics JSON reports unexpected "
+            "${json_path_text}.primary_counter_semantics: "
+            "${presentation_counter_semantics}")
+    endif()
+
+    if(presentation_scanout_verified)
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "terminal metrics JSON reports ${json_path_text}.scanout_verified=true")
+    endif()
+endfunction()
+
 function(vnm_terminal_validate_positive_int32 option_name option_value)
     if(NOT "${option_value}" MATCHES "^[1-9][0-9]*$")
         message(FATAL_ERROR "${option_name} must be an integer in 1..2147483647")
@@ -114,6 +146,45 @@ function(vnm_terminal_expect_renderer_frame_evidence json_text source_path)
     if(NOT visible_first_frame_completed)
         message(FATAL_ERROR
             "terminal metrics JSON reports no visible first-frame completion")
+    endif()
+endfunction()
+
+function(vnm_terminal_expect_presentation_frame_evidence json_text source_path)
+    vnm_terminal_read_json_field(presentation_counter_path
+        "${json_text}" "${source_path}" presentation primary_counter_path)
+    vnm_terminal_read_json_field(presentation_frame_count
+        "${json_text}" "${source_path}" presentation primary_frame_count)
+    vnm_terminal_read_json_field(presentation_frames_per_second
+        "${json_text}" "${source_path}" presentation primary_frames_per_second)
+    vnm_terminal_read_json_field(frame_swapped_count
+        "${json_text}" "${source_path}" presentation frameSwapped count)
+
+    if(NOT presentation_counter_path STREQUAL "presentation.frameSwapped.count")
+        message(FATAL_ERROR
+            "terminal metrics JSON reports unexpected presentation.primary_counter_path: "
+            "${presentation_counter_path}")
+    endif()
+    vnm_terminal_expect_presentation_counter_metadata(
+        "${json_text}"
+        "${source_path}"
+        presentation)
+
+    if(NOT presentation_frame_count STREQUAL frame_swapped_count)
+        message(FATAL_ERROR
+            "terminal metrics JSON reports presentation.primary_frame_count="
+            "${presentation_frame_count}, expected presentation.frameSwapped.count="
+            "${frame_swapped_count}")
+    endif()
+
+    if(NOT presentation_frame_count MATCHES "^[1-9][0-9]*$")
+        message(FATAL_ERROR
+            "terminal metrics JSON reports no Qt frameSwapped proxy evidence")
+    endif()
+
+    if(NOT presentation_frames_per_second GREATER 0)
+        message(FATAL_ERROR
+            "terminal metrics JSON reports non-positive presentation proxy FPS: "
+            "${presentation_frames_per_second}")
     endif()
 endfunction()
 
@@ -344,6 +415,7 @@ if(terminal_timeout_expired)
 endif()
 
 vnm_terminal_expect_renderer_frame_evidence("${terminal_metrics_text}" "${terminal_metrics}")
+vnm_terminal_expect_presentation_frame_evidence("${terminal_metrics_text}" "${terminal_metrics}")
 
 set(terminal_timeline_periodic_count 0)
 math(EXPR terminal_timeline_last_index "${terminal_timeline_line_count} - 1")
@@ -377,6 +449,10 @@ foreach(terminal_timeline_index RANGE 0 ${terminal_timeline_last_index})
             "terminal metrics timeline reports unexpected runtime_metrics schema: "
             "${terminal_timeline_runtime_schema}")
     endif()
+    vnm_terminal_expect_presentation_counter_metadata(
+        "${terminal_timeline_sample_text}"
+        "${terminal_timeline}"
+        runtime_metrics presentation)
 
     if(NOT terminal_timeline_sample_index STREQUAL "${terminal_timeline_index}")
         message(FATAL_ERROR
@@ -455,6 +531,11 @@ vnm_terminal_read_json_field(terminal_evidence_frame_count
 vnm_terminal_read_json_field(terminal_timeline_evidence_frame_count
     "${terminal_timeline_final_text}" "${terminal_timeline}"
     runtime_metrics renderer_frame_evidence frame_count)
+vnm_terminal_read_json_field(terminal_presentation_frame_count
+    "${terminal_metrics_text}" "${terminal_metrics}" presentation primary_frame_count)
+vnm_terminal_read_json_field(terminal_timeline_presentation_frame_count
+    "${terminal_timeline_final_text}" "${terminal_timeline}"
+    runtime_metrics presentation primary_frame_count)
 
 if(NOT terminal_timeline_sample_index STREQUAL "${terminal_timeline_last_index}")
     message(FATAL_ERROR
@@ -472,6 +553,13 @@ if(NOT terminal_timeline_evidence_frame_count STREQUAL "${terminal_evidence_fram
     message(FATAL_ERROR
         "terminal metrics timeline renderer evidence frame_count="
         "${terminal_timeline_evidence_frame_count}, expected ${terminal_evidence_frame_count}")
+endif()
+
+if(NOT terminal_timeline_presentation_frame_count STREQUAL "${terminal_presentation_frame_count}")
+    message(FATAL_ERROR
+        "terminal metrics timeline presentation primary_frame_count="
+        "${terminal_timeline_presentation_frame_count}, expected "
+        "${terminal_presentation_frame_count}")
 endif()
 
 vnm_terminal_read_json_field(cmdg_scene
@@ -509,6 +597,24 @@ if(NOT cmdg_scene_frames STREQUAL "${frame_limit}")
         "expected ${frame_limit}")
 endif()
 
+string(JSON cmdg_benchmark_windows_type
+    ERROR_VARIABLE cmdg_benchmark_windows_error
+    TYPE "${cmdg_metrics_text}" benchmark_windows)
+if(cmdg_benchmark_windows_error STREQUAL "NOTFOUND")
+    if(NOT cmdg_benchmark_windows_type STREQUAL "OBJECT")
+        message(FATAL_ERROR
+            "CMDG metrics JSON reports benchmark_windows type "
+            "${cmdg_benchmark_windows_type}, expected OBJECT")
+    endif()
+    set(cmdg_benchmark_windows_available ON)
+else()
+    set(cmdg_benchmark_windows_available OFF)
+    message(STATUS
+        "CMDG metrics JSON has no benchmark_windows object; accepting older "
+        "scratch CMDG metrics without window samples.")
+endif()
+
+if(cmdg_benchmark_windows_available)
 vnm_terminal_read_json_field(cmdg_window_schema
     "${cmdg_metrics_text}" "${cmdg_metrics}" benchmark_windows schema)
 vnm_terminal_read_json_field(cmdg_window_interval_ms
@@ -539,6 +645,7 @@ if(cmdg_window_count LESS benchmark_min_windows)
         "VNM_TERMINAL_CMDG_NELOSTIE_FRAMES or reduce "
         "VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS.")
 endif()
+endif()
 
 vnm_terminal_read_json_field(cmdg_draw_frames
     "${cmdg_metrics_text}" "${cmdg_metrics}" draw_frames)
@@ -557,6 +664,27 @@ vnm_terminal_read_json_field(cmdg_changed_rows
 vnm_terminal_read_json_field(cmdg_changed_cells
     "${cmdg_metrics_text}" "${cmdg_metrics}" changed_cells)
 
+foreach(cmdg_number_field IN ITEMS
+    elapsed_ms
+    scene_elapsed_seconds
+    scene_frames
+    draw_frames
+    scene_frames_per_second
+    draw_frames_per_second
+    scene_calc_ms_total
+    scene_wait_ms_total
+    draw_ms_total
+    draw_wait_ms_total
+    draw_output_bytes
+    changed_rows
+    changed_cells)
+    vnm_terminal_expect_json_number(
+        "${cmdg_metrics_text}"
+        "${cmdg_metrics}"
+        ${cmdg_number_field})
+endforeach()
+
+if(cmdg_benchmark_windows_available)
 set(cmdg_window_scene_frames 0)
 set(cmdg_window_draw_frames 0)
 set(cmdg_window_scene_calc_ms_total 0)
@@ -696,6 +824,7 @@ foreach(cmdg_counter_name IN ITEMS
             "${cmdg_window_${cmdg_counter_name}}, expected ${cmdg_${cmdg_counter_name}}")
     endif()
 endforeach()
+endif()
 
 message(STATUS "CMDG scene: ${scene} (${run_id})")
 message(STATUS "terminal metrics: ${terminal_metrics}")

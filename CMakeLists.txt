@@ -42,6 +42,8 @@ add_executable(vnm_terminal
     src/app_metrics.h
     src/app_options.cpp
     src/app_options.h
+    src/app_presentation_metrics.cpp
+    src/app_presentation_metrics.h
     src/app_profile_text.cpp
     src/app_profile_text.h
     src/app_settings.cpp

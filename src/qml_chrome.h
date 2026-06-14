@@ -24,7 +24,7 @@ constexpr qreal k_default_frameless_resize_border_width      = 6.0;
 constexpr qreal k_frameless_resize_border_physical_reduction = 2.0;
 
 QColor terminal_chrome_background_color(bool active);
-QColor terminal_chrome_content_border_color(bool active);
+QColor terminal_chrome_frame_edge_color(bool active);
 
 class Terminal_qml_chrome final : public QObject
 {
@@ -41,11 +41,13 @@ public:
     QQuickItem* titlebar_item() const;
 
     void set_size(const QSizeF& size);
-    void set_content_border_rect(const QRectF& rect, qreal border_width);
+    QRectF content_interior_rect() const;
+    qreal device_pixel_ratio() const;
     void set_title(const QString& title);
     void set_activity_marker_text(const QString& marker_text);
     void set_active(bool active);
     void set_maximized(bool maximized);
+    void set_fullscreen(bool fullscreen);
     void set_resize_enabled(bool resize_enabled);
     void pulse_wheel_delivery_indicator();
     void show_row_timestamp_tooltip(const QPointF& position, const QDateTime& timestamp);

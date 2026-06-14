@@ -16,6 +16,7 @@
 #include <QDateTime>
 #include <QEventLoop>
 #include <QGuiApplication>
+#include <QImage>
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -23,11 +24,15 @@
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
+#include <QQuickWindow>
+#include <QScreen>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QVariant>
 #include <QWheelEvent>
 #include <QWindow>
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <memory>
@@ -51,6 +56,28 @@ using vnm_terminal::test_helpers::check;
 bool nearly_equal(qreal actual, qreal expected)
 {
     return std::abs(actual - expected) <= 0.000001;
+}
+
+bool color_nearly_equal(
+    const QColor& actual,
+    const QColor& expected)
+{
+    constexpr int k_tolerance = 2;
+    return
+        std::abs(actual.red()   - expected.red())   <= k_tolerance &&
+        std::abs(actual.green() - expected.green()) <= k_tolerance &&
+        std::abs(actual.blue()  - expected.blue())  <= k_tolerance &&
+        std::abs(actual.alpha() - expected.alpha()) <= k_tolerance;
+}
+
+std::string color_string(const QColor& color)
+{
+    return QStringLiteral("#%1%2%3%4")
+        .arg(color.red(),   2, 16, QChar('0'))
+        .arg(color.green(), 2, 16, QChar('0'))
+        .arg(color.blue(),  2, 16, QChar('0'))
+        .arg(color.alpha(), 2, 16, QChar('0'))
+        .toStdString();
 }
 
 // Walks both the QObject child tree and the visual child-item tree, so it
@@ -118,9 +145,66 @@ void pump_events(QGuiApplication& app)
     }
 }
 
+bool wait_for_exposed_window(
+    QGuiApplication& app,
+    QWindow&         window)
+{
+    for (int attempt = 0; attempt < 100; ++attempt) {
+        pump_events(app);
+        if (window.isExposed()) {
+            return true;
+        }
+        QThread::msleep(10);
+    }
+
+    return window.isExposed();
+}
+
 QRectF item_rect(const QQuickItem& item)
 {
     return QRectF(item.x(), item.y(), item.width(), item.height());
+}
+
+QRectF expected_resize_disabled_content_interior_rect(
+    const chrome_test::Terminal_qml_chrome& titlebar)
+{
+    const qreal root_width      = titlebar.root_item()->width();
+    const qreal root_height     = titlebar.root_item()->height();
+    const qreal titlebar_height = titlebar.titlebar_item()->height();
+    const qreal frame_edge      =
+        1.0 / vnm_qml_chrome::normalized_device_pixel_ratio(titlebar.device_pixel_ratio());
+
+    return QRectF(
+        frame_edge,
+        titlebar_height + frame_edge,
+        std::max<qreal>(0.0, root_width - 2.0 * frame_edge),
+        std::max<qreal>(0.0, root_height - titlebar_height - 2.0 * frame_edge));
+}
+
+bool check_content_split_geometry(
+    const QRectF&                         content_rect,
+    const VNM_TerminalSurface&            surface,
+    const chrome_test::Terminal_scrollbar& scrollbar,
+    const std::string&                    terminal_message,
+    const std::string&                    scrollbar_message)
+{
+    const qreal scrollbar_width =
+        std::min(chrome_test::k_terminal_scrollbar_width, content_rect.width());
+    const QRectF terminal_rect(
+        content_rect.left(),
+        content_rect.top(),
+        std::max<qreal>(0.0, content_rect.width() - scrollbar_width),
+        content_rect.height());
+    const QRectF scrollbar_rect(
+        content_rect.right() - scrollbar_width,
+        content_rect.top(),
+        scrollbar_width,
+        content_rect.height());
+
+    bool ok = true;
+    ok &= check_rect_equal(item_rect(surface), terminal_rect, terminal_message);
+    ok &= check_rect_equal(item_rect(scrollbar), scrollbar_rect, scrollbar_message);
+    return ok;
 }
 
 bool send_item_wheel_event(
@@ -412,14 +496,14 @@ bool test_custom_titlebar_geometry()
         "shared chrome root covers the window");
     ok &= check_rect_equal(item_rect(*titlebar.titlebar_item()), QRectF(0.0, 0.0, 800.0, 30.0),
         "shared titlebar occupies the top band");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_x").toReal(), 4.0),
-        "shared chrome records content border x");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_y").toReal(), 30.0),
-        "shared chrome records content border y");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 792.0),
-        "shared chrome records content border width");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_height").toReal(), 446.0),
-        "shared chrome records content border height");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_interior_x").toReal(), 5.0),
+        "shared frame shell exposes content interior x");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_interior_y").toReal(), 31.0),
+        "shared frame shell exposes content interior y");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_interior_width").toReal(), 790.0),
+        "shared frame shell exposes content interior width");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_interior_height").toReal(), 444.0),
+        "shared frame shell exposes content interior height");
 
     ok &= check(
         find_object_recursive(
@@ -446,23 +530,101 @@ bool test_custom_titlebar_geometry()
             titlebar.root_item(),
             QStringLiteral("terminal_chrome_window_frame_right")) == nullptr,
         "terminal chrome does not create an app-local right window frame strip");
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_content_border_top")) == nullptr,
+        "terminal chrome does not create an app-local top content border strip");
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_content_border_bottom")) == nullptr,
+        "terminal chrome does not create an app-local bottom content border strip");
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_content_border_left")) == nullptr,
+        "terminal chrome does not create an app-local left content border strip");
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_content_border_right")) == nullptr,
+        "terminal chrome does not create an app-local right content border strip");
+    ok &= check(
+        find_object_recursive(
+            titlebar.root_item(),
+            QStringLiteral("terminal_chrome_window_frame")) == nullptr,
+        "terminal chrome does not create an app-local shared window frame wrapper");
+
+    auto* frame_shell = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("terminal_chrome_frame_shell"));
+    ok &= check(frame_shell != nullptr, "terminal chrome creates the shared frame shell");
+    if (frame_shell != nullptr) {
+        ok &= check(nearly_equal(frame_shell->property("frame_outer_edge").toReal(), 1.0),
+            "frame shell uses a one-pixel outer edge");
+        ok &= check(nearly_equal(frame_shell->property("frame_gap").toReal(), 3.0),
+            "frame shell preserves the three-pixel frame gap");
+        ok &= check(nearly_equal(frame_shell->property("frame_inner_edge").toReal(), 1.0),
+            "frame shell uses a one-pixel inner edge");
+        ok &= check(nearly_equal(frame_shell->property("edge_resize_extent").toReal(), 4.0),
+            "frame shell keeps the resize hit area independent from visible edges");
+        ok &= check(frame_shell->property("resize_enabled").toBool(),
+            "frame shell starts with resize hit areas enabled");
+        ok &= check(
+            frame_shell->property("frame_color").value<QColor>() ==
+                chrome_test::terminal_chrome_background_color(true),
+            "frame shell uses the active terminal frame fill color");
+        ok &= check(
+            frame_shell->property("frame_inner_edge_color").value<QColor>() ==
+                chrome_test::terminal_chrome_frame_edge_color(true),
+            "frame shell uses the active terminal inner-edge color");
+        ok &= check_rect_equal(
+            frame_shell->property("content_interior_rect").toRectF(),
+            QRectF(5.0, 31.0, 790.0, 444.0),
+            "frame shell reports the terminal content interior");
+    }
+
+    auto* shell_left_resize_area = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("left_resize_area"));
+    auto* shell_top_left_resize_area = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("top_left_resize_area"));
+    auto* shell_bottom_resize_area = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("bottom_resize_area"));
+    ok &= check(shell_left_resize_area != nullptr,
+        "terminal shell creates a left resize area");
+    ok &= check(shell_top_left_resize_area != nullptr,
+        "terminal shell creates a top-left resize area");
+    ok &= check(shell_bottom_resize_area != nullptr,
+        "terminal shell creates a bottom resize area");
+    if (shell_left_resize_area != nullptr &&
+        shell_top_left_resize_area != nullptr &&
+        shell_bottom_resize_area != nullptr)
+    {
+        ok &= check(shell_left_resize_area->property("enabled").toBool(),
+            "terminal shell left resize area starts enabled");
+        ok &= check(shell_top_left_resize_area->property("enabled").toBool(),
+            "terminal shell top-left resize area starts enabled");
+        ok &= check(shell_bottom_resize_area->property("enabled").toBool(),
+            "terminal shell bottom resize area starts enabled");
+    }
 
     auto* window_frame = find_quick_item_recursive(
         titlebar.root_item(),
-        QStringLiteral("terminal_chrome_window_frame"));
-    ok &= check(window_frame != nullptr, "terminal chrome creates shared window frame overlay");
+        QStringLiteral("chrome_frame_shell_outer_frame"));
+    ok &= check(window_frame != nullptr, "frame shell creates shared window frame overlay");
     if (window_frame != nullptr) {
         ok &= check(nearly_equal(window_frame->property("frame_width").toReal(), 1.0),
-            "shared window frame uses the content border line width");
+            "shared window frame uses the outer edge thickness");
         ok &= check(
             window_frame->property("top_edge_visible").toBool() == false,
             "shared window frame delegates the top edge to the titlebar");
         ok &= check(
             window_frame->property("enabled").toBool() == false,
             "shared window frame overlay is non-interactive");
-        ok &= check(
-            window_frame->z() > titlebar.titlebar_item()->z(),
-            "shared window frame overlays the titlebar side and bottom edges");
     }
 
     auto* frame_top = window_frame == nullptr
@@ -512,8 +674,8 @@ bool test_custom_titlebar_geometry()
             "shared titlebar top window frame overlays the outer top edge");
         ok &= check(
             titlebar_frame_top->property("color").value<QColor>() ==
-                chrome_test::terminal_chrome_content_border_color(true),
-            "shared titlebar top window frame uses the content border color");
+                chrome_test::terminal_chrome_frame_edge_color(true),
+            "shared titlebar top window frame uses the frame edge color");
 
         auto* mark = find_quick_item_recursive(
             titlebar.titlebar_item(),
@@ -522,6 +684,58 @@ bool test_custom_titlebar_geometry()
             ok &= check(mark->parentItem()->z() > titlebar_frame_top->z(),
                 "titlebar top window frame is below the titlebar content layer");
         }
+    }
+
+    if (frame_shell != nullptr && titlebar_frame_top != nullptr) {
+        titlebar.set_active(false);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        ok &= check(
+            frame_shell->property("frame_color").value<QColor>() ==
+                chrome_test::terminal_chrome_background_color(false),
+            "frame shell uses the inactive terminal frame fill color");
+        ok &= check(
+            frame_shell->property("frame_outer_edge_color").value<QColor>() ==
+                chrome_test::terminal_chrome_frame_edge_color(false),
+            "frame shell uses the inactive terminal outer-edge color");
+        ok &= check(
+            frame_shell->property("frame_inner_edge_color").value<QColor>() ==
+                chrome_test::terminal_chrome_frame_edge_color(false),
+            "frame shell uses the inactive terminal inner-edge color");
+        ok &= check(
+            titlebar_frame_top->property("color").value<QColor>() ==
+                chrome_test::terminal_chrome_frame_edge_color(false),
+            "shared titlebar top window frame uses the inactive edge color");
+        titlebar.set_active(true);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    }
+
+    auto* inner_top = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("chrome_frame_shell_inner_edge_top"));
+    auto* inner_bottom = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("chrome_frame_shell_inner_edge_bottom"));
+    auto* inner_left = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("chrome_frame_shell_inner_edge_left"));
+    auto* inner_right = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("chrome_frame_shell_inner_edge_right"));
+    ok &= check(inner_top    != nullptr, "frame shell creates top inner edge");
+    ok &= check(inner_bottom != nullptr, "frame shell creates bottom inner edge");
+    ok &= check(inner_left   != nullptr, "frame shell creates left inner edge");
+    ok &= check(inner_right  != nullptr, "frame shell creates right inner edge");
+    if (inner_top != nullptr && inner_bottom != nullptr &&
+        inner_left != nullptr && inner_right != nullptr)
+    {
+        ok &= check_rect_equal(item_rect(*inner_top), QRectF(4.0, 30.0, 792.0, 1.0),
+            "frame shell top inner edge spans the content frame");
+        ok &= check_rect_equal(item_rect(*inner_bottom), QRectF(4.0, 475.0, 792.0, 1.0),
+            "frame shell bottom inner edge spans the content frame");
+        ok &= check_rect_equal(item_rect(*inner_left), QRectF(4.0, 30.0, 1.0, 446.0),
+            "frame shell left inner edge stays at x=4");
+        ok &= check_rect_equal(item_rect(*inner_right), QRectF(795.0, 30.0, 1.0, 446.0),
+            "frame shell right inner edge stays at the content boundary");
     }
 
     ok &= check_rect_equal(item_rect(surface), QRectF(5.0, 31.0, 778.0, 444.0),
@@ -547,43 +761,59 @@ bool test_custom_titlebar_geometry()
         "terminal bottom edge is inside resize border");
 
     constexpr qreal hidpi_dpr = 1.25;
-    const Terminal_shell_geometry hidpi_geometry = terminal_shell_geometry(
-        QSizeF(1920.0, 1080.0),
-        true,
-        true,
-        1.0 / hidpi_dpr,
-        hidpi_dpr);
+    QQmlEngine hidpi_engine;
+    QQuickWindow hidpi_window;
+    hidpi_window.resize(1920, 1080);
+    chrome_test::Terminal_qml_chrome hidpi_titlebar(hidpi_engine, hidpi_window);
+    VNM_TerminalSurface hidpi_surface(hidpi_window.contentItem());
+    chrome_test::Terminal_scrollbar hidpi_scrollbar(hidpi_window.contentItem());
+    ok &= check(hidpi_titlebar.is_valid(), "fractional-DPR shared frame shell initializes");
+    if (!hidpi_titlebar.is_valid()) {
+        std::cerr << hidpi_titlebar.error_string().toStdString() << '\n';
+        return ok;
+    }
+    ok &= check(
+        hidpi_titlebar.root_item()->setProperty("device_pixel_ratio", hidpi_dpr),
+        "fractional-DPR fixture overrides the shell device-pixel ratio");
+    apply_terminal_shell_geometry(
+        hidpi_window,
+        hidpi_surface,
+        hidpi_scrollbar,
+        &hidpi_titlebar,
+        true);
+
+    const QRectF hidpi_content_interior = hidpi_titlebar.content_interior_rect();
     ok &= check_rect_equal(
-        hidpi_geometry.content_border_rect,
-        QRectF(4.8, 30.4, 1910.4, 1044.8),
-        "custom titlebar content border snaps to physical pixels at fractional DPR");
+        hidpi_content_interior,
+        QRectF(5.6, 31.2, 1908.8, 1043.2),
+        "custom titlebar content interior comes from the shell at fractional DPR");
     ok &= check_rect_equal(
-        hidpi_geometry.terminal_rect,
+        item_rect(hidpi_surface),
         QRectF(5.6, 31.2, 1896.8, 1043.2),
         "custom titlebar terminal rect rounds to physical pixels at fractional DPR");
     ok &= check_rect_equal(
-        hidpi_geometry.scrollbar_rect,
+        item_rect(hidpi_scrollbar),
         QRectF(1902.4, 31.2, 12.0, 1043.2),
         "custom titlebar scrollbar rect rounds to physical pixels at fractional DPR");
     ok &= check(
         vnm_qml_chrome::rect_has_snapped_physical_edges(
-            hidpi_geometry.content_border_rect,
+            hidpi_content_interior,
             hidpi_dpr),
-        "custom titlebar content border edges are physical-pixel aligned");
+        "custom titlebar content interior edges are physical-pixel aligned");
     ok &= check(
         vnm_qml_chrome::rect_has_snapped_physical_edges(
-            hidpi_geometry.terminal_rect,
+            item_rect(hidpi_surface),
             hidpi_dpr),
         "custom titlebar terminal edges are physical-pixel aligned");
     ok &= check(
         vnm_qml_chrome::rect_has_snapped_physical_edges(
-            hidpi_geometry.scrollbar_rect,
+            item_rect(hidpi_scrollbar),
             hidpi_dpr),
         "custom titlebar scrollbar edges are physical-pixel aligned");
     ok &= check(
         nearly_equal(
-            hidpi_geometry.terminal_rect.right(),
-            hidpi_geometry.scrollbar_rect.left()),
+            hidpi_surface.x() + hidpi_surface.width(),
+            hidpi_scrollbar.x()),
         "custom titlebar fractional-DPR terminal and scrollbar remain adjacent");
 
     window.resize(360, 240);
@@ -598,37 +828,100 @@ bool test_custom_titlebar_geometry()
         "resized custom scrollbar remains inside the right frame");
 
     window.setWindowStates(Qt::WindowMaximized);
+    sync_chrome_window_state(titlebar, window);
     apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_x").toReal(), 0.0),
-        "maximized shared chrome drops inactive resize gutter x");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 360.0),
-        "maximized shared chrome drops inactive resize gutter width");
-    ok &= check_rect_equal(item_rect(surface), QRectF(1.0, 31.0, 346.0, 208.0),
-        "maximized custom terminal drops inactive resize border gutters");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(347.0, 31.0, 12.0, 208.0),
+    const QRectF maximized_content_interior = titlebar.content_interior_rect();
+    ok &= check_rect_equal(
+        maximized_content_interior,
+        expected_resize_disabled_content_interior_rect(titlebar),
+        "maximized shared frame shell drops inactive resize border gutters");
+    if (frame_shell != nullptr) {
+        ok &= check(nearly_equal(frame_shell->property("frame_gap").toReal(), 0.0),
+            "maximized shared frame shell collapses the resize-only frame gap");
+        ok &= check(!frame_shell->property("resize_enabled").toBool(),
+            "maximized shared frame shell disables resize hit areas");
+    }
+    if (shell_left_resize_area != nullptr &&
+        shell_top_left_resize_area != nullptr &&
+        shell_bottom_resize_area != nullptr)
+    {
+        ok &= check(!shell_left_resize_area->property("enabled").toBool(),
+            "maximized terminal shell left resize area is disabled");
+        ok &= check(!shell_top_left_resize_area->property("enabled").toBool(),
+            "maximized terminal shell top-left resize area is disabled");
+        ok &= check(!shell_bottom_resize_area->property("enabled").toBool(),
+            "maximized terminal shell bottom resize area is disabled");
+    }
+    ok &= check_content_split_geometry(
+        maximized_content_interior,
+        surface,
+        scrollbar,
+        "maximized custom terminal consumes the shell content interior",
         "maximized custom scrollbar remains inside content bounds");
+
+    window.setWindowStates(Qt::WindowFullScreen);
+    sync_chrome_window_state(titlebar, window);
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    ok &= check(titlebar.root_item()->property("fullscreen").toBool(),
+        "fullscreen shared frame shell tracks fullscreen state separately");
+    ok &= check(!titlebar.root_item()->property("resize_enabled").toBool(),
+        "fullscreen shared frame shell disables resize hit areas");
+    if (frame_shell != nullptr) {
+        ok &= check(nearly_equal(frame_shell->property("frame_outer_edge").toReal(), 0.0),
+            "fullscreen shared frame shell hides the outer frame edge");
+        ok &= check(nearly_equal(frame_shell->property("frame_gap").toReal(), 0.0),
+            "fullscreen shared frame shell removes the resize-only frame gap");
+        ok &= check(nearly_equal(frame_shell->property("frame_inner_edge").toReal(), 1.0),
+            "fullscreen shared frame shell preserves the inner content edge");
+        ok &= check(!frame_shell->property("resize_enabled").toBool(),
+            "fullscreen shared frame shell disables resize hit areas");
+    }
+    if (shell_left_resize_area != nullptr &&
+        shell_top_left_resize_area != nullptr &&
+        shell_bottom_resize_area != nullptr)
+    {
+        ok &= check(!shell_left_resize_area->property("enabled").toBool(),
+            "fullscreen terminal shell left resize area is disabled");
+        ok &= check(!shell_top_left_resize_area->property("enabled").toBool(),
+            "fullscreen terminal shell top-left resize area is disabled");
+        ok &= check(!shell_bottom_resize_area->property("enabled").toBool(),
+            "fullscreen terminal shell bottom resize area is disabled");
+    }
+    const QRectF fullscreen_content_interior = titlebar.content_interior_rect();
+    ok &= check_rect_equal(
+        fullscreen_content_interior,
+        expected_resize_disabled_content_interior_rect(titlebar),
+        "fullscreen shared frame shell uses the resize-disabled content interior");
+    ok &= check_content_split_geometry(
+        fullscreen_content_interior,
+        surface,
+        scrollbar,
+        "fullscreen custom terminal uses the shell content interior",
+        "fullscreen custom scrollbar remains inside shell content bounds");
+
     window.setWindowStates(Qt::WindowNoState);
+    sync_chrome_window_state(titlebar, window);
 
     window.resize(8, 40);
     apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_x").toReal(), 4.0),
-        "very narrow shared chrome clamps horizontal resize insets");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_width").toReal(), 0.0),
-        "very narrow shared chrome clamps content border width");
-    ok &= check_rect_equal(item_rect(surface), QRectF(4.0, 31.0, 0.0, 4.0),
-        "very narrow custom terminal clamps horizontal resize insets");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(4.0, 31.0, 0.0, 4.0),
-        "very narrow custom scrollbar clamps inside horizontal resize insets");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_interior_x").toReal(), 5.0),
+        "very narrow shared frame shell keeps the content interior at the shell inset");
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_interior_width").toReal(), 0.0),
+        "very narrow shared frame shell clamps content interior width");
+    ok &= check_rect_equal(item_rect(surface), QRectF(5.0, 31.0, 0.0, 4.0),
+        "very narrow custom terminal consumes the shell content interior");
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(5.0, 31.0, 0.0, 4.0),
+        "very narrow custom scrollbar clamps inside shell content bounds");
 
     window.resize(200, 20);
     apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
     ok &= check_rect_equal(item_rect(*titlebar.titlebar_item()), QRectF(0.0, 0.0, 200.0, 20.0),
         "very short custom titlebar clamps to window height");
-    ok &= check(nearly_equal(titlebar.root_item()->property("content_border_height").toReal(), 0.0),
-        "very short shared chrome clamps content border height");
-    ok &= check_rect_equal(item_rect(surface), QRectF(5.0, 20.0, 178.0, 0.0),
-        "very short custom terminal clamps nonnegative height");
-    ok &= check_rect_equal(item_rect(scrollbar), QRectF(183.0, 20.0, 12.0, 0.0),
+    ok &= check(nearly_equal(titlebar.root_item()->property("content_interior_height").toReal(), 0.0),
+        "very short shared frame shell clamps content interior height");
+    ok &= check_rect_equal(item_rect(surface), QRectF(5.0, 21.0, 178.0, 0.0),
+        "very short custom terminal consumes the shell content interior");
+    ok &= check_rect_equal(item_rect(scrollbar), QRectF(183.0, 21.0, 12.0, 0.0),
         "very short custom scrollbar clamps nonnegative height");
 
     window.resize(360, 240);
@@ -637,6 +930,162 @@ bool test_custom_titlebar_geometry()
         "native-decoration path reserves scrollbar gutter");
     ok &= check_rect_equal(item_rect(scrollbar), QRectF(348.0, 0.0, 12.0, 240.0),
         "native-decoration path positions scrollbar at right edge");
+
+    return ok;
+}
+
+bool test_terminal_chrome_native_outer_edge_pixels(QGuiApplication& app)
+{
+    if (QGuiApplication::platformName().compare(
+            QStringLiteral("offscreen"),
+            Qt::CaseInsensitive) == 0)
+    {
+        std::cout
+            << "SKIP: native outer-edge pixel coverage requires a real window platform\n";
+        return true;
+    }
+
+    const QColor expected_color = chrome_test::terminal_chrome_frame_edge_color(true);
+    const std::vector<QSize> render_sizes{
+        QSize(492, 418),
+        QSize(493, 419),
+        QSize(522, 392),
+        QSize(554, 488),
+        QSize(555, 489),
+    };
+
+    bool ok = true;
+    for (const QSize& render_size : render_sizes) {
+        QQmlEngine engine;
+        QQuickWindow window;
+        window.setFlags(window.flags() | Qt::FramelessWindowHint);
+        window.setColor(chrome_test::terminal_chrome_background_color(true));
+        window.setPosition(80, 80);
+        window.resize(render_size);
+
+        chrome_test::Terminal_qml_chrome titlebar(engine, window);
+        VNM_TerminalSurface surface(window.contentItem());
+        chrome_test::Terminal_scrollbar scrollbar(window.contentItem());
+        ok &= check(titlebar.is_valid(), "native pixel fixture creates terminal chrome");
+        if (!titlebar.is_valid()) {
+            std::cerr << titlebar.error_string().toStdString() << '\n';
+            return ok;
+        }
+
+        titlebar.set_active(true);
+        titlebar.set_maximized(false);
+        titlebar.set_fullscreen(false);
+        titlebar.set_resize_enabled(true);
+        titlebar.set_size(QSizeF(render_size));
+        apply_terminal_shell_geometry(
+            window,
+            surface,
+            scrollbar,
+            &titlebar,
+            true);
+        auto backend = std::make_unique<Metadata_seed_backend>(
+            QByteArrayLiteral("native outer edge pixel fixture\r\n"));
+        const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+            surface,
+            std::move(backend),
+            {QStringLiteral("native-outer-edge-pixel-fixture")});
+        term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+        ok &= check(started, "native pixel fixture seeds terminal surface content");
+
+        window.show();
+        window.raise();
+        window.requestActivate();
+        ok &= check(wait_for_exposed_window(app, window),
+            "native pixel fixture exposes the frameless window");
+        if (!window.isExposed()) {
+            window.close();
+            return ok;
+        }
+
+        const qreal device_pixel_ratio = window.devicePixelRatio();
+        if (nearly_equal(device_pixel_ratio, std::round(device_pixel_ratio))) {
+            std::cout
+                << "SKIP: native outer-edge pixel coverage requires fractional DPR; "
+                << "current DPR is " << device_pixel_ratio << '\n';
+            window.close();
+            pump_events(app);
+            return true;
+        }
+        ok &= check(
+            titlebar.root_item()->setProperty(
+                "device_pixel_ratio",
+                device_pixel_ratio),
+            "native pixel fixture uses the exposed window device-pixel ratio");
+        titlebar.set_size(QSizeF(render_size));
+        apply_terminal_shell_geometry(
+            window,
+            surface,
+            scrollbar,
+            &titlebar,
+            true);
+        pump_events(app);
+
+        QScreen* screen = window.screen();
+        ok &= check(screen != nullptr,
+            "native pixel fixture has a screen for visible pixel capture");
+        if (screen == nullptr) {
+            window.close();
+            return ok;
+        }
+
+        const QRect frame_geometry = window.frameGeometry();
+        const QImage image = screen->grabWindow(
+            0,
+            frame_geometry.x(),
+            frame_geometry.y(),
+            frame_geometry.width(),
+            frame_geometry.height()).toImage();
+        ok &= check(!image.isNull(), "native pixel fixture grabs desktop-composited window pixels");
+        if (image.isNull()) {
+            window.close();
+            return ok;
+        }
+        const int right_x = image.width() - 1;
+        const int bottom_y = image.height() - 1;
+        for (int y = 0; y < image.height(); ++y) {
+            const QColor actual_color = image.pixelColor(right_x, y);
+            if (!color_nearly_equal(actual_color, expected_color)) {
+                std::cerr
+                    << "FAIL: native terminal chrome right outer edge visible"
+                    << " size=(" << render_size.width() << ", "
+                    << render_size.height() << ")"
+                    << " image=(" << image.width() << ", "
+                    << image.height() << ")"
+                    << " dpr=" << device_pixel_ratio
+                    << " pixel=(" << right_x << ", " << y << ")"
+                    << " expected=" << color_string(expected_color)
+                    << " actual=" << color_string(actual_color) << '\n';
+                ok = false;
+                break;
+            }
+        }
+
+        for (int x = 0; x < image.width(); ++x) {
+            const QColor actual_color = image.pixelColor(x, bottom_y);
+            if (!color_nearly_equal(actual_color, expected_color)) {
+                std::cerr
+                    << "FAIL: native terminal chrome bottom outer edge visible"
+                    << " size=(" << render_size.width() << ", "
+                    << render_size.height() << ")"
+                    << " image=(" << image.width() << ", "
+                    << image.height() << ")"
+                    << " dpr=" << device_pixel_ratio
+                    << " pixel=(" << x << ", " << bottom_y << ")"
+                    << " expected=" << color_string(expected_color)
+                    << " actual=" << color_string(actual_color) << '\n';
+                ok = false;
+                break;
+            }
+        }
+
+        window.close();
+        pump_events(app);
+    }
 
     return ok;
 }
@@ -1191,6 +1640,73 @@ bool test_parse_titlebar_options()
 #else
     ok &= check(!native_result.error.isEmpty(),
         "native-titlebar option is rejected on unvalidated platforms");
+#endif
+    return ok;
+}
+
+bool test_window_chrome_setup_honors_titlebar_mode()
+{
+    bool ok = true;
+    App_options native_options;
+    native_options.custom_titlebar = false;
+    native_options.window_size = QSize(321, 234);
+
+    QQmlEngine native_engine;
+    QQuickWindow native_window;
+    Terminal_window_chrome_setup native_setup =
+        setup_terminal_window_chrome(
+            native_engine,
+            native_window,
+            QIcon(),
+            native_options);
+    ok &= check(native_setup.error.isEmpty(),
+        "native-titlebar window chrome setup succeeds");
+    ok &= check(native_setup.titlebar == nullptr,
+        "native-titlebar mode skips Terminal_qml_chrome construction");
+    ok &= check(
+        find_object_recursive(
+            native_window.contentItem(),
+            QStringLiteral("terminal_qml_chrome_root")) == nullptr,
+        "native-titlebar mode leaves no terminal QML chrome root");
+    ok &= check(!native_window.flags().testFlag(Qt::FramelessWindowHint),
+        "native-titlebar mode keeps native window decorations");
+    ok &= check(native_window.color() == QColor(9, 12, 16),
+        "native-titlebar mode keeps the native window background color");
+    ok &= check(native_window.size() == native_options.window_size,
+        "window chrome setup applies the requested window size");
+
+#if defined(_WIN32) || defined(__linux__)
+    App_options custom_options;
+    custom_options.custom_titlebar = true;
+    custom_options.window_size = QSize(345, 210);
+
+    QQmlEngine custom_engine;
+    QQuickWindow custom_window;
+    Terminal_window_chrome_setup custom_setup =
+        setup_terminal_window_chrome(
+            custom_engine,
+            custom_window,
+            QIcon(),
+            custom_options);
+    ok &= check(custom_setup.error.isEmpty(),
+        "custom-titlebar window chrome setup succeeds");
+    ok &= check(custom_setup.titlebar != nullptr,
+        "custom-titlebar mode constructs Terminal_qml_chrome");
+    if (custom_setup.titlebar != nullptr) {
+        ok &= check(custom_setup.titlebar->is_valid(),
+            "custom-titlebar mode creates valid QML chrome");
+        ok &= check(
+            find_object_recursive(
+                custom_window.contentItem(),
+                QStringLiteral("terminal_qml_chrome_root")) != nullptr,
+            "custom-titlebar mode adds the terminal QML chrome root");
+    }
+    ok &= check(custom_window.flags().testFlag(Qt::FramelessWindowHint),
+        "custom-titlebar mode enables frameless window decorations");
+    ok &= check(
+        custom_window.color() ==
+            chrome_test::terminal_chrome_background_color(custom_window.isActive()),
+        "custom-titlebar mode uses the terminal chrome background color");
 #endif
     return ok;
 }
@@ -2347,9 +2863,16 @@ bool test_window_state_sync()
         signal_window.color() ==
             chrome_test::terminal_chrome_background_color(signal_window.isActive()),
         "windowStateChanged connection synchronizes custom window border color");
-    ok &= check_rect_equal(item_rect(signal_surface), QRectF(1.0, 31.0, 346.0, 208.0),
-        "windowStateChanged connection reapplies maximized geometry");
-    ok &= check_rect_equal(item_rect(signal_scrollbar), QRectF(347.0, 31.0, 12.0, 208.0),
+    const QRectF signal_maximized_content_interior = signal_titlebar.content_interior_rect();
+    ok &= check_rect_equal(
+        signal_maximized_content_interior,
+        expected_resize_disabled_content_interior_rect(signal_titlebar),
+        "windowStateChanged connection reapplies maximized shell geometry");
+    ok &= check_content_split_geometry(
+        signal_maximized_content_interior,
+        signal_surface,
+        signal_scrollbar,
+        "windowStateChanged connection reapplies maximized terminal geometry",
         "windowStateChanged connection reapplies maximized scrollbar geometry");
 
     return ok;
@@ -2880,6 +3403,11 @@ bool test_renderer_mode_enum_assignment_from_qml(QGuiApplication& app)
 int main(int argc, char** argv)
 {
     QGuiApplication app(argc, argv);
+    if (QCoreApplication::arguments().contains(
+            QStringLiteral("--native-outer-edge-pixels")))
+    {
+        return test_terminal_chrome_native_outer_edge_pixels(app) ? 0 : 1;
+    }
 
     bool ok = true;
     ok &= test_custom_titlebar_geometry();
@@ -2887,6 +3415,7 @@ int main(int argc, char** argv)
     ok &= test_terminal_scrollbar_immediate_public_projection_routes(app);
     ok &= test_title_sync_and_button_rect_offsets(app);
     ok &= test_parse_titlebar_options();
+    ok &= test_window_chrome_setup_honors_titlebar_mode();
     ok &= test_parse_selection_trace_option();
     ok &= test_parse_wheel_trace_option();
     ok &= test_parse_synchronized_output_scroll_policy_option();

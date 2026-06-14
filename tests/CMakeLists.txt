@@ -90,6 +90,32 @@ set_tests_properties(vnm_terminal_title_metadata PROPERTIES
     TIMEOUT 30
 )
 
+add_executable(vnm_terminal_app_presentation_metrics
+    terminal_app/app_presentation_metrics_tests.cpp
+    "${PROJECT_SOURCE_DIR}/src/app_presentation_metrics.cpp"
+)
+
+target_link_libraries(vnm_terminal_app_presentation_metrics PRIVATE
+    Qt6::Core
+    Qt6::Quick
+)
+
+set_target_properties(vnm_terminal_app_presentation_metrics PROPERTIES
+    AUTOMOC OFF
+)
+
+add_test(
+    NAME vnm_terminal_app_presentation_metrics
+    COMMAND
+        "${CMAKE_COMMAND}" -E env
+        "${vnm_terminal_qt_runtime_path}"
+        "$<TARGET_FILE:vnm_terminal_app_presentation_metrics>"
+)
+
+set_tests_properties(vnm_terminal_app_presentation_metrics PROPERTIES
+    TIMEOUT 30
+)
+
 add_executable(vnm_terminal_custom_titlebar_integration
     terminal_app/custom_titlebar_integration_tests.cpp
     "${PROJECT_SOURCE_DIR}/src/app_cli.cpp"
@@ -98,6 +124,7 @@ add_executable(vnm_terminal_custom_titlebar_integration
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_presentation_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_profile_text.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_settings.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_shortcuts.cpp"
@@ -149,6 +176,7 @@ add_executable(vnm_terminal_app_persistence
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_presentation_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_profile_text.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_settings.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_shortcuts.cpp"
@@ -1080,6 +1108,7 @@ set_tests_properties(vnm_terminal_rejects_distribution_transcript_build PROPERTI
 
 set(vnm_terminal_test_process_targets
     vnm_terminal_title_metadata
+    vnm_terminal_app_presentation_metrics
     vnm_terminal_custom_titlebar_integration
     vnm_terminal_app_persistence
 )

@@ -25,10 +25,9 @@ constexpr int   k_text_area_resize_max_columns = 512;
 
 QString default_window_title();
 
-struct Terminal_shell_geometry
+struct Terminal_content_geometry
 {
-    QRectF             chrome_rect;
-    QRectF             content_border_rect;
+    QRectF             content_interior_rect;
     QRectF             terminal_rect;
     QRectF             scrollbar_rect;
 };
@@ -52,30 +51,16 @@ void install_wheel_delivery_indicator_filter(
     bool                             enabled);
 
 void split_terminal_area(
-    Terminal_shell_geometry& geometry,
+    Terminal_content_geometry& geometry,
     const QRectF&            area);
 
-void snap_terminal_shell_geometry(
-    Terminal_shell_geometry& geometry,
+void snap_terminal_content_geometry(
+    Terminal_content_geometry& geometry,
     qreal                    device_pixel_ratio);
 
-qreal reduced_chrome_span(
-    qreal logical_span,
-    qreal physical_reduction,
-    qreal device_pixel_ratio);
-
-qreal reduced_frameless_resize_border_width(qreal device_pixel_ratio);
-
-qreal reduced_custom_titlebar_height(qreal device_pixel_ratio);
-
-Terminal_shell_geometry terminal_shell_geometry(
-    const QSizeF&  window_size,
-    bool           custom_titlebar,
-    bool           resize_border_active = true,
-    qreal          content_border_width = 0.0,
-    qreal          device_pixel_ratio   = 1.0);
-
-qreal logical_device_pixel_width(const QQuickWindow& window);
+Terminal_content_geometry terminal_content_geometry(
+    const QRectF& content_interior_rect,
+    qreal         device_pixel_ratio);
 
 bool custom_titlebar_resize_border_active(const QQuickWindow& window);
 

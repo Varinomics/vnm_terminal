@@ -120,25 +120,27 @@ under `artifacts/<tag>/per_run_metrics/`, and writes
 `canonical_atlas_cmdg_gate.json` plus a Markdown summary under
 `artifacts/<tag>/`.
 
-The gate treats terminal `renderer_frame_evidence.frames_per_second`, CMDG
-`draw_frames_per_second`, and CMDG `scene_frames_per_second` as evidence fields.
-The terminal evidence records the counter it used, either
-`renderer.paint_completed_frames` or canonical atlas `qsg_atlas.render_count`.
-The pass/fail checks require zero backend errors/timeouts, positive renderer
-frame evidence above the absolute renderer-FPS floor, canonical atlas metrics to
-be present, positive atlas budget counters, and zero atlas failed inserts. The
-per-run records include producer-sourced `qsg_atlas.producer` counters for shaped
-work built versus reused; the legacy `renderer.text_content_*` counters are not
-atlas reuse evidence. When `-ArchivedBaselineComparisonJson`
-is supplied, the gate also requires at least a 25% median terminal renderer
-frame FPS improvement for the motivating scenes (`Plasma` and `ParticleVortex`)
-and no more than a 5% median regression across CMDG draw FPS and CMDG scene FPS
-for every archived-comparison scene. Terminal paint FPS remains reported for
-diagnostics, but it is not the canonical atlas frame-evidence counter when atlas
-render frames are available. The archived per-run records also preserve renderer
-frame time, first-output startup latency, terminal app elapsed time, atlas
-memory, glyph misses, page pressure, visible first-frame completion evidence,
-and cold-glyph/frame-impact proxy counters such as rasterized glyphs and
+The gate treats terminal Qt frameSwapped proxy FPS
+(`presentation.primary_frames_per_second`), CMDG `draw_frames_per_second`, and
+CMDG `scene_frames_per_second` as evidence fields. The terminal evidence records
+`presentation.frameSwapped.count` with
+`primary_counter_source=QQuickWindow::frameSwapped`,
+`primary_counter_semantics=qt_frame_swapped_proxy`, and
+`scanout_verified=false`. The pass/fail checks require zero backend
+errors/timeouts, positive terminal frame proxy evidence above the absolute FPS
+floor, canonical atlas metrics to be present, positive atlas budget counters,
+and zero atlas failed inserts. The per-run records include producer-sourced
+`qsg_atlas.producer` counters for shaped work built versus reused; the legacy
+`renderer.text_content_*` counters are not atlas reuse evidence. When
+`-ArchivedBaselineComparisonJson` is supplied, the gate also requires at least a
+25% median terminal frame proxy FPS improvement for the motivating scenes
+(`Plasma` and `ParticleVortex`) and no more than a 5% median regression across
+CMDG draw FPS and CMDG scene FPS for every archived-comparison scene. Terminal
+paint FPS remains reported for diagnostics, but it is not the terminal frame
+proxy evidence. The archived per-run records also preserve renderer frame time,
+first-output startup latency, terminal app elapsed time, atlas memory, glyph
+misses, page pressure, visible first-frame completion evidence, and
+cold-glyph/frame-impact proxy counters such as rasterized glyphs and
 glyph-buffer upload counts.
 
 By default the runner builds `THIRD_PARTY/CMDG/CMDG/CMDG.csproj` in Release
@@ -152,9 +154,40 @@ The default suite is a small autonomous scene mix:
 defaults because they depend on pre-existing console content or scene-specific
 assumptions.
 
-The canonical gate defaults to three repeats, 300 CMDG scene frames per repeat,
-the full scene list above, `1920x1080`, font size `10`, visible windowed
-rendering, and D3D11 RHI through the script environment.
+The canonical gate defaults to three repeats, the full scene list above, the
+frame limit selected by `-FrameLimit` /
+`VNM_TERMINAL_CMDG_NELOSTIE_FRAMES`, `1920x1080`, font size `10`, visible
+windowed rendering, and D3D11 RHI through the script environment.
+
+### Exact high-resolution scratch scenario
+
+The canonical atlas gate is not the AssemblyWinter2025 scratch block-only
+benchmark. For that exact scenario, use a direct CMake/CTest run with the
+scratch CMDG executable or working tree that is configured for a `620x150`
+block-only framebuffer:
+
+```powershell
+cmake -S C:\plms\varinomics\vnm_terminal `
+  -B C:\plms\varinomics\vnm_terminal\build_cmdg_aw2025_scratch_620x150 `
+  -G Ninja `
+  -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_PREFIX_PATH=C:\Qt\6.10.1\msvc2022_64 `
+  -DVNM_TERMINAL_ENABLE_PROFILING=OFF `
+  -DVNM_TERMINAL_APP_BUILD_BENCHMARKS=ON `
+  -DVNM_TERMINAL_CMDG_ARTIFACT_TAG=aw2025_scratch_620x150_block_3000 `
+  -DVNM_TERMINAL_CMDG_SCENES=AssemblyWinter2025 `
+  -DVNM_TERMINAL_CMDG_REPEAT_COUNT=1 `
+  -DVNM_TERMINAL_CMDG_NELOSTIE_FRAMES=3000 `
+  -DVNM_TERMINAL_CMDG_NELOSTIE_WINDOW_SIZE=3840x2160 `
+  -DVNM_TERMINAL_CMDG_NELOSTIE_FONT_SIZE=10 `
+  -DVNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN=OFF `
+  -DVNM_TERMINAL_CMDG_NELOSTIE_HIDE_CURSOR=ON `
+  -DVNM_TERMINAL_CMDG_NELOSTIE_EXE=<scratch-CMDG.exe> `
+  -DVNM_TERMINAL_CMDG_NELOSTIE_WORKING_DIR=<scratch-CMDG-dir>
+
+ctest --test-dir C:\plms\varinomics\vnm_terminal\build_cmdg_aw2025_scratch_620x150 `
+  -R vnm_terminal_cmdg_nelostie_benchmark --output-on-failure
+```
 
 The default benchmark window is `1920x1080` with font size `10`. Keep that
 font size unless the window size is adjusted to preserve at least the CMDG
