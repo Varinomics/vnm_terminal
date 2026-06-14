@@ -72,6 +72,21 @@ function(vnm_terminal_expect_json_number json_text source_path)
     endif()
 endfunction()
 
+function(vnm_terminal_expect_presentation_signal json_text source_path signal_name)
+    vnm_terminal_expect_json_counter(
+        "${json_text}"
+        "${source_path}"
+        presentation ${signal_name} count)
+    vnm_terminal_expect_json_counter(
+        "${json_text}"
+        "${source_path}"
+        presentation ${signal_name} last_interval_ns)
+    vnm_terminal_expect_json_counter(
+        "${json_text}"
+        "${source_path}"
+        presentation ${signal_name} max_interval_ns)
+endfunction()
+
 function(vnm_terminal_expect_renderer_frame_evidence json_text source_path)
     vnm_terminal_read_json_field(evidence_counter_path
         "${json_text}" "${source_path}" renderer_frame_evidence counter_path)
@@ -269,6 +284,107 @@ if(NOT fps_elapsed_basis STREQUAL
     "app_exec_elapsed_ms_including_process_startup_excluding_profile_write")
     message(FATAL_ERROR "unexpected paint_frames_per_second_elapsed_basis")
 endif()
+
+vnm_terminal_read_json_field(presentation_primary_counter_path
+    "${metrics_text}" "${metrics_path}" presentation primary_counter_path)
+if(NOT presentation_primary_counter_path STREQUAL "presentation.frameSwapped.count")
+    message(FATAL_ERROR
+        "unexpected presentation.primary_counter_path: "
+        "${presentation_primary_counter_path}")
+endif()
+vnm_terminal_read_json_field(presentation_primary_counter_source
+    "${metrics_text}" "${metrics_path}" presentation primary_counter_source)
+if(NOT presentation_primary_counter_source STREQUAL "QQuickWindow::frameSwapped")
+    message(FATAL_ERROR
+        "unexpected presentation.primary_counter_source: "
+        "${presentation_primary_counter_source}")
+endif()
+vnm_terminal_read_json_field(presentation_primary_counter_semantics
+    "${metrics_text}" "${metrics_path}" presentation primary_counter_semantics)
+if(NOT presentation_primary_counter_semantics STREQUAL "qt_frame_swapped_proxy")
+    message(FATAL_ERROR
+        "unexpected presentation.primary_counter_semantics: "
+        "${presentation_primary_counter_semantics}")
+endif()
+vnm_terminal_read_json_field(presentation_scanout_verified
+    "${metrics_text}" "${metrics_path}" presentation scanout_verified)
+if(presentation_scanout_verified)
+    message(FATAL_ERROR "presentation.scanout_verified should be false")
+endif()
+vnm_terminal_expect_json_counter(
+    "${metrics_text}"
+    "${metrics_path}"
+    presentation primary_frame_count)
+vnm_terminal_expect_json_number(
+    "${metrics_text}"
+    "${metrics_path}"
+    presentation primary_frames_per_second)
+vnm_terminal_read_json_field(presentation_elapsed_basis
+    "${metrics_text}" "${metrics_path}" presentation elapsed_basis)
+if(NOT presentation_elapsed_basis STREQUAL
+    "app_exec_elapsed_ms_including_process_startup_excluding_profile_write")
+    message(FATAL_ERROR "unexpected presentation.elapsed_basis")
+endif()
+foreach(presentation_signal IN ITEMS
+    frameSwapped
+    beforeFrameBegin
+    beforeSynchronizing
+    afterSynchronizing
+    beforeRendering
+    afterRendering
+    beforeRenderPassRecording
+    afterRenderPassRecording
+    afterFrameEnd)
+    vnm_terminal_expect_presentation_signal(
+        "${metrics_text}"
+        "${metrics_path}"
+        ${presentation_signal})
+endforeach()
+
+foreach(render_invalidation_counter IN ITEMS
+    update_requests
+    scheduled_updates
+    coalesced_requests
+    consumed_updates
+    last_rendered_snapshot_sequence)
+    vnm_terminal_expect_json_counter(
+        "${metrics_text}"
+        "${metrics_path}"
+        render_invalidation ${render_invalidation_counter})
+endforeach()
+vnm_terminal_expect_json_boolean(
+    "${metrics_text}"
+    "${metrics_path}"
+    render_invalidation pending_update)
+
+foreach(backend_drain_counter IN ITEMS
+    total_drain_calls
+    budgeted_drain_calls
+    unbudgeted_drain_calls
+    posted_drain_calls
+    posted_full_budget_calls
+    posted_frame_pending_small_budget_calls
+    budget_exhausted_incomplete
+    total_elapsed_ns
+    max_elapsed_ns
+    session_processing_calls
+    session_processing_elapsed_ns
+    session_processing_max_elapsed_ns
+    sync_from_session_calls
+    sync_from_session_elapsed_ns
+    sync_from_session_max_elapsed_ns
+    frame_work_pending_drain_calls
+    frame_work_pending_elapsed_ns
+    render_update_pending_drain_calls
+    atlas_completion_pending_drain_calls
+    requeue_count
+    pending_callback_after_drain
+    output_backpressure_after_drain)
+    vnm_terminal_expect_json_counter(
+        "${metrics_text}"
+        "${metrics_path}"
+        backend_drain ${backend_drain_counter})
+endforeach()
 
 vnm_terminal_read_json_field(font_size
     "${metrics_text}" "${metrics_path}" surface_geometry font_size)

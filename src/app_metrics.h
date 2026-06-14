@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_common.h"
+#include "app_presentation_metrics.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
@@ -25,6 +26,8 @@ public:
     bool write_sample(
         Metrics_timeline_sample_kind kind,
         const VNM_TerminalSurface&   surface,
+        const Presentation_metrics_recorder&
+                                     presentation_metrics,
         const Runtime_state&         state,
         const metrics_timing_t&      timing,
         std::optional<int>           app_result,
@@ -39,6 +42,8 @@ private:
 bool write_metrics_json(
     const QString&              path,
     const VNM_TerminalSurface&  surface,
+    const Presentation_metrics_recorder&
+                                presentation_metrics,
     const Runtime_state&        state,
     const metrics_timing_t&     timing,
     int                         app_result,

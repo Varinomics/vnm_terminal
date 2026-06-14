@@ -13,6 +13,7 @@
 #include <QQuickWindow>
 #include <QString>
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 
@@ -40,6 +41,12 @@ constexpr const char* k_paint_completed_frame_counter_path =
     "renderer.paint_completed_frames";
 constexpr const char* k_qsg_atlas_render_frame_counter_path =
     "qsg_atlas.render_count";
+constexpr const char* k_presentation_frame_swapped_counter_path =
+    "presentation.frameSwapped.count";
+constexpr const char* k_presentation_frame_swapped_counter_source =
+    "QQuickWindow::frameSwapped";
+constexpr const char* k_presentation_frame_swapped_counter_semantics =
+    "qt_frame_swapped_proxy";
 
 struct renderer_frame_evidence_t
 {
@@ -128,6 +135,57 @@ QJsonObject profiling_measurement_json(const metrics_timing_t& timing)
     return object;
 }
 
+QJsonObject presentation_signal_metrics_json(
+    const presentation_signal_metrics_t& metrics)
+{
+    QJsonObject object;
+    insert_json_counter(object, "count", metrics.count);
+    insert_json_counter(object, "last_interval_ns", metrics.last_interval_ns);
+    insert_json_counter(object, "max_interval_ns", metrics.max_interval_ns);
+    return object;
+}
+
+QJsonObject presentation_metrics_json(
+    const Presentation_metrics_recorder&  recorder,
+    qint64                                elapsed_ms)
+{
+    const presentation_metrics_snapshot_t snapshot = recorder.snapshot();
+    const presentation_signal_metrics_t& frame_swapped =
+        snapshot.stages[static_cast<std::size_t>(Presentation_signal::FRAME_SWAPPED)];
+
+    QJsonObject object;
+    object.insert(
+        QStringLiteral("primary_counter_path"),
+        QString::fromLatin1(k_presentation_frame_swapped_counter_path));
+    object.insert(
+        QStringLiteral("primary_counter_source"),
+        QString::fromLatin1(k_presentation_frame_swapped_counter_source));
+    object.insert(
+        QStringLiteral("primary_counter_semantics"),
+        QString::fromLatin1(k_presentation_frame_swapped_counter_semantics));
+    object.insert(QStringLiteral("scanout_verified"), false);
+    insert_json_counter(object, "primary_frame_count", frame_swapped.count);
+    object.insert(
+        QStringLiteral("primary_frames_per_second"),
+        frames_per_second(frame_swapped.count, elapsed_ms));
+    object.insert(
+        QStringLiteral("elapsed_basis"),
+        QString::fromLatin1(k_runtime_frame_rate_elapsed_basis));
+
+    for (std::size_t index = 0U; index < snapshot.stages.size(); ++index) {
+        const auto signal = static_cast<Presentation_signal>(index);
+        if (!presentation_signal_available(signal)) {
+            continue;
+        }
+
+        object.insert(
+            QString::fromLatin1(presentation_signal_json_key(signal)),
+            presentation_signal_metrics_json(snapshot.stages[index]));
+    }
+
+    return object;
+}
+
 QJsonObject surface_geometry_json(const VNM_TerminalSurface& surface)
 {
     QJsonObject object;
@@ -149,6 +207,8 @@ QJsonObject surface_geometry_json(const VNM_TerminalSurface& surface)
 
 QJsonObject terminal_metrics_json(
     const VNM_TerminalSurface&  surface,
+    const Presentation_metrics_recorder&
+                                presentation_metrics,
     const Runtime_state&        state,
     const metrics_timing_t&     timing,
     std::optional<int>          app_result)
@@ -165,6 +225,14 @@ QJsonObject terminal_metrics_json(
 
     QJsonObject qsg_atlas;
     vnm_terminal::diagnostics::append_atlas_metrics_json(surface, qsg_atlas);
+
+    QJsonObject render_invalidation;
+    vnm_terminal::diagnostics::append_render_invalidation_metrics_json(
+        surface,
+        render_invalidation);
+
+    QJsonObject backend_drain;
+    vnm_terminal::diagnostics::append_backend_drain_metrics_json(surface, backend_drain);
 
     QJsonObject root;
     root.insert(QStringLiteral("schema"), QString::fromLatin1(k_runtime_metrics_schema));
@@ -191,7 +259,12 @@ QJsonObject terminal_metrics_json(
         QStringLiteral("startup"),
         startup_metrics_json(state, frame_evidence));
     root.insert(QStringLiteral("profiling"), profiling_measurement_json(timing));
+    root.insert(
+        QStringLiteral("presentation"),
+        presentation_metrics_json(presentation_metrics, timing.app_elapsed_ms));
     root.insert(QStringLiteral("surface_geometry"), surface_geometry_json(surface));
+    root.insert(QStringLiteral("render_invalidation"), render_invalidation);
+    root.insert(QStringLiteral("backend_drain"), backend_drain);
     root.insert(QStringLiteral("renderer"), renderer);
     root.insert(QStringLiteral("qsg_atlas"), qsg_atlas);
 
@@ -202,6 +275,8 @@ QJsonObject metrics_timeline_sample_json(
     Metrics_timeline_sample_kind kind,
     int                          sample_index,
     const VNM_TerminalSurface&   surface,
+    const Presentation_metrics_recorder&
+                                 presentation_metrics,
     const Runtime_state&         state,
     const metrics_timing_t&      timing,
     std::optional<int>           app_result,
@@ -220,6 +295,7 @@ QJsonObject metrics_timeline_sample_json(
         QStringLiteral("runtime_metrics"),
         terminal_metrics_json(
             surface,
+            presentation_metrics,
             state,
             timing,
             app_result));
@@ -244,6 +320,8 @@ bool Metrics_timeline_jsonl_writer::open(const QString& path, QString* out_error
 bool Metrics_timeline_jsonl_writer::write_sample(
     Metrics_timeline_sample_kind kind,
     const VNM_TerminalSurface&   surface,
+    const Presentation_metrics_recorder&
+                                 presentation_metrics,
     const Runtime_state&         state,
     const metrics_timing_t&      timing,
     std::optional<int>           app_result,
@@ -255,6 +333,7 @@ bool Metrics_timeline_jsonl_writer::write_sample(
             kind,
             m_sample_index,
             surface,
+            presentation_metrics,
             state,
             timing,
             app_result,
@@ -282,6 +361,8 @@ bool Metrics_timeline_jsonl_writer::write_sample(
 bool write_metrics_json(
     const QString&              path,
     const VNM_TerminalSurface&  surface,
+    const Presentation_metrics_recorder&
+                                presentation_metrics,
     const Runtime_state&        state,
     const metrics_timing_t&     timing,
     int                         app_result,
@@ -297,6 +378,7 @@ bool write_metrics_json(
     const QByteArray json = QJsonDocument(
         terminal_metrics_json(
             surface,
+            presentation_metrics,
             state,
             timing,
             app_result))

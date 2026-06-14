@@ -42,6 +42,17 @@ function(vnm_terminal_read_json_type out_value json_text source_path)
     set(${out_value} "${value}" PARENT_SCOPE)
 endfunction()
 
+function(vnm_terminal_expect_json_counter json_text source_path)
+    set(json_path ${ARGN})
+    vnm_terminal_read_json_field(counter_value "${json_text}" "${source_path}" ${json_path})
+    if(NOT counter_value MATCHES "^[0-9]+$")
+        list(JOIN json_path "." json_path_text)
+        message(FATAL_ERROR
+            "${source_path} JSON field '${json_path_text}' should be an integer counter, "
+            "got ${counter_value}")
+    endif()
+endfunction()
+
 set(separator_index -1)
 math(EXPR last_index "${CMAKE_ARGC} - 1")
 foreach(index RANGE 0 ${last_index})
@@ -137,6 +148,78 @@ foreach(sample_index RANGE 0 ${timeline_last_index})
     if(NOT renderer_type STREQUAL "OBJECT")
         message(FATAL_ERROR "runtime_metrics.renderer should be an object")
     endif()
+
+    vnm_terminal_read_json_type(presentation_type
+        "${sample_text}" "${timeline_path}" runtime_metrics presentation)
+    if(NOT presentation_type STREQUAL "OBJECT")
+        message(FATAL_ERROR "runtime_metrics.presentation should be an object")
+    endif()
+    vnm_terminal_read_json_field(presentation_primary_counter_path
+        "${sample_text}" "${timeline_path}"
+        runtime_metrics presentation primary_counter_path)
+    if(NOT presentation_primary_counter_path STREQUAL "presentation.frameSwapped.count")
+        message(FATAL_ERROR
+            "unexpected runtime_metrics.presentation.primary_counter_path: "
+            "${presentation_primary_counter_path}")
+    endif()
+    vnm_terminal_read_json_field(presentation_primary_counter_source
+        "${sample_text}" "${timeline_path}"
+        runtime_metrics presentation primary_counter_source)
+    if(NOT presentation_primary_counter_source STREQUAL "QQuickWindow::frameSwapped")
+        message(FATAL_ERROR
+            "unexpected runtime_metrics.presentation.primary_counter_source: "
+            "${presentation_primary_counter_source}")
+    endif()
+    vnm_terminal_read_json_field(presentation_primary_counter_semantics
+        "${sample_text}" "${timeline_path}"
+        runtime_metrics presentation primary_counter_semantics)
+    if(NOT presentation_primary_counter_semantics STREQUAL "qt_frame_swapped_proxy")
+        message(FATAL_ERROR
+            "unexpected runtime_metrics.presentation.primary_counter_semantics: "
+            "${presentation_primary_counter_semantics}")
+    endif()
+    vnm_terminal_read_json_field(presentation_scanout_verified
+        "${sample_text}" "${timeline_path}"
+        runtime_metrics presentation scanout_verified)
+    if(presentation_scanout_verified)
+        message(FATAL_ERROR "runtime_metrics.presentation.scanout_verified should be false")
+    endif()
+    vnm_terminal_expect_json_counter(
+        "${sample_text}"
+        "${timeline_path}"
+        runtime_metrics presentation frameSwapped count)
+    vnm_terminal_expect_json_counter(
+        "${sample_text}"
+        "${timeline_path}"
+        runtime_metrics render_invalidation update_requests)
+    foreach(backend_drain_counter IN ITEMS
+        total_drain_calls
+        budgeted_drain_calls
+        unbudgeted_drain_calls
+        posted_drain_calls
+        posted_full_budget_calls
+        posted_frame_pending_small_budget_calls
+        budget_exhausted_incomplete
+        total_elapsed_ns
+        max_elapsed_ns
+        session_processing_calls
+        session_processing_elapsed_ns
+        session_processing_max_elapsed_ns
+        sync_from_session_calls
+        sync_from_session_elapsed_ns
+        sync_from_session_max_elapsed_ns
+        frame_work_pending_drain_calls
+        frame_work_pending_elapsed_ns
+        render_update_pending_drain_calls
+        atlas_completion_pending_drain_calls
+        requeue_count
+        pending_callback_after_drain
+        output_backpressure_after_drain)
+        vnm_terminal_expect_json_counter(
+            "${sample_text}"
+            "${timeline_path}"
+            runtime_metrics backend_drain ${backend_drain_counter})
+    endforeach()
 
     vnm_terminal_read_json_field(sample_kind
         "${sample_text}" "${timeline_path}" kind)

@@ -37,6 +37,7 @@
 #include <QQmlEngine>
 #include <QQuickWindow>
 #include <QRect>
+#include <QScreen>
 #include <QSettings>
 #include <QSize>
 #include <QString>
@@ -71,6 +72,7 @@ using chrome::apply_scrollback_limit_option;
 using chrome::apply_synchronized_output_scroll_policy_option;
 using chrome::apply_terminal_shell_geometry;
 using chrome::clipboard_broker_mode_requested;
+using chrome::connect_presentation_metrics_recorder;
 using chrome::connect_row_timestamp_tooltip_to_chrome;
 using chrome::connect_terminal_metadata_to_chrome;
 using chrome::custom_titlebar_resize_border_active;
@@ -113,7 +115,6 @@ using chrome::k_window_settings_x;
 using chrome::k_window_settings_y;
 using chrome::load_persisted_appearance_settings;
 using chrome::load_persisted_terminal_window_state;
-using chrome::logical_device_pixel_width;
 using chrome::Metrics_timeline_jsonl_writer;
 using chrome::Metrics_timeline_sample_kind;
 using chrome::metrics_timing_t;
@@ -121,14 +122,12 @@ using chrome::Osc52_clipboard_policy;
 using chrome::Persisted_appearance_settings;
 using chrome::Persisted_terminal_window_state;
 using chrome::persisted_window_axis_is_valid;
+using chrome::Presentation_metrics_recorder;
 #if VNM_TERMINAL_PROFILING_ENABLED
 using chrome::prepare_profile_text_file;
 #endif
 using chrome::print_error;
 using chrome::read_clipboard_text_with_broker;
-using chrome::reduced_chrome_span;
-using chrome::reduced_custom_titlebar_height;
-using chrome::reduced_frameless_resize_border_width;
 using chrome::resize_window_for_text_area_request;
 using chrome::restorable_terminal_window_state;
 using chrome::Runtime_state;
@@ -137,12 +136,9 @@ using chrome::settings_font_size;
 using chrome::settings_int_value;
 using chrome::settings_window_position;
 using chrome::settings_window_size;
-using chrome::snap_terminal_shell_geometry;
 using chrome::split_terminal_area;
 using chrome::sync_chrome_window_state;
 using chrome::sync_terminal_title;
-using chrome::Terminal_shell_geometry;
-using chrome::terminal_shell_geometry;
 using chrome::Terminal_shortcut_filter;
 using chrome::terminal_window_persistence_enabled;
 using chrome::visible_terminal_title;
@@ -238,6 +234,46 @@ int app_status_after_process_exit(
     }
 
     return 0;
+}
+
+struct Terminal_window_chrome_setup
+{
+    std::unique_ptr<chrome::Terminal_qml_chrome> titlebar;
+    QString                                     error;
+};
+
+Terminal_window_chrome_setup setup_terminal_window_chrome(
+    QQmlEngine&        chrome_engine,
+    QQuickWindow&      window,
+    const QIcon&       app_icon,
+    const App_options& options)
+{
+    window.setTitle(default_window_title());
+    window.setIcon(app_icon);
+    window.setColor(options.custom_titlebar
+        ? chrome::terminal_chrome_background_color(window.isActive())
+        : QColor(9, 12, 16));
+    window.resize(options.window_size);
+    if (options.window_position.has_value()) {
+        window.setPosition(*options.window_position);
+    }
+    if (options.custom_titlebar) {
+        window.setFlags(window.flags() | Qt::FramelessWindowHint);
+    }
+
+    Terminal_window_chrome_setup setup;
+    if (options.custom_titlebar) {
+        setup.titlebar = std::make_unique<chrome::Terminal_qml_chrome>(
+            chrome_engine,
+            window);
+        if (!setup.titlebar->is_valid()) {
+            setup.error = QStringLiteral("failed to create shared window chrome: %1")
+                .arg(setup.titlebar->error_string());
+            setup.titlebar.reset();
+        }
+    }
+
+    return setup;
 }
 
 }
@@ -342,30 +378,22 @@ int main(int argc, char** argv)
     }
 
     QQmlEngine chrome_engine;
-
+    Presentation_metrics_recorder presentation_metrics;
     QQuickWindow window;
-    window.setTitle(default_window_title());
-    window.setIcon(app_icon);
-    window.setColor(options.custom_titlebar
-        ? chrome::terminal_chrome_background_color(window.isActive())
-        : QColor(9, 12, 16));
-    window.resize(options.window_size);
-    if (options.window_position.has_value()) {
-        window.setPosition(*options.window_position);
+    const bool presentation_metrics_requested =
+        !options.metrics_json_path.isEmpty() ||
+        !options.metrics_timeline_jsonl_path.isEmpty();
+    if (presentation_metrics_requested) {
+        connect_presentation_metrics_recorder(window, presentation_metrics);
     }
-    if (options.custom_titlebar) {
-        window.setFlags(window.flags() | Qt::FramelessWindowHint);
+    Terminal_window_chrome_setup chrome_setup =
+        setup_terminal_window_chrome(chrome_engine, window, app_icon, options);
+    if (!chrome_setup.error.isEmpty()) {
+        print_error(chrome_setup.error);
+        return k_exit_start_failed;
     }
-
-    std::unique_ptr<chrome::Terminal_qml_chrome> titlebar;
-    if (options.custom_titlebar) {
-        titlebar = std::make_unique<chrome::Terminal_qml_chrome>(chrome_engine, window);
-        if (!titlebar->is_valid()) {
-            print_error(QStringLiteral("failed to create shared window chrome: %1")
-                .arg(titlebar->error_string()));
-            return k_exit_start_failed;
-        }
-    }
+    std::unique_ptr<chrome::Terminal_qml_chrome> titlebar =
+        std::move(chrome_setup.titlebar);
     auto* titlebar_ptr = titlebar.get();
 
     auto* surface = new VNM_TerminalSurface(window.contentItem());
@@ -552,6 +580,29 @@ int main(int argc, char** argv)
         [remember_restorable_window_state](int) {
             remember_restorable_window_state();
         });
+    QObject::connect(
+        &window,
+        &QWindow::screenChanged,
+        surface,
+        [
+            titlebar_ptr,
+            &window,
+            surface,
+            scrollbar,
+            custom_titlebar_enabled,
+            remember_restorable_window_state
+        ](QScreen*) {
+            if (titlebar_ptr != nullptr) {
+                sync_chrome_window_state(*titlebar_ptr, window);
+            }
+            apply_terminal_shell_geometry(
+                window,
+                *surface,
+                *scrollbar,
+                titlebar_ptr,
+                custom_titlebar_enabled);
+            remember_restorable_window_state();
+        });
 
     if (titlebar_ptr != nullptr) {
         auto sync_titlebar_state = [titlebar_ptr, &window] {
@@ -717,6 +768,7 @@ int main(int argc, char** argv)
                 &metrics_timeline_timer,
                 &metrics_timeline_writer,
                 &options,
+                &presentation_metrics,
                 &state,
                 surface
             ] {
@@ -728,6 +780,7 @@ int main(int argc, char** argv)
                 if (!metrics_timeline_writer.write_sample(
                         Metrics_timeline_sample_kind::PERIODIC,
                         *surface,
+                        presentation_metrics,
                         state,
                         sample_timing,
                         std::nullopt,
@@ -745,6 +798,15 @@ int main(int argc, char** argv)
     if (options.restore_maximized_window_state) {
         window.setWindowState(Qt::WindowMaximized);
     }
+    if (titlebar_ptr != nullptr) {
+        sync_chrome_window_state(*titlebar_ptr, window);
+    }
+    apply_terminal_shell_geometry(
+        window,
+        *surface,
+        *scrollbar,
+        titlebar_ptr,
+        custom_titlebar_enabled);
     surface->forceActiveFocus();
 
     QTimer::singleShot(0, &app, [&options, &state, surface, &timeout_timer] {
@@ -797,6 +859,7 @@ int main(int argc, char** argv)
         if (!write_metrics_json(
                 options.metrics_json_path,
                 *surface,
+                presentation_metrics,
                 state,
                 metrics_timing,
                 app_result,
@@ -814,6 +877,7 @@ int main(int argc, char** argv)
         if (!metrics_timeline_writer.write_sample(
                 Metrics_timeline_sample_kind::FINAL,
                 *surface,
+                presentation_metrics,
                 state,
                 metrics_timing,
                 app_result,
