@@ -25,6 +25,7 @@ if not exist "%~dp0build_config.bat" (
     echo   set CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe
     echo   set NINJA=C:\Qt\Tools\Ninja\ninja.exe
     echo   set VNM_TERMINAL_SURFACE_SOURCE_DIR=C:\plms\varinomics\vnm_terminal_surface
+    echo   set VNM_QML_CHROME_SOURCE_DIR=C:\plms\varinomics\vnm_qml_chrome
     echo.
     exit /b 1
 )
@@ -41,8 +42,10 @@ if "%MINGW_BIN%"=="" (
 if "%CMAKE%"=="" set CMAKE=cmake
 if "%NINJA%"=="" set NINJA=ninja
 if "%VNM_TERMINAL_SURFACE_SOURCE_DIR%"=="" set VNM_TERMINAL_SURFACE_SOURCE_DIR=%~dp0..\vnm_terminal_surface
+if "%VNM_QML_CHROME_SOURCE_DIR%"=="" set VNM_QML_CHROME_SOURCE_DIR=%~dp0..\vnm_qml_chrome
 
 for %%I in ("%VNM_TERMINAL_SURFACE_SOURCE_DIR%") do set VNM_TERMINAL_SURFACE_SOURCE_DIR=%%~fI
+for %%I in ("%VNM_QML_CHROME_SOURCE_DIR%") do set VNM_QML_CHROME_SOURCE_DIR=%%~fI
 
 set CONFIG=Release
 set WINDEPLOYQT=%QT_PREFIX%\bin\windeployqt.exe
@@ -83,6 +86,10 @@ if not exist "%VNM_TERMINAL_SURFACE_SOURCE_DIR%\CMakeLists.txt" (
     echo ERROR: vnm_terminal_surface not found at %VNM_TERMINAL_SURFACE_SOURCE_DIR%
     exit /b 1
 )
+if not exist "%VNM_QML_CHROME_SOURCE_DIR%\CMakeLists.txt" (
+    echo ERROR: vnm_qml_chrome not found at %VNM_QML_CHROME_SOURCE_DIR%
+    exit /b 1
+)
 
 echo.
 echo [1/5] Configuring CMake ...
@@ -103,6 +110,7 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
     -DCMAKE_C_COMPILER="%MINGW_BIN%\gcc.exe" ^
     -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
     -DVNM_TERMINAL_SURFACE_SOURCE_DIR="%VNM_TERMINAL_SURFACE_SOURCE_DIR%" ^
+    -DVNM_QML_CHROME_SOURCE_DIR="%VNM_QML_CHROME_SOURCE_DIR%" ^
     -DVNM_TERMINAL_ENABLE_PROFILING=OFF ^
     -DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=OFF ^
     -DVNM_TERMINAL_DISTRIBUTION_BUILD=ON ^
@@ -259,22 +267,71 @@ for %%F in (
 echo.
 echo [4/5] Writing build info ...
 
-set GIT_COMMIT=unknown
-set GIT_BRANCH=unknown
-set SURFACE_GIT_COMMIT=unknown
-set SURFACE_GIT_BRANCH=unknown
-for /f %%i in ('git rev-parse --short HEAD 2^>nul') do set GIT_COMMIT=%%i
-for /f %%i in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set GIT_BRANCH=%%i
-for /f %%i in ('git -C "%VNM_TERMINAL_SURFACE_SOURCE_DIR%" rev-parse --short HEAD 2^>nul') do set SURFACE_GIT_COMMIT=%%i
+set APP_SOURCE_DIR=%~dp0.
+for %%I in ("%APP_SOURCE_DIR%") do set APP_SOURCE_DIR=%%~fI
+
+set APP_GIT_COMMIT=
+set APP_GIT_BRANCH=
+set APP_GIT_STATE=clean
+set SURFACE_GIT_COMMIT=
+set SURFACE_GIT_BRANCH=
+set SURFACE_GIT_STATE=clean
+set CHROME_GIT_COMMIT=
+set CHROME_GIT_BRANCH=
+set CHROME_GIT_STATE=clean
+
+for /f %%i in ('git -C "%APP_SOURCE_DIR%" rev-parse --verify HEAD 2^>nul') do set APP_GIT_COMMIT=%%i
+for /f %%i in ('git -C "%APP_SOURCE_DIR%" rev-parse --abbrev-ref HEAD 2^>nul') do set APP_GIT_BRANCH=%%i
+if "%APP_GIT_COMMIT%"=="" (
+    echo ERROR: Could not read Git commit metadata from %APP_SOURCE_DIR%
+    exit /b 1
+)
+if "%APP_GIT_BRANCH%"=="" (
+    echo ERROR: Could not read Git branch metadata from %APP_SOURCE_DIR%
+    exit /b 1
+)
+for /f %%i in ('git -C "%APP_SOURCE_DIR%" status --porcelain --untracked-files=all 2^>nul') do set APP_GIT_STATE=dirty
+
+for /f %%i in ('git -C "%VNM_TERMINAL_SURFACE_SOURCE_DIR%" rev-parse --verify HEAD 2^>nul') do set SURFACE_GIT_COMMIT=%%i
 for /f %%i in ('git -C "%VNM_TERMINAL_SURFACE_SOURCE_DIR%" rev-parse --abbrev-ref HEAD 2^>nul') do set SURFACE_GIT_BRANCH=%%i
+if "%SURFACE_GIT_COMMIT%"=="" (
+    echo ERROR: Could not read Git commit metadata from %VNM_TERMINAL_SURFACE_SOURCE_DIR%
+    exit /b 1
+)
+if "%SURFACE_GIT_BRANCH%"=="" (
+    echo ERROR: Could not read Git branch metadata from %VNM_TERMINAL_SURFACE_SOURCE_DIR%
+    exit /b 1
+)
+for /f %%i in ('git -C "%VNM_TERMINAL_SURFACE_SOURCE_DIR%" status --porcelain --untracked-files=all 2^>nul') do set SURFACE_GIT_STATE=dirty
+
+for /f %%i in ('git -C "%VNM_QML_CHROME_SOURCE_DIR%" rev-parse --verify HEAD 2^>nul') do set CHROME_GIT_COMMIT=%%i
+for /f %%i in ('git -C "%VNM_QML_CHROME_SOURCE_DIR%" rev-parse --abbrev-ref HEAD 2^>nul') do set CHROME_GIT_BRANCH=%%i
+if "%CHROME_GIT_COMMIT%"=="" (
+    echo ERROR: Could not read Git commit metadata from %VNM_QML_CHROME_SOURCE_DIR%
+    exit /b 1
+)
+if "%CHROME_GIT_BRANCH%"=="" (
+    echo ERROR: Could not read Git branch metadata from %VNM_QML_CHROME_SOURCE_DIR%
+    exit /b 1
+)
+for /f %%i in ('git -C "%VNM_QML_CHROME_SOURCE_DIR%" status --porcelain --untracked-files=all 2^>nul') do set CHROME_GIT_STATE=dirty
+
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH:mm"') do set TIMESTAMP=%%i
 
 (
     echo Build timestamp: %TIMESTAMP%
-    echo Git branch:      %GIT_BRANCH%
-    echo Git commit:      %GIT_COMMIT%
+    echo App source:      %APP_SOURCE_DIR%
+    echo App branch:      %APP_GIT_BRANCH%
+    echo App commit:      %APP_GIT_COMMIT%
+    echo App tree state:  %APP_GIT_STATE%
+    echo Surface source:  %VNM_TERMINAL_SURFACE_SOURCE_DIR%
     echo Surface branch:  %SURFACE_GIT_BRANCH%
     echo Surface commit:  %SURFACE_GIT_COMMIT%
+    echo Surface state:   %SURFACE_GIT_STATE%
+    echo Chrome source:   %VNM_QML_CHROME_SOURCE_DIR%
+    echo Chrome branch:   %CHROME_GIT_BRANCH%
+    echo Chrome commit:   %CHROME_GIT_COMMIT%
+    echo Chrome state:    %CHROME_GIT_STATE%
     echo Version:         %PACKAGE_VERSION%
     echo Configuration:   %CONFIG%
     echo Distribution:    ON

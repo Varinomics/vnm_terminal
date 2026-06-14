@@ -37,14 +37,14 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: master
+          ref: ${{ github.event_name == 'release' && '740569a2b5675370e426d7976eac2c9f00ad2244' || 'master' }}
 
       - name: Checkout chrome
         uses: actions/checkout@v4
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ github.event_name == 'release' && '184bd4021afd01e798394049fe5bd835ce5a8c77' || 'master' }}
 
       - name: Derive package names
         id: package
@@ -99,7 +99,67 @@ jobs:
           app_bundle="vnm_terminal/build/vnm_terminal.app"
           test -d "${app_bundle}"
           "${QT_ROOT_DIR}/bin/macdeployqt" "${app_bundle}" -verbose=2
+
+      - name: Write macOS build info
+        run: |
+          app_bundle="vnm_terminal/build/vnm_terminal.app"
+          resources_dir="${app_bundle}/Contents/Resources"
+          mkdir -p "${resources_dir}"
+          package_version="$(
+            sed -nE 's/^project\(vnm_terminal .* VERSION ([^ )]+)\).*/\1/p' \
+              vnm_terminal/CMakeLists.txt
+          )"
+          if [[ -z "${package_version}" ]]; then
+            echo "Could not derive package version." >&2
+            exit 1
+          fi
+          app_commit="$(git -C vnm_terminal rev-parse --verify HEAD)"
+          app_branch="$(git -C vnm_terminal rev-parse --abbrev-ref HEAD)"
+          surface_commit="$(git -C vnm_terminal_surface rev-parse --verify HEAD)"
+          surface_branch="$(git -C vnm_terminal_surface rev-parse --abbrev-ref HEAD)"
+          chrome_commit="$(git -C vnm_qml_chrome rev-parse --verify HEAD)"
+          chrome_branch="$(git -C vnm_qml_chrome rev-parse --abbrev-ref HEAD)"
+          app_state=clean
+          surface_state=clean
+          chrome_state=clean
+          if [[ -n "$(git -C vnm_terminal status --porcelain --untracked-files=all)" ]]; then
+            app_state=dirty
+          fi
+          if [[ -n "$(git -C vnm_terminal_surface status --porcelain --untracked-files=all)" ]]; then
+            surface_state=dirty
+          fi
+          if [[ -n "$(git -C vnm_qml_chrome status --porcelain --untracked-files=all)" ]]; then
+            chrome_state=dirty
+          fi
+          timestamp="$(date -u +%Y-%m-%d_%H:%MZ)"
+          {
+            echo "Build timestamp: ${timestamp}"
+            echo "App source:      ${GITHUB_WORKSPACE}/vnm_terminal"
+            echo "App branch:      ${app_branch}"
+            echo "App commit:      ${app_commit}"
+            echo "App tree state:  ${app_state}"
+            echo "Surface source:  ${GITHUB_WORKSPACE}/vnm_terminal_surface"
+            echo "Surface branch:  ${surface_branch}"
+            echo "Surface commit:  ${surface_commit}"
+            echo "Surface state:   ${surface_state}"
+            echo "Chrome source:   ${GITHUB_WORKSPACE}/vnm_qml_chrome"
+            echo "Chrome branch:   ${chrome_branch}"
+            echo "Chrome commit:   ${chrome_commit}"
+            echo "Chrome state:    ${chrome_state}"
+            echo "Version:         ${package_version}"
+            echo "Configuration:   ${CMAKE_BUILD_TYPE}"
+            echo "Distribution:    ON"
+            echo "Profiling:       OFF"
+            echo "Transcript:      OFF"
+            echo "Toolchain:       clang"
+            echo "Qt:              ${QT_ROOT_DIR}"
+          } > "${resources_dir}/vnm_terminal_build_info.txt"
+
+      - name: Sign and validate macOS app bundle
+        run: |
+          app_bundle="vnm_terminal/build/vnm_terminal.app"
           codesign --force --deep --sign - "${app_bundle}"
+          codesign --verify --deep --strict "${app_bundle}"
           QT_QPA_PLATFORM=offscreen "${app_bundle}/Contents/MacOS/vnm_terminal" --help >/tmp/vnm_terminal_help.txt
 
       - name: Package macOS app bundle

@@ -14,3 +14,4 @@ set MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin
 set CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe
 set NINJA=C:\Qt\Tools\Ninja\ninja.exe
 set VNM_TERMINAL_SURFACE_SOURCE_DIR=C:\plms\varinomics\vnm_terminal_surface
+set VNM_QML_CHROME_SOURCE_DIR=C:\plms\varinomics\vnm_qml_chrome

@@ -4,16 +4,23 @@ set(VNM_QML_CHROME_SOURCE_DIR "" CACHE PATH
 set(VNM_QML_CHROME_MIN_VERSION "${PROJECT_VERSION}")
 
 if(NOT VNM_QML_CHROME_SOURCE_DIR)
-    get_filename_component(vnm_terminal_default_qml_chrome_dir
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../bsd_licensed/vnm_qml_chrome"
-        ABSOLUTE)
-    if(EXISTS "${vnm_terminal_default_qml_chrome_dir}/CMakeLists.txt")
-        set(VNM_QML_CHROME_SOURCE_DIR
-            "${vnm_terminal_default_qml_chrome_dir}"
-            CACHE PATH
-            "Path to a source checkout of vnm_qml_chrome."
-            FORCE)
-    endif()
+    set(vnm_terminal_default_qml_chrome_dirs
+        "${CMAKE_CURRENT_SOURCE_DIR}/../vnm_qml_chrome"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../bsd_licensed/vnm_qml_chrome")
+    foreach(vnm_terminal_default_qml_chrome_candidate IN LISTS
+            vnm_terminal_default_qml_chrome_dirs)
+        get_filename_component(vnm_terminal_default_qml_chrome_dir
+            "${vnm_terminal_default_qml_chrome_candidate}"
+            ABSOLUTE)
+        if(EXISTS "${vnm_terminal_default_qml_chrome_dir}/CMakeLists.txt")
+            set(VNM_QML_CHROME_SOURCE_DIR
+                "${vnm_terminal_default_qml_chrome_dir}"
+                CACHE PATH
+                "Path to a source checkout of vnm_qml_chrome."
+                FORCE)
+            break()
+        endif()
+    endforeach()
 endif()
 
 if(VNM_QML_CHROME_SOURCE_DIR)

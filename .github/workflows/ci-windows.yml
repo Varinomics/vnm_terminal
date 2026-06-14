@@ -5,6 +5,11 @@ on:
     branches: [ master, main, dev ]
   pull_request:
     branches: [ master, main, dev ]
+  release:
+    types: [ published ]
+
+permissions:
+  contents: read
 
 defaults:
   run:
@@ -29,7 +34,7 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: master
+          ref: ${{ github.event_name == 'release' && '740569a2b5675370e426d7976eac2c9f00ad2244' || 'master' }}
           token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
 
       - name: Checkout chrome
@@ -37,7 +42,7 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ github.event_name == 'release' && '184bd4021afd01e798394049fe5bd835ce5a8c77' || 'master' }}
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.1
@@ -65,3 +70,81 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: ctest --output-on-failure -C ${CMAKE_BUILD_TYPE}
+
+      - name: Create source archive
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/create_source_archive.ps1
+
+      - name: Validate source archive build
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -Path vnm_terminal/dist -Filter 'vnm_terminal_v*_source.zip' | Select-Object -First 1
+          if (-not $archive) {
+              throw 'Source archive was not created.'
+          }
+
+          $extractDir = Join-Path $env:RUNNER_TEMP 'vnm_terminal_source_extract'
+          $buildDir = Join-Path $env:RUNNER_TEMP 'vnm_terminal_source_build'
+          Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath $buildDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $extractDir | Out-Null
+          Expand-Archive -Path $archive.FullName -DestinationPath $extractDir -Force
+
+          $roots = @(Get-ChildItem -Path $extractDir -Directory)
+          if ($roots.Count -ne 1) {
+              throw "Expected exactly one source root in archive, found $($roots.Count)."
+          }
+          $sourceRoot = $roots[0].FullName
+          $surfaceDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_terminal_surface'
+          $chromeDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_qml_chrome'
+
+          cmake -B $buildDir -S $sourceRoot `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DVNM_TERMINAL_SURFACE_SOURCE_DIR="$surfaceDir" `
+            -DVNM_QML_CHROME_SOURCE_DIR="$chromeDir" `
+            -DVNM_TERMINAL_ENABLE_PROFILING=OFF `
+            -DBUILD_TESTING=ON
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+          cmake --build $buildDir --config $env:CMAKE_BUILD_TYPE --parallel
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Upload source archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vnm-terminal-source
+          path: vnm_terminal/dist/vnm_terminal_v*_source.zip
+          if-no-files-found: error
+
+  attach-source-archive:
+    name: Attach source archive (release)
+    if: github.event_name == 'release'
+    needs: build-and-test
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download source archive artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vnm-terminal-source
+          path: dist
+
+      - name: Attach source archive to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive="$(find dist -maxdepth 1 -name 'vnm_terminal_v*_source.zip' -print -quit)"
+          if [[ -z "${archive}" ]]; then
+            echo "Source archive artifact was not downloaded." >&2
+            exit 1
+          fi
+          gh release upload "${GITHUB_REF_NAME}" "${archive}" --repo "${GITHUB_REPOSITORY}" --clobber
