@@ -18,11 +18,14 @@
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QQuickWindow>
+#include <QScreen>
+#include <QSGRendererInterface>
 #include <QSize>
 #include <QString>
 #include <QStringList>
 #include <QThread>
 #include <QTimer>
+#include <QWindow>
 
 #include <algorithm>
 #include <cstdint>
@@ -124,6 +127,47 @@ struct Render_counts
     std::uint64_t backend_callback_event_epoch          = 0U;
     std::uint64_t backend_callback_frame_boundary_epoch = 0U;
     bool          qsg_drew                              = false;
+    bool          render_target_non_null                = false;
+    bool          rhi_non_null                          = false;
+};
+
+struct Presentation_environment
+{
+    QString qpa_platform;
+    QString qt_qpa_platform_env;
+    QString qsg_render_loop_env;
+    QString qsg_rhi_backend_env;
+    QString qt_quick_backend_env;
+    QString scene_graph_backend;
+    QString static_graphics_api;
+    int     static_graphics_api_value        = 0;
+    bool    static_graphics_api_rhi_based    = false;
+    bool    static_graphics_api_software_or_null = false;
+    QString graphics_api;
+    int     graphics_api_value               = 0;
+    bool    graphics_api_rhi_based           = false;
+    bool    graphics_api_software_or_null    = false;
+    bool    renderer_interface_non_null      = false;
+    bool    software_or_null_env_requested   = false;
+    bool    window_visible                   = false;
+    bool    window_exposed                   = false;
+    bool    window_minimized                 = false;
+    QString window_visibility;
+    QString window_state;
+    int     window_width                     = 0;
+    int     window_height                    = 0;
+    qreal   device_pixel_ratio               = 0.0;
+    bool    screen_non_null                  = false;
+    QString screen_name;
+    int     screen_width                     = 0;
+    int     screen_height                    = 0;
+    bool    qsg_drew                         = false;
+    bool    render_target_non_null           = false;
+    bool    rhi_non_null                     = false;
+    bool    qpa_platform_real_window_valid   = false;
+    bool    window_state_real_window_valid   = false;
+    bool    renderer_real_window_valid       = false;
+    bool    real_window_claim_valid          = false;
 };
 
 struct Snapshot_match
@@ -440,7 +484,191 @@ Render_counts render_counts(const VNM_TerminalSurface& surface)
         invalidation.backend_callback_event_epoch,
         invalidation.backend_callback_frame_boundary_epoch,
         qsg_atlas.drew,
+        qsg_atlas.render_target_non_null,
+        qsg_atlas.rhi_non_null,
     };
+}
+
+QString environment_value_or_unset(const char* name)
+{
+    if (!qEnvironmentVariableIsSet(name)) {
+        return QStringLiteral("<unset>");
+    }
+
+    return qEnvironmentVariable(name);
+}
+
+bool environment_backend_requests_software_or_null(const QString& value)
+{
+    const QString lower = value.toLower();
+    return lower.contains(QStringLiteral("software")) ||
+        lower.contains(QStringLiteral("null"));
+}
+
+bool qpa_platform_is_headless(const QString& platform)
+{
+    const QString lower = platform.toLower();
+    return lower.startsWith(QStringLiteral("offscreen")) ||
+        lower.startsWith(QStringLiteral("minimal"))      ||
+        lower.startsWith(QStringLiteral("minimalegl"))   ||
+        lower.startsWith(QStringLiteral("vnc"));
+}
+
+bool qpa_env_requests_headless_platform(const QString& value)
+{
+    const QString lower = value.toLower();
+    return qpa_platform_is_headless(lower);
+}
+
+QString graphics_api_key(QSGRendererInterface::GraphicsApi api)
+{
+    switch (api) {
+        case QSGRendererInterface::Unknown:
+            return QStringLiteral("unknown");
+        case QSGRendererInterface::Software:
+            return QStringLiteral("software");
+        case QSGRendererInterface::OpenVG:
+            return QStringLiteral("openvg");
+        case QSGRendererInterface::OpenGL:
+            return QStringLiteral("opengl");
+        case QSGRendererInterface::Direct3D11:
+            return QStringLiteral("direct3d11");
+        case QSGRendererInterface::Vulkan:
+            return QStringLiteral("vulkan");
+        case QSGRendererInterface::Metal:
+            return QStringLiteral("metal");
+        case QSGRendererInterface::Null:
+            return QStringLiteral("null");
+        case QSGRendererInterface::Direct3D12:
+            return QStringLiteral("direct3d12");
+    }
+
+    return QStringLiteral("unknown");
+}
+
+QString window_visibility_key(QWindow::Visibility visibility)
+{
+    switch (visibility) {
+        case QWindow::Hidden:
+            return QStringLiteral("hidden");
+        case QWindow::AutomaticVisibility:
+            return QStringLiteral("automatic");
+        case QWindow::Windowed:
+            return QStringLiteral("windowed");
+        case QWindow::Minimized:
+            return QStringLiteral("minimized");
+        case QWindow::Maximized:
+            return QStringLiteral("maximized");
+        case QWindow::FullScreen:
+            return QStringLiteral("fullscreen");
+    }
+
+    return QStringLiteral("unknown");
+}
+
+QString window_state_key(Qt::WindowStates states)
+{
+    QStringList parts;
+    if (states.testFlag(Qt::WindowMinimized)) {
+        parts.push_back(QStringLiteral("minimized"));
+    }
+    if (states.testFlag(Qt::WindowMaximized)) {
+        parts.push_back(QStringLiteral("maximized"));
+    }
+    if (states.testFlag(Qt::WindowFullScreen)) {
+        parts.push_back(QStringLiteral("fullscreen"));
+    }
+    if (states.testFlag(Qt::WindowActive)) {
+        parts.push_back(QStringLiteral("active"));
+    }
+    if (parts.isEmpty()) {
+        return QStringLiteral("none");
+    }
+
+    return parts.join(QStringLiteral("|"));
+}
+
+Presentation_environment presentation_environment(
+    const QQuickWindow&   window,
+    const Render_counts&  render)
+{
+    const QSGRendererInterface* renderer_interface = window.rendererInterface();
+    const QSGRendererInterface::GraphicsApi graphics_api =
+        renderer_interface == nullptr
+            ? QSGRendererInterface::Unknown
+            : renderer_interface->graphicsApi();
+    const QSGRendererInterface::GraphicsApi static_graphics_api =
+        QQuickWindow::graphicsApi();
+    const QScreen* screen = window.screen();
+
+    Presentation_environment environment;
+    environment.qpa_platform = QGuiApplication::platformName();
+    environment.qt_qpa_platform_env = environment_value_or_unset("QT_QPA_PLATFORM");
+    environment.qsg_render_loop_env = environment_value_or_unset("QSG_RENDER_LOOP");
+    environment.qsg_rhi_backend_env = environment_value_or_unset("QSG_RHI_BACKEND");
+    environment.qt_quick_backend_env = environment_value_or_unset("QT_QUICK_BACKEND");
+    environment.scene_graph_backend = QQuickWindow::sceneGraphBackend();
+    environment.static_graphics_api = graphics_api_key(static_graphics_api);
+    environment.static_graphics_api_value = static_cast<int>(static_graphics_api);
+    environment.static_graphics_api_rhi_based =
+        QSGRendererInterface::isApiRhiBased(static_graphics_api);
+    environment.static_graphics_api_software_or_null =
+        static_graphics_api == QSGRendererInterface::Software ||
+        static_graphics_api == QSGRendererInterface::Null;
+    environment.graphics_api = graphics_api_key(graphics_api);
+    environment.graphics_api_value = static_cast<int>(graphics_api);
+    environment.graphics_api_rhi_based =
+        QSGRendererInterface::isApiRhiBased(graphics_api);
+    environment.graphics_api_software_or_null =
+        graphics_api == QSGRendererInterface::Software ||
+        graphics_api == QSGRendererInterface::Null;
+    environment.renderer_interface_non_null = renderer_interface != nullptr;
+    environment.software_or_null_env_requested =
+        environment_backend_requests_software_or_null(
+            environment.qsg_rhi_backend_env) ||
+        environment_backend_requests_software_or_null(
+            environment.qt_quick_backend_env);
+    environment.window_visible = window.isVisible();
+    environment.window_exposed = window.isExposed();
+    environment.window_minimized =
+        window.windowStates().testFlag(Qt::WindowMinimized) ||
+        window.visibility() == QWindow::Minimized;
+    environment.window_visibility = window_visibility_key(window.visibility());
+    environment.window_state = window_state_key(window.windowStates());
+    environment.window_width = window.width();
+    environment.window_height = window.height();
+    environment.device_pixel_ratio = window.devicePixelRatio();
+    environment.screen_non_null = screen != nullptr;
+    if (screen != nullptr) {
+        environment.screen_name = screen->name();
+        environment.screen_width = screen->geometry().width();
+        environment.screen_height = screen->geometry().height();
+    }
+    environment.qsg_drew = render.qsg_drew;
+    environment.render_target_non_null = render.render_target_non_null;
+    environment.rhi_non_null = render.rhi_non_null;
+    environment.qpa_platform_real_window_valid =
+        !qpa_platform_is_headless(environment.qpa_platform) &&
+        !qpa_env_requests_headless_platform(environment.qt_qpa_platform_env);
+    environment.window_state_real_window_valid =
+        environment.window_visible   &&
+        environment.window_exposed   &&
+        !environment.window_minimized &&
+        environment.screen_non_null;
+    environment.renderer_real_window_valid =
+        environment.renderer_interface_non_null   &&
+        graphics_api != QSGRendererInterface::Unknown &&
+        !environment.graphics_api_software_or_null &&
+        !environment.static_graphics_api_software_or_null &&
+        !environment.software_or_null_env_requested &&
+        environment.qsg_drew                       &&
+        environment.render_target_non_null         &&
+        environment.rhi_non_null;
+    environment.real_window_claim_valid =
+        environment.qpa_platform_real_window_valid &&
+        environment.window_state_real_window_valid &&
+        environment.renderer_real_window_valid;
+    return environment;
 }
 
 QString snapshot_row_text(const term::Terminal_render_snapshot& snapshot, int row)
@@ -692,6 +920,13 @@ QJsonObject evidence_requirements_json(
     object.insert(
         QStringLiteral("requires_frame_swapped"),
         requirements.require_presentation_frame);
+    if (mode == Evidence_mode::REAL_WINDOW_PRESENTATION) {
+        object.insert(QStringLiteral("requires_real_window_qpa"), true);
+        object.insert(QStringLiteral("requires_visible_non_minimized_window"), true);
+        object.insert(QStringLiteral("requires_non_software_non_null_renderer"), true);
+        object.insert(QStringLiteral("requires_render_target_non_null"), true);
+        object.insert(QStringLiteral("requires_rhi_non_null"), true);
+    }
     return object;
 }
 
@@ -738,6 +973,10 @@ QJsonObject render_delta_json(const Render_counts& before, const Render_counts& 
         static_cast<qint64>(after.qsg_rendered_snapshot));
     object.insert(QStringLiteral("qsg_drew_after"), after.qsg_drew);
     object.insert(
+        QStringLiteral("render_target_non_null_after"),
+        after.render_target_non_null);
+    object.insert(QStringLiteral("rhi_non_null_after"), after.rhi_non_null);
+    object.insert(
         QStringLiteral("last_rendered_snapshot_before"),
         static_cast<qint64>(before.last_rendered_snapshot));
     object.insert(
@@ -757,6 +996,92 @@ QJsonObject render_delta_json(const Render_counts& before, const Render_counts& 
     object.insert(
         QStringLiteral("backend_callback_frame_boundary_epoch_after"),
         static_cast<qint64>(after.backend_callback_frame_boundary_epoch));
+    return object;
+}
+
+QJsonObject presentation_environment_json(
+    const Presentation_environment& environment)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("qpa_platform"), environment.qpa_platform);
+    object.insert(
+        QStringLiteral("qt_qpa_platform_env"),
+        environment.qt_qpa_platform_env);
+    object.insert(
+        QStringLiteral("qsg_render_loop_env"),
+        environment.qsg_render_loop_env);
+    object.insert(
+        QStringLiteral("qsg_rhi_backend_env"),
+        environment.qsg_rhi_backend_env);
+    object.insert(
+        QStringLiteral("qt_quick_backend_env"),
+        environment.qt_quick_backend_env);
+    object.insert(
+        QStringLiteral("scene_graph_backend"),
+        environment.scene_graph_backend);
+    object.insert(
+        QStringLiteral("static_graphics_api"),
+        environment.static_graphics_api);
+    object.insert(
+        QStringLiteral("static_graphics_api_value"),
+        environment.static_graphics_api_value);
+    object.insert(
+        QStringLiteral("static_graphics_api_rhi_based"),
+        environment.static_graphics_api_rhi_based);
+    object.insert(
+        QStringLiteral("static_graphics_api_software_or_null"),
+        environment.static_graphics_api_software_or_null);
+    object.insert(QStringLiteral("graphics_api"), environment.graphics_api);
+    object.insert(
+        QStringLiteral("graphics_api_value"),
+        environment.graphics_api_value);
+    object.insert(
+        QStringLiteral("graphics_api_rhi_based"),
+        environment.graphics_api_rhi_based);
+    object.insert(
+        QStringLiteral("graphics_api_software_or_null"),
+        environment.graphics_api_software_or_null);
+    object.insert(
+        QStringLiteral("renderer_interface_non_null"),
+        environment.renderer_interface_non_null);
+    object.insert(
+        QStringLiteral("software_or_null_env_requested"),
+        environment.software_or_null_env_requested);
+    object.insert(QStringLiteral("window_visible"), environment.window_visible);
+    object.insert(QStringLiteral("window_exposed"), environment.window_exposed);
+    object.insert(
+        QStringLiteral("window_minimized"),
+        environment.window_minimized);
+    object.insert(
+        QStringLiteral("window_visibility"),
+        environment.window_visibility);
+    object.insert(QStringLiteral("window_state"), environment.window_state);
+    object.insert(QStringLiteral("window_width"), environment.window_width);
+    object.insert(QStringLiteral("window_height"), environment.window_height);
+    object.insert(
+        QStringLiteral("device_pixel_ratio"),
+        environment.device_pixel_ratio);
+    object.insert(QStringLiteral("screen_non_null"), environment.screen_non_null);
+    object.insert(QStringLiteral("screen_name"), environment.screen_name);
+    object.insert(QStringLiteral("screen_width"), environment.screen_width);
+    object.insert(QStringLiteral("screen_height"), environment.screen_height);
+    object.insert(QStringLiteral("qsg_drew"), environment.qsg_drew);
+    object.insert(
+        QStringLiteral("render_target_non_null"),
+        environment.render_target_non_null);
+    object.insert(QStringLiteral("rhi_non_null"), environment.rhi_non_null);
+    object.insert(
+        QStringLiteral("qpa_platform_real_window_valid"),
+        environment.qpa_platform_real_window_valid);
+    object.insert(
+        QStringLiteral("window_state_real_window_valid"),
+        environment.window_state_real_window_valid);
+    object.insert(
+        QStringLiteral("renderer_real_window_valid"),
+        environment.renderer_real_window_valid);
+    object.insert(
+        QStringLiteral("real_window_claim_valid"),
+        environment.real_window_claim_valid);
     return object;
 }
 
@@ -1264,6 +1589,7 @@ int main(int argc, char** argv)
     int missing_backend_drain = 0;
     int missing_rendered_snapshot = 0;
     int missing_frame_evidence = 0;
+    int invalid_real_window_environment = 0;
 
     for (int burst_index = 0; burst_index < options.burst_count; ++burst_index) {
         const QString payload = burst_payload(burst_index, options.burst_length);
@@ -1333,6 +1659,8 @@ int main(int argc, char** argv)
         const Presentation_counts presentation_after =
             presentation_counts(presentation_metrics);
         const Render_counts render_after = render_counts(surface);
+        const Presentation_environment environment =
+            presentation_environment(window, render_after);
         const Drain_delta drain = drain_delta(drain_before, drain_after);
         const QByteArray input_bytes = joined_write_bytes(
             backend_ptr->writes(),
@@ -1374,6 +1702,11 @@ int main(int argc, char** argv)
         }
         if (requirements.require_qsg_capture && !frame_evidence.qsg_captured) {
             ++missing_frame_evidence;
+        }
+        if (options.evidence_mode == Evidence_mode::REAL_WINDOW_PRESENTATION &&
+            !environment.real_window_claim_valid)
+        {
+            ++invalid_real_window_environment;
         }
 
         QJsonObject record;
@@ -1427,6 +1760,9 @@ int main(int argc, char** argv)
         record.insert(
             QStringLiteral("decision_criteria"),
             evidence_requirements_json(options.evidence_mode, requirements));
+        record.insert(
+            QStringLiteral("presentation_environment"),
+            presentation_environment_json(environment));
         record.insert(QStringLiteral("backend_drain"), drain_delta_json(drain));
         record.insert(
             QStringLiteral("presentation"),
@@ -1460,6 +1796,8 @@ int main(int argc, char** argv)
             << " qsg_capture=" << (frame_evidence.qsg_captured ? "yes" : "no")
             << " strict_render=" << (frame_evidence.strict_rendered ? "yes" : "no")
             << " presented=" << (frame_evidence.presentation_frame ? "yes" : "no")
+            << " real_window_env="
+            << (environment.real_window_claim_valid ? "yes" : "no")
             << " snapshot=" << match->sequence
             << " cursor=" << match->row << ',' << match->column
             << '\n';
@@ -1488,6 +1826,7 @@ int main(int argc, char** argv)
         missing_backend_echo > 0 ||
         missing_backend_drain > 0 ||
         missing_frame_evidence > 0 ||
+        invalid_real_window_environment > 0 ||
         (requirements.require_qsg_capture && missing_qsg_capture > 0) ||
         (requirements.require_rendered_snapshot && missing_rendered_snapshot > 0) ||
         (requirements.require_presentation_frame && missing_presentation_frame > 0))
@@ -1515,6 +1854,7 @@ int main(int argc, char** argv)
         << " missing_presentation_frame=" << missing_presentation_frame
         << " missing_rendered_snapshot=" << missing_rendered_snapshot
         << " missing_frame_evidence=" << missing_frame_evidence
+        << " invalid_real_window_environment=" << invalid_real_window_environment
         << " metrics_timeline=" << options.metrics_timeline_jsonl_path.toStdString()
         << " evidence=" << options.evidence_jsonl_path.toStdString()
         << '\n';
