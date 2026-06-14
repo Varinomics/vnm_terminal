@@ -1,0 +1,36 @@
+name = "CMDG"
+spdx_license_expression = "LicenseRef-MEGAKORP-0.0000001"
+upstream_url = "https://github.com/Byproduct/CMDG"
+commit_or_version = "vendored source snapshot"
+source_path = "THIRD_PARTY/CMDG"
+imported_path = "THIRD_PARTY/CMDG"
+notice = "THIRD_PARTY_NOTICES.md#cmdg"
+dependency_kind = "vendored_terminal_workload"
+rationale = "Terminal graphics workload and demo source used by CMDG/Nelostie validation paths."
+reviewer = "Vendored workload notice review"
+license_posture = "custom_permissive_license"
+gpl_only = false
+license_file = "THIRD_PARTY/CMDG/LICENSE"
+direct_dependencies = [
+    "NAudio 2.2.1 (NuGet, MIT)",
+    "NVorbis 0.10.5 (NuGet, MIT)",
+    "System.Drawing.Common 9.0.2 (NuGet, MIT)"
+]
+transitive_dependencies = [
+    "Microsoft.NETCore.Platforms 3.1.0",
+    "Microsoft.Win32.Registry 4.7.0",
+    "Microsoft.Win32.SystemEvents 9.0.2 (via System.Drawing.Common on net8.0)",
+    "NAudio.Asio 2.2.1 (via NAudio package compatibility group)",
+    "NAudio.Core 2.2.1 (via NAudio package compatibility group)",
+    "NAudio.Midi 2.2.1 (via NAudio package compatibility group)",
+    "NAudio.Wasapi 2.2.1 (via NAudio package compatibility group)",
+    "NAudio.WinMM 2.2.1 (via NAudio package compatibility group)",
+    "System.Memory 4.5.3",
+    "System.Security.AccessControl 4.7.0",
+    "System.Security.Principal.Windows 4.7.0",
+    "System.ValueTuple 4.5.0 (via NVorbis netstandard2.0 compatibility group)"
+]
+asset_notes = [
+    "AssemblyWinter2025 scene identifies vehicle model assets as CC0 by eracoon from OpenGameArt."
+]
+cmake_targets = []

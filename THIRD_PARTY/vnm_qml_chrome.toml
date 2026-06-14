@@ -1,0 +1,22 @@
+name = "vnm_qml_chrome"
+spdx_license_expression = "NOASSERTION"
+upstream_url = "https://github.com/imakris/vnm_qml_chrome"
+commit_or_version = "184bd4021afd01e798394049fe5bd835ce5a8c77 or installed package"
+source_path = "external Varinomics repository"
+imported_path = "not vendored"
+notice = "THIRD_PARTY_NOTICES.md#vnm_qml_chrome"
+dependency_kind = "varinomics_library"
+rationale = "Shared Qt Quick chrome and frame-shell implementation used by the app."
+reviewer = "Repository split dependency review"
+license_posture = "license_file_not_present_in_reviewed_checkout"
+gpl_only = false
+direct_dependencies = [
+    "Qt 6 Core",
+    "Qt 6 Gui",
+    "Qt 6 Qml",
+    "Qt 6 Quick",
+    "Qt 6 Quick Controls 2",
+    "Qt 6 Quick Layouts"
+]
+transitive_dependencies = []
+cmake_targets = ["vnm_qml_chrome::vnm_qml_chrome"]

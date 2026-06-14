@@ -48,10 +48,9 @@ Source builds are the release baseline. Clone `vnm_terminal_surface` and
 `-DVNM_QML_CHROME_SOURCE_DIR=<path>` during configure. Both dependencies are
 version-gated against this app's `project()` version; installed CMake packages
 are accepted only when they satisfy the same minimum versions. The release CI
-source-dependency baseline for this app version pins `vnm_terminal_surface` to
-`740569a2b5675370e426d7976eac2c9f00ad2244` and `vnm_qml_chrome` to
-`184bd4021afd01e798394049fe5bd835ce5a8c77`; installed packages are supported
-by CMake but are not the release validation baseline unless a release workflow
+source-dependency baseline tracks the `master` branches of
+`vnm_terminal_surface` and `vnm_qml_chrome`; installed packages are supported by
+CMake but are not the release validation baseline unless a release workflow
 explicitly validates an installed-prefix build.
 
 ```powershell
@@ -177,6 +176,10 @@ build_portable.bat
 The script writes `dist\portable\` and `dist\vnm_terminal_v<version>_w64.zip`,
 where `<version>` is the `project()` version in `CMakeLists.txt` (derived from
 the configured CMake cache, not hardcoded).
+`build_portable.bat` is the release-provenance build path and requires Git
+metadata for the app, `vnm_terminal_surface`, and `vnm_qml_chrome` checkouts.
+When building from a source archive without `.git` directories, use the regular
+CMake source build instructions above instead of this portable release script.
 Portable releases are built with `VNM_TERMINAL_DISTRIBUTION_BUILD=ON`,
 `VNM_TERMINAL_ENABLE_PROFILING=OFF`, and transcript capture/replay disabled.
 They are packaged from the Qt MinGW kit and include the required Qt and MinGW
