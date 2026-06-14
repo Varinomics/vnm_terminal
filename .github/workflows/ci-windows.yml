@@ -34,7 +34,7 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: ${{ github.event_name == 'release' && '740569a2b5675370e426d7976eac2c9f00ad2244' || 'master' }}
+          ref: master
           token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
 
       - name: Checkout chrome
@@ -42,7 +42,7 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: ${{ github.event_name == 'release' && '184bd4021afd01e798394049fe5bd835ce5a8c77' || 'master' }}
+          ref: master
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.1
