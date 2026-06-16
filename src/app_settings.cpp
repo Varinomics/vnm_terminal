@@ -160,6 +160,27 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
     return state;
 }
 
+void save_persisted_appearance_settings(
+    QSettings&                  settings,
+    const VNM_TerminalSurface&  surface)
+{
+    settings.beginGroup(QLatin1String(k_appearance_settings_group));
+    settings.setValue(QLatin1String(k_appearance_color_scheme), surface.color_scheme());
+    settings.setValue(QLatin1String(k_appearance_font_family),  surface.font_family());
+    settings.setValue(
+        QLatin1String(k_appearance_text_renderer_mode),
+        static_cast<int>(surface.text_renderer_mode()));
+    settings.setValue(
+        QLatin1String(k_appearance_lcd_subpixel_order),
+        static_cast<int>(surface.lcd_subpixel_order()));
+    settings.setValue(
+        QLatin1String(k_appearance_row_timestamp_tooltip),
+        surface.row_timestamp_tooltip_enabled());
+    settings.setValue(QLatin1String(k_appearance_scrollback_limit), surface.scrollback_limit());
+    settings.endGroup();
+    settings.sync();
+}
+
 void apply_persisted_appearance_settings(
     const Persisted_appearance_settings& state,
     App_options*                         options)

@@ -35,7 +35,7 @@ QString component_error_string(const QQmlComponent& component)
 // A self-contained frameless QML Window styled with the shared VNM_Chrome
 // titlebar so it visually belongs to the terminal. Its controls bind directly
 // to the live surface (context property `surface`) for immediate apply; the
-// `settings` controller supplies the monospace font list and persists changes.
+// `settings` controller supplies the monospace font list.
 //
 // The dialog styles every control itself (dialog-local inline `component`
 // definitions over QtQuick.Controls.Basic, carrying the S_ prefix) because the

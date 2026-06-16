@@ -3248,7 +3248,7 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     ok &= check(settings_requests == 1,
         "clicking the settings gear emits exactly one settings request");
 
-    chrome_test::Terminal_settings_controller settings_controller(surface);
+    chrome_test::Terminal_settings_controller settings_controller;
     chrome_test::Terminal_settings_window settings_window(engine, surface, settings_controller);
     ok &= check(settings_window.is_valid(), "settings window initializes");
     if (!settings_window.is_valid()) {
