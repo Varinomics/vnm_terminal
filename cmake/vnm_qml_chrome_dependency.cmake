@@ -1,7 +1,10 @@
 set(VNM_QML_CHROME_SOURCE_DIR "" CACHE PATH
     "Path to a source checkout of vnm_qml_chrome.")
 
-set(VNM_QML_CHROME_MIN_VERSION "${PROJECT_VERSION}")
+# Minimum is major.minor, not the full patch version, so an app patch bump does
+# not force lockstep re-tags of vnm_qml_chrome (which release CI tracks on
+# master). Same-major compatibility is still enforced separately below.
+set(VNM_QML_CHROME_MIN_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
 
 if(NOT VNM_QML_CHROME_SOURCE_DIR)
     set(vnm_terminal_default_qml_chrome_dirs

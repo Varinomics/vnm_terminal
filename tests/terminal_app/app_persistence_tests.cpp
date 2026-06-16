@@ -249,6 +249,47 @@ bool test_appearance_settings_round_trip()
     return ok;
 }
 
+bool test_save_appearance_settings_from_surface()
+{
+    QTemporaryDir dir;
+    bool ok = check(dir.isValid(), "temporary surface-appearance settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    VNM_TerminalSurface surface;
+    surface.set_color_scheme(QStringLiteral("Solarized Dark"));
+    surface.set_font_family(QStringLiteral("monospace"));
+    surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::GLYPH);
+    surface.set_lcd_subpixel_order(VNM_TerminalSurface::Lcd_subpixel_order::NONE);
+    surface.set_row_timestamp_tooltip_enabled(false);
+    surface.set_scrollback_limit(25000);
+
+    QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+    save_persisted_appearance_settings(writer, surface);
+
+    QSettings reader(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+    const Persisted_appearance_settings state = load_persisted_appearance_settings(reader);
+
+    ok &= check(state.color_scheme.value_or(QString()) == surface.color_scheme(),
+        "surface color scheme persists immediately");
+    ok &= check(state.font_family.value_or(QString()) == surface.font_family(),
+        "surface font family persists immediately");
+    ok &= check(
+        state.text_renderer_mode.value_or(-1) ==
+            static_cast<int>(surface.text_renderer_mode()),
+        "surface renderer mode persists immediately");
+    ok &= check(
+        state.lcd_subpixel_order.value_or(-1) ==
+            static_cast<int>(surface.lcd_subpixel_order()),
+        "surface lcd subpixel order persists immediately");
+    ok &= check(state.row_timestamp_tooltip.has_value() && !*state.row_timestamp_tooltip,
+        "surface row timestamp toggle persists immediately");
+    ok &= check(state.scrollback_limit.value_or(-1) == surface.scrollback_limit(),
+        "surface scrollback limit persists immediately");
+    return ok;
+}
+
 }
 
 int main(int argc, char** argv)
@@ -260,5 +301,6 @@ int main(int argc, char** argv)
     ok &= test_apply_persisted_window_state();
     ok &= test_invalid_persisted_values_are_ignored();
     ok &= test_appearance_settings_round_trip();
+    ok &= test_save_appearance_settings_from_surface();
     return ok ? 0 : 1;
 }

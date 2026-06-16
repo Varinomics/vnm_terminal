@@ -130,6 +130,7 @@ using chrome::print_error;
 using chrome::read_clipboard_text_with_broker;
 using chrome::resize_window_for_text_area_request;
 using chrome::restorable_terminal_window_state;
+using chrome::save_persisted_appearance_settings;
 using chrome::Runtime_state;
 using chrome::save_persisted_terminal_window_state;
 using chrome::settings_font_size;
@@ -445,14 +446,41 @@ int main(int argc, char** argv)
     const bool custom_titlebar_enabled = options.custom_titlebar;
     std::optional<Persisted_terminal_window_state> latest_restorable_window_state =
         restorable_terminal_window_state(window, *surface);
-    const auto remember_restorable_window_state =
-        [&window, surface, &latest_restorable_window_state] {
-            const std::optional<Persisted_terminal_window_state> state =
-                restorable_terminal_window_state(window, *surface);
-            if (state.has_value()) {
-                latest_restorable_window_state = *state;
+    const auto persist_window_state =
+        [
+            persistence_enabled,
+            surface,
+            &window,
+            &latest_restorable_window_state
+        ] {
+            if (!persistence_enabled) {
+                return;
             }
+
+            const std::optional<Persisted_terminal_window_state> current_state =
+                restorable_terminal_window_state(window, *surface);
+            if (current_state.has_value()) {
+                latest_restorable_window_state = *current_state;
+            }
+
+            Persisted_terminal_window_state state =
+                current_state.value_or(
+                    latest_restorable_window_state.value_or(
+                        Persisted_terminal_window_state{}));
+            state.font_size = surface->font_size();
+            state.maximized = window.windowStates().testFlag(Qt::WindowMaximized);
+
+            QSettings settings;
+            save_persisted_terminal_window_state(settings, state);
         };
+    const auto persist_appearance = [persistence_enabled, surface] {
+        if (!persistence_enabled) {
+            return;
+        }
+
+        QSettings settings;
+        save_persisted_appearance_settings(settings, *surface);
+    };
 
     apply_terminal_shell_geometry(
         window,
@@ -465,7 +493,7 @@ int main(int argc, char** argv)
     window.installEventFilter(shortcut_filter);
 
     auto settings_controller =
-        std::make_unique<chrome::Terminal_settings_controller>(*surface);
+        std::make_unique<chrome::Terminal_settings_controller>();
     auto settings_window = std::make_unique<chrome::Terminal_settings_window>(
         chrome_engine,
         *surface,
@@ -536,7 +564,7 @@ int main(int argc, char** argv)
             surface,
             scrollbar,
             custom_titlebar_enabled,
-            remember_restorable_window_state
+            persist_window_state
         ] {
             apply_terminal_shell_geometry(
                 window,
@@ -544,7 +572,7 @@ int main(int argc, char** argv)
                 *scrollbar,
                 titlebar_ptr,
                 custom_titlebar_enabled);
-            remember_restorable_window_state();
+            persist_window_state();
         });
     QObject::connect(
         &window,
@@ -556,7 +584,7 @@ int main(int argc, char** argv)
             surface,
             scrollbar,
             custom_titlebar_enabled,
-            remember_restorable_window_state
+            persist_window_state
         ] {
             apply_terminal_shell_geometry(
                 window,
@@ -564,21 +592,21 @@ int main(int argc, char** argv)
                 *scrollbar,
                 titlebar_ptr,
                 custom_titlebar_enabled);
-            remember_restorable_window_state();
+            persist_window_state();
         });
     QObject::connect(
         &window,
         &QWindow::xChanged,
         surface,
-        [remember_restorable_window_state](int) {
-            remember_restorable_window_state();
+        [persist_window_state](int) {
+            persist_window_state();
         });
     QObject::connect(
         &window,
         &QWindow::yChanged,
         surface,
-        [remember_restorable_window_state](int) {
-            remember_restorable_window_state();
+        [persist_window_state](int) {
+            persist_window_state();
         });
     QObject::connect(
         &window,
@@ -590,7 +618,7 @@ int main(int argc, char** argv)
             surface,
             scrollbar,
             custom_titlebar_enabled,
-            remember_restorable_window_state
+            persist_window_state
         ](QScreen*) {
             if (titlebar_ptr != nullptr) {
                 sync_chrome_window_state(*titlebar_ptr, window);
@@ -601,8 +629,43 @@ int main(int argc, char** argv)
                 *scrollbar,
                 titlebar_ptr,
                 custom_titlebar_enabled);
-            remember_restorable_window_state();
+            persist_window_state();
         });
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::font_size_changed,
+        surface,
+        persist_window_state);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::color_scheme_changed,
+        surface,
+        persist_appearance);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::font_family_changed,
+        surface,
+        persist_appearance);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::text_renderer_mode_changed,
+        surface,
+        persist_appearance);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::lcd_subpixel_order_changed,
+        surface,
+        persist_appearance);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::row_timestamp_tooltip_enabled_changed,
+        surface,
+        persist_appearance);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::scrollback_limit_changed,
+        surface,
+        persist_appearance);
 
     if (titlebar_ptr != nullptr) {
         auto sync_titlebar_state = [titlebar_ptr, &window] {
@@ -615,7 +678,7 @@ int main(int argc, char** argv)
                 surface,
                 scrollbar,
                 custom_titlebar_enabled,
-                remember_restorable_window_state
+                persist_window_state
             ] {
                 sync_chrome_window_state(*titlebar_ptr, window);
                 apply_terminal_shell_geometry(
@@ -624,7 +687,7 @@ int main(int argc, char** argv)
                     *scrollbar,
                     titlebar_ptr,
                     custom_titlebar_enabled);
-                remember_restorable_window_state();
+                persist_window_state();
             };
         QObject::connect(
             &window,
@@ -647,8 +710,8 @@ int main(int argc, char** argv)
             &window,
             &QWindow::windowStateChanged,
             surface,
-            [remember_restorable_window_state](Qt::WindowState) {
-                remember_restorable_window_state();
+            [persist_window_state](Qt::WindowState) {
+                persist_window_state();
             });
     }
 
@@ -656,27 +719,8 @@ int main(int argc, char** argv)
         &app,
         &QCoreApplication::aboutToQuit,
         surface,
-        [
-            persistence_enabled,
-            surface,
-            &window,
-            &latest_restorable_window_state
-        ] {
-            if (!persistence_enabled) {
-                return;
-            }
-
-            const std::optional<Persisted_terminal_window_state> current_state =
-                restorable_terminal_window_state(window, *surface);
-            Persisted_terminal_window_state state =
-                current_state.value_or(
-                    latest_restorable_window_state.value_or(
-                        Persisted_terminal_window_state{}));
-            state.font_size = surface->font_size();
-            state.maximized = window.windowStates().testFlag(Qt::WindowMaximized);
-
-            QSettings settings;
-            save_persisted_terminal_window_state(settings, state);
+        [persist_window_state] {
+            persist_window_state();
         });
 
     Runtime_state state;

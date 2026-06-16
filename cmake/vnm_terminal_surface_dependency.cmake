@@ -1,7 +1,10 @@
 set(VNM_TERMINAL_SURFACE_SOURCE_DIR "" CACHE PATH
     "Path to a source checkout of vnm_terminal_surface.")
 
-set(VNM_TERMINAL_SURFACE_MIN_VERSION "${PROJECT_VERSION}")
+# Minimum is major.minor, not the full patch version, so an app patch bump does
+# not force lockstep re-tags of vnm_terminal_surface (which release CI tracks on
+# master). Same-major compatibility is still enforced separately below.
+set(VNM_TERMINAL_SURFACE_MIN_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
 
 if(NOT VNM_TERMINAL_SURFACE_SOURCE_DIR)
     get_filename_component(vnm_terminal_default_surface_dir

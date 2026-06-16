@@ -68,6 +68,10 @@ void save_persisted_terminal_window_state(
 
 Persisted_appearance_settings load_persisted_appearance_settings(QSettings& settings);
 
+void save_persisted_appearance_settings(
+    QSettings&                  settings,
+    const VNM_TerminalSurface&  surface);
+
 void apply_persisted_appearance_settings(
     const Persisted_appearance_settings& state,
     App_options*                         options);
