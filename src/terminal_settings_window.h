@@ -37,6 +37,7 @@ public:
     QString error_string() const;
 
     void set_transient_parent(QWindow* parent);
+    void set_fallback_anchor_window_title(const QString& title);
 
 public slots:
     void show_window();
@@ -47,11 +48,12 @@ private slots:
     void handle_resize_requested(int edges);
 
 private:
-    void center_over_transient_parent();
+    void place_within_transient_parent();
 
     std::unique_ptr<QObject> m_root_object;
     QPointer<QQuickWindow>   m_window;
     QString                  m_error_string;
+    QString                  m_fallback_anchor_window_title;
     bool                     m_positioned = false;
 };
 
