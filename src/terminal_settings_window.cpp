@@ -11,12 +11,24 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQmlError>
+#include <QGuiApplication>
 #include <QQuickWindow>
 #include <QRect>
+#include <QScreen>
 #include <QStringList>
 #include <QUrl>
 #include <QWindow>
 #include <Qt>
+
+#ifdef Q_OS_WIN
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace settings = vnm_terminal::terminal_app;
 
@@ -30,6 +42,89 @@ QString component_error_string(const QQmlComponent& component)
         out.push_back(error.toString());
     }
     return out.join(QStringLiteral("\n"));
+}
+
+int clamp_axis(int value, int min_value, int max_value)
+{
+    if (max_value < min_value) {
+        return min_value;
+    }
+
+    return qBound(min_value, value, max_value);
+}
+
+#ifdef Q_OS_WIN
+struct Window_title_search
+{
+    const QString* title = nullptr;
+    QRect geometry;
+};
+
+BOOL CALLBACK find_visible_window_with_title(HWND hwnd, LPARAM user_data)
+{
+    auto* search = reinterpret_cast<Window_title_search*>(user_data);
+    if (search == nullptr || search->title == nullptr || !IsWindowVisible(hwnd)) {
+        return TRUE;
+    }
+
+    wchar_t title_buffer[256] = {};
+    if (GetWindowTextW(hwnd, title_buffer, 256) <= 0) {
+        return TRUE;
+    }
+    if (QString::fromWCharArray(title_buffer) != *search->title) {
+        return TRUE;
+    }
+
+    RECT rect{};
+    if (GetWindowRect(hwnd, &rect) &&
+        rect.right > rect.left &&
+        rect.bottom > rect.top)
+    {
+        search->geometry = QRect(
+            QPoint(rect.left, rect.top),
+            QPoint(rect.right - 1, rect.bottom - 1));
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+QRect window_geometry_for_title(const QString& title)
+{
+    if (title.isEmpty()) {
+        return {};
+    }
+
+    Window_title_search search;
+    search.title = &title;
+    EnumWindows(find_visible_window_with_title, reinterpret_cast<LPARAM>(&search));
+    return search.geometry;
+}
+#endif
+
+QRect fallback_anchor_geometry(const QString& preferred_window_title)
+{
+#ifdef Q_OS_WIN
+    const QRect preferred_geometry = window_geometry_for_title(preferred_window_title);
+    if (!preferred_geometry.isEmpty()) {
+        return preferred_geometry;
+    }
+
+    const HWND foreground_window = GetForegroundWindow();
+    RECT rect{};
+    if (foreground_window != nullptr &&
+        GetWindowRect(foreground_window, &rect) &&
+        rect.right > rect.left &&
+        rect.bottom > rect.top)
+    {
+        return QRect(
+            QPoint(rect.left, rect.top),
+            QPoint(rect.right - 1, rect.bottom - 1));
+    }
+#endif
+
+    QScreen* screen = QGuiApplication::primaryScreen();
+    return screen != nullptr ? screen->availableGeometry() : QRect{};
 }
 
 // A self-contained frameless QML Window styled with the shared VNM_Chrome
@@ -59,8 +154,8 @@ Window {
     minimumWidth: 480
     minimumHeight: 520
     visible: false
-    flags: Qt.Window | Qt.FramelessWindowHint | Qt.Dialog
-    color: "#0e1116"
+    flags: Qt.Tool | Qt.FramelessWindowHint
+    color: "#202020"
     title: "vnm_terminal - Settings"
 
     signal close_requested()
@@ -77,16 +172,16 @@ Window {
     readonly property color hint_color:         "#6c7886"
     readonly property color warning_color:      "#d6b25a"
     readonly property color accent_color:       "#71b4ff"
-    readonly property color separator_color:    "#1f2733"
-    readonly property color field_color:        "#1a212c"
-    readonly property color field_hover_color:  "#1f2835"
-    readonly property color field_border_color: "#2c3645"
-    readonly property color field_focus_color:  "#4a5d75"
-    readonly property color popup_color:        "#161c26"
-    readonly property color row_hover_color:    "#27313f"
-    readonly property color card_color:         "#151b24"
-    readonly property color card_hover_color:   "#1a2230"
-    readonly property color card_border_color:  "#232c3a"
+    readonly property color separator_color:    "#343434"
+    readonly property color field_color:        "#262626"
+    readonly property color field_hover_color:  "#2e2e2e"
+    readonly property color field_border_color: "#3a3a3a"
+    readonly property color field_focus_color:  "#5a5a5a"
+    readonly property color popup_color:        "#242424"
+    readonly property color row_hover_color:    "#303030"
+    readonly property color card_color:         "#252525"
+    readonly property color card_hover_color:   "#2d2d2d"
+    readonly property color card_border_color:  "#383838"
 
     component S_SectionHeader: RowLayout {
         property alias text: section_text.text
@@ -390,15 +485,15 @@ R"qml(
     VNM_ChromeTheme {
         id: settings_theme
 
-        titlebar: "#12171e"
-        titlebar_text: "#ebeff5"
-        titlebar_button_icon: "#e2e8f0"
-        titlebar_button_hover: "#272f3a"
-        titlebar_button_pressed: "#343d4a"
+        titlebar: "#202020"
+        titlebar_text: "#e8e8e8"
+        titlebar_button_icon: "#d8d8d8"
+        titlebar_button_hover: "#303030"
+        titlebar_button_pressed: "#3a3a3a"
         titlebar_close_hover: "#c6303a"
         titlebar_close_pressed: "#96222a"
-        titlebar_content_border: "#0b0e13"
-        window_frame_border: "#2a313c"
+        titlebar_content_border: "#343434"
+        window_frame_border: "#343434"
     }
 
     Rectangle {
@@ -840,14 +935,20 @@ void settings::Terminal_settings_window::set_transient_parent(QWindow* parent)
     }
 }
 
+void settings::Terminal_settings_window::set_fallback_anchor_window_title(const QString& title)
+{
+    m_fallback_anchor_window_title = title;
+}
+
 void settings::Terminal_settings_window::show_window()
 {
     if (m_window == nullptr) {
         return;
     }
 
+    place_within_transient_parent();
+
     if (!m_window->isVisible()) {
-        center_over_transient_parent();
         m_window->show();
     }
 
@@ -855,20 +956,36 @@ void settings::Terminal_settings_window::show_window()
     m_window->requestActivate();
 }
 
-void settings::Terminal_settings_window::center_over_transient_parent()
+void settings::Terminal_settings_window::place_within_transient_parent()
 {
-    if (m_window == nullptr || m_positioned) {
+    if (m_window == nullptr) {
         return;
     }
 
     const QWindow* anchor = m_window->transientParent();
-    if (anchor == nullptr) {
+    const QRect anchor_geometry =
+        anchor != nullptr && anchor->isVisible()
+            ? anchor->geometry()
+            : fallback_anchor_geometry(m_fallback_anchor_window_title);
+    if (anchor_geometry.isEmpty()) {
         return;
     }
 
-    const QRect anchor_geometry = anchor->geometry();
-    const QPoint top_left = anchor_geometry.center()
-        - QPoint(m_window->width() / 2, m_window->height() / 2);
+    const int width = qMax(1, m_window->width());
+    const int height = qMax(1, m_window->height());
+    QPoint top_left = m_positioned
+        ? m_window->position()
+        : anchor_geometry.center() - QPoint(width / 2, height / 2);
+
+    top_left.setX(clamp_axis(
+        top_left.x(),
+        anchor_geometry.left(),
+        anchor_geometry.left() + anchor_geometry.width() - width));
+    top_left.setY(clamp_axis(
+        top_left.y(),
+        anchor_geometry.top(),
+        anchor_geometry.top() + anchor_geometry.height() - height));
+
     m_window->setPosition(top_left);
     m_positioned = true;
 }
