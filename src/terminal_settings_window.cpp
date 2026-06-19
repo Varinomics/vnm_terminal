@@ -58,6 +58,7 @@ struct Window_title_search
 {
     const QString* title = nullptr;
     QRect geometry;
+    HWND hwnd = nullptr;
 };
 
 BOOL CALLBACK find_visible_window_with_title(HWND hwnd, LPARAM user_data)
@@ -80,6 +81,7 @@ BOOL CALLBACK find_visible_window_with_title(HWND hwnd, LPARAM user_data)
         rect.right > rect.left &&
         rect.bottom > rect.top)
     {
+        search->hwnd = hwnd;
         search->geometry = QRect(
             QPoint(rect.left, rect.top),
             QPoint(rect.right - 1, rect.bottom - 1));
@@ -99,6 +101,50 @@ QRect window_geometry_for_title(const QString& title)
     search.title = &title;
     EnumWindows(find_visible_window_with_title, reinterpret_cast<LPARAM>(&search));
     return search.geometry;
+}
+
+HWND window_handle_for_title(const QString& title)
+{
+    if (title.isEmpty()) {
+        return nullptr;
+    }
+
+    Window_title_search search;
+    search.title = &title;
+    EnumWindows(find_visible_window_with_title, reinterpret_cast<LPARAM>(&search));
+    return search.hwnd;
+}
+
+void show_window_above_anchor(QWindow& window, const QString& preferred_window_title)
+{
+    const HWND hwnd = reinterpret_cast<HWND>(window.winId());
+    if (hwnd == nullptr) {
+        return;
+    }
+
+    const HWND owner = window_handle_for_title(preferred_window_title);
+    if (owner != nullptr) {
+        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
+    }
+
+    ShowWindow(hwnd, SW_SHOWNORMAL);
+    SetWindowPos(
+        hwnd,
+        HWND_TOPMOST,
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    SetWindowPos(
+        hwnd,
+        HWND_NOTOPMOST,
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    BringWindowToTop(hwnd);
 }
 #endif
 
@@ -952,6 +998,9 @@ void settings::Terminal_settings_window::show_window()
         m_window->show();
     }
 
+#ifdef Q_OS_WIN
+    show_window_above_anchor(*m_window, m_fallback_anchor_window_title);
+#endif
     m_window->raise();
     m_window->requestActivate();
 }

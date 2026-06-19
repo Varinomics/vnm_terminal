@@ -1,3 +1,5 @@
+include("${PROJECT_SOURCE_DIR}/cmake/vnm_terminal_cmake_script_helpers.cmake")
+
 set(VNM_TERMINAL_CMDG_NELOSTIE_EXE "" CACHE FILEPATH
     "Optional path to prebuilt CMDG.exe for the AssemblyWinter2025/Nelostie benchmark.")
 set(VNM_TERMINAL_CMDG_NELOSTIE_WORKING_DIR "" CACHE PATH
@@ -66,18 +68,6 @@ if(NOT VNM_TERMINAL_CMDG_ARTIFACT_TAG STREQUAL "" AND
         "(got '${VNM_TERMINAL_CMDG_ARTIFACT_TAG}').")
 endif()
 
-function(vnm_terminal_cmdg_validate_positive_int32 option_name option_value)
-    if(NOT "${option_value}" MATCHES "^[1-9][0-9]*$")
-        message(FATAL_ERROR "${option_name} must be an integer in 1..2147483647")
-    endif()
-
-    string(LENGTH "${option_value}" option_length)
-    if(option_length GREATER 10 OR
-        (option_length EQUAL 10 AND "${option_value}" STRGREATER "2147483647"))
-        message(FATAL_ERROR "${option_name} must be an integer in 1..2147483647")
-    endif()
-endfunction()
-
 if(VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN)
     find_package(Qt6Gui 6.7 REQUIRED COMPONENTS QOffscreenIntegrationPlugin)
     set(vnm_terminal_cmdg_offscreen_plugin_dir
@@ -121,10 +111,10 @@ if(NOT VNM_TERMINAL_CMDG_NELOSTIE_FRAMES MATCHES "^[1-9][0-9]*$")
         "VNM_TERMINAL_CMDG_NELOSTIE_FRAMES must be a positive integer")
 endif()
 
-vnm_terminal_cmdg_validate_positive_int32(
+vnm_terminal_validate_positive_int32(
     VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS
     "${VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS}")
-vnm_terminal_cmdg_validate_positive_int32(
+vnm_terminal_validate_positive_int32(
     VNM_TERMINAL_CMDG_BENCHMARK_MIN_WINDOWS
     "${VNM_TERMINAL_CMDG_BENCHMARK_MIN_WINDOWS}")
 

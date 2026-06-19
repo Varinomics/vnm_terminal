@@ -2,6 +2,8 @@ if(NOT DEFINED preserved_path)
     message(FATAL_ERROR "preserved_path is required")
 endif()
 
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/vnm_terminal_cmake_script_helpers.cmake")
+
 if(NOT DEFINED preserved_text)
     message(FATAL_ERROR "preserved_text is required")
 endif()
@@ -14,29 +16,7 @@ if(NOT DEFINED expected_output_regex)
     message(FATAL_ERROR "expected_output_regex is required")
 endif()
 
-set(separator_index -1)
-math(EXPR last_index "${CMAKE_ARGC} - 1")
-foreach(index RANGE 0 ${last_index})
-    if(separator_index LESS 0 AND "${CMAKE_ARGV${index}}" STREQUAL "--")
-        set(separator_index ${index})
-    endif()
-endforeach()
-
-if(separator_index LESS 0)
-    message(FATAL_ERROR "expected process command after --")
-endif()
-
-math(EXPR command_start "${separator_index} + 1")
-if(command_start GREATER last_index)
-    message(FATAL_ERROR "expected process command after --")
-endif()
-
-set(command_args)
-foreach(index RANGE ${command_start} ${last_index})
-    set(command_arg "${CMAKE_ARGV${index}}")
-    string(REPLACE ";" "\\;" command_arg "${command_arg}")
-    list(APPEND command_args "${command_arg}")
-endforeach()
+vnm_terminal_script_command_args(command_args)
 
 file(WRITE "${preserved_path}" "${preserved_text}")
 execute_process(

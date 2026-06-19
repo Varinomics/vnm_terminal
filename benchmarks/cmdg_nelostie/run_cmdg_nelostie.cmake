@@ -1,55 +1,4 @@
-function(vnm_terminal_read_json_field out_value json_text source_path)
-    set(json_path ${ARGN})
-    string(JSON value ERROR_VARIABLE json_error GET "${json_text}" ${json_path})
-    if(NOT json_error STREQUAL "NOTFOUND")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} is missing JSON field '${json_path_text}': ${json_error}")
-    endif()
-    set(${out_value} "${value}" PARENT_SCOPE)
-endfunction()
-
-function(vnm_terminal_read_json_type out_value json_text source_path)
-    set(json_path ${ARGN})
-    string(JSON value ERROR_VARIABLE json_error TYPE "${json_text}" ${json_path})
-    if(NOT json_error STREQUAL "NOTFOUND")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} is missing JSON field '${json_path_text}': ${json_error}")
-    endif()
-    set(${out_value} "${value}" PARENT_SCOPE)
-endfunction()
-
-function(vnm_terminal_read_json_length out_value json_text source_path)
-    set(json_path ${ARGN})
-    string(JSON value ERROR_VARIABLE json_error LENGTH "${json_text}" ${json_path})
-    if(NOT json_error STREQUAL "NOTFOUND")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} is missing JSON object '${json_path_text}': ${json_error}")
-    endif()
-    set(${out_value} "${value}" PARENT_SCOPE)
-endfunction()
-
-function(vnm_terminal_expect_json_number json_text source_path)
-    set(json_path ${ARGN})
-    vnm_terminal_read_json_type(field_type "${json_text}" "${source_path}" ${json_path})
-    if(NOT field_type STREQUAL "NUMBER")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} JSON field '${json_path_text}' should be a number, got ${field_type}")
-    endif()
-endfunction()
-
-function(vnm_terminal_expect_json_missing json_text source_path)
-    set(json_path ${ARGN})
-    string(JSON value ERROR_VARIABLE json_error TYPE "${json_text}" ${json_path})
-    if(json_error STREQUAL "NOTFOUND")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} JSON field '${json_path_text}' should be absent")
-    endif()
-endfunction()
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/vnm_terminal_cmake_script_helpers.cmake")
 
 function(vnm_terminal_expect_presentation_counter_metadata json_text source_path)
     set(json_path ${ARGN})
@@ -80,18 +29,6 @@ function(vnm_terminal_expect_presentation_counter_metadata json_text source_path
         list(JOIN json_path "." json_path_text)
         message(FATAL_ERROR
             "terminal metrics JSON reports ${json_path_text}.scanout_verified=true")
-    endif()
-endfunction()
-
-function(vnm_terminal_validate_positive_int32 option_name option_value)
-    if(NOT "${option_value}" MATCHES "^[1-9][0-9]*$")
-        message(FATAL_ERROR "${option_name} must be an integer in 1..2147483647")
-    endif()
-
-    string(LENGTH "${option_value}" option_length)
-    if(option_length GREATER 10 OR
-        (option_length EQUAL 10 AND "${option_value}" STRGREATER "2147483647"))
-        message(FATAL_ERROR "${option_name} must be an integer in 1..2147483647")
     endif()
 endfunction()
 

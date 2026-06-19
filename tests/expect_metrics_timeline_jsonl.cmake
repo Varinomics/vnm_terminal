@@ -2,6 +2,8 @@ if(NOT DEFINED timeline_path)
     message(FATAL_ERROR "timeline_path is required")
 endif()
 
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/vnm_terminal_cmake_script_helpers.cmake")
+
 if(NOT DEFINED expected_interval_ms)
     set(expected_interval_ms "100")
 endif()
@@ -10,72 +12,7 @@ if(NOT DEFINED expected_exit_code)
     set(expected_exit_code "0")
 endif()
 
-function(vnm_terminal_read_json_field out_value json_text source_path)
-    set(json_path ${ARGN})
-    string(JSON value ERROR_VARIABLE json_error GET "${json_text}" ${json_path})
-    if(NOT json_error STREQUAL "NOTFOUND")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} is missing JSON field '${json_path_text}': ${json_error}")
-    endif()
-    set(${out_value} "${value}" PARENT_SCOPE)
-endfunction()
-
-function(vnm_terminal_expect_json_missing json_text source_path)
-    set(json_path ${ARGN})
-    string(JSON value ERROR_VARIABLE json_error TYPE "${json_text}" ${json_path})
-    if(json_error STREQUAL "NOTFOUND")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} JSON field '${json_path_text}' should be absent")
-    endif()
-endfunction()
-
-function(vnm_terminal_read_json_type out_value json_text source_path)
-    set(json_path ${ARGN})
-    string(JSON value ERROR_VARIABLE json_error TYPE "${json_text}" ${json_path})
-    if(NOT json_error STREQUAL "NOTFOUND")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} is missing JSON field '${json_path_text}': ${json_error}")
-    endif()
-    set(${out_value} "${value}" PARENT_SCOPE)
-endfunction()
-
-function(vnm_terminal_expect_json_counter json_text source_path)
-    set(json_path ${ARGN})
-    vnm_terminal_read_json_field(counter_value "${json_text}" "${source_path}" ${json_path})
-    if(NOT counter_value MATCHES "^[0-9]+$")
-        list(JOIN json_path "." json_path_text)
-        message(FATAL_ERROR
-            "${source_path} JSON field '${json_path_text}' should be an integer counter, "
-            "got ${counter_value}")
-    endif()
-endfunction()
-
-set(separator_index -1)
-math(EXPR last_index "${CMAKE_ARGC} - 1")
-foreach(index RANGE 0 ${last_index})
-    if(separator_index LESS 0 AND "${CMAKE_ARGV${index}}" STREQUAL "--")
-        set(separator_index ${index})
-    endif()
-endforeach()
-
-if(separator_index LESS 0)
-    message(FATAL_ERROR "expected process command after --")
-endif()
-
-math(EXPR command_start "${separator_index} + 1")
-if(command_start GREATER last_index)
-    message(FATAL_ERROR "expected process command after --")
-endif()
-
-set(command_args)
-foreach(index RANGE ${command_start} ${last_index})
-    set(command_arg "${CMAKE_ARGV${index}}")
-    string(REPLACE ";" "\\;" command_arg "${command_arg}")
-    list(APPEND command_args "${command_arg}")
-endforeach()
+vnm_terminal_script_command_args(command_args)
 
 file(REMOVE "${timeline_path}")
 execute_process(
