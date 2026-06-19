@@ -48,7 +48,6 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($resolvedOutputPath)
 try {
     $forbidden = @(
-        "(^|/)\.git(/|$)",
         "(^|/)THIRD_PARTY/CMDG/CMDG/(bin|obj)(/|$)"
     )
     $badEntries = @()

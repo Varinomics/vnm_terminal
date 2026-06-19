@@ -44,6 +44,29 @@ function(vnm_terminal_configure_test_process target_name)
     endif()
 endfunction()
 
+function(vnm_terminal_add_target_test target_name)
+    cmake_parse_arguments(
+        vnm_terminal_test
+        ""
+        ""
+        "ENVIRONMENT;ARGUMENTS"
+        ${ARGN})
+
+    add_test(
+        NAME ${target_name}
+        COMMAND
+            "${CMAKE_COMMAND}" -E env
+            ${vnm_terminal_test_ENVIRONMENT}
+            "${vnm_terminal_qt_runtime_path}"
+            "$<TARGET_FILE:${target_name}>"
+            ${vnm_terminal_test_ARGUMENTS}
+    )
+
+    set_tests_properties(${target_name} PROPERTIES
+        TIMEOUT 30
+    )
+endfunction()
+
 vnm_terminal_require_qt_plugin_file(
     Qt6::QOffscreenIntegrationPlugin
     "CTest offscreen runs")
@@ -78,16 +101,7 @@ set_target_properties(vnm_terminal_title_metadata PROPERTIES
     AUTOMOC OFF
 )
 
-add_test(
-    NAME vnm_terminal_title_metadata
-    COMMAND
-        "${CMAKE_COMMAND}" -E env
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_title_metadata>"
-)
-
-set_tests_properties(vnm_terminal_title_metadata PROPERTIES
-    TIMEOUT 30
+vnm_terminal_add_target_test(vnm_terminal_title_metadata
 )
 
 add_executable(vnm_terminal_app_presentation_metrics
@@ -104,16 +118,7 @@ set_target_properties(vnm_terminal_app_presentation_metrics PROPERTIES
     AUTOMOC OFF
 )
 
-add_test(
-    NAME vnm_terminal_app_presentation_metrics
-    COMMAND
-        "${CMAKE_COMMAND}" -E env
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_app_presentation_metrics>"
-)
-
-set_tests_properties(vnm_terminal_app_presentation_metrics PROPERTIES
-    TIMEOUT 30
+vnm_terminal_add_target_test(vnm_terminal_app_presentation_metrics
 )
 
 add_executable(vnm_terminal_input_echo_timing_probe
@@ -136,14 +141,11 @@ set_target_properties(vnm_terminal_input_echo_timing_probe PROPERTIES
     AUTOMOC OFF
 )
 
-add_test(
-    NAME vnm_terminal_input_echo_timing_probe
-    COMMAND
-        "${CMAKE_COMMAND}" -E env
+vnm_terminal_add_target_test(vnm_terminal_input_echo_timing_probe
+    ENVIRONMENT
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_input_echo_timing_probe>"
+    ARGUMENTS
         "--metrics-timeline-jsonl"
         "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_input_echo_timing_metrics_$<CONFIG>.jsonl"
         "--evidence-jsonl"
@@ -155,12 +157,37 @@ add_test(
 
 set_tests_properties(vnm_terminal_input_echo_timing_probe PROPERTIES
     LABELS "readiness;benchmark;input-echo"
-    TIMEOUT 30
+)
+
+add_executable(vnm_terminal_app_cli
+    terminal_app/app_cli_tests.cpp
+    "${PROJECT_SOURCE_DIR}/src/app_cli.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
+)
+
+target_link_libraries(vnm_terminal_app_cli PRIVATE
+    vnm_terminal_surface::vnm_terminal_surface
+    Qt6::Core
+    Qt6::Gui
+)
+
+target_compile_definitions(vnm_terminal_app_cli PRIVATE
+    "VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED=$<BOOL:${VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY}>"
+)
+
+set_target_properties(vnm_terminal_app_cli PROPERTIES
+    AUTOMOC OFF
+)
+
+vnm_terminal_add_target_test(vnm_terminal_app_cli
+    ENVIRONMENT
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
 )
 
 add_executable(vnm_terminal_custom_titlebar_integration
     terminal_app/custom_titlebar_integration_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/app_cli.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_reader.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
@@ -196,23 +223,14 @@ set_target_properties(vnm_terminal_custom_titlebar_integration PROPERTIES
     AUTOMOC ON
 )
 
-add_test(
-    NAME vnm_terminal_custom_titlebar_integration
-    COMMAND
-        "${CMAKE_COMMAND}" -E env
+vnm_terminal_add_target_test(vnm_terminal_custom_titlebar_integration
+    ENVIRONMENT
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_custom_titlebar_integration>"
-)
-
-set_tests_properties(vnm_terminal_custom_titlebar_integration PROPERTIES
-    TIMEOUT 30
 )
 
 add_executable(vnm_terminal_app_persistence
     terminal_app/app_persistence_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/app_cli.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_reader.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
@@ -244,18 +262,10 @@ set_target_properties(vnm_terminal_app_persistence PROPERTIES
     AUTOMOC ON
 )
 
-add_test(
-    NAME vnm_terminal_app_persistence
-    COMMAND
-        "${CMAKE_COMMAND}" -E env
+vnm_terminal_add_target_test(vnm_terminal_app_persistence
+    ENVIRONMENT
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal_app_persistence>"
-)
-
-set_tests_properties(vnm_terminal_app_persistence PROPERTIES
-    TIMEOUT 30
 )
 
 if(TARGET vnm_terminal_canvas_fixture)
@@ -1151,6 +1161,7 @@ set_tests_properties(vnm_terminal_rejects_distribution_transcript_build PROPERTI
 set(vnm_terminal_test_process_targets
     vnm_terminal_title_metadata
     vnm_terminal_app_presentation_metrics
+    vnm_terminal_app_cli
     vnm_terminal_custom_titlebar_integration
     vnm_terminal_app_persistence
 )

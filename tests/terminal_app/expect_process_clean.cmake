@@ -2,34 +2,14 @@ if(NOT DEFINED expected_exit_code)
     message(FATAL_ERROR "expected_exit_code is required")
 endif()
 
+include("${CMAKE_CURRENT_LIST_DIR}/../../cmake/vnm_terminal_cmake_script_helpers.cmake")
+
 set(stderr_must_be_empty OFF)
 if(DEFINED require_empty_stderr)
     set(stderr_must_be_empty "${require_empty_stderr}")
 endif()
 
-set(separator_index -1)
-math(EXPR last_index "${CMAKE_ARGC} - 1")
-foreach(index RANGE 0 ${last_index})
-    if(separator_index LESS 0 AND "${CMAKE_ARGV${index}}" STREQUAL "--")
-        set(separator_index ${index})
-    endif()
-endforeach()
-
-if(separator_index LESS 0)
-    message(FATAL_ERROR "expected process command after --")
-endif()
-
-math(EXPR command_start "${separator_index} + 1")
-if(command_start GREATER last_index)
-    message(FATAL_ERROR "expected process command after --")
-endif()
-
-set(command_args)
-foreach(index RANGE ${command_start} ${last_index})
-    set(command_arg "${CMAKE_ARGV${index}}")
-    string(REPLACE ";" "\\;" command_arg "${command_arg}")
-    list(APPEND command_args "${command_arg}")
-endforeach()
+vnm_terminal_script_command_args(command_args)
 
 execute_process(
     COMMAND ${command_args}

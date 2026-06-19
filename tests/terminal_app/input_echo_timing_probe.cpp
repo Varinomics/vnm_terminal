@@ -1294,73 +1294,6 @@ private:
     std::vector<Backend_output_observation>         m_outputs;
 };
 
-class Metrics_timeline_driver
-{
-public:
-    Metrics_timeline_driver(
-        chrome::Metrics_timeline_jsonl_writer& writer,
-        const Probe_options&                   options,
-        const VNM_TerminalSurface&             surface,
-        const chrome::Presentation_metrics_recorder& presentation,
-        const chrome::Runtime_state&           state,
-        QElapsedTimer&                         app_timer)
-    :
-        m_writer(writer),
-        m_options(options),
-        m_surface(surface),
-        m_presentation(presentation),
-        m_state(state),
-        m_app_timer(app_timer)
-    {}
-
-    bool write_periodic(QString* out_error)
-    {
-        chrome::metrics_timing_t timing;
-        timing.app_elapsed_ms = m_app_timer.elapsed();
-        if (!m_writer.write_sample(
-                chrome::Metrics_timeline_sample_kind::PERIODIC,
-                m_surface,
-                m_presentation,
-                m_state,
-                timing,
-                std::nullopt,
-                m_options.metrics_timeline_interval_ms,
-                out_error))
-        {
-            return false;
-        }
-
-        ++m_periodic_samples;
-        return true;
-    }
-
-    bool write_final(int app_result, QString* out_error)
-    {
-        chrome::metrics_timing_t timing;
-        timing.app_elapsed_ms = m_app_timer.elapsed();
-        return m_writer.write_sample(
-            chrome::Metrics_timeline_sample_kind::FINAL,
-            m_surface,
-            m_presentation,
-            m_state,
-            timing,
-            app_result,
-            m_options.metrics_timeline_interval_ms,
-            out_error);
-    }
-
-    int periodic_samples() const { return m_periodic_samples; }
-
-private:
-    chrome::Metrics_timeline_jsonl_writer&        m_writer;
-    const Probe_options&                          m_options;
-    const VNM_TerminalSurface&                    m_surface;
-    const chrome::Presentation_metrics_recorder&  m_presentation;
-    const chrome::Runtime_state&                  m_state;
-    QElapsedTimer&                                m_app_timer;
-    int                                           m_periodic_samples = 0;
-};
-
 void print_burst_failure_diagnostics(
     const VNM_TerminalSurface&             surface,
     const std::vector<Write_observation>&  writes,
@@ -1550,22 +1483,49 @@ int main(int argc, char** argv)
         return 3;
     }
 
-    Metrics_timeline_driver timeline(
-        metrics_writer,
-        options,
-        surface,
-        presentation_metrics,
-        runtime_state,
-        app_timer);
+    int periodic_metrics_samples = 0;
+    const auto write_periodic_metrics = [&](QString* out_error) {
+        chrome::metrics_timing_t timing;
+        timing.app_elapsed_ms = app_timer.elapsed();
+        if (!metrics_writer.write_sample(
+                chrome::Metrics_timeline_sample_kind::PERIODIC,
+                surface,
+                presentation_metrics,
+                runtime_state,
+                timing,
+                std::nullopt,
+                options.metrics_timeline_interval_ms,
+                out_error))
+        {
+            return false;
+        }
+
+        ++periodic_metrics_samples;
+        return true;
+    };
+    const auto write_final_metrics = [&](int app_result, QString* out_error) {
+        chrome::metrics_timing_t timing;
+        timing.app_elapsed_ms = app_timer.elapsed();
+        return metrics_writer.write_sample(
+            chrome::Metrics_timeline_sample_kind::FINAL,
+            surface,
+            presentation_metrics,
+            runtime_state,
+            timing,
+            app_result,
+            options.metrics_timeline_interval_ms,
+            out_error);
+    };
+
     QTimer metrics_timer;
     metrics_timer.setInterval(options.metrics_timeline_interval_ms);
     QObject::connect(
         &metrics_timer,
         &QTimer::timeout,
         &metrics_timer,
-        [&timeline, &error] {
+        [&write_periodic_metrics, &error] {
             QString write_error;
-            if (!timeline.write_periodic(&write_error) && error.isEmpty()) {
+            if (!write_periodic_metrics(&write_error) && error.isEmpty()) {
                 error = write_error;
             }
         });
@@ -1834,7 +1794,7 @@ int main(int argc, char** argv)
         app_result = 8;
     }
 
-    if (!timeline.write_final(app_result, &error)) {
+    if (!write_final_metrics(app_result, &error)) {
         std::cerr << "ERROR: " << error.toStdString() << '\n';
         return 2;
     }
@@ -1842,7 +1802,7 @@ int main(int argc, char** argv)
     std::cout
         << "input echo timing summary"
         << " bursts=" << options.burst_count
-        << " periodic_metrics_samples=" << timeline.periodic_samples()
+        << " periodic_metrics_samples=" << periodic_metrics_samples
         << " exceeded_echo_limit=" << exceeded_echo_limit
         << " exceeded_frame_limit=" << exceeded_frame_limit
         << " latency_limits_enforced="

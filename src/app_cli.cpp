@@ -314,6 +314,51 @@ bool validate_capture_path(
     return true;
 }
 
+struct capture_path_option_t
+{
+    const char* name;
+    QString*    path;
+};
+
+struct capture_path_conflict_t
+{
+    std::size_t first;
+    std::size_t second;
+};
+
+bool validate_present_capture_path(
+    const capture_path_option_t& option,
+    QString*                     out_error)
+{
+    if (option.path->isEmpty()) {
+        return true;
+    }
+
+    return validate_capture_path(
+        QString::fromLatin1(option.name),
+        *option.path,
+        option.path,
+        out_error);
+}
+
+bool capture_paths_conflict(
+    const capture_path_option_t& first,
+    const capture_path_option_t& second)
+{
+    return
+        !first.path->isEmpty() &&
+        !second.path->isEmpty() &&
+        comparable_capture_path(*first.path) == comparable_capture_path(*second.path);
+}
+
+QString capture_path_conflict_error(
+    const capture_path_option_t& first,
+    const capture_path_option_t& second)
+{
+    return QStringLiteral("%1 and %2 must use different paths: %3")
+        .arg(QString::fromLatin1(first.name), QString::fromLatin1(second.name), *first.path);
+}
+
 } // namespace
 
 void print_usage()
@@ -380,147 +425,69 @@ void print_usage()
 
 bool validate_capture_paths(App_options* options, QString* out_error)
 {
-    if (!options->backend_output_capture_path.isEmpty() &&
-        !validate_capture_path(
-            QStringLiteral("--capture-output"),
-            options->backend_output_capture_path,
-            &options->backend_output_capture_path,
-            out_error))
-    {
-        return false;
-    }
+#if VNM_TERMINAL_PROFILING_ENABLED
+    const std::array<capture_path_option_t, 5> capture_paths{{
+        {"--capture-output",         &options->backend_output_capture_path},
+        {"--capture-transcript",     &options->transcript_capture_path},
+        {"--metrics-json",           &options->metrics_json_path},
+        {"--metrics-timeline-jsonl", &options->metrics_timeline_jsonl_path},
+        {"--profile-text",           &options->profile_text_path},
+    }};
+#else
+    const std::array<capture_path_option_t, 4> capture_paths{{
+        {"--capture-output",         &options->backend_output_capture_path},
+        {"--capture-transcript",     &options->transcript_capture_path},
+        {"--metrics-json",           &options->metrics_json_path},
+        {"--metrics-timeline-jsonl", &options->metrics_timeline_jsonl_path},
+    }};
+#endif
 
-    if (!options->transcript_capture_path.isEmpty() &&
-        !validate_capture_path(
-            QStringLiteral("--capture-transcript"),
-            options->transcript_capture_path,
-            &options->transcript_capture_path,
-            out_error))
-    {
-        return false;
-    }
+    constexpr std::size_t capture_output_path         = 0;
+    constexpr std::size_t capture_transcript_path     = 1;
+    constexpr std::size_t metrics_json_path           = 2;
+    constexpr std::size_t metrics_timeline_jsonl_path = 3;
+#if VNM_TERMINAL_PROFILING_ENABLED
+    constexpr std::size_t profile_text_path           = 4;
+#endif
 
-    if (!options->metrics_json_path.isEmpty() &&
-        !validate_capture_path(
-            QStringLiteral("--metrics-json"),
-            options->metrics_json_path,
-            &options->metrics_json_path,
-            out_error))
-    {
-        return false;
-    }
-
-    if (!options->metrics_timeline_jsonl_path.isEmpty() &&
-        !validate_capture_path(
-            QStringLiteral("--metrics-timeline-jsonl"),
-            options->metrics_timeline_jsonl_path,
-            &options->metrics_timeline_jsonl_path,
-            out_error))
-    {
-        return false;
+    for (const capture_path_option_t& path : capture_paths) {
+        if (!validate_present_capture_path(path, out_error)) {
+            return false;
+        }
     }
 
 #if VNM_TERMINAL_PROFILING_ENABLED
-    if (!options->profile_text_path.isEmpty() &&
-        !validate_capture_path(
-            QStringLiteral("--profile-text"),
-            options->profile_text_path,
-            &options->profile_text_path,
-            out_error))
-    {
-        return false;
-    }
+    const std::array<capture_path_conflict_t, 10> conflicts{{
+        {capture_output_path,     capture_transcript_path},
+        {capture_output_path,     metrics_json_path},
+        {capture_output_path,     metrics_timeline_jsonl_path},
+        {capture_transcript_path, metrics_json_path},
+        {capture_transcript_path, metrics_timeline_jsonl_path},
+        {metrics_json_path,       metrics_timeline_jsonl_path},
+        {profile_text_path,       capture_output_path},
+        {profile_text_path,       capture_transcript_path},
+        {profile_text_path,       metrics_json_path},
+        {profile_text_path,       metrics_timeline_jsonl_path},
+    }};
+#else
+    const std::array<capture_path_conflict_t, 6> conflicts{{
+        {capture_output_path,     capture_transcript_path},
+        {capture_output_path,     metrics_json_path},
+        {capture_output_path,     metrics_timeline_jsonl_path},
+        {capture_transcript_path, metrics_json_path},
+        {capture_transcript_path, metrics_timeline_jsonl_path},
+        {metrics_json_path,       metrics_timeline_jsonl_path},
+    }};
 #endif
 
-    if (!options->backend_output_capture_path.isEmpty() &&
-        !options->transcript_capture_path.isEmpty() &&
-        comparable_capture_path(options->backend_output_capture_path) ==
-            comparable_capture_path(options->transcript_capture_path))
-    {
-        *out_error = QStringLiteral(
-            "--capture-output and --capture-transcript must use different paths: %1")
-            .arg(options->backend_output_capture_path);
-        return false;
+    for (const capture_path_conflict_t& conflict : conflicts) {
+        const capture_path_option_t& first  = capture_paths[conflict.first];
+        const capture_path_option_t& second = capture_paths[conflict.second];
+        if (capture_paths_conflict(first, second)) {
+            *out_error = capture_path_conflict_error(first, second);
+            return false;
+        }
     }
-
-    if (!options->backend_output_capture_path.isEmpty() &&
-        !options->metrics_json_path.isEmpty() &&
-        comparable_capture_path(options->backend_output_capture_path) ==
-            comparable_capture_path(options->metrics_json_path))
-    {
-        *out_error = QStringLiteral(
-            "--capture-output and --metrics-json must use different paths: %1")
-            .arg(options->backend_output_capture_path);
-        return false;
-    }
-
-    if (!options->backend_output_capture_path.isEmpty() &&
-        !options->metrics_timeline_jsonl_path.isEmpty() &&
-        comparable_capture_path(options->backend_output_capture_path) ==
-            comparable_capture_path(options->metrics_timeline_jsonl_path))
-    {
-        *out_error = QStringLiteral(
-            "--capture-output and --metrics-timeline-jsonl must use different paths: %1")
-            .arg(options->backend_output_capture_path);
-        return false;
-    }
-
-    if (!options->transcript_capture_path.isEmpty() &&
-        !options->metrics_json_path.isEmpty() &&
-        comparable_capture_path(options->transcript_capture_path) ==
-            comparable_capture_path(options->metrics_json_path))
-    {
-        *out_error = QStringLiteral(
-            "--capture-transcript and --metrics-json must use different paths: %1")
-            .arg(options->transcript_capture_path);
-        return false;
-    }
-
-    if (!options->transcript_capture_path.isEmpty() &&
-        !options->metrics_timeline_jsonl_path.isEmpty() &&
-        comparable_capture_path(options->transcript_capture_path) ==
-            comparable_capture_path(options->metrics_timeline_jsonl_path))
-    {
-        *out_error = QStringLiteral(
-            "--capture-transcript and --metrics-timeline-jsonl must use different paths: %1")
-            .arg(options->transcript_capture_path);
-        return false;
-    }
-
-    if (!options->metrics_json_path.isEmpty() &&
-        !options->metrics_timeline_jsonl_path.isEmpty() &&
-        comparable_capture_path(options->metrics_json_path) ==
-            comparable_capture_path(options->metrics_timeline_jsonl_path))
-    {
-        *out_error = QStringLiteral(
-            "--metrics-json and --metrics-timeline-jsonl must use different paths: %1")
-            .arg(options->metrics_json_path);
-        return false;
-    }
-
-#if VNM_TERMINAL_PROFILING_ENABLED
-    if (!options->profile_text_path.isEmpty() &&
-        !options->metrics_json_path.isEmpty() &&
-        comparable_capture_path(options->profile_text_path) ==
-            comparable_capture_path(options->metrics_json_path))
-    {
-        *out_error = QStringLiteral(
-            "--profile-text and --metrics-json must use different paths: %1")
-            .arg(options->profile_text_path);
-        return false;
-    }
-
-    if (!options->profile_text_path.isEmpty() &&
-        !options->metrics_timeline_jsonl_path.isEmpty() &&
-        comparable_capture_path(options->profile_text_path) ==
-            comparable_capture_path(options->metrics_timeline_jsonl_path))
-    {
-        *out_error = QStringLiteral(
-            "--profile-text and --metrics-timeline-jsonl must use different paths: %1")
-            .arg(options->profile_text_path);
-        return false;
-    }
-#endif
 
     return true;
 }

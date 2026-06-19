@@ -84,6 +84,15 @@ compaction or future agent sessions.
   was another `vnm_terminal.exe` benchmark process stuck during shutdown, with
   the GUI thread joining ConPTY backend worker threads and another thread inside
   `ClosePseudoConsole`.
+- In a 2026-06-17 stale packaged-app capture, the outer launcher process was
+  only waiting for its runtime child. The runtime had no visible top-level
+  windows, no hosted shell/Codex descendants, and was stuck in Qt window
+  destruction while joining ConPTY backend threads: one worker was blocked in a
+  synchronous `ReadFile`, another waited for reader completion, and a detached
+  thread was blocked in `ClosePseudoConsole`. Fixes for this class belong in
+  `vnm_terminal_surface/src/windows_conpty_backend.cpp`; do not rely only on
+  `std::thread::native_handle()` for MinGW packaged builds when cancelling
+  blocking Windows I/O.
 - For this class of hang, inspect the clipboard owner with `GetClipboardOwner`
   / `GetWindowThreadProcessId` before assuming the requesting terminal's backend
   or hosted shell is the root cause. Replacing the clipboard contents or ending
@@ -97,6 +106,13 @@ compaction or future agent sessions.
 - Do not add pattern-matching, data-driven, or test-tailored fixes.
 - A passing similar test is only narrowing evidence; it is not proof that the
   reported bug is fixed or absent.
+- For live Windows hang captures, prefer non-invasive `cdb` attach with an
+  explicit detach:
+  `cdb.exe -pv -p <pid> -y "<symbol path>" -c ".reload; ~* kP; qd"`.
+  Do not put an unquoted semicolon-separated symbol path at the start of `-c`;
+  `.sympath` treats semicolons as symbol path separators and can swallow the
+  intended commands. Exiting an invasive attach without `qd` can terminate the
+  debuggee instead of leaving the hung process available for another capture.
 
 ## Rejected experiment: visible nested ConPTY tee for Codex
 
