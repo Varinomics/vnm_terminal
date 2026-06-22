@@ -53,6 +53,11 @@ set BUILD_DIR=%~dp0build_portable
 set DIST_DIR=%~dp0dist
 set PORTABLE_DIR=%DIST_DIR%\portable
 set RUNTIME_DIR=%PORTABLE_DIR%\vnm_terminal_runtime
+set MSDF_PACKAGE_PREFIX=%BUILD_DIR%\msdf_text_package
+set MSDF_PACKAGE_BUILD_DIR=%BUILD_DIR%\msdf_text_package_build
+set FREETYPE_SOURCE_DIR=%BUILD_DIR%\_deps\freetype-src
+set MSDFGEN_SOURCE_DIR=%BUILD_DIR%\_deps\msdfgen-src
+set VNM_MSDF_TEXT_SOURCE_DIR=%BUILD_DIR%\_deps\vnm_msdf_text-src
 set REAL_EXE=%BUILD_DIR%\vnm_terminal.exe
 set LAUNCHER_EXE=%BUILD_DIR%\vnm_terminal_portable_launcher.exe
 REM PACKAGE_VERSION is derived from the configured CMake project version after
@@ -92,7 +97,7 @@ if not exist "%VNM_QML_CHROME_SOURCE_DIR%\CMakeLists.txt" (
 )
 
 echo.
-echo [1/5] Configuring CMake ...
+echo [1/6] Preparing packaged MSDF dependency ...
 if exist "%BUILD_DIR%\CMakeCache.txt" (
     findstr /c:"CMAKE_GENERATOR:INTERNAL=Ninja" "%BUILD_DIR%\CMakeCache.txt" >nul
     if errorlevel 1 (
@@ -102,9 +107,111 @@ if exist "%BUILD_DIR%\CMakeCache.txt" (
 )
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
+if not exist "%MSDF_PACKAGE_PREFIX%\lib\cmake\vnm_msdf_text\vnm_msdf_text-config.cmake" (
+    where git >nul 2>nul
+    if errorlevel 1 (
+        echo ERROR: Git is required to fetch MSDF package dependencies.
+        exit /b 1
+    )
+
+    if not exist "%FREETYPE_SOURCE_DIR%\CMakeLists.txt" (
+        git clone --depth 1 --branch VER-2-13-3 https://gitlab.freedesktop.org/freetype/freetype.git "%FREETYPE_SOURCE_DIR%"
+        if errorlevel 1 (
+            echo ERROR: Failed to fetch FreeType.
+            exit /b 1
+        )
+    )
+    if not exist "%MSDFGEN_SOURCE_DIR%\CMakeLists.txt" (
+        git clone --depth 1 --branch v1.12.1 https://github.com/Chlumsky/msdfgen.git "%MSDFGEN_SOURCE_DIR%"
+        if errorlevel 1 (
+            echo ERROR: Failed to fetch msdfgen.
+            exit /b 1
+        )
+    )
+    if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
+        REM vnm_msdf_text intentionally tracks master; API breaks should fail this build instead of hiding behind stale pins.
+        git clone --depth 1 https://github.com/imakris/vnm_msdf_text.git "%VNM_MSDF_TEXT_SOURCE_DIR%"
+        if errorlevel 1 (
+            echo ERROR: Failed to fetch vnm_msdf_text.
+            exit /b 1
+        )
+    )
+
+    "%CMAKE%" -G Ninja ^
+        -DCMAKE_BUILD_TYPE=%CONFIG% ^
+        -DCMAKE_INSTALL_PREFIX="%MSDF_PACKAGE_PREFIX%" ^
+        -DCMAKE_C_COMPILER="%MINGW_BIN%\gcc.exe" ^
+        -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
+        -DBUILD_SHARED_LIBS=OFF ^
+        -DFT_DISABLE_HARFBUZZ=ON ^
+        -DFT_DISABLE_BROTLI=ON ^
+        -DFT_DISABLE_BZIP2=ON ^
+        -DFT_DISABLE_PNG=ON ^
+        -DFT_DISABLE_ZLIB=ON ^
+        -DFT_ENABLE_ERROR_STRINGS=OFF ^
+        -S "%FREETYPE_SOURCE_DIR%" ^
+        -B "%MSDF_PACKAGE_BUILD_DIR%\freetype"
+    if errorlevel 1 (
+        echo ERROR: FreeType configuration failed.
+        exit /b 1
+    )
+    "%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\freetype" --target install --parallel
+    if errorlevel 1 (
+        echo ERROR: FreeType build failed.
+        exit /b 1
+    )
+
+    "%CMAKE%" -G Ninja ^
+        -DCMAKE_BUILD_TYPE=%CONFIG% ^
+        -DCMAKE_INSTALL_PREFIX="%MSDF_PACKAGE_PREFIX%" ^
+        -DCMAKE_PREFIX_PATH="%MSDF_PACKAGE_PREFIX%" ^
+        -DCMAKE_CXX_COMPILER="%MINGW_BIN%\g++.exe" ^
+        -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
+        -DMSDFGEN_USE_VCPKG=OFF ^
+        -DMSDFGEN_BUILD_STANDALONE=OFF ^
+        -DMSDFGEN_DISABLE_SVG=ON ^
+        -DMSDFGEN_DISABLE_PNG=ON ^
+        -DMSDFGEN_USE_SKIA=OFF ^
+        -DMSDFGEN_CORE_ONLY=OFF ^
+        -DMSDFGEN_INSTALL=ON ^
+        -S "%MSDFGEN_SOURCE_DIR%" ^
+        -B "%MSDF_PACKAGE_BUILD_DIR%\msdfgen"
+    if errorlevel 1 (
+        echo ERROR: msdfgen configuration failed.
+        exit /b 1
+    )
+    "%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\msdfgen" --target install --parallel
+    if errorlevel 1 (
+        echo ERROR: msdfgen build failed.
+        exit /b 1
+    )
+
+    "%CMAKE%" -G Ninja ^
+        -DCMAKE_BUILD_TYPE=%CONFIG% ^
+        -DCMAKE_INSTALL_PREFIX="%MSDF_PACKAGE_PREFIX%" ^
+        -DCMAKE_PREFIX_PATH="%MSDF_PACKAGE_PREFIX%" ^
+        -DCMAKE_CXX_COMPILER="%MINGW_BIN%\g++.exe" ^
+        -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
+        -DVNM_MSDF_TEXT_FETCH_DEPS=OFF ^
+        -DVNM_MSDF_TEXT_BUILD_TESTS=OFF ^
+        -S "%VNM_MSDF_TEXT_SOURCE_DIR%" ^
+        -B "%MSDF_PACKAGE_BUILD_DIR%\vnm_msdf_text"
+    if errorlevel 1 (
+        echo ERROR: vnm_msdf_text configuration failed.
+        exit /b 1
+    )
+    "%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\vnm_msdf_text" --target install --parallel
+    if errorlevel 1 (
+        echo ERROR: vnm_msdf_text build failed.
+        exit /b 1
+    )
+)
+
+echo.
+echo [2/6] Configuring CMake ...
 "%CMAKE%" -G Ninja ^
     -DCMAKE_BUILD_TYPE=%CONFIG% ^
-    -DCMAKE_PREFIX_PATH="%QT_PREFIX%" ^
+    -DCMAKE_PREFIX_PATH="%QT_PREFIX%;%MSDF_PACKAGE_PREFIX%" ^
     -DQt6_DIR="%QT_PREFIX%\lib\cmake\Qt6" ^
     -DCMAKE_CXX_COMPILER="%MINGW_BIN%\g++.exe" ^
     -DCMAKE_C_COMPILER="%MINGW_BIN%\gcc.exe" ^
@@ -112,6 +219,8 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
     -DVNM_TERMINAL_SURFACE_SOURCE_DIR="%VNM_TERMINAL_SURFACE_SOURCE_DIR%" ^
     -DVNM_QML_CHROME_SOURCE_DIR="%VNM_QML_CHROME_SOURCE_DIR%" ^
     -DVNM_TERMINAL_ENABLE_PROFILING=OFF ^
+    -DVNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER=ON ^
+    -DVNM_TERMINAL_MSDF_TEXT_RENDERER_USE_SYSTEM_LIBS=ON ^
     -DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=OFF ^
     -DVNM_TERMINAL_DISTRIBUTION_BUILD=ON ^
     -DBUILD_TESTING=OFF ^
@@ -132,7 +241,7 @@ if "%PACKAGE_VERSION%"=="" (
 echo Package version: %PACKAGE_VERSION%
 
 echo.
-echo [2/5] Building ...
+echo [3/6] Building ...
 "%CMAKE%" --build "%BUILD_DIR%" --config "%CONFIG%" --target vnm_terminal vnm_terminal_portable_launcher --parallel
 if errorlevel 1 (
     echo ERROR: Build failed.
@@ -140,7 +249,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo [3/5] Assembling portable distribution ...
+echo [4/6] Assembling portable distribution ...
 
 if exist "%PORTABLE_DIR%" rmdir /s /q "%PORTABLE_DIR%"
 mkdir "%PORTABLE_DIR%"
@@ -265,7 +374,7 @@ for %%F in (
 )
 
 echo.
-echo [4/5] Writing build info ...
+echo [5/6] Writing build info ...
 
 set APP_SOURCE_DIR=%~dp0.
 for %%I in ("%APP_SOURCE_DIR%") do set APP_SOURCE_DIR=%%~fI
@@ -342,7 +451,7 @@ for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd_HH:m
 ) > "%RUNTIME_DIR%\vnm_terminal_build_info.txt"
 
 echo.
-echo [5/5] Creating ZIP archive ...
+echo [6/6] Creating ZIP archive ...
 
 set ZIP_NAME=vnm_terminal_v%PACKAGE_VERSION%_w64.zip
 set ZIP_PATH=%DIST_DIR%\%ZIP_NAME%
