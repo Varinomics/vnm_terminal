@@ -46,6 +46,13 @@ jobs:
           path: vnm_qml_chrome
           ref: master
 
+      - name: Checkout MSDF text
+        uses: actions/checkout@v4
+        with:
+          repository: imakris/vnm_msdf_text
+          path: vnm_msdf_text
+          ref: master
+
       - name: Derive package names
         id: package
         run: |
@@ -74,13 +81,67 @@ jobs:
           archives: 'qtbase qtdeclarative'
           cache: 'true'
 
+      - name: Prepare MSDF package dependency
+        run: |
+          msdf_package_prefix="${GITHUB_WORKSPACE}/msdf_package"
+          msdf_package_build_dir="${GITHUB_WORKSPACE}/msdf_package_build"
+          freetype_source_dir="${GITHUB_WORKSPACE}/_deps/freetype-src"
+          msdfgen_source_dir="${GITHUB_WORKSPACE}/_deps/msdfgen-src"
+
+          git clone --depth 1 --branch VER-2-13-3 \
+            https://gitlab.freedesktop.org/freetype/freetype.git \
+            "${freetype_source_dir}"
+          git clone --depth 1 --branch v1.12.1 \
+            https://github.com/Chlumsky/msdfgen.git \
+            "${msdfgen_source_dir}"
+
+          cmake -S "${freetype_source_dir}" -B "${msdf_package_build_dir}/freetype" \
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DCMAKE_INSTALL_PREFIX="${msdf_package_prefix}" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DFT_DISABLE_HARFBUZZ=ON \
+            -DFT_DISABLE_BROTLI=ON \
+            -DFT_DISABLE_BZIP2=ON \
+            -DFT_DISABLE_PNG=ON \
+            -DFT_DISABLE_ZLIB=ON \
+            -DFT_ENABLE_ERROR_STRINGS=OFF
+          cmake --build "${msdf_package_build_dir}/freetype" --target install --parallel
+
+          cmake -S "${msdfgen_source_dir}" -B "${msdf_package_build_dir}/msdfgen" \
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DCMAKE_INSTALL_PREFIX="${msdf_package_prefix}" \
+            -DCMAKE_PREFIX_PATH="${msdf_package_prefix}" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DMSDFGEN_USE_VCPKG=OFF \
+            -DMSDFGEN_BUILD_STANDALONE=OFF \
+            -DMSDFGEN_DISABLE_SVG=ON \
+            -DMSDFGEN_DISABLE_PNG=ON \
+            -DMSDFGEN_USE_SKIA=OFF \
+            -DMSDFGEN_CORE_ONLY=OFF \
+            -DMSDFGEN_INSTALL=ON
+          cmake --build "${msdf_package_build_dir}/msdfgen" --target install --parallel
+
+          cmake -S vnm_msdf_text -B "${msdf_package_build_dir}/vnm_msdf_text" \
+            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DCMAKE_INSTALL_PREFIX="${msdf_package_prefix}" \
+            -DCMAKE_PREFIX_PATH="${msdf_package_prefix}" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DVNM_MSDF_TEXT_FETCH_DEPS=OFF \
+            -DVNM_MSDF_TEXT_BUILD_TESTS=OFF
+          cmake --build "${msdf_package_build_dir}/vnm_msdf_text" --target install --parallel
+
+          test -f "${msdf_package_prefix}/lib/cmake/vnm_msdf_text/vnm_msdf_text-config.cmake"
+
       - name: Configure CMake
         run: |
           cmake -B vnm_terminal/build -S vnm_terminal \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR};${GITHUB_WORKSPACE}/msdf_package" \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
+            -DVNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER=ON \
+            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_USE_SYSTEM_LIBS=ON \
             -DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=OFF \
             -DVNM_TERMINAL_DISTRIBUTION_BUILD=ON \
             -DBUILD_TESTING=ON
