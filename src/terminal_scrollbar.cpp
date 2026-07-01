@@ -15,9 +15,9 @@ namespace scrollbar = vnm_terminal::terminal_app;
 namespace {
 
 constexpr qreal k_track_vertical_inset        = 3.0;
-constexpr qreal k_track_width                 = 4.0;
+constexpr qreal k_track_width                 = 10.0;
 constexpr qreal k_thumb_min_height            = 24.0;
-constexpr qreal k_thumb_radius                = 2.0;
+constexpr qreal k_thumb_radius                = 5.0;
 constexpr qreal k_angle_delta_per_wheel_step  = 120.0;
 constexpr qreal k_font_zoom_min_pixel_size    = 6.0;
 constexpr qreal k_font_zoom_max_pixel_size    = 72.0;
