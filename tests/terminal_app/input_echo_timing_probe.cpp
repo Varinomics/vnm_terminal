@@ -123,9 +123,6 @@ struct Render_counts
     std::uint64_t qsg_captured_snapshot                 = 0U;
     std::uint64_t qsg_rendered_snapshot                 = 0U;
     std::uint64_t last_rendered_snapshot                = 0U;
-    std::uint64_t backend_callback_frame_deferrals      = 0U;
-    std::uint64_t backend_callback_event_epoch          = 0U;
-    std::uint64_t backend_callback_frame_boundary_epoch = 0U;
     bool          qsg_drew                              = false;
     bool          render_target_non_null                = false;
     bool          rhi_non_null                          = false;
@@ -480,9 +477,6 @@ Render_counts render_counts(const VNM_TerminalSurface& surface)
         qsg_atlas.captured_snapshot_sequence,
         qsg_atlas.render_snapshot_sequence,
         invalidation.last_rendered_snapshot_sequence,
-        invalidation.backend_callback_frame_deferrals,
-        invalidation.backend_callback_event_epoch,
-        invalidation.backend_callback_frame_boundary_epoch,
         qsg_atlas.drew,
         qsg_atlas.render_target_non_null,
         qsg_atlas.rhi_non_null,
@@ -982,20 +976,6 @@ QJsonObject render_delta_json(const Render_counts& before, const Render_counts& 
     object.insert(
         QStringLiteral("last_rendered_snapshot_after"),
         static_cast<qint64>(after.last_rendered_snapshot));
-    object.insert(
-        QStringLiteral("backend_callback_frame_deferrals_delta"),
-        static_cast<qint64>(counter_delta(
-            before.backend_callback_frame_deferrals,
-            after.backend_callback_frame_deferrals)));
-    object.insert(
-        QStringLiteral("backend_callback_frame_deferrals_after"),
-        static_cast<qint64>(after.backend_callback_frame_deferrals));
-    object.insert(
-        QStringLiteral("backend_callback_event_epoch_after"),
-        static_cast<qint64>(after.backend_callback_event_epoch));
-    object.insert(
-        QStringLiteral("backend_callback_frame_boundary_epoch_after"),
-        static_cast<qint64>(after.backend_callback_frame_boundary_epoch));
     return object;
 }
 
@@ -1344,11 +1324,6 @@ void print_burst_failure_diagnostics(
         << " qsg_captured_snapshot=" << render.qsg_captured_snapshot
         << " qsg_rendered_snapshot=" << render.qsg_rendered_snapshot
         << " last_rendered_snapshot=" << render.last_rendered_snapshot
-        << " backend_callback_frame_deferrals="
-        << render.backend_callback_frame_deferrals
-        << " backend_callback_event_epoch=" << render.backend_callback_event_epoch
-        << " backend_callback_frame_boundary_epoch="
-        << render.backend_callback_frame_boundary_epoch
         << " qsg_drew=" << (render.qsg_drew ? "true" : "false")
         << '\n';
 
