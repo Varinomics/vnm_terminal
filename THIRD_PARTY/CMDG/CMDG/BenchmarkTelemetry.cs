@@ -17,7 +17,11 @@ public static class BenchmarkTelemetry
     private static int s_drawFrames;
     private static long s_sceneCalcMsTotal;
     private static long s_sceneWaitMsTotal;
-    private static long s_drawMsTotal;
+    private static long s_drawTicksTotal;
+    private static long s_drawPreWriteBuildTicksTotal;
+    private static long s_drawOpenStdoutTicksTotal;
+    private static long s_drawUtf8EncodeTicksTotal;
+    private static long s_drawStdoutWriteFlushTicksTotal;
     private static long s_drawWaitMsTotal;
     private static long s_drawOutputBytes;
     private static long s_changedRows;
@@ -40,7 +44,11 @@ public static class BenchmarkTelemetry
         public int DrawFrames;
         public long SceneCalcMsTotal;
         public long SceneWaitMsTotal;
-        public long DrawMsTotal;
+        public long DrawTicksTotal;
+        public long DrawPreWriteBuildTicksTotal;
+        public long DrawOpenStdoutTicksTotal;
+        public long DrawUtf8EncodeTicksTotal;
+        public long DrawStdoutWriteFlushTicksTotal;
         public long DrawWaitMsTotal;
         public long DrawOutputBytes;
         public long ChangedRows;
@@ -57,7 +65,11 @@ public static class BenchmarkTelemetry
                 DrawFrames = DrawFrames,
                 SceneCalcMsTotal = SceneCalcMsTotal,
                 SceneWaitMsTotal = SceneWaitMsTotal,
-                DrawMsTotal = DrawMsTotal,
+                DrawTicksTotal = DrawTicksTotal,
+                DrawPreWriteBuildTicksTotal = DrawPreWriteBuildTicksTotal,
+                DrawOpenStdoutTicksTotal = DrawOpenStdoutTicksTotal,
+                DrawUtf8EncodeTicksTotal = DrawUtf8EncodeTicksTotal,
+                DrawStdoutWriteFlushTicksTotal = DrawStdoutWriteFlushTicksTotal,
                 DrawWaitMsTotal = DrawWaitMsTotal,
                 DrawOutputBytes = DrawOutputBytes,
                 ChangedRows = ChangedRows,
@@ -90,7 +102,11 @@ public static class BenchmarkTelemetry
     }
 
     public static void RecordDrawFrame(
-        int drawMs,
+        long drawTicks,
+        long preWriteBuildTicks,
+        long openStdoutTicks,
+        long utf8EncodeTicks,
+        long stdoutWriteFlushTicks,
         int waitMs,
         int outputBytes,
         int changedRows,
@@ -99,12 +115,25 @@ public static class BenchmarkTelemetry
         if (!Enabled) return;
 
         Interlocked.Increment(ref s_drawFrames);
-        Interlocked.Add(ref s_drawMsTotal, drawMs);
+        Interlocked.Add(ref s_drawTicksTotal, drawTicks);
+        Interlocked.Add(ref s_drawPreWriteBuildTicksTotal, preWriteBuildTicks);
+        Interlocked.Add(ref s_drawOpenStdoutTicksTotal, openStdoutTicks);
+        Interlocked.Add(ref s_drawUtf8EncodeTicksTotal, utf8EncodeTicks);
+        Interlocked.Add(ref s_drawStdoutWriteFlushTicksTotal, stdoutWriteFlushTicks);
         Interlocked.Add(ref s_drawWaitMsTotal, waitMs);
         Interlocked.Add(ref s_drawOutputBytes, outputBytes);
         Interlocked.Add(ref s_changedRows, changedRows);
         Interlocked.Add(ref s_changedCells, changedCells);
-        RecordDrawWindow(drawMs, waitMs, outputBytes, changedRows, changedCells);
+        RecordDrawWindow(
+            drawTicks,
+            preWriteBuildTicks,
+            openStdoutTicks,
+            utf8EncodeTicks,
+            stdoutWriteFlushTicks,
+            waitMs,
+            outputBytes,
+            changedRows,
+            changedCells);
     }
 
     public static void WriteSummary(int exitCode, string exitReason)
@@ -149,7 +178,11 @@ public static class BenchmarkTelemetry
     }
 
     private static void RecordDrawWindow(
-        int drawMs,
+        long drawTicks,
+        long preWriteBuildTicks,
+        long openStdoutTicks,
+        long utf8EncodeTicks,
+        long stdoutWriteFlushTicks,
         int waitMs,
         int outputBytes,
         int changedRows,
@@ -162,7 +195,11 @@ public static class BenchmarkTelemetry
         {
             WindowCounters window = EnsureWindow(index);
             window.DrawFrames++;
-            window.DrawMsTotal += drawMs;
+            window.DrawTicksTotal += drawTicks;
+            window.DrawPreWriteBuildTicksTotal += preWriteBuildTicks;
+            window.DrawOpenStdoutTicksTotal += openStdoutTicks;
+            window.DrawUtf8EncodeTicksTotal += utf8EncodeTicks;
+            window.DrawStdoutWriteFlushTicksTotal += stdoutWriteFlushTicks;
             window.DrawWaitMsTotal += waitMs;
             window.DrawOutputBytes += outputBytes;
             window.ChangedRows += changedRows;
@@ -204,6 +241,11 @@ public static class BenchmarkTelemetry
         }
     }
 
+    private static double StopwatchTicksToMilliseconds(long ticks)
+    {
+        return ticks * 1000.0 / Stopwatch.Frequency;
+    }
+
     private static string BuildJson(int exitCode, string exitReason)
     {
         int sceneFrames = Volatile.Read(ref s_sceneFrames);
@@ -225,7 +267,31 @@ public static class BenchmarkTelemetry
         AppendJsonNumber(json, "draw_frames_per_second", drawFrames / elapsedSeconds, true);
         AppendJsonNumber(json, "scene_calc_ms_total", Volatile.Read(ref s_sceneCalcMsTotal), true);
         AppendJsonNumber(json, "scene_wait_ms_total", Volatile.Read(ref s_sceneWaitMsTotal), true);
-        AppendJsonNumber(json, "draw_ms_total", Volatile.Read(ref s_drawMsTotal), true);
+        AppendJsonNumber(
+            json,
+            "draw_ms_total",
+            StopwatchTicksToMilliseconds(Volatile.Read(ref s_drawTicksTotal)),
+            true);
+        AppendJsonNumber(
+            json,
+            "draw_pre_write_build_ms_total",
+            StopwatchTicksToMilliseconds(Volatile.Read(ref s_drawPreWriteBuildTicksTotal)),
+            true);
+        AppendJsonNumber(
+            json,
+            "draw_open_stdout_ms_total",
+            StopwatchTicksToMilliseconds(Volatile.Read(ref s_drawOpenStdoutTicksTotal)),
+            true);
+        AppendJsonNumber(
+            json,
+            "draw_utf8_encode_ms_total",
+            StopwatchTicksToMilliseconds(Volatile.Read(ref s_drawUtf8EncodeTicksTotal)),
+            true);
+        AppendJsonNumber(
+            json,
+            "draw_stdout_write_flush_ms_total",
+            StopwatchTicksToMilliseconds(Volatile.Read(ref s_drawStdoutWriteFlushTicksTotal)),
+            true);
         AppendJsonNumber(json, "draw_wait_ms_total", Volatile.Read(ref s_drawWaitMsTotal), true);
         AppendJsonNumber(json, "draw_output_bytes", Volatile.Read(ref s_drawOutputBytes), true);
         AppendJsonNumber(json, "changed_rows", Volatile.Read(ref s_changedRows), true);
@@ -276,7 +342,36 @@ public static class BenchmarkTelemetry
                 json, 8, "scene_elapsed_seconds_end", sceneElapsedSecondsEnd, true);
             AppendJsonNumber(json, 8, "scene_calc_ms_total", window.SceneCalcMsTotal, true);
             AppendJsonNumber(json, 8, "scene_wait_ms_total", window.SceneWaitMsTotal, true);
-            AppendJsonNumber(json, 8, "draw_ms_total", window.DrawMsTotal, true);
+            AppendJsonNumber(
+                json,
+                8,
+                "draw_ms_total",
+                StopwatchTicksToMilliseconds(window.DrawTicksTotal),
+                true);
+            AppendJsonNumber(
+                json,
+                8,
+                "draw_pre_write_build_ms_total",
+                StopwatchTicksToMilliseconds(window.DrawPreWriteBuildTicksTotal),
+                true);
+            AppendJsonNumber(
+                json,
+                8,
+                "draw_open_stdout_ms_total",
+                StopwatchTicksToMilliseconds(window.DrawOpenStdoutTicksTotal),
+                true);
+            AppendJsonNumber(
+                json,
+                8,
+                "draw_utf8_encode_ms_total",
+                StopwatchTicksToMilliseconds(window.DrawUtf8EncodeTicksTotal),
+                true);
+            AppendJsonNumber(
+                json,
+                8,
+                "draw_stdout_write_flush_ms_total",
+                StopwatchTicksToMilliseconds(window.DrawStdoutWriteFlushTicksTotal),
+                true);
             AppendJsonNumber(json, 8, "draw_wait_ms_total", window.DrawWaitMsTotal, true);
             AppendJsonNumber(json, 8, "draw_output_bytes", window.DrawOutputBytes, true);
             AppendJsonNumber(json, 8, "changed_rows", window.ChangedRows, true);
