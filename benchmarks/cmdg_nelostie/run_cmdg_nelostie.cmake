@@ -611,6 +611,10 @@ foreach(cmdg_number_field IN ITEMS
     scene_calc_ms_total
     scene_wait_ms_total
     draw_ms_total
+    draw_pre_write_build_ms_total
+    draw_open_stdout_ms_total
+    draw_utf8_encode_ms_total
+    draw_stdout_write_flush_ms_total
     draw_wait_ms_total
     draw_output_bytes
     changed_rows
@@ -652,6 +656,10 @@ foreach(cmdg_window_index RANGE 0 ${cmdg_window_last_index})
         scene_calc_ms_total
         scene_wait_ms_total
         draw_ms_total
+        draw_pre_write_build_ms_total
+        draw_open_stdout_ms_total
+        draw_utf8_encode_ms_total
+        draw_stdout_write_flush_ms_total
         draw_wait_ms_total
         draw_output_bytes
         changed_rows
@@ -733,8 +741,6 @@ foreach(cmdg_window_index RANGE 0 ${cmdg_window_last_index})
         "${cmdg_window_scene_calc_ms_total} + ${window_scene_calc_ms_total}")
     math(EXPR cmdg_window_scene_wait_ms_total
         "${cmdg_window_scene_wait_ms_total} + ${window_scene_wait_ms_total}")
-    math(EXPR cmdg_window_draw_ms_total
-        "${cmdg_window_draw_ms_total} + ${window_draw_ms_total}")
     math(EXPR cmdg_window_draw_wait_ms_total
         "${cmdg_window_draw_wait_ms_total} + ${window_draw_wait_ms_total}")
     math(EXPR cmdg_window_draw_output_bytes
@@ -750,7 +756,6 @@ foreach(cmdg_counter_name IN ITEMS
     draw_frames
     scene_calc_ms_total
     scene_wait_ms_total
-    draw_ms_total
     draw_wait_ms_total
     draw_output_bytes
     changed_rows

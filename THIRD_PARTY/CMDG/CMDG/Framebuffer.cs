@@ -10,6 +10,7 @@ namespace CMDG
         private static readonly object swapBufferLock = new object();
         private static volatile bool isRunning = true;
         private static Thread? drawThread;
+        private static Stream? stdoutStream;
 
         private static int diskFrameNumber = 0;                                                              // Frame number for filenames (disk renderer)
 
@@ -210,6 +211,7 @@ namespace CMDG
             }
 
             stopwatch.Restart();
+            long preWriteBuildStartTicks = Stopwatch.GetTimestamp();
             SwapbuffersToFrontBuffers();      // Get the contents of Backbuffers (Swapbuffers) as written by the scene function.
 
             var outputBuffer = new StringBuilder(Config.ScreenWidth * Config.ScreenHeight * 5);     // Buffer to store the commands for characters, colors and cursor placements, collected and executed in one go.
@@ -360,15 +362,32 @@ namespace CMDG
             DebugConsole.PrintMessages(1, 2);
 
             // Finally write the entire buffer as bytes
-            var outputStream = Console.OpenStandardOutput();
+            bool openedStdout = false;
+            Stream? cachedOutputStream = stdoutStream;
+            long openStdoutStartTicks = Stopwatch.GetTimestamp();
+            if (cachedOutputStream == null)
+            {
+                cachedOutputStream = Console.OpenStandardOutput();
+                stdoutStream = cachedOutputStream;
+                openedStdout = true;
+            }
+            Stream outputStream = cachedOutputStream;
+            long utf8EncodeStartTicks = openedStdout
+                ? Stopwatch.GetTimestamp()
+                : openStdoutStartTicks;
             byte[] bytes = Encoding.UTF8.GetBytes(outputBuffer.ToString());
+            long stdoutWriteFlushStartTicks = Stopwatch.GetTimestamp();
             outputStream.Write(bytes, 0, bytes.Length);
             outputStream.Flush();
+            long stdoutWriteFlushEndTicks = Stopwatch.GetTimestamp();
 
             stopwatch.Stop();
-            drawFrameTime = (int)(stopwatch.ElapsedMilliseconds);  // Frame time display lags one frame behind calculation, but who cares.
-
-
+            long drawTicks = stdoutWriteFlushEndTicks - preWriteBuildStartTicks;
+            drawFrameTime = (int)(drawTicks * 1000 / Stopwatch.Frequency);  // Frame time display lags one frame behind calculation, but who cares.
+            long preWriteBuildTicks = openStdoutStartTicks - preWriteBuildStartTicks;
+            long openStdoutTicks = utf8EncodeStartTicks - openStdoutStartTicks;
+            long utf8EncodeTicks = stdoutWriteFlushStartTicks - utf8EncodeStartTicks;
+            long stdoutWriteFlushTicks = stdoutWriteFlushEndTicks - stdoutWriteFlushStartTicks;
 
             // If drawing this frame needed less time than specified max framerate, wait to steady the framerate to max.
             drawFrameWaitTime = SceneControl.maxMs - drawFrameTime;
@@ -382,7 +401,11 @@ namespace CMDG
             }
 
             BenchmarkTelemetry.RecordDrawFrame(
-                drawFrameTime,
+                drawTicks,
+                preWriteBuildTicks,
+                openStdoutTicks,
+                utf8EncodeTicks,
+                stdoutWriteFlushTicks,
                 drawFrameWaitTime,
                 bytes.Length,
                 changedRows,
