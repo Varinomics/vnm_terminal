@@ -26,6 +26,7 @@ if not exist "%~dp0build_config.bat" (
     echo   set NINJA=C:\Qt\Tools\Ninja\ninja.exe
     echo   set VNM_TERMINAL_SURFACE_SOURCE_DIR=C:\plms\varinomics\vnm_terminal_surface
     echo   set VNM_QML_CHROME_SOURCE_DIR=C:\plms\varinomics\vnm_qml_chrome
+    echo   REM Optional: set VNM_MSDF_TEXT_SOURCE_DIR=C:\plms\bsd_licensed\vnm_msdf_text
     echo.
     exit /b 1
 )
@@ -55,13 +56,33 @@ set PORTABLE_DIR=%DIST_DIR%\portable_candidate
 set RUNTIME_DIR=%PORTABLE_DIR%\vnm_terminal_runtime
 set MSDF_PACKAGE_PREFIX=%BUILD_DIR%\msdf_text_package
 set MSDF_PACKAGE_BUILD_DIR=%BUILD_DIR%\msdf_text_package_build
+set VNM_MSDF_TEXT_PACKAGE_BUILD_TREE=%MSDF_PACKAGE_BUILD_DIR%\vnm_msdf_text
+set VNM_MSDF_TEXT_PACKAGE_CONFIG=%MSDF_PACKAGE_PREFIX%\lib\cmake\vnm_msdf_text\vnm_msdf_text-config.cmake
+set VNM_MSDF_TEXT_SOURCE_STAMP=%MSDF_PACKAGE_PREFIX%\vnm_msdf_text_source_dir.txt
 set FREETYPE_SOURCE_DIR=%BUILD_DIR%\_deps\freetype-src
 set MSDFGEN_SOURCE_DIR=%BUILD_DIR%\_deps\msdfgen-src
-set VNM_MSDF_TEXT_SOURCE_DIR=%BUILD_DIR%\_deps\vnm_msdf_text-src
+set VNM_MSDF_TEXT_FALLBACK_SOURCE_DIR=%BUILD_DIR%\_deps\vnm_msdf_text-src
+set VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK=0
 set REAL_EXE=%BUILD_DIR%\vnm_terminal.exe
 set LAUNCHER_EXE=%BUILD_DIR%\vnm_terminal_portable_launcher.exe
 REM PACKAGE_VERSION is derived from the configured CMake project version after
 REM the configure step below (single source of truth: project() in CMakeLists.txt).
+
+if "%VNM_MSDF_TEXT_SOURCE_DIR%"=="" (
+    set VNM_MSDF_TEXT_SOURCE_DIR=%VNM_MSDF_TEXT_FALLBACK_SOURCE_DIR%
+    set VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK=1
+)
+for %%I in ("%VNM_MSDF_TEXT_SOURCE_DIR%") do set VNM_MSDF_TEXT_SOURCE_DIR=%%~fI
+if "%VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK%"=="0" if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
+    echo ERROR: vnm_msdf_text not found at %VNM_MSDF_TEXT_SOURCE_DIR%
+    exit /b 1
+)
+set VNM_MSDF_TEXT_PACKAGE_READY=1
+if not exist "%VNM_MSDF_TEXT_PACKAGE_CONFIG%" set VNM_MSDF_TEXT_PACKAGE_READY=0
+if not exist "%VNM_MSDF_TEXT_SOURCE_STAMP%" set VNM_MSDF_TEXT_PACKAGE_READY=0
+set VNM_MSDF_TEXT_STAMPED_SOURCE=
+if exist "%VNM_MSDF_TEXT_SOURCE_STAMP%" set /p VNM_MSDF_TEXT_STAMPED_SOURCE=<"%VNM_MSDF_TEXT_SOURCE_STAMP%"
+if "%VNM_MSDF_TEXT_PACKAGE_READY%"=="1" if /i not "%VNM_MSDF_TEXT_STAMPED_SOURCE%"=="%VNM_MSDF_TEXT_SOURCE_DIR%" set VNM_MSDF_TEXT_PACKAGE_READY=0
 
 if not exist "%CMAKE%" (
     echo ERROR: CMake not found at %CMAKE%
@@ -107,7 +128,7 @@ if exist "%BUILD_DIR%\CMakeCache.txt" (
 )
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
-if not exist "%MSDF_PACKAGE_PREFIX%\lib\cmake\vnm_msdf_text\vnm_msdf_text-config.cmake" (
+if "%VNM_MSDF_TEXT_PACKAGE_READY%"=="0" (
     where git >nul 2>nul
     if errorlevel 1 (
         echo ERROR: Git is required to fetch MSDF package dependencies.
@@ -129,10 +150,15 @@ if not exist "%MSDF_PACKAGE_PREFIX%\lib\cmake\vnm_msdf_text\vnm_msdf_text-config
         )
     )
     if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
-        REM vnm_msdf_text intentionally tracks master; API breaks should fail this build instead of hiding behind stale pins.
-        git clone --depth 1 https://github.com/imakris/vnm_msdf_text.git "%VNM_MSDF_TEXT_SOURCE_DIR%"
-        if errorlevel 1 (
-            echo ERROR: Failed to fetch vnm_msdf_text.
+        if "%VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK%"=="1" (
+            REM Fallback for standalone app checkouts without a local vnm_msdf_text source tree.
+            git clone --depth 1 https://github.com/imakris/vnm_msdf_text.git "%VNM_MSDF_TEXT_SOURCE_DIR%"
+            if errorlevel 1 (
+                echo ERROR: Failed to fetch vnm_msdf_text.
+                exit /b 1
+            )
+        ) else (
+            echo ERROR: vnm_msdf_text not found at %VNM_MSDF_TEXT_SOURCE_DIR%
             exit /b 1
         )
     )
@@ -159,6 +185,15 @@ if not exist "%MSDF_PACKAGE_PREFIX%\lib\cmake\vnm_msdf_text\vnm_msdf_text-config
     if errorlevel 1 (
         echo ERROR: FreeType build failed.
         exit /b 1
+    )
+
+    if exist "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%\CMakeCache.txt" (
+        echo Clearing stale vnm_msdf_text package build cache...
+        rmdir /s /q "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%"
+        if errorlevel 1 (
+            echo ERROR: Failed to clear stale vnm_msdf_text package build cache.
+            exit /b 1
+        )
     )
 
     "%CMAKE%" -G Ninja ^
@@ -195,16 +230,17 @@ if not exist "%MSDF_PACKAGE_PREFIX%\lib\cmake\vnm_msdf_text\vnm_msdf_text-config
         -DVNM_MSDF_TEXT_FETCH_DEPS=OFF ^
         -DVNM_MSDF_TEXT_BUILD_TESTS=OFF ^
         -S "%VNM_MSDF_TEXT_SOURCE_DIR%" ^
-        -B "%MSDF_PACKAGE_BUILD_DIR%\vnm_msdf_text"
+        -B "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%"
     if errorlevel 1 (
         echo ERROR: vnm_msdf_text configuration failed.
         exit /b 1
     )
-    "%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\vnm_msdf_text" --target install --parallel
+    "%CMAKE%" --build "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%" --target install --parallel
     if errorlevel 1 (
         echo ERROR: vnm_msdf_text build failed.
         exit /b 1
     )
+    > "%VNM_MSDF_TEXT_SOURCE_STAMP%" echo(%VNM_MSDF_TEXT_SOURCE_DIR%
 )
 
 echo.
