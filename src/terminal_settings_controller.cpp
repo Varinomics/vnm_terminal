@@ -2,12 +2,24 @@
 
 #include <QFontDatabase>
 
+#ifndef VNM_TERMINAL_BUILD_PROVENANCE_TEXT
+#define VNM_TERMINAL_BUILD_PROVENANCE_TEXT \
+    "Build date: unknown\n" \
+    "vnm_terminal: unknown\n" \
+    "vnm_terminal_surface: unknown"
+#endif
+
 namespace settings = vnm_terminal::terminal_app;
 
 settings::Terminal_settings_controller::Terminal_settings_controller(QObject* parent)
 :
     QObject(parent)
 {}
+
+QString settings::Terminal_settings_controller::build_provenance_text() const
+{
+    return QStringLiteral(VNM_TERMINAL_BUILD_PROVENANCE_TEXT);
+}
 
 QStringList settings::Terminal_settings_controller::available_font_families() const
 {

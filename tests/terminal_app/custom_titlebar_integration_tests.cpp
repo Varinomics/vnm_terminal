@@ -2199,6 +2199,30 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
             settings_qml_window->findChild<QQuickItem*>(
                 QStringLiteral("row_timestamp_switch")) != nullptr,
             "settings panel builds the row-timestamp switch");
+
+        auto* build_provenance_text = settings_qml_window->findChild<QQuickItem*>(
+            QStringLiteral("build_provenance_text"));
+        ok &= check(build_provenance_text != nullptr,
+            "settings panel builds the build provenance footer");
+        if (build_provenance_text != nullptr) {
+            const QString provenance_text =
+                build_provenance_text->property("text").toString();
+            ok &= check(
+                provenance_text.contains(QStringLiteral("Build date:")),
+                "build provenance footer includes the build date");
+            ok &= check(
+                provenance_text.contains(QStringLiteral("vnm_terminal:")),
+                "build provenance footer names the app repository");
+            ok &= check(
+                provenance_text.contains(QStringLiteral("vnm_terminal_surface:")),
+                "build provenance footer names the surface repository");
+            ok &= check(
+                build_provenance_text->property("readOnly").toBool(),
+                "build provenance footer is read-only");
+            ok &= check(
+                build_provenance_text->property("selectByMouse").toBool(),
+                "build provenance footer text is selectable");
+        }
     }
 
     ok &= check(surface.color_scheme() == QStringLiteral("Campbell"),

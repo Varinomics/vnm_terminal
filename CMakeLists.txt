@@ -27,6 +27,15 @@ endif()
 find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2)
 include(cmake/vnm_terminal_surface_dependency.cmake)
 include(cmake/vnm_qml_chrome_dependency.cmake)
+include(cmake/vnm_terminal_build_info.cmake)
+
+vnm_terminal_build_provenance_text(
+    vnm_terminal_build_provenance_text
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${VNM_TERMINAL_SURFACE_SOURCE_DIR}")
+vnm_terminal_cxx_string_literal(
+    vnm_terminal_build_provenance_text_literal
+    "${vnm_terminal_build_provenance_text}")
 
 add_executable(vnm_terminal
     src/main.cpp
@@ -89,6 +98,7 @@ target_link_libraries(vnm_terminal PRIVATE
 
 target_compile_definitions(vnm_terminal PRIVATE
     VNM_TERMINAL_VERSION_STRING="${PROJECT_VERSION}"
+    VNM_TERMINAL_BUILD_PROVENANCE_TEXT=${vnm_terminal_build_provenance_text_literal}
     VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED=$<BOOL:${VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY}>
 )
 
