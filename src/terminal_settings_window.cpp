@@ -198,7 +198,7 @@ Window {
     width: 560
     height: 660
     minimumWidth: 480
-    minimumHeight: 520
+    minimumHeight: 560
     visible: false
     flags: Qt.Tool | Qt.FramelessWindowHint
     color: "#202020"
@@ -898,6 +898,31 @@ R"qml(
                     checked: surface.rowTimestampTooltipEnabled
                     onToggled: surface.rowTimestampTooltipEnabled = checked
                 }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: 2
+                implicitHeight: 1
+                color: win.separator_color
+            }
+
+            TextEdit {
+                objectName: "build_provenance_text"
+
+                Layout.fillWidth: true
+                Layout.preferredHeight: contentHeight
+
+                text: settings.buildProvenanceText
+                textFormat: TextEdit.PlainText
+                color: win.hint_color
+                selectedTextColor: win.value_color
+                selectionColor: "#2f4a6b"
+                font.family: surface.fontFamily
+                font.pixelSize: 10
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.Wrap
             }
         }
     }
