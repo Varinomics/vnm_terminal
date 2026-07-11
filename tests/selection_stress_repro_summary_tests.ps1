@@ -15,15 +15,15 @@ function Write-MetricsFixture
         [Parameter(Mandatory = $true)]
         [string] $Path,
 
-        [string] $ContractVersion = "1",
+        [string] $ContractVersion = "2",
 
         [object] $Columns = "160",
 
-        [string] $MaxColumns = "171"
+        [string] $MaxColumns = "187"
     )
 
     $metrics = @{
-        schema = "vnm_terminal_runtime_metrics_v2"
+        schema = "vnm_terminal_runtime_metrics_v3"
         retained_history = @{
             byte_budget = "10"
             prefix_plain_ascii_estimate = @{
@@ -115,11 +115,11 @@ Invoke-MetricsFixture -Write {
 
 Invoke-MetricsFixture -Write {
     param($Path)
-    Write-MetricsFixture -Path $Path -ContractVersion "2"
+    Write-MetricsFixture -Path $Path -ContractVersion "1"
 } -Validate {
     param($Path)
     Assert-Warning -MetricsPath $Path -CaseName "unexpected estimate contract" `
-        -ExpectedWarning "contract_version must be 1"
+        -ExpectedWarning "contract_version must be 2"
 }
 
 Invoke-MetricsFixture -Write {
@@ -239,10 +239,10 @@ function Invoke-LauncherFixture
 }
 
 $validMetrics = (
-    '{"schema":"vnm_terminal_runtime_metrics_v2","retained_history":{"byte_budget":"10",' +
-    '"prefix_plain_ascii_estimate":{"contract_version":"1","source_width_columns":"160",' +
+    '{"schema":"vnm_terminal_runtime_metrics_v3","retained_history":{"byte_budget":"10",' +
+    '"prefix_plain_ascii_estimate":{"contract_version":"2","source_width_columns":"160",' +
     '"record_bytes":"316","retained_rows":"777777","target_rows":"205000",' +
-    '"max_columns_at_target_rows":"171"}}}')
+    '"max_columns_at_target_rows":"187"}}}')
 Invoke-LauncherFixture -CaseName "sampler-free producer estimate" -MetricsJson $validMetrics -Validate {
     param($Output, $ArtifactRoot, $RunDirectory)
     if ($Output -notmatch "777777 rows at 316 bytes per row" -or
@@ -262,10 +262,10 @@ Invoke-LauncherFixture -CaseName "malformed current-run metrics" -MetricsJson '{
 }
 
 $staleMetrics = (
-    '{"schema":"vnm_terminal_runtime_metrics_v2","retained_history":{' +
-    '"prefix_plain_ascii_estimate":{"contract_version":"1","source_width_columns":"80",' +
+    '{"schema":"vnm_terminal_runtime_metrics_v3","retained_history":{' +
+    '"prefix_plain_ascii_estimate":{"contract_version":"2","source_width_columns":"80",' +
     '"record_bytes":"236","retained_rows":"9","target_rows":"205000",' +
-    '"max_columns_at_target_rows":"171"}}}')
+    '"max_columns_at_target_rows":"187"}}}')
 Invoke-LauncherFixture -CaseName "stale artifact provenance" -MetricsJson $null -PrepareArtifactRoot {
     param($ArtifactRoot)
     $stalePaths = @{
