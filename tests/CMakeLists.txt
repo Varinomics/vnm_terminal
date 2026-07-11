@@ -11,6 +11,15 @@ endif()
 
 find_package(Qt6Gui 6.7 REQUIRED COMPONENTS QOffscreenIntegrationPlugin)
 
+add_test(
+    NAME vnm_terminal_build_info_generation
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DVNM_TERMINAL_TEST_ROOT=${PROJECT_BINARY_DIR}/tests/build_info_generation"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/build_info_generation_tests.cmake"
+)
+
 function(vnm_terminal_require_qt_plugin_file plugin_target purpose)
     if(NOT TARGET ${plugin_target})
         message(FATAL_ERROR
