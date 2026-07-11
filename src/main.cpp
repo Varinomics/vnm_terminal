@@ -47,16 +47,6 @@
 #include <QWindow>
 #include <QtGlobal>
 
-#if defined(Q_OS_WIN)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
-
 #include <memory>
 #include <optional>
 #include <utility>
@@ -208,13 +198,6 @@ void request_vsync_surface_format()
     QSurfaceFormat format = QSurfaceFormat::defaultFormat();
     format.setSwapInterval(1);
     QSurfaceFormat::setDefaultFormat(format);
-}
-
-void request_terminal_bell()
-{
-#if defined(Q_OS_WIN)
-    (void)MessageBeep(MB_OK);
-#endif
 }
 
 int process_exit_status(VNM_TerminalSurface::Exit_reason reason, int exit_code)
@@ -542,13 +525,6 @@ int main(int argc, char** argv)
 
     connect_terminal_metadata_to_chrome(*surface, window, titlebar_ptr);
     connect_row_timestamp_tooltip_to_chrome(*surface, titlebar_ptr);
-    QObject::connect(
-        surface,
-        &VNM_TerminalSurface::bell_requested,
-        &app,
-        [] {
-            request_terminal_bell();
-        });
     QObject::connect(
         surface,
         &VNM_TerminalSurface::clipboard_write_requested,
