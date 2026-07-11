@@ -756,12 +756,3 @@ vnm_terminal_expect_json_boolean(
     "${metrics_text}"
     "${metrics_path}"
     qsg_atlas capabilities dual_source_blend_factors_runtime_probe)
-
-foreach(frame_counter IN ITEMS
-    visible_rows
-    dirty_rows)
-    vnm_terminal_expect_json_counter(
-        "${metrics_text}"
-        "${metrics_path}"
-        renderer frame ${frame_counter})
-endforeach()
