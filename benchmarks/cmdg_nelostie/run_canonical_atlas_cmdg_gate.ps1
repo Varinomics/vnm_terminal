@@ -1082,12 +1082,12 @@ function Write-GateReport {
     $lines.Add(
         "- Require at least $($Summary.settings.benchmark_min_windows) comparable " +
         "$($Summary.settings.benchmark_window_ms) ms CMDG windows and terminal " +
-        "timeline samples for phase diagnostics.")
+        "timeline samples for time-window diagnostics.")
     if ($Summary.archived_baseline_comparison.enabled) {
-        $lines.Add("- Compare canonical atlas metrics against the archived retired-renderer baseline.")
+        $lines.Add("- Compare atlas metrics against the supplied archived baseline.")
     }
     else {
-        $lines.Add("- No archived retired-renderer baseline was supplied for this canonical-only run.")
+        $lines.Add("- No archived baseline was supplied.")
     }
     $lines.Add(
         "- Per-run terminal/CMDG aggregate JSONs and terminal timeline JSONLs " +
@@ -1123,7 +1123,7 @@ function Write-GateReport {
     }
     $lines.Add("")
     if ($Summary.archived_baseline_comparison.enabled) {
-        $lines.Add("Archived retired-renderer baseline: $($Summary.archived_baseline_comparison.archive_path)")
+        $lines.Add("Archived baseline: $($Summary.archived_baseline_comparison.archive_path)")
         $lines.Add("")
         $lines.Add("| Scene | Baseline Terminal Frame Proxy FPS | Canonical Terminal Frame Proxy FPS | Frame Proxy Delta % | Draw Delta % | Scene Delta % | Gate |")
         $lines.Add("| --- | ---: | ---: | ---: | ---: | ---: | --- |")

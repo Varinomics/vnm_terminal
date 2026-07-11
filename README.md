@@ -109,9 +109,9 @@ scrollback recovery for the launched session. It is enabled by default on
 Windows and disabled by default elsewhere.
 
 Pass `--paste-shortcut <mode>` before `--` to choose the keyboard shortcut that
-pastes clipboard text into the terminal. The default `platform-default`
-preserves the current behavior: Ctrl+V and Ctrl+Shift+V paste on every platform,
-plus Cmd+V on macOS. `ctrl-v-and-ctrl-shift-v` keeps the Ctrl combinations
+pastes clipboard text into the terminal. The default `platform-default` enables
+Ctrl+V and Ctrl+Shift+V on every platform, plus Cmd+V on macOS.
+`ctrl-v-and-ctrl-shift-v` keeps the Ctrl combinations
 without the macOS Cmd+V shortcut, `ctrl-shift-v` restricts pasting to
 Ctrl+Shift+V only, and `disabled` turns the paste shortcut off entirely. Mode
 values are case-insensitive. Copy shortcuts are unaffected.

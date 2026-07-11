@@ -19,9 +19,8 @@ enum class Paste_shortcut_policy
 
 // Decide whether a key press should paste under the given policy. The caller
 // pre-masks modifiers to Ctrl|Shift|Alt|Meta; the predicate masks too so it is
-// safe to call with raw modifiers. PLATFORM_DEFAULT reproduces the historical
-// behavior, including the macOS Cmd+V shortcut; the explicit Ctrl-combo policies
-// are literal and do not honor Cmd+V.
+// safe to call with raw modifiers. PLATFORM_DEFAULT includes macOS Cmd+V; the
+// explicit Ctrl-combo policies are literal and do not honor Cmd+V.
 bool paste_shortcut_should_paste(
     Paste_shortcut_policy   policy,
     int                     key,

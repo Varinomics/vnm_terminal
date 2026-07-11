@@ -284,10 +284,8 @@ if(vnm_terminal_cmdg_nelostie_exe)
                 list(APPEND vnm_terminal_cmdg_test_labels nelostie)
             endif()
             list(APPEND vnm_terminal_cmdg_test_labels "${vnm_terminal_cmdg_scene}")
-            # Focused regression label: the two scenes (single repeat) that drive
-            # the Plasma/ParticleVortex investigation. `ctest -L cmdg_regression_focus`
-            # runs exactly these two hardware/windowed r1 benchmarks so terminal
-            # builds can be A/B compared without full-suite thermal noise.
+            # Keep the focused comparison to one repeat of the two high-load
+            # scenes so A/B runs stay bounded and limit thermal drift.
             if((vnm_terminal_cmdg_scene STREQUAL "Plasma" OR
                 vnm_terminal_cmdg_scene STREQUAL "ParticleVortex") AND
                 vnm_terminal_cmdg_repeat_index EQUAL 1)

@@ -35,16 +35,6 @@ requests a repo-tracked artifact.
 These files are scratch work. Keep them outside the repository or delete them
 when done; do not add them to `.gitignore` as a workaround.
 
-## Durable Debugging Knowledge
-
-Before working on terminal scrollback, Codex-in-terminal behavior, transcript
-capture/replay, custom chrome diagnostics, or blank-line preservation, read
-`docs/debugging_knowledge.md`.
-
-That file records durable facts from previous debugging sessions. It is a
-repo-tracked exception to the transient-notes rule above because the user
-explicitly requested persistent knowledge for future agents.
-
 ## Local Windows Toolchain
 
 On this workstation, initialize native MSVC builds from:
