@@ -57,8 +57,6 @@ set RUNTIME_DIR=%PORTABLE_DIR%\vnm_terminal_runtime
 set MSDF_PACKAGE_PREFIX=%BUILD_DIR%\msdf_text_package
 set MSDF_PACKAGE_BUILD_DIR=%BUILD_DIR%\msdf_text_package_build
 set VNM_MSDF_TEXT_PACKAGE_BUILD_TREE=%MSDF_PACKAGE_BUILD_DIR%\vnm_msdf_text
-set VNM_MSDF_TEXT_PACKAGE_CONFIG=%MSDF_PACKAGE_PREFIX%\lib\cmake\vnm_msdf_text\vnm_msdf_text-config.cmake
-set VNM_MSDF_TEXT_SOURCE_STAMP=%MSDF_PACKAGE_PREFIX%\vnm_msdf_text_source_dir.txt
 set FREETYPE_SOURCE_DIR=%BUILD_DIR%\_deps\freetype-src
 set MSDFGEN_SOURCE_DIR=%BUILD_DIR%\_deps\msdfgen-src
 set VNM_MSDF_TEXT_FALLBACK_SOURCE_DIR=%BUILD_DIR%\_deps\vnm_msdf_text-src
@@ -73,16 +71,11 @@ if "%VNM_MSDF_TEXT_SOURCE_DIR%"=="" (
     set VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK=1
 )
 for %%I in ("%VNM_MSDF_TEXT_SOURCE_DIR%") do set VNM_MSDF_TEXT_SOURCE_DIR=%%~fI
+set VNM_MSDF_TEXT_SOURCE_CACHE_PATH=%VNM_MSDF_TEXT_SOURCE_DIR:\=/%
 if "%VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK%"=="0" if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
     echo ERROR: vnm_msdf_text not found at %VNM_MSDF_TEXT_SOURCE_DIR%
     exit /b 1
 )
-set VNM_MSDF_TEXT_PACKAGE_READY=1
-if not exist "%VNM_MSDF_TEXT_PACKAGE_CONFIG%" set VNM_MSDF_TEXT_PACKAGE_READY=0
-if not exist "%VNM_MSDF_TEXT_SOURCE_STAMP%" set VNM_MSDF_TEXT_PACKAGE_READY=0
-set VNM_MSDF_TEXT_STAMPED_SOURCE=
-if exist "%VNM_MSDF_TEXT_SOURCE_STAMP%" set /p VNM_MSDF_TEXT_STAMPED_SOURCE=<"%VNM_MSDF_TEXT_SOURCE_STAMP%"
-if "%VNM_MSDF_TEXT_PACKAGE_READY%"=="1" if /i not "%VNM_MSDF_TEXT_STAMPED_SOURCE%"=="%VNM_MSDF_TEXT_SOURCE_DIR%" set VNM_MSDF_TEXT_PACKAGE_READY=0
 
 if not exist "%CMAKE%" (
     echo ERROR: CMake not found at %CMAKE%
@@ -128,66 +121,68 @@ if exist "%BUILD_DIR%\CMakeCache.txt" (
 )
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
-if "%VNM_MSDF_TEXT_PACKAGE_READY%"=="0" (
-    where git >nul 2>nul
+where git >nul 2>nul
+if errorlevel 1 (
+    echo ERROR: Git is required for portable build metadata and dependency fetching.
+    exit /b 1
+)
+
+if not exist "%FREETYPE_SOURCE_DIR%\CMakeLists.txt" (
+    git clone --depth 1 --branch VER-2-13-3 https://gitlab.freedesktop.org/freetype/freetype.git "%FREETYPE_SOURCE_DIR%"
     if errorlevel 1 (
-        echo ERROR: Git is required to fetch MSDF package dependencies.
+        echo ERROR: Failed to fetch FreeType.
         exit /b 1
     )
-
-    if not exist "%FREETYPE_SOURCE_DIR%\CMakeLists.txt" (
-        git clone --depth 1 --branch VER-2-13-3 https://gitlab.freedesktop.org/freetype/freetype.git "%FREETYPE_SOURCE_DIR%"
+)
+if not exist "%MSDFGEN_SOURCE_DIR%\CMakeLists.txt" (
+    git clone --depth 1 --branch v1.12.1 https://github.com/Chlumsky/msdfgen.git "%MSDFGEN_SOURCE_DIR%"
+    if errorlevel 1 (
+        echo ERROR: Failed to fetch msdfgen.
+        exit /b 1
+    )
+)
+if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
+    if "%VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK%"=="1" (
+        REM Fallback for standalone app checkouts without a local vnm_msdf_text source tree.
+        git clone --depth 1 https://github.com/imakris/vnm_msdf_text.git "%VNM_MSDF_TEXT_SOURCE_DIR%"
         if errorlevel 1 (
-            echo ERROR: Failed to fetch FreeType.
+            echo ERROR: Failed to fetch vnm_msdf_text.
             exit /b 1
         )
-    )
-    if not exist "%MSDFGEN_SOURCE_DIR%\CMakeLists.txt" (
-        git clone --depth 1 --branch v1.12.1 https://github.com/Chlumsky/msdfgen.git "%MSDFGEN_SOURCE_DIR%"
-        if errorlevel 1 (
-            echo ERROR: Failed to fetch msdfgen.
-            exit /b 1
-        )
-    )
-    if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
-        if "%VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK%"=="1" (
-            REM Fallback for standalone app checkouts without a local vnm_msdf_text source tree.
-            git clone --depth 1 https://github.com/imakris/vnm_msdf_text.git "%VNM_MSDF_TEXT_SOURCE_DIR%"
-            if errorlevel 1 (
-                echo ERROR: Failed to fetch vnm_msdf_text.
-                exit /b 1
-            )
-        ) else (
-            echo ERROR: vnm_msdf_text not found at %VNM_MSDF_TEXT_SOURCE_DIR%
-            exit /b 1
-        )
-    )
-
-    "%CMAKE%" -G Ninja ^
-        -DCMAKE_BUILD_TYPE=%CONFIG% ^
-        -DCMAKE_INSTALL_PREFIX="%MSDF_PACKAGE_PREFIX%" ^
-        -DCMAKE_C_COMPILER="%MINGW_BIN%\gcc.exe" ^
-        -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
-        -DBUILD_SHARED_LIBS=OFF ^
-        -DFT_DISABLE_HARFBUZZ=ON ^
-        -DFT_DISABLE_BROTLI=ON ^
-        -DFT_DISABLE_BZIP2=ON ^
-        -DFT_DISABLE_PNG=ON ^
-        -DFT_DISABLE_ZLIB=ON ^
-        -DFT_ENABLE_ERROR_STRINGS=OFF ^
-        -S "%FREETYPE_SOURCE_DIR%" ^
-        -B "%MSDF_PACKAGE_BUILD_DIR%\freetype"
-    if errorlevel 1 (
-        echo ERROR: FreeType configuration failed.
+    ) else (
+        echo ERROR: vnm_msdf_text not found at %VNM_MSDF_TEXT_SOURCE_DIR%
         exit /b 1
     )
-    "%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\freetype" --target install --parallel
-    if errorlevel 1 (
-        echo ERROR: FreeType build failed.
-        exit /b 1
-    )
+)
 
-    if exist "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%\CMakeCache.txt" (
+"%CMAKE%" -G Ninja ^
+    -DCMAKE_BUILD_TYPE=%CONFIG% ^
+    -DCMAKE_INSTALL_PREFIX="%MSDF_PACKAGE_PREFIX%" ^
+    -DCMAKE_C_COMPILER="%MINGW_BIN%\gcc.exe" ^
+    -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
+    -DBUILD_SHARED_LIBS=OFF ^
+    -DFT_DISABLE_HARFBUZZ=ON ^
+    -DFT_DISABLE_BROTLI=ON ^
+    -DFT_DISABLE_BZIP2=ON ^
+    -DFT_DISABLE_PNG=ON ^
+    -DFT_DISABLE_ZLIB=ON ^
+    -DFT_ENABLE_ERROR_STRINGS=OFF ^
+    -S "%FREETYPE_SOURCE_DIR%" ^
+    -B "%MSDF_PACKAGE_BUILD_DIR%\freetype"
+if errorlevel 1 (
+    echo ERROR: FreeType configuration failed.
+    exit /b 1
+)
+"%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\freetype" --target install --parallel
+if errorlevel 1 (
+    echo ERROR: FreeType build failed.
+    exit /b 1
+)
+
+if exist "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%\CMakeCache.txt" (
+    findstr /i /l /x /c:"CMAKE_HOME_DIRECTORY:INTERNAL=%VNM_MSDF_TEXT_SOURCE_CACHE_PATH%" ^
+        "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%\CMakeCache.txt" >nul
+    if errorlevel 1 (
         echo Clearing stale vnm_msdf_text package build cache...
         rmdir /s /q "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%"
         if errorlevel 1 (
@@ -195,52 +190,51 @@ if "%VNM_MSDF_TEXT_PACKAGE_READY%"=="0" (
             exit /b 1
         )
     )
+)
 
-    "%CMAKE%" -G Ninja ^
-        -DCMAKE_BUILD_TYPE=%CONFIG% ^
-        -DCMAKE_INSTALL_PREFIX="%MSDF_PACKAGE_PREFIX%" ^
-        -DCMAKE_PREFIX_PATH="%MSDF_PACKAGE_PREFIX%" ^
-        -DCMAKE_CXX_COMPILER="%MINGW_BIN%\g++.exe" ^
-        -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
-        -DMSDFGEN_USE_VCPKG=OFF ^
-        -DMSDFGEN_BUILD_STANDALONE=OFF ^
-        -DMSDFGEN_DISABLE_SVG=ON ^
-        -DMSDFGEN_DISABLE_PNG=ON ^
-        -DMSDFGEN_USE_SKIA=OFF ^
-        -DMSDFGEN_CORE_ONLY=OFF ^
-        -DMSDFGEN_INSTALL=ON ^
-        -S "%MSDFGEN_SOURCE_DIR%" ^
-        -B "%MSDF_PACKAGE_BUILD_DIR%\msdfgen"
-    if errorlevel 1 (
-        echo ERROR: msdfgen configuration failed.
-        exit /b 1
-    )
-    "%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\msdfgen" --target install --parallel
-    if errorlevel 1 (
-        echo ERROR: msdfgen build failed.
-        exit /b 1
-    )
+"%CMAKE%" -G Ninja ^
+    -DCMAKE_BUILD_TYPE=%CONFIG% ^
+    -DCMAKE_INSTALL_PREFIX="%MSDF_PACKAGE_PREFIX%" ^
+    -DCMAKE_PREFIX_PATH="%MSDF_PACKAGE_PREFIX%" ^
+    -DCMAKE_CXX_COMPILER="%MINGW_BIN%\g++.exe" ^
+    -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
+    -DMSDFGEN_USE_VCPKG=OFF ^
+    -DMSDFGEN_BUILD_STANDALONE=OFF ^
+    -DMSDFGEN_DISABLE_SVG=ON ^
+    -DMSDFGEN_DISABLE_PNG=ON ^
+    -DMSDFGEN_USE_SKIA=OFF ^
+    -DMSDFGEN_CORE_ONLY=OFF ^
+    -DMSDFGEN_INSTALL=ON ^
+    -S "%MSDFGEN_SOURCE_DIR%" ^
+    -B "%MSDF_PACKAGE_BUILD_DIR%\msdfgen"
+if errorlevel 1 (
+    echo ERROR: msdfgen configuration failed.
+    exit /b 1
+)
+"%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\msdfgen" --target install --parallel
+if errorlevel 1 (
+    echo ERROR: msdfgen build failed.
+    exit /b 1
+)
 
-    "%CMAKE%" -G Ninja ^
-        -DCMAKE_BUILD_TYPE=%CONFIG% ^
-        -DCMAKE_INSTALL_PREFIX="%MSDF_PACKAGE_PREFIX%" ^
-        -DCMAKE_PREFIX_PATH="%MSDF_PACKAGE_PREFIX%" ^
-        -DCMAKE_CXX_COMPILER="%MINGW_BIN%\g++.exe" ^
-        -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
-        -DVNM_MSDF_TEXT_FETCH_DEPS=OFF ^
-        -DVNM_MSDF_TEXT_BUILD_TESTS=OFF ^
-        -S "%VNM_MSDF_TEXT_SOURCE_DIR%" ^
-        -B "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%"
-    if errorlevel 1 (
-        echo ERROR: vnm_msdf_text configuration failed.
-        exit /b 1
-    )
-    "%CMAKE%" --build "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%" --target install --parallel
-    if errorlevel 1 (
-        echo ERROR: vnm_msdf_text build failed.
-        exit /b 1
-    )
-    > "%VNM_MSDF_TEXT_SOURCE_STAMP%" echo(%VNM_MSDF_TEXT_SOURCE_DIR%
+"%CMAKE%" -G Ninja ^
+    -DCMAKE_BUILD_TYPE=%CONFIG% ^
+    -DCMAKE_INSTALL_PREFIX="%MSDF_PACKAGE_PREFIX%" ^
+    -DCMAKE_PREFIX_PATH="%MSDF_PACKAGE_PREFIX%" ^
+    -DCMAKE_CXX_COMPILER="%MINGW_BIN%\g++.exe" ^
+    -DCMAKE_MAKE_PROGRAM="%NINJA%" ^
+    -DVNM_MSDF_TEXT_FETCH_DEPS=OFF ^
+    -DVNM_MSDF_TEXT_BUILD_TESTS=OFF ^
+    -S "%VNM_MSDF_TEXT_SOURCE_DIR%" ^
+    -B "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%"
+if errorlevel 1 (
+    echo ERROR: vnm_msdf_text configuration failed.
+    exit /b 1
+)
+"%CMAKE%" --build "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%" --target install --parallel
+if errorlevel 1 (
+    echo ERROR: vnm_msdf_text build failed.
+    exit /b 1
 )
 
 echo.
