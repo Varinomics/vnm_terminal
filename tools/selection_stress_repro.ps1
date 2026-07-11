@@ -307,7 +307,7 @@ function Write-RetainedHistoryEstimateSummary
     $schemaProperty = $metrics.PSObject.Properties["schema"]
     if ($null -eq $schemaProperty -or
         $schemaProperty.Value -isnot [string] -or
-        $schemaProperty.Value -ne "vnm_terminal_runtime_metrics_v2")
+        $schemaProperty.Value -ne "vnm_terminal_runtime_metrics_v3")
     {
         $reportedSchema = if ($null -eq $schemaProperty) {
             "<missing>"
@@ -399,10 +399,10 @@ function Write-RetainedHistoryEstimateSummary
     [uint64] $targetRows      = $counters["target_rows"]
     [uint64] $maxColumns      = $counters["max_columns_at_target_rows"]
 
-    if ($contractVersion -ne 1) {
+    if ($contractVersion -ne 2) {
         Write-Warning (
             "Final app metrics retained_history.prefix_plain_ascii_estimate.contract_version " +
-            "must be 1: $MetricsPath")
+            "must be 2: $MetricsPath")
         return
     }
     if ($columns -eq 0 -or $columns -gt 4096) {
