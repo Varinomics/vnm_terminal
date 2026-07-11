@@ -304,4 +304,26 @@ Invoke-LauncherFixture -CaseName "stale artifact provenance" -MetricsJson $null 
     }
 }
 
+$resolverRoot = Join-Path (
+    [System.IO.Path]::GetTempPath()
+) "vnm_terminal_repro_resolver_$([Guid]::NewGuid().ToString('N'))"
+try {
+    $resolverTools = Join-Path $resolverRoot "tools"
+    $portableExe = Join-Path $resolverRoot "dist\portable_candidate\vnm_terminal.exe"
+    New-Item -ItemType Directory -Path $resolverTools | Out-Null
+    New-Item -ItemType Directory -Path (Split-Path -Parent $portableExe) | Out-Null
+    Copy-Item `
+        -LiteralPath (Join-Path (Split-Path -Parent $ToolPath) "terminal_repro_common.ps1") `
+        -Destination $resolverTools
+    New-Item -ItemType File -Path $portableExe | Out-Null
+
+    . (Join-Path $resolverTools "terminal_repro_common.ps1")
+    if ((Resolve-DefaultTerminalExe) -ne $portableExe) {
+        throw "default resolver should find dist\portable_candidate\vnm_terminal.exe"
+    }
+}
+finally {
+    Remove-Item -LiteralPath $resolverRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Host "selection stress metrics summary tests passed"
