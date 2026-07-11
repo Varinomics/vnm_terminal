@@ -1158,6 +1158,35 @@ set_tests_properties(vnm_terminal_rejects_distribution_transcript_build PROPERTI
     TIMEOUT 30
 )
 
+if(WIN32)
+    find_program(vnm_terminal_pwsh_executable NAMES pwsh)
+    find_program(vnm_terminal_windows_powershell_executable NAMES powershell REQUIRED)
+
+    function(vnm_terminal_add_selection_stress_repro_summary_test test_name executable)
+        add_test(
+            NAME ${test_name}
+            COMMAND
+                "${executable}"
+                -NoProfile
+                -ExecutionPolicy Bypass
+                -File "${CMAKE_CURRENT_SOURCE_DIR}/selection_stress_repro_summary_tests.ps1"
+                -ToolPath "${PROJECT_SOURCE_DIR}/tools/selection_stress_repro.ps1"
+        )
+        set_tests_properties(${test_name} PROPERTIES
+            TIMEOUT 60
+        )
+    endfunction()
+
+    if(vnm_terminal_pwsh_executable)
+        vnm_terminal_add_selection_stress_repro_summary_test(
+            vnm_terminal_selection_stress_repro_summary_pwsh
+            "${vnm_terminal_pwsh_executable}")
+    endif()
+    vnm_terminal_add_selection_stress_repro_summary_test(
+        vnm_terminal_selection_stress_repro_summary_windows_powershell
+        "${vnm_terminal_windows_powershell_executable}")
+endif()
+
 set(vnm_terminal_test_process_targets
     vnm_terminal_title_metadata
     vnm_terminal_app_presentation_metrics

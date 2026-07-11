@@ -234,6 +234,11 @@ QJsonObject terminal_metrics_json(
     QJsonObject backend_drain;
     vnm_terminal::diagnostics::append_backend_drain_metrics_json(surface, backend_drain);
 
+    QJsonObject retained_history;
+    vnm_terminal::diagnostics::append_retained_history_metrics_json(
+        surface,
+        retained_history);
+
     QJsonObject root;
     root.insert(QStringLiteral("schema"), QString::fromLatin1(k_runtime_metrics_schema));
     root.insert(QStringLiteral("elapsed_ms"), timing.app_elapsed_ms);
@@ -265,6 +270,7 @@ QJsonObject terminal_metrics_json(
     root.insert(QStringLiteral("surface_geometry"), surface_geometry_json(surface));
     root.insert(QStringLiteral("render_invalidation"), render_invalidation);
     root.insert(QStringLiteral("backend_drain"), backend_drain);
+    root.insert(QStringLiteral("retained_history"), retained_history);
     root.insert(QStringLiteral("renderer"), renderer);
     root.insert(QStringLiteral("qsg_atlas"), qsg_atlas);
 

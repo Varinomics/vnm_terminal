@@ -199,6 +199,7 @@ if(expected_profile_text_requested)
         "atlas_page_pressure"
         "render"
         "capabilities"
+        "retained_history"
         "session_profile_stats")
         string(FIND "${profile_text}" "${profile_fragment}" profile_fragment_index)
         if(profile_fragment_index LESS 0)
@@ -333,6 +334,54 @@ foreach(backend_drain_counter IN ITEMS
         "${metrics_path}"
         backend_drain ${backend_drain_counter})
 endforeach()
+
+foreach(retained_history_counter IN ITEMS
+    byte_budget
+    retained_rows
+    retained_record_bytes
+    payload_kind_generic_compact_rows
+    payload_kind_prefix_plain_ascii_rows
+    current_style_count
+    peak_style_count
+    style_compaction_count
+    reclaimed_styles
+    hyperlink_compaction_count
+    reclaimed_hyperlink_ids)
+    vnm_terminal_expect_json_counter(
+        "${metrics_text}"
+        "${metrics_path}"
+        retained_history ${retained_history_counter})
+endforeach()
+
+vnm_terminal_read_json_field(average_retained_row_bytes
+    "${metrics_text}" "${metrics_path}" retained_history average_retained_row_bytes)
+if(NOT average_retained_row_bytes MATCHES "^[0-9]+(\\.[0-9]+)?$")
+    message(FATAL_ERROR
+        "retained_history.average_retained_row_bytes should be numeric, got "
+        "${average_retained_row_bytes}")
+endif()
+
+foreach(retained_history_estimate_counter IN ITEMS
+    contract_version
+    source_width_columns
+    record_bytes
+    retained_rows
+    target_rows
+    max_columns_at_target_rows)
+    vnm_terminal_expect_json_counter(
+        "${metrics_text}"
+        "${metrics_path}"
+        retained_history prefix_plain_ascii_estimate ${retained_history_estimate_counter})
+endforeach()
+
+vnm_terminal_read_json_field(retained_history_estimate_contract_version
+    "${metrics_text}" "${metrics_path}"
+    retained_history prefix_plain_ascii_estimate contract_version)
+if(NOT retained_history_estimate_contract_version STREQUAL "1")
+    message(FATAL_ERROR
+        "retained_history.prefix_plain_ascii_estimate.contract_version should be 1, got "
+        "${retained_history_estimate_contract_version}")
+endif()
 
 vnm_terminal_read_json_field(font_size
     "${metrics_text}" "${metrics_path}" surface_geometry font_size)

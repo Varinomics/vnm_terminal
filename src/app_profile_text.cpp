@@ -141,6 +141,8 @@ bool write_profile_text(
     stream << '\n';
     diag::append_model_profile_stats_text(surface, stream);
     stream << '\n';
+    diag::append_retained_history_profile_text(surface, stream);
+    stream << '\n';
     diag::append_session_profile_stats_text(surface, stream);
     stream << '\n';
     diag::append_renderer_stats_text(surface, stream);
