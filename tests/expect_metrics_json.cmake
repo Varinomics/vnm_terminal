@@ -86,16 +86,12 @@ function(vnm_terminal_expect_renderer_frame_evidence json_text source_path)
             "got ${evidence_frames_per_second}")
     endif()
 
-    if(evidence_counter_path STREQUAL "renderer.paint_completed_frames")
-        vnm_terminal_read_json_field(producer_frame_count
-            "${json_text}" "${source_path}" renderer paint_completed_frames)
-    elseif(evidence_counter_path STREQUAL "qsg_atlas.render_count")
-        vnm_terminal_read_json_field(producer_frame_count
-            "${json_text}" "${source_path}" qsg_atlas render_count)
-    else()
+    if(NOT evidence_counter_path STREQUAL "qsg_atlas.render_count")
         message(FATAL_ERROR
             "unexpected renderer_frame_evidence.counter_path: ${evidence_counter_path}")
     endif()
+    vnm_terminal_read_json_field(producer_frame_count
+        "${json_text}" "${source_path}" qsg_atlas render_count)
 
     if(NOT evidence_frame_count STREQUAL producer_frame_count)
         message(FATAL_ERROR
@@ -138,7 +134,7 @@ file(READ "${metrics_path}" metrics_text)
 
 vnm_terminal_read_json_field(schema
     "${metrics_text}" "${metrics_path}" schema)
-if(NOT schema STREQUAL "vnm_terminal_runtime_metrics_v2")
+if(NOT schema STREQUAL "vnm_terminal_runtime_metrics_v3")
     message(FATAL_ERROR "unexpected metrics schema: ${schema}")
 endif()
 
@@ -170,6 +166,7 @@ if(expected_profile_text_requested)
     endif()
     file(READ "${profile_text_path}" profile_text)
     foreach(profile_fragment IN ITEMS
+        "format=2"
         "dirty_rows"
         "enabled=true"
         "qsg_atlas"
@@ -431,14 +428,8 @@ foreach(cursor_report IN ITEMS
         ${cursor_report})
 endforeach()
 
-vnm_terminal_read_json_field(paint_completed_frames
-    "${metrics_text}" "${metrics_path}" renderer paint_completed_frames)
-if(NOT paint_completed_frames MATCHES "^[0-9]+$")
-    message(FATAL_ERROR "renderer.paint_completed_frames should be an integer counter")
-endif()
-if(paint_completed_frames STREQUAL "0" AND atlas_render_count STREQUAL "0")
-    message(FATAL_ERROR
-        "metrics JSON reports no painted frames and no atlas render frames")
+if(atlas_render_count STREQUAL "0")
+    message(FATAL_ERROR "metrics JSON reports no atlas render frames")
 endif()
 vnm_terminal_expect_renderer_frame_evidence("${metrics_text}" "${metrics_path}")
 vnm_terminal_expect_json_number(
@@ -458,8 +449,7 @@ vnm_terminal_read_json_field(
     "${metrics_text}"
     "${metrics_path}"
     startup visible_first_frame_counter_path)
-if(NOT startup_visible_frame_counter_path MATCHES
-    "^(renderer\\.paint_completed_frames|qsg_atlas\\.render_count)$")
+if(NOT startup_visible_frame_counter_path STREQUAL "qsg_atlas.render_count")
     message(FATAL_ERROR
         "unexpected startup.visible_first_frame_counter_path: "
         "${startup_visible_frame_counter_path}")

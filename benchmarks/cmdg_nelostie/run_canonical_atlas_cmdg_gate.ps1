@@ -302,19 +302,7 @@ function Get-RecordTerminalFrameEvidence {
         }
     }
 
-    $paintFps = Convert-MetricNumber (Get-ObjectProperty $Record "paint_frames_per_second")
-    if ($null -eq $paintFps) {
-        return $null
-    }
-
-    return [ordered]@{
-        frames_per_second = $paintFps
-        source = "paint_frames_per_second"
-        counter_path = "renderer.paint_completed_frames"
-        primary_counter_source = $null
-        primary_counter_semantics = "renderer_paint_completed_proxy"
-        scanout_verified = $false
-    }
+    return $null
 }
 
 function Get-MedianTerminalFrameFps {
@@ -594,7 +582,6 @@ function Read-CmdgRecord {
         $errors.Add("missing terminal metrics timeline JSONL")
     }
 
-    $rendererMetrics = Get-ObjectProperty $terminalMetrics "renderer"
     $atlasMetrics = Get-ObjectProperty $terminalMetrics "qsg_atlas"
     $presentationMetrics = Get-ObjectProperty $terminalMetrics "presentation"
     $frameEvidenceMetrics = Get-ObjectProperty $terminalMetrics "renderer_frame_evidence"
@@ -615,12 +602,6 @@ function Read-CmdgRecord {
     $visibleFirstFrameCounterPath = Get-ObjectProperty `
         $startupMetrics `
         "visible_first_frame_counter_path"
-    $paintCompletedFrames = Convert-MetricNumber (
-        Get-ObjectProperty $rendererMetrics "paint_completed_frames"
-    )
-    $framesPublished = Convert-MetricNumber (
-        Get-ObjectProperty $rendererMetrics "frames_published"
-    )
     $paintFramesPerSecond = Convert-MetricNumber (
         Get-ObjectProperty $terminalMetrics "paint_frames_per_second"
     )
@@ -832,15 +813,10 @@ function Read-CmdgRecord {
         -Scene $Scene `
         -Repeat $Repeat
 
-    $frameEvidenceCounterMatches = $false
-    if ($frameEvidenceCounterPath -eq "renderer.paint_completed_frames") {
-        $frameEvidenceCounterMatches = $null -ne $paintCompletedFrames -and
-            $frameEvidenceCount -eq $paintCompletedFrames
-    }
-    elseif ($frameEvidenceCounterPath -eq "qsg_atlas.render_count") {
-        $frameEvidenceCounterMatches = $null -ne $renderCount -and
-            $frameEvidenceCount -eq $renderCount
-    }
+    $frameEvidenceCounterMatches =
+        $frameEvidenceCounterPath -eq "qsg_atlas.render_count" -and
+        $null -ne $renderCount -and
+        $frameEvidenceCount -eq $renderCount
     $presentationCounterMatches =
         $presentationCounterPath -eq "presentation.frameSwapped.count" -and
         $presentationCounterSource -eq "QQuickWindow::frameSwapped" -and
@@ -972,8 +948,6 @@ function Read-CmdgRecord {
         presentation_frame_floor_pass = $presentationFrameFloorPass
         minimum_presentation_frame_fps = $MinimumRendererFrameFps
         paint_frames_per_second = $paintFramesPerSecond
-        paint_completed_frames = $paintCompletedFrames
-        frames_published = $framesPublished
         renderer_frame_evidence = [ordered]@{
             counter_path = $frameEvidenceCounterPath
             frame_count = $frameEvidenceCount
@@ -984,7 +958,6 @@ function Read-CmdgRecord {
         renderer_frame_floor_pass = $rendererFrameFloorPass
         minimum_renderer_frame_fps = $MinimumRendererFrameFps
         frame_completion = [ordered]@{
-            frames_published = $framesPublished
             atlas_capture_count = $captureCount
             atlas_render_count = $renderCount
             presentation_frame_evidence_present = $presentationFrameEvidencePresent

@@ -40,17 +40,13 @@ function(vnm_terminal_expect_renderer_frame_evidence json_text source_path)
     vnm_terminal_read_json_field(evidence_frames_per_second
         "${json_text}" "${source_path}" renderer_frame_evidence frames_per_second)
 
-    if(evidence_counter_path STREQUAL "renderer.paint_completed_frames")
-        vnm_terminal_read_json_field(producer_frame_count
-            "${json_text}" "${source_path}" renderer paint_completed_frames)
-    elseif(evidence_counter_path STREQUAL "qsg_atlas.render_count")
-        vnm_terminal_read_json_field(producer_frame_count
-            "${json_text}" "${source_path}" qsg_atlas render_count)
-    else()
+    if(NOT evidence_counter_path STREQUAL "qsg_atlas.render_count")
         message(FATAL_ERROR
             "terminal metrics JSON reports unexpected renderer_frame_evidence.counter_path: "
             "${evidence_counter_path}")
     endif()
+    vnm_terminal_read_json_field(producer_frame_count
+        "${json_text}" "${source_path}" qsg_atlas render_count)
 
     if(NOT evidence_frame_count STREQUAL producer_frame_count)
         message(FATAL_ERROR
@@ -381,7 +377,7 @@ foreach(terminal_timeline_index RANGE 0 ${terminal_timeline_last_index})
             "terminal metrics timeline reports unexpected schema: ${terminal_timeline_schema}")
     endif()
 
-    if(NOT terminal_timeline_runtime_schema STREQUAL "vnm_terminal_runtime_metrics_v2")
+    if(NOT terminal_timeline_runtime_schema STREQUAL "vnm_terminal_runtime_metrics_v3")
         message(FATAL_ERROR
             "terminal metrics timeline reports unexpected runtime_metrics schema: "
             "${terminal_timeline_runtime_schema}")
