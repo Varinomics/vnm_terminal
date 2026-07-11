@@ -22,9 +22,8 @@ Repository:
 
 - https://github.com/imakris/vnm_qml_chrome
 
-The reviewed checkout used for the current release baseline does not include a
-license file. Keep this dependency treated as an internal Varinomics dependency
-until an explicit upstream license is added.
+The dependency does not include a license file and is treated as an internal
+Varinomics dependency.
 
 ## Qt 6
 
@@ -62,8 +61,8 @@ restores these direct NuGet dependencies:
 - NVorbis 0.10.5, MIT license
 - System.Drawing.Common 9.0.2, MIT license, with .NET third-party notices
 
-For the current `net8.0` restore, the selected transitive package graph also
-includes Microsoft.NETCore.Platforms 3.1.0, Microsoft.Win32.Registry 4.7.0,
+The `net8.0` transitive package graph also includes Microsoft.NETCore.Platforms
+3.1.0, Microsoft.Win32.Registry 4.7.0,
 Microsoft.Win32.SystemEvents 9.0.2, NAudio.Asio/Core/Midi/Wasapi/WinMM 2.2.1,
 System.Memory 4.5.3, System.Security.AccessControl 4.7.0,
 System.Security.Principal.Windows 4.7.0, and System.ValueTuple 4.5.0.

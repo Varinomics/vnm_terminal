@@ -1,8 +1,7 @@
 # CLAUDE
 
 Read `AGENTS.md` first. It contains the repository-specific AI-agent rules,
-including the no-transient-artifacts rule and the durable debugging knowledge
-exception.
+including the no-transient-artifacts rule.
 
 ## Common Varinomics Rules
 
