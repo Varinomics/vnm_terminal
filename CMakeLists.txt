@@ -27,15 +27,21 @@ endif()
 find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2)
 include(cmake/vnm_terminal_surface_dependency.cmake)
 include(cmake/vnm_qml_chrome_dependency.cmake)
-include(cmake/vnm_terminal_build_info.cmake)
 
-vnm_terminal_build_provenance_text(
-    vnm_terminal_build_provenance_text
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${VNM_TERMINAL_SURFACE_SOURCE_DIR}")
-vnm_terminal_cxx_string_literal(
-    vnm_terminal_build_provenance_text_literal
-    "${vnm_terminal_build_provenance_text}")
+set(vnm_terminal_build_info_header
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/vnm_terminal_build_info.h")
+add_custom_target(vnm_terminal_build_info ALL
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DVNM_TERMINAL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DVNM_TERMINAL_SURFACE_SOURCE_DIR=${VNM_TERMINAL_SURFACE_SOURCE_DIR}"
+        "-DVNM_QML_CHROME_SOURCE_DIR=${VNM_QML_CHROME_SOURCE_DIR}"
+        "-DVNM_TERMINAL_BUILD_INFO_OUTPUT=${vnm_terminal_build_info_header}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vnm_terminal_generate_build_info.cmake"
+    BYPRODUCTS
+        "${vnm_terminal_build_info_header}"
+    COMMENT "Refreshing build provenance"
+    VERBATIM)
 
 add_executable(vnm_terminal
     src/main.cpp
@@ -72,6 +78,12 @@ add_executable(vnm_terminal
     src/terminal_window.h
 )
 
+add_dependencies(vnm_terminal vnm_terminal_build_info)
+
+target_include_directories(vnm_terminal PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated"
+)
+
 qt_add_resources(vnm_terminal "vnm_terminal_resources"
     PREFIX
         "/vnm_terminal"
@@ -98,7 +110,7 @@ target_link_libraries(vnm_terminal PRIVATE
 
 target_compile_definitions(vnm_terminal PRIVATE
     VNM_TERMINAL_VERSION_STRING="${PROJECT_VERSION}"
-    VNM_TERMINAL_BUILD_PROVENANCE_TEXT=${vnm_terminal_build_provenance_text_literal}
+    VNM_TERMINAL_BUILD_PROVENANCE_HEADER="vnm_terminal_build_info.h"
     VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED=$<BOOL:${VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY}>
 )
 

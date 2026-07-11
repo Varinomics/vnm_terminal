@@ -2217,6 +2217,9 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
                 provenance_text.contains(QStringLiteral("vnm_terminal_surface:")),
                 "build provenance footer names the surface repository");
             ok &= check(
+                provenance_text.contains(QStringLiteral("vnm_qml_chrome:")),
+                "build provenance footer names the chrome repository");
+            ok &= check(
                 build_provenance_text->property("readOnly").toBool(),
                 "build provenance footer is read-only");
             ok &= check(

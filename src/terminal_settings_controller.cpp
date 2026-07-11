@@ -1,12 +1,17 @@
 #include "terminal_settings_controller.h"
 
+#if defined(VNM_TERMINAL_BUILD_PROVENANCE_HEADER)
+#include VNM_TERMINAL_BUILD_PROVENANCE_HEADER
+#endif
+
 #include <QFontDatabase>
 
 #ifndef VNM_TERMINAL_BUILD_PROVENANCE_TEXT
 #define VNM_TERMINAL_BUILD_PROVENANCE_TEXT \
-    "Build date: unknown\n" \
-    "vnm_terminal: unknown\n" \
-    "vnm_terminal_surface: unknown"
+    "Build date: unknown\n"                \
+    "vnm_terminal: unknown\n"              \
+    "vnm_terminal_surface: unknown\n"      \
+    "vnm_qml_chrome: unknown"
 #endif
 
 namespace settings = vnm_terminal::terminal_app;

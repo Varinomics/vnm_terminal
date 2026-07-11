@@ -1,0 +1,3 @@
+#pragma once
+
+#define VNM_TERMINAL_BUILD_PROVENANCE_TEXT @vnm_terminal_build_provenance_text_literal@
