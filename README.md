@@ -173,7 +173,7 @@ run:
 build_portable.bat
 ```
 
-The script writes `dist\portable\` and `dist\vnm_terminal_v<version>_w64.zip`,
+The script writes `dist\portable_candidate\` and `dist\vnm_terminal_v<version>_w64.zip`,
 where `<version>` is the `project()` version in `CMakeLists.txt` (derived from
 the configured CMake cache, not hardcoded).
 `build_portable.bat` is the release-provenance build path and requires Git
@@ -186,7 +186,7 @@ They are packaged from the Qt MinGW kit and include the required Qt and MinGW
 runtime DLLs beside the real application in `vnm_terminal_runtime\`. The build
 info file records the app, surface, and chrome Git revisions used for the
 package.
-Launch the portable distribution through `dist\portable\vnm_terminal.exe`.
+Launch the portable distribution through `dist\portable_candidate\vnm_terminal.exe`.
 That top-level executable is a launcher; do not launch the raw
 `build_portable\vnm_terminal.exe` as a substitute for portable validation.
 
