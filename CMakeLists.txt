@@ -30,12 +30,14 @@ include(cmake/vnm_qml_chrome_dependency.cmake)
 
 set(vnm_terminal_build_info_header
     "${CMAKE_CURRENT_BINARY_DIR}/generated/vnm_terminal_build_info.h")
+string(TIMESTAMP vnm_terminal_build_date "%Y-%m-%d %H:%M:%S UTC" UTC)
 add_custom_target(vnm_terminal_build_info ALL
     COMMAND
         "${CMAKE_COMMAND}"
         "-DVNM_TERMINAL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
         "-DVNM_TERMINAL_SURFACE_SOURCE_DIR=${VNM_TERMINAL_SURFACE_SOURCE_DIR}"
         "-DVNM_QML_CHROME_SOURCE_DIR=${VNM_QML_CHROME_SOURCE_DIR}"
+        "-DVNM_TERMINAL_BUILD_DATE=${vnm_terminal_build_date}"
         "-DVNM_TERMINAL_BUILD_INFO_OUTPUT=${vnm_terminal_build_info_header}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vnm_terminal_generate_build_info.cmake"
     BYPRODUCTS

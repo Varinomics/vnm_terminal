@@ -21,7 +21,7 @@ function(vnm_terminal_git_summary out_commit out_modified repo_dir)
             endif()
 
             execute_process(
-                COMMAND git -C "${repo_dir}" status --porcelain --untracked-files=no
+                COMMAND git -C "${repo_dir}" status --porcelain --untracked-files=all
                 RESULT_VARIABLE git_status_result
                 OUTPUT_VARIABLE git_status
                 OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -45,9 +45,7 @@ function(vnm_terminal_build_info_line out_var component_name commit modified)
     set(${out_var} "${line}" PARENT_SCOPE)
 endfunction()
 
-function(vnm_terminal_build_provenance_text out_var terminal_dir surface_dir chrome_dir)
-    string(TIMESTAMP build_date "%Y-%m-%d %H:%M:%S UTC" UTC)
-
+function(vnm_terminal_build_provenance_text out_var build_date terminal_dir surface_dir chrome_dir)
     vnm_terminal_git_summary(
         terminal_commit
         terminal_modified

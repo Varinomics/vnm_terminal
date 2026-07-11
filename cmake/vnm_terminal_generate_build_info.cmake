@@ -2,6 +2,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/vnm_terminal_build_info.cmake")
 
 vnm_terminal_build_provenance_text(
     vnm_terminal_build_provenance_text
+    "${VNM_TERMINAL_BUILD_DATE}"
     "${VNM_TERMINAL_SOURCE_DIR}"
     "${VNM_TERMINAL_SURFACE_SOURCE_DIR}"
     "${VNM_QML_CHROME_SOURCE_DIR}")
