@@ -216,8 +216,15 @@ target_link_libraries(vnm_terminal_custom_titlebar_integration PRIVATE
 )
 
 target_compile_definitions(vnm_terminal_custom_titlebar_integration PRIVATE
+    VNM_TERMINAL_BUILD_PROVENANCE_HEADER="vnm_terminal_build_info.h"
     "VNM_TERMINAL_TRANSCRIPT_CAPTURE_REPLAY_ENABLED=$<BOOL:${VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY}>"
 )
+
+target_include_directories(vnm_terminal_custom_titlebar_integration PRIVATE
+    "${PROJECT_BINARY_DIR}/generated"
+)
+
+add_dependencies(vnm_terminal_custom_titlebar_integration vnm_terminal_build_info)
 
 set_target_properties(vnm_terminal_custom_titlebar_integration PROPERTIES
     AUTOMOC ON

@@ -1,77 +1,3 @@
-function(vnm_terminal_git_path out_var repo_dir git_path)
-    if(IS_ABSOLUTE "${git_path}")
-        set(abs_path "${git_path}")
-    else()
-        get_filename_component(abs_path "${repo_dir}/${git_path}" ABSOLUTE)
-    endif()
-
-    set(${out_var} "${abs_path}" PARENT_SCOPE)
-endfunction()
-
-function(vnm_terminal_register_git_configure_inputs repo_dir)
-    execute_process(
-        COMMAND git -C "${repo_dir}" rev-parse --is-inside-work-tree
-        RESULT_VARIABLE git_result
-        OUTPUT_VARIABLE inside_work_tree
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET)
-    if(NOT git_result EQUAL 0 OR NOT inside_work_tree STREQUAL "true")
-        return()
-    endif()
-
-    execute_process(
-        COMMAND git -C "${repo_dir}" rev-parse --git-dir
-        RESULT_VARIABLE git_dir_result
-        OUTPUT_VARIABLE git_dir
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET)
-    execute_process(
-        COMMAND git -C "${repo_dir}" rev-parse --git-common-dir
-        RESULT_VARIABLE git_common_dir_result
-        OUTPUT_VARIABLE git_common_dir
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET)
-    if(NOT git_dir_result EQUAL 0 OR NOT git_common_dir_result EQUAL 0)
-        return()
-    endif()
-
-    vnm_terminal_git_path(git_dir_abs "${repo_dir}" "${git_dir}")
-    vnm_terminal_git_path(git_common_dir_abs "${repo_dir}" "${git_common_dir}")
-
-    set(git_inputs
-        "${git_dir_abs}/HEAD"
-        "${git_dir_abs}/index")
-
-    if(EXISTS "${git_common_dir_abs}/packed-refs")
-        list(APPEND git_inputs "${git_common_dir_abs}/packed-refs")
-    endif()
-
-    execute_process(
-        COMMAND git -C "${repo_dir}" symbolic-ref -q HEAD
-        RESULT_VARIABLE git_ref_result
-        OUTPUT_VARIABLE git_ref
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET)
-    if(git_ref_result EQUAL 0 AND NOT git_ref STREQUAL "")
-        list(APPEND git_inputs "${git_common_dir_abs}/${git_ref}")
-    endif()
-
-    execute_process(
-        COMMAND git -C "${repo_dir}" ls-files
-        RESULT_VARIABLE git_files_result
-        OUTPUT_VARIABLE git_files
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET)
-    if(git_files_result EQUAL 0 AND NOT git_files STREQUAL "")
-        string(REPLACE "\n" ";" tracked_files "${git_files}")
-        foreach(tracked_file IN LISTS tracked_files)
-            list(APPEND git_inputs "${repo_dir}/${tracked_file}")
-        endforeach()
-    endif()
-
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${git_inputs})
-endfunction()
-
 function(vnm_terminal_git_summary out_commit out_modified repo_dir)
     set(commit "unknown")
     set(modified OFF)
@@ -103,8 +29,6 @@ function(vnm_terminal_git_summary out_commit out_modified repo_dir)
             if(git_status_result EQUAL 0 AND NOT git_status STREQUAL "")
                 set(modified ON)
             endif()
-
-            vnm_terminal_register_git_configure_inputs("${repo_dir}")
         endif()
     endif()
 
@@ -121,7 +45,7 @@ function(vnm_terminal_build_info_line out_var component_name commit modified)
     set(${out_var} "${line}" PARENT_SCOPE)
 endfunction()
 
-function(vnm_terminal_build_provenance_text out_var terminal_dir surface_dir)
+function(vnm_terminal_build_provenance_text out_var terminal_dir surface_dir chrome_dir)
     string(TIMESTAMP build_date "%Y-%m-%d %H:%M:%S UTC" UTC)
 
     vnm_terminal_git_summary(
@@ -132,6 +56,10 @@ function(vnm_terminal_build_provenance_text out_var terminal_dir surface_dir)
         surface_commit
         surface_modified
         "${surface_dir}")
+    vnm_terminal_git_summary(
+        chrome_commit
+        chrome_modified
+        "${chrome_dir}")
 
     vnm_terminal_build_info_line(
         terminal_line
@@ -143,8 +71,13 @@ function(vnm_terminal_build_provenance_text out_var terminal_dir surface_dir)
         "vnm_terminal_surface"
         "${surface_commit}"
         "${surface_modified}")
+    vnm_terminal_build_info_line(
+        chrome_line
+        "vnm_qml_chrome"
+        "${chrome_commit}"
+        "${chrome_modified}")
 
-    set(text "Build date: ${build_date}\n${terminal_line}\n${surface_line}")
+    set(text "Build date: ${build_date}\n${terminal_line}\n${surface_line}\n${chrome_line}")
     set(${out_var} "${text}" PARENT_SCOPE)
 endfunction()
 
