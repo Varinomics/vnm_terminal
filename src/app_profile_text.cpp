@@ -131,7 +131,7 @@ bool write_profile_text(
     QString text;
     QTextStream stream(&text);
     stream << "vnm_terminal example terminal profile\n";
-    stream << "format=1\n";
+    stream << "format=2\n";
     stream << "time_unit=ns\n\n";
     diag::append_surface_geometry_profile_text(surface, stream);
     stream << '\n';
@@ -144,10 +144,6 @@ bool write_profile_text(
     diag::append_retained_history_profile_text(surface, stream);
     stream << '\n';
     diag::append_session_profile_stats_text(surface, stream);
-    stream << '\n';
-    diag::append_renderer_stats_text(surface, stream);
-    stream << '\n';
-    diag::append_cumulative_renderer_stats_text(surface, stream);
     stream << '\n';
     diag::append_qsg_atlas_profile_text(surface, stream);
     stream << '\n';

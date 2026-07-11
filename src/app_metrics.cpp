@@ -34,11 +34,9 @@ void insert_json_counter(
 
 constexpr const char* k_runtime_frame_rate_elapsed_basis =
     "app_exec_elapsed_ms_including_process_startup_excluding_profile_write";
-constexpr const char* k_runtime_metrics_schema = "vnm_terminal_runtime_metrics_v2";
+constexpr const char* k_runtime_metrics_schema = "vnm_terminal_runtime_metrics_v3";
 constexpr const char* k_metrics_timeline_sample_schema =
     "vnm_terminal_metrics_timeline_sample_v1";
-constexpr const char* k_paint_completed_frame_counter_path =
-    "renderer.paint_completed_frames";
 constexpr const char* k_qsg_atlas_render_frame_counter_path =
     "qsg_atlas.render_count";
 constexpr const char* k_presentation_frame_swapped_counter_path =
@@ -48,12 +46,6 @@ constexpr const char* k_presentation_frame_swapped_counter_source =
 constexpr const char* k_presentation_frame_swapped_counter_semantics =
     "qt_frame_swapped_proxy";
 
-struct renderer_frame_evidence_t
-{
-    const char*   counter_path = k_paint_completed_frame_counter_path;
-    std::uint64_t frame_count  = 0U;
-};
-
 double frames_per_second(
     std::uint64_t frame_count,
     qint64        elapsed_ms)
@@ -61,23 +53,6 @@ double frames_per_second(
     return elapsed_ms > 0
         ? static_cast<double>(frame_count) * 1000.0 / static_cast<double>(elapsed_ms)
         : 0.0;
-}
-
-renderer_frame_evidence_t renderer_frame_evidence(
-    std::uint64_t paint_completed_frame_count,
-    std::uint64_t qsg_atlas_render_frame_count)
-{
-    if (qsg_atlas_render_frame_count > 0U) {
-        return {
-            k_qsg_atlas_render_frame_counter_path,
-            qsg_atlas_render_frame_count,
-        };
-    }
-
-    return {
-        k_paint_completed_frame_counter_path,
-        paint_completed_frame_count,
-    };
 }
 
 const char* metrics_timeline_sample_kind_text(Metrics_timeline_sample_kind kind)
@@ -90,17 +65,17 @@ const char* metrics_timeline_sample_kind_text(Metrics_timeline_sample_kind kind)
 }
 
 QJsonObject renderer_frame_evidence_json(
-    const renderer_frame_evidence_t& evidence,
-    qint64                           elapsed_ms)
+    std::uint64_t frame_count,
+    qint64        elapsed_ms)
 {
     QJsonObject object;
     object.insert(
         QStringLiteral("counter_path"),
-        QString::fromLatin1(evidence.counter_path));
-    insert_json_counter(object, "frame_count", evidence.frame_count);
+        QString::fromLatin1(k_qsg_atlas_render_frame_counter_path));
+    insert_json_counter(object, "frame_count", frame_count);
     object.insert(
         QStringLiteral("frames_per_second"),
-        frames_per_second(evidence.frame_count, elapsed_ms));
+        frames_per_second(frame_count, elapsed_ms));
     object.insert(
         QStringLiteral("elapsed_basis"),
         QString::fromLatin1(k_runtime_frame_rate_elapsed_basis));
@@ -108,18 +83,18 @@ QJsonObject renderer_frame_evidence_json(
 }
 
 QJsonObject startup_metrics_json(
-    const Runtime_state&              state,
-    const renderer_frame_evidence_t&  frame_evidence)
+    const Runtime_state& state,
+    std::uint64_t        qsg_atlas_render_frame_count)
 {
     QJsonObject object;
     object.insert(QStringLiteral("first_output_elapsed_ms"), state.first_output_elapsed_ms);
     object.insert(QStringLiteral("output_seen"), state.output_seen);
     object.insert(
         QStringLiteral("visible_first_frame_completed"),
-        frame_evidence.frame_count > 0U);
+        qsg_atlas_render_frame_count > 0U);
     object.insert(
         QStringLiteral("visible_first_frame_counter_path"),
-        QString::fromLatin1(frame_evidence.counter_path));
+        QString::fromLatin1(k_qsg_atlas_render_frame_counter_path));
     return object;
 }
 
@@ -217,11 +192,6 @@ QJsonObject terminal_metrics_json(
         static_cast<std::uint64_t>(surface.paint_completed_frame_count());
     const std::uint64_t qsg_atlas_render_frame_count =
         static_cast<std::uint64_t>(surface.qsg_atlas_render_frame_count());
-    const renderer_frame_evidence_t frame_evidence =
-        renderer_frame_evidence(paint_completed_frame_count, qsg_atlas_render_frame_count);
-
-    QJsonObject renderer;
-    vnm_terminal::diagnostics::append_renderer_metrics_json(surface, renderer);
 
     QJsonObject qsg_atlas;
     vnm_terminal::diagnostics::append_atlas_metrics_json(surface, qsg_atlas);
@@ -259,10 +229,12 @@ QJsonObject terminal_metrics_json(
         QString::fromLatin1(k_runtime_frame_rate_elapsed_basis));
     root.insert(
         QStringLiteral("renderer_frame_evidence"),
-        renderer_frame_evidence_json(frame_evidence, timing.app_elapsed_ms));
+        renderer_frame_evidence_json(
+            qsg_atlas_render_frame_count,
+            timing.app_elapsed_ms));
     root.insert(
         QStringLiteral("startup"),
-        startup_metrics_json(state, frame_evidence));
+        startup_metrics_json(state, qsg_atlas_render_frame_count));
     root.insert(QStringLiteral("profiling"), profiling_measurement_json(timing));
     root.insert(
         QStringLiteral("presentation"),
@@ -271,7 +243,6 @@ QJsonObject terminal_metrics_json(
     root.insert(QStringLiteral("render_invalidation"), render_invalidation);
     root.insert(QStringLiteral("backend_drain"), backend_drain);
     root.insert(QStringLiteral("retained_history"), retained_history);
-    root.insert(QStringLiteral("renderer"), renderer);
     root.insert(QStringLiteral("qsg_atlas"), qsg_atlas);
 
     return root;

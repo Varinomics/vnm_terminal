@@ -76,14 +76,8 @@ foreach(sample_index RANGE 0 ${timeline_last_index})
 
     vnm_terminal_read_json_field(runtime_schema
         "${sample_text}" "${timeline_path}" runtime_metrics schema)
-    if(NOT runtime_schema STREQUAL "vnm_terminal_runtime_metrics_v2")
+    if(NOT runtime_schema STREQUAL "vnm_terminal_runtime_metrics_v3")
         message(FATAL_ERROR "unexpected runtime_metrics schema: ${runtime_schema}")
-    endif()
-
-    vnm_terminal_read_json_type(renderer_type
-        "${sample_text}" "${timeline_path}" runtime_metrics renderer)
-    if(NOT renderer_type STREQUAL "OBJECT")
-        message(FATAL_ERROR "runtime_metrics.renderer should be an object")
     endif()
 
     vnm_terminal_read_json_type(presentation_type
