@@ -1720,6 +1720,30 @@ bool test_surface_option_application_helpers()
     ok &= check(scrollback_limit_surface.scrollback_limit() == 200,
         "scrollback limit option reaches surface config");
 
+    App_options retained_capacity_default_options;
+    VNM_TerminalSurface retained_capacity_default_surface;
+    const std::size_t retained_capacity_default =
+        retained_capacity_default_surface.retained_history_capacity_bytes();
+    apply_retained_history_capacity_option(
+        retained_capacity_default_surface,
+        retained_capacity_default_options);
+    ok &= check(
+        retained_capacity_default_surface.retained_history_capacity_bytes() ==
+            retained_capacity_default,
+        "default retained-history capacity keeps surface config");
+
+    App_options retained_capacity_options;
+    retained_capacity_options.retained_history_capacity_bytes =
+        2U * 1024U * 1024U;
+    VNM_TerminalSurface retained_capacity_surface;
+    apply_retained_history_capacity_option(
+        retained_capacity_surface,
+        retained_capacity_options);
+    ok &= check(
+        retained_capacity_surface.retained_history_capacity_bytes() ==
+            *retained_capacity_options.retained_history_capacity_bytes,
+        "retained-history capacity option reaches surface config");
+
     return ok;
 }
 

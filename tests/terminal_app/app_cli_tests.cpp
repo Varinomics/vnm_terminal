@@ -8,6 +8,7 @@
 #include <QStringList>
 #include <QTemporaryDir>
 
+#include <cstddef>
 #include <initializer_list>
 
 namespace chrome = vnm_terminal::terminal_app;
@@ -479,6 +480,100 @@ bool test_parse_scrollback_limit_option()
     return ok;
 }
 
+bool test_parse_retained_history_capacity_option()
+{
+    constexpr std::size_t bytes_per_mib = 1024U * 1024U;
+    const std::size_t minimum_capacity_mib =
+        VNM_TerminalSurface::minimum_retained_history_capacity_bytes() /
+            bytes_per_mib +
+        (VNM_TerminalSurface::minimum_retained_history_capacity_bytes() %
+                bytes_per_mib ==
+            0U
+            ? 0U
+            : 1U);
+    const std::size_t maximum_capacity_mib =
+        VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
+        bytes_per_mib;
+    const QString minimum_capacity_text = QString::number(minimum_capacity_mib);
+    const QString maximum_capacity_text = QString::number(maximum_capacity_mib);
+    const QString excessive_capacity_text = QString::number(maximum_capacity_mib + 1U);
+    const QString expected_range_error = QStringLiteral(
+        "--retained-history-capacity-mib requires an integer from %1 to %2")
+                                             .arg(minimum_capacity_mib)
+                                             .arg(maximum_capacity_mib);
+    const auto parse_capacity = [](const QString& value) {
+        return chrome::parse_arguments({
+            QStringLiteral("vnm_terminal"),
+            QStringLiteral("--retained-history-capacity-mib"),
+            value,
+        });
+    };
+    const chrome::Parse_result default_result = parse({
+        "vnm_terminal", "--", "fixture-command",
+    });
+    const chrome::Parse_result capacity_result = parse({
+        "vnm_terminal",
+        "--retained-history-capacity-mib",
+        "2",
+        "--",
+        "fixture-command",
+    });
+    const chrome::Parse_result zero_result = parse({
+        "vnm_terminal", "--retained-history-capacity-mib", "0",
+    });
+    const chrome::Parse_result minimum_result = parse_capacity(minimum_capacity_text);
+    const chrome::Parse_result maximum_result = parse_capacity(maximum_capacity_text);
+    const chrome::Parse_result excessive_result = parse_capacity(excessive_capacity_text);
+    const chrome::Parse_result malformed_result = parse_capacity(QStringLiteral("abc"));
+    const chrome::Parse_result fractional_result = parse_capacity(QStringLiteral("2.5"));
+    const chrome::Parse_result negative_result = parse_capacity(QStringLiteral("-1"));
+    const chrome::Parse_result missing_result = parse({
+        "vnm_terminal", "--retained-history-capacity-mib",
+    });
+    const chrome::Parse_result command_result = parse({
+        "vnm_terminal", "--", "--retained-history-capacity-mib", "2",
+    });
+
+    bool ok = true;
+    ok &= check(!default_result.options.retained_history_capacity_bytes.has_value(),
+        "retained-history capacity default leaves surface policy unchanged");
+    ok &= check(capacity_result.error.isEmpty(),
+        "retained-history capacity option parses");
+    ok &= check(
+        capacity_result.options.retained_history_capacity_bytes.value_or(0U) ==
+            2U * 1024U * 1024U,
+        "retained-history capacity option selects MiB byte capacity");
+    ok &= check(!zero_result.error.isEmpty(),
+        "retained-history capacity rejects zero");
+    ok &= check(zero_result.error == expected_range_error,
+        "retained-history capacity reports the exact supported range");
+    ok &= check(
+        minimum_result.options.retained_history_capacity_bytes.value_or(0U) ==
+            minimum_capacity_mib * bytes_per_mib,
+        "retained-history capacity accepts the inclusive surface minimum");
+    ok &= check(
+        maximum_result.options.retained_history_capacity_bytes.value_or(0U) ==
+            maximum_capacity_mib * bytes_per_mib,
+        "retained-history capacity accepts the inclusive surface maximum");
+    ok &= check(excessive_result.error == expected_range_error,
+        "retained-history capacity rejects values above the surface maximum");
+    ok &= check(!malformed_result.error.isEmpty(),
+        "retained-history capacity rejects non-numeric input");
+    ok &= check(!fractional_result.error.isEmpty(),
+        "retained-history capacity rejects fractional input");
+    ok &= check(!negative_result.error.isEmpty(),
+        "retained-history capacity rejects negative input");
+    ok &= check(!missing_result.error.isEmpty(),
+        "retained-history capacity rejects a missing value");
+    ok &= check(command_result.error.isEmpty(),
+        "retained-history capacity after command separator parses as command argv");
+    ok &= check(
+        command_result.options.command ==
+            arguments({"--retained-history-capacity-mib", "2"}),
+        "retained-history capacity after command separator is preserved in command argv");
+    return ok;
+}
+
 bool test_parse_metrics_timeline_options()
 {
     chrome::Parse_result default_result = parse({
@@ -771,6 +866,7 @@ int main(int argc, char** argv)
     ok &= test_parse_alternate_wheel_option();
     ok &= test_parse_osc52_clipboard_option();
     ok &= test_parse_scrollback_limit_option();
+    ok &= test_parse_retained_history_capacity_option();
     ok &= test_parse_metrics_timeline_options();
 #if VNM_TERMINAL_PROFILING_ENABLED
     ok &= test_profile_text_capture_path_conflicts();

@@ -350,6 +350,18 @@ foreach(retained_history_counter IN ITEMS
         retained_history ${retained_history_counter})
 endforeach()
 
+if(DEFINED expected_retained_history_byte_budget)
+    vnm_terminal_read_json_field(retained_history_byte_budget
+        "${metrics_text}" "${metrics_path}" retained_history byte_budget)
+    if(NOT retained_history_byte_budget STREQUAL
+        "${expected_retained_history_byte_budget}")
+        message(FATAL_ERROR
+            "retained_history.byte_budget should be "
+            "${expected_retained_history_byte_budget}, got "
+            "${retained_history_byte_budget}")
+    endif()
+endif()
+
 vnm_terminal_read_json_field(average_retained_row_bytes
     "${metrics_text}" "${metrics_path}" retained_history average_retained_row_bytes)
 if(NOT average_retained_row_bytes MATCHES "^[0-9]+(\\.[0-9]+)?$")

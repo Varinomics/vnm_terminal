@@ -83,6 +83,10 @@ void apply_scrollback_limit_option(
     VNM_TerminalSurface& surface,
     const App_options&   options);
 
+void apply_retained_history_capacity_option(
+    VNM_TerminalSurface& surface,
+    const App_options&   options);
+
 bool resize_window_for_text_area_request(
     QQuickWindow&                  window,
     const VNM_TerminalSurface&     surface,

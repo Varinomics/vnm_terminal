@@ -165,6 +165,16 @@ void apply_scrollback_limit_option(
     }
 }
 
+void apply_retained_history_capacity_option(
+    VNM_TerminalSurface& surface,
+    const App_options&   options)
+{
+    if (options.retained_history_capacity_bytes.has_value()) {
+        surface.set_retained_history_capacity_bytes(
+            *options.retained_history_capacity_bytes);
+    }
+}
+
 bool resize_window_for_text_area_request(
     QQuickWindow&                  window,
     const VNM_TerminalSurface&     surface,
