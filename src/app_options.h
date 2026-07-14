@@ -12,6 +12,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <cstddef>
 #include <optional>
 
 namespace vnm_terminal::terminal_app {
@@ -56,8 +57,9 @@ struct App_options
         VNM_TerminalSurface::Lcd_subpixel_order::AUTO;
     Osc52_clipboard_policy osc52_clipboard_policy = Osc52_clipboard_policy::DENY;
     Paste_shortcut_policy paste_shortcut_policy = Paste_shortcut_policy::PLATFORM_DEFAULT;
-    std::optional<int> timeout_ms;
-    std::optional<int> scrollback_limit;
+    std::optional<int>         timeout_ms;
+    std::optional<int>         scrollback_limit;
+    std::optional<std::size_t> retained_history_capacity_bytes;
     bool               shell_requested                    = false;
     bool               keep_open_after_process_exits      = false;
     bool               require_output                     = false;

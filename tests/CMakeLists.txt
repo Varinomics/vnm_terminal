@@ -404,6 +404,7 @@ if(TARGET vnm_terminal_canvas_fixture)
         COMMAND
             "${CMAKE_COMMAND}"
             "-Dmetrics_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_json_$<CONFIG>.json"
+            "-Dexpected_retained_history_byte_budget=2097152"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_metrics_json.cmake"
             --
             "${CMAKE_COMMAND}" -E env
@@ -413,6 +414,7 @@ if(TARGET vnm_terminal_canvas_fixture)
             "$<TARGET_FILE:vnm_terminal>"
             "--window-size" "800x480"
             "--font-size" "10"
+            "--retained-history-capacity-mib" "2"
             "--metrics-json" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_metrics_json_$<CONFIG>.json"
             "--timeout-ms" "10000"
             "--require-output"

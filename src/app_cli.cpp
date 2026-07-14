@@ -33,6 +33,15 @@ namespace vnm_terminal::terminal_app {
 
 namespace {
 
+constexpr std::size_t k_bytes_per_mib = 1024U * 1024U;
+
+std::size_t whole_mib_ceiling(std::size_t byte_count)
+{
+    return
+        byte_count / k_bytes_per_mib +
+        (byte_count % k_bytes_per_mib == 0U ? 0U : 1U);
+}
+
 bool argument_is(const QString& argument, const char* expected)
 {
     return argument == QLatin1String(expected);
@@ -144,6 +153,31 @@ bool parse_scrollback_limit(
     }
 
     *out_scrollback_limit = static_cast<int>(limit);
+    return true;
+}
+
+bool parse_retained_history_capacity_mib(
+    const QString&              value,
+    std::optional<std::size_t>* out_capacity_bytes,
+    QString*                    out_error)
+{
+    const std::size_t minimum_mib = whole_mib_ceiling(
+        VNM_TerminalSurface::minimum_retained_history_capacity_bytes());
+    const std::size_t maximum_mib =
+        VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
+        k_bytes_per_mib;
+
+    bool ok = false;
+    const qulonglong capacity_mib = value.toULongLong(&ok);
+    if (!ok || capacity_mib < minimum_mib || capacity_mib > maximum_mib) {
+        *out_error = QStringLiteral(
+            "--retained-history-capacity-mib requires an integer from %1 to %2")
+            .arg(minimum_mib)
+            .arg(maximum_mib);
+        return false;
+    }
+
+    *out_capacity_bytes = static_cast<std::size_t>(capacity_mib) * k_bytes_per_mib;
     return true;
 }
 
@@ -363,6 +397,15 @@ QString capture_path_conflict_error(
 
 void print_usage()
 {
+    const std::size_t minimum_retained_history_mib = whole_mib_ceiling(
+        VNM_TerminalSurface::minimum_retained_history_capacity_bytes());
+    const std::size_t maximum_retained_history_mib =
+        VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
+        k_bytes_per_mib;
+    const std::size_t default_retained_history_mib =
+        VNM_TerminalSurface::default_retained_history_capacity_bytes() /
+        k_bytes_per_mib;
+
     std::cout
         << "usage: vnm_terminal [options]\n"
         << "       vnm_terminal [options] -- <program> [args...]\n"
@@ -374,6 +417,14 @@ void print_usage()
         << "  --font-size <pixels>            terminal font size in pixels\n"
         << "  --color-scheme <name>           terminal color scheme (e.g. Campbell)\n"
         << "  --scrollback-limit <rows>       maximum retained scrollback rows\n"
+        << "  --retained-history-capacity-mib <MiB>\n"
+        << "                                  retained-history byte capacity, "
+        << minimum_retained_history_mib
+        << ".."
+        << maximum_retained_history_mib
+        << ", default "
+        << default_retained_history_mib
+        << "\n"
         << "  --window-size <width>x<height>  window size in logical pixels\n"
 #if defined(_WIN32) || defined(__linux__)
         << "  --native-titlebar               use the platform titlebar instead of built-in chrome\n"
@@ -630,6 +681,19 @@ Parse_result parse_arguments(const QStringList& arguments)
         if (argument_is(argument, "--scrollback-limit")) {
             if (!take_option_value(arguments, index, &value, &result.error) ||
                 !parse_scrollback_limit(value, &result.options.scrollback_limit, &result.error))
+            {
+                return result;
+            }
+
+            continue;
+        }
+
+        if (argument_is(argument, "--retained-history-capacity-mib")) {
+            if (!take_option_value(arguments, index, &value, &result.error) ||
+                !parse_retained_history_capacity_mib(
+                    value,
+                    &result.options.retained_history_capacity_bytes,
+                    &result.error))
             {
                 return result;
             }

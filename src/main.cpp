@@ -69,6 +69,7 @@ using chrome::App_options;
 using chrome::apply_persisted_appearance_settings;
 using chrome::apply_persisted_terminal_window_state;
 using chrome::apply_primary_repaint_recovery_option;
+using chrome::apply_retained_history_capacity_option;
 using chrome::apply_scrollback_limit_option;
 using chrome::apply_synchronized_output_scroll_policy_option;
 using chrome::apply_terminal_shell_geometry;
@@ -425,6 +426,7 @@ int main(int argc, char** argv)
     surface->set_wheel_event_policy(
         VNM_TerminalSurface::Wheel_event_policy::LOCAL_SCROLLBACK_FIRST);
     apply_scrollback_limit_option(*surface, options);
+    apply_retained_history_capacity_option(*surface, options);
 #if defined(Q_OS_MACOS)
     surface->set_copy_shortcut_policy(VNM_TerminalSurface::Copy_shortcut_policy::TERMINAL_INPUT);
 #endif
