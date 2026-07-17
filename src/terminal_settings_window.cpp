@@ -211,6 +211,10 @@ Window {
     readonly property int titlebar_height: 32
     readonly property real frame_border_width: 1
     readonly property bool resize_enabled: visibility === Window.Windowed
+    readonly property real resize_outward_extent:
+        VNM_chrome_geometry.resize_outward_extent(
+            frame_border_width,
+            VNM_chrome_geometry.default_resize_target_extent)
 
     readonly property color section_color:      "#8d99a8"
     readonly property color label_color:        "#9aa4b2"
@@ -542,40 +546,52 @@ R"qml(
         window_frame_border: "#343434"
     }
 
+    VNM_NativeWindowFrame {
+        window: win
+        frame_visible: false
+        resize_enabled: win.resize_enabled
+        resize_outward_margins.left: win.resize_outward_extent
+        resize_outward_margins.top: win.resize_outward_extent
+        resize_outward_margins.right: win.resize_outward_extent
+        resize_outward_margins.bottom: win.resize_outward_extent
+    }
+
     Rectangle {
         anchors.fill: parent
         color: settings_theme.window_frame_border
         z: -100
     }
 
+    VNM_ChromeSideResizeLayer {
+        anchors.fill: parent
+        resize_enabled: win.resize_enabled
+        left_frame_extent: win.frame_border_width
+        right_frame_extent: win.frame_border_width
+
+        onResize_requested: (edges) => win.resize_requested(edges)
+    }
+
+    VNM_ChromeBottomResizeLayer {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: implicitHeight
+        resize_enabled: win.resize_enabled
+        left_frame_extent: win.frame_border_width
+        right_frame_extent: win.frame_border_width
+        bottom_frame_extent: win.frame_border_width
+
+        onResize_requested: (edges) => win.resize_requested(edges)
+    }
+
     Item {
         id: content
         anchors.fill: parent
         anchors.margins: win.resize_enabled ? win.frame_border_width : 0
-        clip: true
 
         Rectangle {
             anchors.fill: parent
             color: win.color
-        }
-
-        VNM_ChromeSideResizeLayer {
-            anchors.fill: parent
-            resize_enabled: win.resize_enabled
-            resize_border_width: 6
-
-            onResize_requested: (edges) => win.resize_requested(edges)
-        }
-
-        VNM_ChromeBottomResizeLayer {
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            height: 6
-            resize_enabled: win.resize_enabled
-            resize_border_width: 6
-
-            onResize_requested: (edges) => win.resize_requested(edges)
         }
 
         VNM_ChromeTitleBar {

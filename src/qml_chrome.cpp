@@ -119,6 +119,16 @@ Item {
         window_frame_border: root.frame_edge_color
     }
 
+    VNM_NativeWindowFrame {
+        window: Window.window
+        frame_visible: false
+        resize_enabled: root.resize_enabled
+        resize_outward_margins.left: frame_shell.left_resize_outward_extent
+        resize_outward_margins.top: frame_shell.top_resize_outward_extent
+        resize_outward_margins.right: frame_shell.right_resize_outward_extent
+        resize_outward_margins.bottom: frame_shell.bottom_resize_outward_extent
+    }
+
     VNM_ChromeFrameShell {
         id: frame_shell
         objectName: "terminal_chrome_frame_shell"
@@ -136,7 +146,6 @@ Item {
         frame_gap: root.shell_frame_gap
         frame_inner_edge: root.shell_inner_edge_thickness
         frame_inner_edge_color: root.frame_edge_color
-        edge_resize_extent: root.reduced_resize_border_width
         device_pixel_ratio: root.device_pixel_ratio
         titlebar_height: Math.min(root.reduced_titlebar_height, root.height)
         title: root.title
