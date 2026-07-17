@@ -30,6 +30,7 @@ public:
         QQmlEngine&                   engine,
         VNM_TerminalSurface&          surface,
         Terminal_settings_controller& controller,
+        bool                          interaction_diagnostics_unlocked = false,
         QObject*                      parent = nullptr);
     ~Terminal_settings_window() override;
 

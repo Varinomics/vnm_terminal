@@ -181,6 +181,42 @@ bool test_parse_selection_trace_option()
     return ok;
 }
 
+bool test_parse_interaction_diagnostics_options()
+{
+    const chrome::Parse_result default_result = parse({
+        "vnm_terminal", "--", "fixture-command",
+    });
+    const chrome::Parse_result enabled_result = parse({
+        "vnm_terminal",
+        "--unlock-interaction-diagnostics",
+        "--",
+        "fixture-command",
+    });
+    const chrome::Parse_result command_result = parse({
+        "vnm_terminal",
+        "--",
+        "--unlock-interaction-diagnostics",
+    });
+
+    bool ok = true;
+    ok &= check(default_result.error.isEmpty(),
+        "interaction diagnostics default parse succeeds");
+    ok &= check(!default_result.options.interaction_diagnostics_unlocked,
+        "interaction diagnostics UI defaults locked");
+    ok &= check(enabled_result.error.isEmpty(),
+        "interaction diagnostics options parse");
+    ok &= check(enabled_result.options.interaction_diagnostics_unlocked,
+        "unlock option exposes interaction diagnostics UI");
+    ok &= check(command_result.error.isEmpty(),
+        "interaction diagnostics command argument parses after command separator");
+    ok &= check(!command_result.options.interaction_diagnostics_unlocked,
+        "interaction diagnostics unlock after command separator remains a command argument");
+    ok &= check(
+        command_result.options.command == arguments({"--unlock-interaction-diagnostics"}),
+        "interaction diagnostics unlock after command separator is preserved in command argv");
+    return ok;
+}
+
 bool test_parse_wheel_trace_option()
 {
     chrome::Parse_result trace_result = parse({
@@ -857,6 +893,7 @@ int main(int argc, char** argv)
     bool ok = true;
     ok &= test_parse_titlebar_options();
     ok &= test_parse_selection_trace_option();
+    ok &= test_parse_interaction_diagnostics_options();
     ok &= test_parse_wheel_trace_option();
     ok &= test_parse_synchronized_output_scroll_policy_option();
     ok &= test_parse_disable_primary_repaint_recovery_option();
