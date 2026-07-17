@@ -500,7 +500,8 @@ int main(int argc, char** argv)
     auto settings_window = std::make_unique<chrome::Terminal_settings_window>(
         chrome_engine,
         *surface,
-        *settings_controller);
+        *settings_controller,
+        options.interaction_diagnostics_unlocked);
     if (!settings_window->is_valid()) {
         print_error(QStringLiteral("failed to create settings window: %1")
             .arg(settings_window->error_string()));

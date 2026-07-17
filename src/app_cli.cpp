@@ -451,6 +451,8 @@ void print_usage()
         << "  --wheel-trace                   include diagnostic wheel routing events in transcript\n"
 #endif
         << "  --selection-trace               write selection diagnostics to stderr\n"
+        << "  --unlock-interaction-diagnostics\n"
+        << "                                  show the opt-in interaction diagnostics setting\n"
 #if VNM_TERMINAL_PROFILING_ENABLED
         << "  --profile-text <path>           write profile and dirty-row diagnostics\n"
 #endif
@@ -604,6 +606,12 @@ Parse_result parse_arguments(const QStringList& arguments)
 
         if (argument_is(argument, "--selection-trace")) {
             result.options.selection_trace_enabled = true;
+            ++index;
+            continue;
+        }
+
+        if (argument_is(argument, "--unlock-interaction-diagnostics")) {
+            result.options.interaction_diagnostics_unlocked = true;
             ++index;
             continue;
         }

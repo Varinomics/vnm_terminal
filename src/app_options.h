@@ -65,6 +65,7 @@ struct App_options
     bool               require_output                     = false;
     bool               custom_titlebar                    = k_custom_titlebar_default_enabled;
     bool               selection_trace_enabled            = false;
+    bool               interaction_diagnostics_unlocked   = false;
     bool               transcript_snapshot_diagnostics    = false;
     bool               transcript_timing_diagnostics      = false;
     bool               wheel_trace_enabled                 = false;

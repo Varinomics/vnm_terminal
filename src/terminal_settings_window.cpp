@@ -898,6 +898,43 @@ R"qml(
                     checked: surface.rowTimestampTooltipEnabled
                     onToggled: surface.rowTimestampTooltipEnabled = checked
                 }
+
+                S_SectionHeader {
+                    visible: interactionDiagnosticsUnlocked
+                    text: "Diagnostics"
+                    Layout.columnSpan: 2
+                    Layout.topMargin: 10
+                }
+
+                S_Label {
+                    visible: interactionDiagnosticsUnlocked
+                    text: "Interaction trace"
+                }
+
+                ColumnLayout {
+                    visible: interactionDiagnosticsUnlocked
+                    Layout.fillWidth: true
+                    spacing: 3
+
+                    S_Switch {
+                        objectName: "interaction_diagnostics_switch"
+                        checked: surface.interactionDiagnosticsEnabled
+                        onToggled: {
+                            surface.interactionDiagnosticsEnabled = checked
+                            if (checked !== surface.interactionDiagnosticsEnabled)
+                                checked = surface.interactionDiagnosticsEnabled
+                        }
+                    }
+
+                    S_Hint {
+                        Layout.fillWidth: true
+                        text: surface.interactionDiagnosticsError.length > 0
+                            ? surface.interactionDiagnosticsError
+                            : "Bounded trace (records control keys and event timing): "
+                                + surface.interactionDiagnosticsPath
+                        wrapMode: Text.Wrap
+                    }
+                }
             }
 
             Rectangle {
@@ -935,6 +972,7 @@ settings::Terminal_settings_window::Terminal_settings_window(
     QQmlEngine&                   engine,
     VNM_TerminalSurface&          surface,
     Terminal_settings_controller& controller,
+    bool                          interaction_diagnostics_unlocked,
     QObject*                      parent)
 :
     QObject(parent)
@@ -947,6 +985,9 @@ settings::Terminal_settings_window::Terminal_settings_window(
     auto* context = new QQmlContext(engine.rootContext(), this);
     context->setContextProperty(QStringLiteral("surface"), &surface);
     context->setContextProperty(QStringLiteral("settings"), &controller);
+    context->setContextProperty(
+        QStringLiteral("interactionDiagnosticsUnlocked"),
+        interaction_diagnostics_unlocked);
 
     QQmlComponent component(&engine);
     component.setData(

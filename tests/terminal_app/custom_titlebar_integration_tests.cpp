@@ -15,6 +15,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QEventLoop>
+#include <QFile>
 #include <QGuiApplication>
 #include <QImage>
 #include <QJsonObject>
@@ -2223,6 +2224,12 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
             settings_qml_window->findChild<QQuickItem*>(
                 QStringLiteral("row_timestamp_switch")) != nullptr,
             "settings panel builds the row-timestamp switch");
+        auto* interaction_diagnostics_switch = settings_qml_window->findChild<QQuickItem*>(
+            QStringLiteral("interaction_diagnostics_switch"));
+        ok &= check(
+            interaction_diagnostics_switch != nullptr &&
+                !interaction_diagnostics_switch->isVisible(),
+            "interaction diagnostics switch stays hidden without the startup unlock");
 
         auto* build_provenance_text = settings_qml_window->findChild<QQuickItem*>(
             QStringLiteral("build_provenance_text"));
@@ -2251,6 +2258,64 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
                 "build provenance footer text is selectable");
         }
     }
+
+    chrome_test::Terminal_settings_window unlocked_settings_window(
+        engine, surface, settings_controller, true);
+    ok &= check(unlocked_settings_window.is_valid(),
+        "unlocked settings window initializes");
+    unlocked_settings_window.set_transient_parent(&window);
+    unlocked_settings_window.show_window();
+    pump_events(app);
+    bool unlocked_switch_visible = false;
+    QQuickItem* unlocked_diagnostics_switch = nullptr;
+    for (QWindow* top_level : QGuiApplication::topLevelWindows()) {
+        auto* quick_window = qobject_cast<QQuickWindow*>(top_level);
+        auto* diagnostics_switch = quick_window != nullptr
+            ? quick_window->findChild<QQuickItem*>(
+                  QStringLiteral("interaction_diagnostics_switch"))
+            : nullptr;
+        unlocked_switch_visible =
+            unlocked_switch_visible ||
+            (diagnostics_switch != nullptr && diagnostics_switch->isVisible());
+        if (diagnostics_switch != nullptr && diagnostics_switch->isVisible()) {
+            unlocked_diagnostics_switch = diagnostics_switch;
+        }
+    }
+    ok &= check(unlocked_switch_visible,
+        "startup unlock makes the interaction diagnostics switch visible");
+    ok &= check(!surface.interaction_diagnostics_enabled(),
+        "unlocking the setting alone does not start capture");
+    const QString trace_path = surface.interaction_diagnostics_path();
+    (void)QFile::remove(trace_path);
+    (void)QFile::remove(trace_path + QStringLiteral(".previous"));
+    const bool toggle_invoked = unlocked_diagnostics_switch != nullptr &&
+        unlocked_diagnostics_switch->setProperty("checked", true) &&
+        QMetaObject::invokeMethod(
+            unlocked_diagnostics_switch,
+            "toggled",
+            Qt::DirectConnection);
+    pump_events(app);
+    ok &= check(toggle_invoked && surface.interaction_diagnostics_enabled(),
+        "unlocked UI toggle starts interaction capture");
+    ok &= check(QFile::exists(trace_path),
+        "unlocked UI toggle creates the bounded trace artifact");
+    const bool stop_invoked = unlocked_diagnostics_switch != nullptr &&
+        unlocked_diagnostics_switch->setProperty("checked", false) &&
+        QMetaObject::invokeMethod(
+            unlocked_diagnostics_switch,
+            "toggled",
+            Qt::DirectConnection);
+    pump_events(app);
+    ok &= check(stop_invoked && !surface.interaction_diagnostics_enabled(),
+        "unlocked UI toggle stops interaction capture");
+    QFile trace_file(trace_path);
+    ok &= check(trace_file.open(QIODevice::ReadOnly),
+        "interaction diagnostics trace can be read after capture");
+    ok &= check(trace_file.readAll().contains("\"event\":\"enabled\""),
+        "interaction diagnostics toggle records the capture start");
+    trace_file.close();
+    (void)QFile::remove(trace_path);
+    (void)QFile::remove(trace_path + QStringLiteral(".previous"));
 
     ok &= check(surface.color_scheme() == QStringLiteral("Campbell"),
         "surface defaults to the Campbell color scheme");

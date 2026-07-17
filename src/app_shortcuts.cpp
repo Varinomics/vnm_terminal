@@ -58,6 +58,10 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
     const Qt::KeyboardModifiers modifiers =
         key_event->modifiers() &
         (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
+    m_surface->record_key_interaction_diagnostic(
+        "app-shortcut",
+        "key-press",
+        *key_event);
 
     if (key_event->key() == Qt::Key_Comma) {
         // Settings shortcut: Ctrl+, everywhere, Cmd+, on macOS (the platform
@@ -69,6 +73,8 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
         const bool settings_shortcut = modifiers == Qt::ControlModifier;
 #endif
         if (settings_shortcut) {
+            m_surface->record_interaction_diagnostic(
+                "app-shortcut", "routed", QStringLiteral("settings"));
             emit settings_requested();
             return true;
         }
@@ -84,17 +90,25 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
     constexpr bool copy_shortcut = false;
 #endif
     if (!paste_shortcut && !copy_shortcut) {
+        m_surface->record_interaction_diagnostic(
+            "app-shortcut", "routed", QStringLiteral("surface"));
         return false;
     }
 
     if (!m_surface->hasActiveFocus()) {
+        m_surface->record_interaction_diagnostic(
+            "app-shortcut", "routed", QStringLiteral("inactive-focus"));
         return false;
     }
 
     if (copy_shortcut) {
+        m_surface->record_interaction_diagnostic(
+            "app-shortcut", "routed", QStringLiteral("copy"));
         return copy_selected_text();
     }
 
+    m_surface->record_interaction_diagnostic(
+        "app-shortcut", "routed", QStringLiteral("paste"));
     (void)paste_clipboard_text();
     return true;
 }
