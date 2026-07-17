@@ -141,15 +141,24 @@ if not exist "%MSDFGEN_SOURCE_DIR%\CMakeLists.txt" (
         exit /b 1
     )
 )
-if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
-    if "%VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK%"=="1" (
+if "%VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK%"=="1" (
+    if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
         REM Fallback for standalone app checkouts without a local vnm_msdf_text source tree.
-        git clone --depth 1 https://github.com/imakris/vnm_msdf_text.git "%VNM_MSDF_TEXT_SOURCE_DIR%"
+        git clone --depth 1 --branch master https://github.com/imakris/vnm_msdf_text.git "%VNM_MSDF_TEXT_SOURCE_DIR%"
         if errorlevel 1 (
             echo ERROR: Failed to fetch vnm_msdf_text.
             exit /b 1
         )
     ) else (
+        REM Owned source dependencies track master; never reuse a stale fallback clone.
+        git -C "%VNM_MSDF_TEXT_SOURCE_DIR%" checkout master && git -C "%VNM_MSDF_TEXT_SOURCE_DIR%" pull --ff-only origin master
+        if errorlevel 1 (
+            echo ERROR: Failed to update vnm_msdf_text master.
+            exit /b 1
+        )
+    )
+) else (
+    if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
         echo ERROR: vnm_msdf_text not found at %VNM_MSDF_TEXT_SOURCE_DIR%
         exit /b 1
     )
