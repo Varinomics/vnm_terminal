@@ -568,8 +568,12 @@ bool test_custom_titlebar_geometry()
             "frame shell preserves the three-pixel frame gap");
         ok &= check(nearly_equal(frame_shell->property("frame_inner_edge").toReal(), 1.0),
             "frame shell uses a one-pixel inner edge");
-        ok &= check(nearly_equal(frame_shell->property("edge_resize_extent").toReal(), 4.0),
-            "frame shell keeps the resize hit area independent from visible edges");
+        ok &= check(nearly_equal(frame_shell->property("resize_target_extent").toReal(), 11.0),
+            "frame shell uses the shared minimum resize target");
+        ok &= check(nearly_equal(
+            frame_shell->property("right_resize_outward_extent").toReal(),
+            48.0 / 11.0),
+            "five-pixel side frame leaves the expected outward resize share");
         ok &= check(frame_shell->property("resize_enabled").toBool(),
             "frame shell starts with resize hit areas enabled");
         ok &= check(
