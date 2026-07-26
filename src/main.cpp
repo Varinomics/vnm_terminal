@@ -15,6 +15,8 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <vnm_qt_dispatch/vnm_qt_dispatch.h>
+
 // Privileged first-party use of surface internal headers for profiler wiring
 // (render-profiler attachment + the app's own GUI-thread profiler; profiling
 // builds only). vnm_terminal builds the surface in-tree and is a documented
@@ -855,7 +857,8 @@ int main(int argc, char** argv)
         custom_titlebar_enabled);
     surface->forceActiveFocus();
 
-    QTimer::singleShot(0, &app, [&options, &state, surface, &timeout_timer] {
+    const auto start_result =
+        vnm::qt::post(&app, [&options, &state, surface, &timeout_timer] {
         if (!surface->start_process(options.command, options.working_directory)) {
             if (state.backend_error_count == 0) {
                 print_error(QStringLiteral("failed to start terminal process"));
@@ -869,6 +872,12 @@ int main(int argc, char** argv)
             timeout_timer.start(*options.timeout_ms);
         }
     });
+    if (start_result != vnm::qt::Post_result::QUEUED) {
+        print_error(QStringLiteral(
+            "failed to queue terminal process startup (dispatch result %1)")
+                .arg(static_cast<int>(start_result)));
+        return k_exit_start_failed;
+    }
 
     app_elapsed_timer.start();
     if (!options.metrics_timeline_jsonl_path.isEmpty()) {

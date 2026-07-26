@@ -139,6 +139,7 @@ add_executable(vnm_terminal_input_echo_timing_probe
 
 target_link_libraries(vnm_terminal_input_echo_timing_probe PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
+    vnm_qt_dispatch::vnm_qt_dispatch
     Qt6::Core
     Qt6::Gui
     Qt6::Quick
