@@ -120,7 +120,7 @@ Item {
     }
 
     VNM_NativeWindowFrame {
-        window: Window.window
+        window: root.Window.window
         frame_visible: false
         resize_enabled: root.resize_enabled
         resize_outward_margins.left: frame_shell.left_resize_outward_extent
