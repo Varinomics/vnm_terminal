@@ -320,14 +320,6 @@ int main(int argc, char** argv)
         return k_exit_usage_error;
     }
 
-    if (!options.backend_output_capture_path.isEmpty() &&
-        !prepare_capture_file(
-            QStringLiteral("--capture-output"),
-            options.backend_output_capture_path, &parse_result.error))
-    {
-        print_error(parse_result.error);
-        return k_exit_usage_error;
-    }
     if (!options.transcript_capture_path.isEmpty() &&
         !prepare_capture_file(
             QStringLiteral("--capture-transcript"),
@@ -436,7 +428,13 @@ int main(int argc, char** argv)
     surface->set_row_timestamp_tooltip_enabled(options.row_timestamp_tooltip_enabled);
     apply_synchronized_output_scroll_policy_option(*surface, options);
     apply_primary_repaint_recovery_option(*surface, options);
-    surface->set_backend_output_capture_path(options.backend_output_capture_path);
+    if (!options.backend_output_capture_base_path.isEmpty()) {
+        surface->set_backend_output_capture_config(
+            vnm_terminal::Backend_output_capture_config{
+                options.backend_output_capture_base_path,
+                chrome::k_backend_output_capture_max_bytes,
+            });
+    }
     surface->set_transcript_capture_path(options.transcript_capture_path);
     surface->set_transcript_snapshot_diagnostics(options.transcript_snapshot_diagnostics);
     surface->set_transcript_timing_diagnostics(options.transcript_timing_diagnostics);

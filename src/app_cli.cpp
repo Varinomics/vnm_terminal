@@ -375,6 +375,34 @@ bool validate_present_capture_path(
         out_error);
 }
 
+bool validate_backend_output_capture_base_path(
+    QString* out_base_path,
+    QString* out_error)
+{
+    if (out_base_path->isEmpty()) {
+        return true;
+    }
+
+    if (!validate_capture_path(
+            QStringLiteral("--capture-output"),
+            *out_base_path,
+            out_base_path,
+            out_error))
+    {
+        return false;
+    }
+
+    const QFileInfo base_info(*out_base_path);
+    if (base_info.exists()) {
+        *out_error = QStringLiteral(
+            "--capture-output requires an unused file-name prefix: %1")
+            .arg(base_info.absoluteFilePath());
+        return false;
+    }
+
+    return true;
+}
+
 bool capture_paths_conflict(
     const capture_path_option_t& first,
     const capture_path_option_t& second)
@@ -405,6 +433,8 @@ void print_usage()
     const std::size_t default_retained_history_mib =
         VNM_TerminalSurface::default_retained_history_capacity_bytes() /
         k_bytes_per_mib;
+    constexpr std::size_t backend_output_capture_max_mib =
+        k_backend_output_capture_max_bytes / k_bytes_per_mib;
 
     std::cout
         << "usage: vnm_terminal [options]\n"
@@ -439,7 +469,10 @@ void print_usage()
         << "  --disable-primary-repaint-recovery\n"
         << "                                  disable primary repaint scrollback recovery "
         << "when enabled\n"
-        << "  --capture-output <path>         write raw backend output bytes to a file\n"
+        << "  --capture-output <path-prefix>\n"
+        << "                                  retain the newest "
+        << backend_output_capture_max_mib
+        << " MiB of raw backend output\n"
         << "  --metrics-json <path>           write lightweight terminal runtime metrics\n"
         << "  --metrics-timeline-jsonl <path> write periodic terminal metrics JSONL samples\n"
         << "  --metrics-timeline-interval-ms <n>\n"
@@ -480,7 +513,7 @@ bool validate_capture_paths(App_options* options, QString* out_error)
 {
 #if VNM_TERMINAL_PROFILING_ENABLED
     const std::array<capture_path_option_t, 5> capture_paths{{
-        {"--capture-output",         &options->backend_output_capture_path},
+        {"--capture-output",         &options->backend_output_capture_base_path},
         {"--capture-transcript",     &options->transcript_capture_path},
         {"--metrics-json",           &options->metrics_json_path},
         {"--metrics-timeline-jsonl", &options->metrics_timeline_jsonl_path},
@@ -488,7 +521,7 @@ bool validate_capture_paths(App_options* options, QString* out_error)
     }};
 #else
     const std::array<capture_path_option_t, 4> capture_paths{{
-        {"--capture-output",         &options->backend_output_capture_path},
+        {"--capture-output",         &options->backend_output_capture_base_path},
         {"--capture-transcript",     &options->transcript_capture_path},
         {"--metrics-json",           &options->metrics_json_path},
         {"--metrics-timeline-jsonl", &options->metrics_timeline_jsonl_path},
@@ -503,8 +536,15 @@ bool validate_capture_paths(App_options* options, QString* out_error)
     constexpr std::size_t profile_text_path           = 4;
 #endif
 
-    for (const capture_path_option_t& path : capture_paths) {
-        if (!validate_present_capture_path(path, out_error)) {
+    if (!validate_backend_output_capture_base_path(
+            capture_paths[capture_output_path].path,
+            out_error))
+    {
+        return false;
+    }
+
+    for (std::size_t i = capture_transcript_path; i < capture_paths.size(); ++i) {
+        if (!validate_present_capture_path(capture_paths[i], out_error)) {
             return false;
         }
     }
@@ -805,7 +845,7 @@ Parse_result parse_arguments(const QStringList& arguments)
                 return result;
             }
 
-            result.options.backend_output_capture_path = value;
+            result.options.backend_output_capture_base_path = value;
             continue;
         }
 

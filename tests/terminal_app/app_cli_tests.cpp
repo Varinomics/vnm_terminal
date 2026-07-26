@@ -2,7 +2,10 @@
 
 #include "helpers/test_check.h"
 
+#include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
+#include <QIODevice>
 #include <QLatin1String>
 #include <QString>
 #include <QStringList>
@@ -710,6 +713,75 @@ bool test_parse_metrics_timeline_options()
     return ok;
 }
 
+bool test_parse_backend_output_capture_option()
+{
+    chrome::Parse_result capture_result = parse({
+        "vnm_terminal",
+        "--capture-output",
+        "backend-output",
+        "--",
+        "fixture-command",
+    });
+    chrome::Parse_result command_result = parse({
+        "vnm_terminal",
+        "--",
+        "--capture-output",
+        "backend-output",
+    });
+
+    bool ok = true;
+    ok &= check(capture_result.error.isEmpty(),
+        "backend output capture option parses");
+    ok &= check(
+        capture_result.options.backend_output_capture_base_path ==
+            QStringLiteral("backend-output"),
+        "backend output capture option stores the requested base path");
+    ok &= check(command_result.error.isEmpty(),
+        "backend output capture option after command separator parses as command argv");
+    ok &= check(command_result.options.command == arguments({
+            "--capture-output",
+            "backend-output",
+        }),
+        "backend output capture option after command separator is preserved in command argv");
+
+    QTemporaryDir temp_dir;
+    ok &= check(temp_dir.isValid(),
+        "backend output capture validation creates a temp directory");
+    if (!temp_dir.isValid()) {
+        return ok;
+    }
+
+    chrome::App_options valid_options;
+    valid_options.backend_output_capture_base_path =
+        temp_dir.filePath(QStringLiteral("capture-prefix"));
+    QString validation_error;
+    ok &= check(
+        chrome::validate_capture_paths(&valid_options, &validation_error),
+        "backend output capture accepts an unused file-name prefix");
+    ok &= check(
+        QFileInfo(valid_options.backend_output_capture_base_path).isAbsolute(),
+        "backend output capture normalizes its base path");
+
+    const QString existing_path =
+        temp_dir.filePath(QStringLiteral("existing-capture-path"));
+    QFile existing_file(existing_path);
+    ok &= check(existing_file.open(QIODevice::WriteOnly),
+        "backend output capture validation creates an existing path fixture");
+    existing_file.close();
+
+    chrome::App_options invalid_options;
+    invalid_options.backend_output_capture_base_path = existing_path;
+    validation_error.clear();
+    ok &= check(
+        !chrome::validate_capture_paths(&invalid_options, &validation_error),
+        "backend output capture rejects an existing base path");
+    ok &= check(
+        validation_error.contains(QStringLiteral("unused file-name prefix")),
+        "backend output capture explains the unused-prefix requirement");
+
+    return ok;
+}
+
 #if VNM_TERMINAL_PROFILING_ENABLED
 bool test_profile_text_capture_path_conflicts()
 {
@@ -905,6 +977,7 @@ int main(int argc, char** argv)
     ok &= test_parse_scrollback_limit_option();
     ok &= test_parse_retained_history_capacity_option();
     ok &= test_parse_metrics_timeline_options();
+    ok &= test_parse_backend_output_capture_option();
 #if VNM_TERMINAL_PROFILING_ENABLED
     ok &= test_profile_text_capture_path_conflicts();
 #endif

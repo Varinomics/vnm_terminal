@@ -271,7 +271,7 @@ Invoke-LauncherFixture -CaseName "stale artifact provenance" -MetricsJson $null 
     $stalePaths = @{
         (Join-Path $ArtifactRoot "app_metrics_final.json") = $staleMetrics
         (Join-Path $ArtifactRoot "app_metrics_timeline.jsonl") = "stale-timeline"
-        (Join-Path $ArtifactRoot "backend_output.raw") = "stale-capture"
+        (Join-Path $ArtifactRoot "backend_output.vnm-complete") = "stale-capture"
     }
     foreach ($entry in $stalePaths.GetEnumerator()) {
         [System.IO.File]::WriteAllText(
@@ -284,7 +284,7 @@ Invoke-LauncherFixture -CaseName "stale artifact provenance" -MetricsJson $null 
     $stalePaths = @{
         (Join-Path $ArtifactRoot "app_metrics_final.json") = $staleMetrics
         (Join-Path $ArtifactRoot "app_metrics_timeline.jsonl") = "stale-timeline"
-        (Join-Path $ArtifactRoot "backend_output.raw") = "stale-capture"
+        (Join-Path $ArtifactRoot "backend_output.vnm-complete") = "stale-capture"
     }
     foreach ($entry in $stalePaths.GetEnumerator()) {
         if ([System.IO.File]::ReadAllText($entry.Key) -ne $entry.Value) {
@@ -297,7 +297,7 @@ Invoke-LauncherFixture -CaseName "stale artifact provenance" -MetricsJson $null 
     if ($Output -notmatch "Final app metrics are unavailable" -or
         $Output -match "App metrics final:" -or
         $Output -match "App metrics timeline:" -or
-        $Output -match "Backend output capture:" -or
+        $Output -match "Backend output capture prefix:" -or
         $Output -match "Current terminal columns:")
     {
         throw "stale artifacts must not masquerade as current-run evidence. Output: $Output"

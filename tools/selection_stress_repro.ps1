@@ -533,7 +533,7 @@ Assert-TerminalDeployment -ResolvedTerminalExe $resolvedTerminalExe
 $artifactDirectory = Resolve-OutputDirectory -ConfiguredOutputDirectory $OutputDirectory
 $metricsJsonPath = Join-Path $artifactDirectory "app_metrics_final.json"
 $metricsTimelinePath = Join-Path $artifactDirectory "app_metrics_timeline.jsonl"
-$captureOutputPath = Join-Path $artifactDirectory "backend_output.raw"
+$captureOutputBasePath = Join-Path $artifactDirectory "backend_output"
 $selectionTracePath = Join-Path $artifactDirectory "selection_trace.log"
 
 $maxCheckpoint = $checkpointValues[$checkpointValues.Count - 1]
@@ -560,7 +560,7 @@ if ($SelectionTrace) {
     $terminalArguments += "--selection-trace"
 }
 if ($CaptureOutput) {
-    $terminalArguments += @("--capture-output", $captureOutputPath)
+    $terminalArguments += @("--capture-output", $captureOutputBasePath)
 }
 if (!$NoAppMetrics) {
     $terminalArguments += @(
@@ -623,8 +623,15 @@ if (!$NoAppMetrics) {
     }
 }
 Invoke-PostLaunchDiagnostic -Description "backend output capture artifact" -Action {
-    if ($CaptureOutput -and (Test-Path -LiteralPath $captureOutputPath -PathType Leaf)) {
-        Write-Host "Backend output capture: $captureOutputPath"
+    $captureArtifacts = @(
+        Get-ChildItem `
+            -LiteralPath $artifactDirectory `
+            -Filter "backend_output.vnm-*" `
+            -File `
+            -ErrorAction SilentlyContinue
+    )
+    if ($CaptureOutput -and $captureArtifacts.Count -gt 0) {
+        Write-Host "Backend output capture prefix: $captureOutputBasePath"
     }
 }
 Invoke-PostLaunchDiagnostic -Description "selection trace artifact" -Action {

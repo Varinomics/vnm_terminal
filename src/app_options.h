@@ -26,6 +26,8 @@ constexpr bool k_custom_titlebar_supported_on_platform = false;
 constexpr bool k_custom_titlebar_default_enabled =
     k_custom_titlebar_supported_on_platform;
 constexpr int k_default_metrics_timeline_interval_ms = 5000;
+constexpr std::size_t k_backend_output_capture_max_bytes =
+    64U * 1024U * 1024U;
 
 bool custom_titlebar_supported_on_platform();
 
@@ -36,7 +38,7 @@ struct App_options
 {
     QStringList        command;
     QString            working_directory;
-    QString            backend_output_capture_path;
+    QString            backend_output_capture_base_path;
     QString            transcript_capture_path;
     QString            profile_text_path;
     QString            metrics_json_path;

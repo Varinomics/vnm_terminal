@@ -195,6 +195,21 @@ vnm_terminal_add_target_test(vnm_terminal_app_cli
         ${vnm_terminal_qt_unscaled_environment}
 )
 
+add_executable(vnm_terminal_backend_output_capture_probe
+    terminal_app/backend_output_capture_probe.cpp
+)
+
+target_link_libraries(vnm_terminal_backend_output_capture_probe PRIVATE
+    vnm_terminal_surface::vnm_terminal_surface
+    Qt6::Core
+)
+
+set_target_properties(vnm_terminal_backend_output_capture_probe PROPERTIES
+    AUTOMOC OFF
+)
+
+vnm_terminal_configure_test_process(vnm_terminal_backend_output_capture_probe)
+
 add_executable(vnm_terminal_custom_titlebar_integration
     terminal_app/custom_titlebar_integration_tests.cpp
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_reader.cpp"
@@ -377,9 +392,10 @@ if(TARGET vnm_terminal_canvas_fixture)
         NAME vnm_terminal_capture_output
         COMMAND
             "${CMAKE_COMMAND}"
-            "-Dcapture_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_output_$<CONFIG>.raw"
-            "-Dexpected_capture_regex=terminal-canvas"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_capture_file.cmake"
+            "-Dcapture_probe=$<TARGET_FILE:vnm_terminal_backend_output_capture_probe>"
+            "-Dcapture_base_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_output_$<CONFIG>"
+            "-Dexpected_capture_text=terminal-canvas"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_backend_output_capture.cmake"
             --
             "${CMAKE_COMMAND}" -E env
             ${vnm_terminal_qt_offscreen_environment}
@@ -387,7 +403,7 @@ if(TARGET vnm_terminal_canvas_fixture)
             "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
             "--window-size" "800x480"
-            "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_output_$<CONFIG>.raw"
+            "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_output_$<CONFIG>"
             "--timeout-ms" "10000"
             "--require-output"
             "--"
@@ -536,28 +552,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             TIMEOUT 30
         )
 
-        add_test(
-            NAME vnm_terminal_invalid_transcript_path_preserves_capture_output
-            COMMAND
-                "${CMAKE_COMMAND}"
-                "-Dpreserved_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_preserved_capture_$<CONFIG>.raw"
-                "-Dpreserved_text=preserve-output-sentinel"
-                "-Dexpected_exit_code=2"
-                "-Dexpected_output_regex=--capture-transcript parent directory does not exist"
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_capture_path_failure_preserves_file.cmake"
-                --
-                "${CMAKE_COMMAND}" -E env
-                ${vnm_terminal_qt_offscreen_environment}
-                ${vnm_terminal_qt_unscaled_environment}
-                "${vnm_terminal_qt_runtime_path}"
-                "$<TARGET_FILE:vnm_terminal>"
-                "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_preserved_capture_$<CONFIG>.raw"
-                "--capture-transcript" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_preserved_capture_$<CONFIG>.raw/transcript.ndjson"
-        )
-
-        set_tests_properties(vnm_terminal_invalid_transcript_path_preserves_capture_output PROPERTIES
-            TIMEOUT 30
-        )
     else()
         add_test(
             NAME vnm_terminal_rejects_capture_transcript_when_disabled
