@@ -28,6 +28,12 @@ find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickCo
 include(cmake/vnm_terminal_surface_dependency.cmake)
 include(cmake/vnm_qml_chrome_dependency.cmake)
 
+if(NOT TARGET vnm_qt_dispatch::vnm_qt_dispatch)
+    message(FATAL_ERROR
+        "vnm_terminal_surface did not make "
+        "vnm_qt_dispatch::vnm_qt_dispatch available.")
+endif()
+
 set(vnm_terminal_build_info_header
     "${CMAKE_CURRENT_BINARY_DIR}/generated/vnm_terminal_build_info.h")
 string(TIMESTAMP vnm_terminal_build_date "%Y-%m-%d %H:%M:%S UTC" UTC)
@@ -107,6 +113,7 @@ endif()
 
 target_link_libraries(vnm_terminal PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
+    vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
 )
 

@@ -139,6 +139,7 @@ add_executable(vnm_terminal_input_echo_timing_probe
 
 target_link_libraries(vnm_terminal_input_echo_timing_probe PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
+    vnm_qt_dispatch::vnm_qt_dispatch
     Qt6::Core
     Qt6::Gui
     Qt6::Quick
@@ -230,6 +231,7 @@ add_executable(vnm_terminal_custom_titlebar_integration
 
 target_link_libraries(vnm_terminal_custom_titlebar_integration PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
+    vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
     Qt6::Core
     Qt6::Gui
@@ -280,6 +282,7 @@ add_executable(vnm_terminal_app_persistence
 
 target_link_libraries(vnm_terminal_app_persistence PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
+    vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
     Qt6::Core
     Qt6::Gui

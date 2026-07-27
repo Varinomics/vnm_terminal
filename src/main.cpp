@@ -15,6 +15,8 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <vnm_qt_dispatch/vnm_qt_dispatch.h>
+
 // Privileged first-party use of surface internal headers for profiler wiring
 // (render-profiler attachment + the app's own GUI-thread profiler; profiling
 // builds only). vnm_terminal builds the surface in-tree and is a documented
@@ -214,6 +216,16 @@ int process_exit_status(VNM_TerminalSurface::Exit_reason reason, int exit_code)
     }
 
     return k_exit_process_failed;
+}
+
+std::optional<int> deferred_startup_exit_status(
+    vnm::qt::Post_result post_result)
+{
+    if (post_result == vnm::qt::Post_result::QUEUED) {
+        return std::nullopt;
+    }
+
+    return k_exit_start_failed;
 }
 
 int app_status_after_process_exit(
@@ -855,7 +867,8 @@ int main(int argc, char** argv)
         custom_titlebar_enabled);
     surface->forceActiveFocus();
 
-    QTimer::singleShot(0, &app, [&options, &state, surface, &timeout_timer] {
+    const auto start_result =
+        vnm::qt::post(&app, [&options, &state, surface, &timeout_timer] {
         if (!surface->start_process(options.command, options.working_directory)) {
             if (state.backend_error_count == 0) {
                 print_error(QStringLiteral("failed to start terminal process"));
@@ -869,6 +882,14 @@ int main(int argc, char** argv)
             timeout_timer.start(*options.timeout_ms);
         }
     });
+    const auto startup_exit_status =
+        deferred_startup_exit_status(start_result);
+    if (startup_exit_status.has_value()) {
+        print_error(QStringLiteral(
+            "failed to queue terminal process startup (dispatch result %1)")
+                .arg(static_cast<int>(start_result)));
+        return *startup_exit_status;
+    }
 
     app_elapsed_timer.start();
     if (!options.metrics_timeline_jsonl_path.isEmpty()) {

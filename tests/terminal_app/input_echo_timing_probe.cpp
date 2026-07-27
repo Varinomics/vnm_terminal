@@ -6,6 +6,8 @@
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <vnm_qt_dispatch/vnm_qt_dispatch.h>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -1219,9 +1221,16 @@ public:
 
         m_running = false;
         term::Terminal_backend_callbacks callbacks = m_callbacks;
-        QTimer::singleShot(0, QCoreApplication::instance(), [callbacks, exit] {
+        const auto post_result =
+            vnm::qt::post(QCoreApplication::instance(), [callbacks, exit] {
             callbacks.process_exited(exit);
         });
+        if (post_result != vnm::qt::Post_result::QUEUED) {
+            qFatal(
+                "input echo timing probe: exit dispatch admission failed "
+                "(result %d)",
+                static_cast<int>(post_result));
+        }
     }
 
     const std::vector<Write_observation>& writes() const { return m_writes; }

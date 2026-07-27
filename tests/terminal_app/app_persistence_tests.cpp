@@ -83,6 +83,29 @@ bool test_save_and_load_window_state()
     return ok;
 }
 
+bool test_rejected_deferred_startup_returns_start_failed()
+{
+    const auto queued_exit_status =
+        deferred_startup_exit_status(vnm::qt::Post_result::QUEUED);
+    bool ok = check(
+        !queued_exit_status.has_value(),
+        "accepted deferred startup does not request an early exit");
+
+    QObject receiver;
+    receiver.moveToThread(nullptr);
+
+    const auto post_result = vnm::qt::post(&receiver, [] {});
+    ok &= check(
+        post_result == vnm::qt::Post_result::NO_THREAD_AFFINITY,
+        "deferred startup post is rejected without receiver affinity");
+
+    const auto exit_status = deferred_startup_exit_status(post_result);
+    ok &= check(
+        exit_status.has_value() && *exit_status == k_exit_start_failed,
+        "rejected deferred startup returns the start-failed exit status");
+    return ok;
+}
+
 bool test_apply_persisted_window_state()
 {
     Persisted_terminal_window_state state;
@@ -298,6 +321,7 @@ int main(int argc, char** argv)
 
     bool ok = true;
     ok &= test_save_and_load_window_state();
+    ok &= test_rejected_deferred_startup_returns_start_failed();
     ok &= test_apply_persisted_window_state();
     ok &= test_invalid_persisted_values_are_ignored();
     ok &= test_appearance_settings_round_trip();
