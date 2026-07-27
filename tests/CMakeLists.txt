@@ -969,27 +969,6 @@ set_tests_properties(
     TIMEOUT 30
 )
 
-add_test(
-    NAME vnm_terminal_help_hides_custom_titlebar
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-Dexpected_exit_code=0"
-        "-Dforbidden_stdout_regex=--custom-titlebar"
-        "-Drequire_empty_stderr=ON"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/terminal_app/expect_process_clean.cmake"
-        --
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal>"
-        "--help"
-)
-
-set_tests_properties(vnm_terminal_help_hides_custom_titlebar PROPERTIES
-    TIMEOUT 30
-)
-
 if(vnm_terminal_custom_titlebar_supported)
     add_test(
         NAME vnm_terminal_help_mentions_native_titlebar

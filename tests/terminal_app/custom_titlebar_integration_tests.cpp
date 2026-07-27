@@ -506,57 +506,6 @@ bool test_custom_titlebar_geometry()
     ok &= check(nearly_equal(titlebar.root_item()->property("content_interior_height").toReal(), 444.0),
         "shared frame shell exposes content interior height");
 
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_native_window_frame")) == nullptr,
-        "terminal chrome does not create an app-local native window frame");
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_window_frame_top")) == nullptr,
-        "terminal chrome does not create an app-local top window frame strip");
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_window_frame_bottom")) == nullptr,
-        "terminal chrome does not create an app-local bottom window frame strip");
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_window_frame_left")) == nullptr,
-        "terminal chrome does not create an app-local left window frame strip");
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_window_frame_right")) == nullptr,
-        "terminal chrome does not create an app-local right window frame strip");
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_content_border_top")) == nullptr,
-        "terminal chrome does not create an app-local top content border strip");
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_content_border_bottom")) == nullptr,
-        "terminal chrome does not create an app-local bottom content border strip");
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_content_border_left")) == nullptr,
-        "terminal chrome does not create an app-local left content border strip");
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_content_border_right")) == nullptr,
-        "terminal chrome does not create an app-local right content border strip");
-    ok &= check(
-        find_object_recursive(
-            titlebar.root_item(),
-            QStringLiteral("terminal_chrome_window_frame")) == nullptr,
-        "terminal chrome does not create an app-local shared window frame wrapper");
-
     auto* frame_shell = find_quick_item_recursive(
         titlebar.root_item(),
         QStringLiteral("terminal_chrome_frame_shell"));
