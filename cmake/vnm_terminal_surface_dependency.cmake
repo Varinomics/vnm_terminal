@@ -1,10 +1,7 @@
 set(VNM_TERMINAL_SURFACE_SOURCE_DIR "" CACHE PATH
     "Path to a source checkout of vnm_terminal_surface.")
 
-# Minimum is major.minor, not the full patch version, so an app patch bump does
-# not force lockstep re-tags of vnm_terminal_surface (which release CI tracks on
-# master). Same-major compatibility is still enforced separately below.
-set(VNM_TERMINAL_SURFACE_MIN_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+set(VNM_TERMINAL_SURFACE_EXPECTED_VERSION "${PROJECT_VERSION}")
 
 if(NOT VNM_TERMINAL_SURFACE_SOURCE_DIR)
     get_filename_component(vnm_terminal_default_surface_dir
@@ -44,9 +41,6 @@ if(VNM_TERMINAL_SURFACE_SOURCE_DIR)
     get_directory_property(vnm_terminal_surface_source_version
         DIRECTORY "${CMAKE_BINARY_DIR}/_deps/vnm_terminal_surface"
         DEFINITION vnm_terminal_surface_VERSION)
-    get_directory_property(vnm_terminal_surface_source_version_major
-        DIRECTORY "${CMAKE_BINARY_DIR}/_deps/vnm_terminal_surface"
-        DEFINITION vnm_terminal_surface_VERSION_MAJOR)
 
     if(NOT vnm_terminal_surface_source_version)
         message(FATAL_ERROR
@@ -54,24 +48,15 @@ if(VNM_TERMINAL_SURFACE_SOURCE_DIR)
             "version: ${VNM_TERMINAL_SURFACE_SOURCE_DIR}")
     endif()
 
-    if(NOT "${vnm_terminal_surface_source_version_major}" STREQUAL
-        "${PROJECT_VERSION_MAJOR}")
+    if(NOT "${vnm_terminal_surface_source_version}" VERSION_EQUAL
+        "${VNM_TERMINAL_SURFACE_EXPECTED_VERSION}")
         message(FATAL_ERROR
             "vnm_terminal_surface source checkout version "
-            "${vnm_terminal_surface_source_version} is not same-major "
-            "compatible with vnm_terminal ${PROJECT_VERSION}: "
-            "${VNM_TERMINAL_SURFACE_SOURCE_DIR}")
-    endif()
-
-    if("${vnm_terminal_surface_source_version}" VERSION_LESS
-        "${VNM_TERMINAL_SURFACE_MIN_VERSION}")
-        message(FATAL_ERROR
-            "vnm_terminal_surface source checkout version "
-            "${vnm_terminal_surface_source_version} is older than the "
-            "required minimum ${VNM_TERMINAL_SURFACE_MIN_VERSION}: "
+            "${vnm_terminal_surface_source_version} does not match "
+            "vnm_terminal ${VNM_TERMINAL_SURFACE_EXPECTED_VERSION}: "
             "${VNM_TERMINAL_SURFACE_SOURCE_DIR}")
     endif()
 else()
-    find_package(vnm_terminal_surface ${VNM_TERMINAL_SURFACE_MIN_VERSION}
-        CONFIG REQUIRED)
+    find_package(vnm_terminal_surface ${VNM_TERMINAL_SURFACE_EXPECTED_VERSION}
+        EXACT CONFIG REQUIRED)
 endif()
