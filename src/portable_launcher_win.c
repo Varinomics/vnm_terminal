@@ -41,6 +41,16 @@ static void show_last_error(const wchar_t* title, const wchar_t* prefix)
     show_error_message(title, combined);
 }
 
+// GetModuleFileNameW reports the buffer element count when the module path does not fit:
+// it leaves a truncated but NUL-terminated path behind and sets ERROR_INSUFFICIENT_BUFFER
+// instead of failing. A truncated launcher path names a different directory, so the
+// runtime would be looked for beside the wrong file. Only a length strictly inside the
+// buffer is a complete path.
+static int module_path_is_complete(DWORD length, size_t capacity)
+{
+    return length > 0 && (size_t)length < capacity;
+}
+
 static void trim_to_directory(wchar_t* path)
 {
     int len = lstrlenW(path);
@@ -61,13 +71,16 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, 
     wchar_t launcher_dir[ VNM_TERMINAL_MAX_PATH_CHARS + 1];
     wchar_t target_path[  VNM_TERMINAL_MAX_PATH_CHARS + 1];
     wchar_t command_line[ VNM_TERMINAL_MAX_CMDLINE    + 1];
-    const size_t target_path_capacity  = sizeof(target_path)  / sizeof(target_path[0]);
-    const size_t command_line_capacity = sizeof(command_line) / sizeof(command_line[0]);
+    const size_t launcher_path_capacity = sizeof(launcher_path) / sizeof(launcher_path[0]);
+    const size_t launcher_dir_capacity  = sizeof(launcher_dir)  / sizeof(launcher_dir[0]);
+    const size_t target_path_capacity   = sizeof(target_path)   / sizeof(target_path[0]);
+    const size_t command_line_capacity  = sizeof(command_line)  / sizeof(command_line[0]);
     LPWSTR* argv               = NULL;
     int     argc               = 0;
     size_t  target_path_length = 0;
     size_t  offset             = 0;
     int     assembled          = 0;
+    DWORD   launcher_length    = 0;
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
     DWORD exit_code = 1;
@@ -76,12 +89,21 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, 
     (void)prev_instance;
     (void)cmd_line;
 
-    if (GetModuleFileNameW(NULL, launcher_path, VNM_TERMINAL_MAX_PATH_CHARS) == 0) {
+    launcher_length = GetModuleFileNameW(
+        NULL, launcher_path, (DWORD)launcher_path_capacity);
+    if (launcher_length == 0) {
         show_last_error(L"vnm_terminal", L"Failed to locate vnm_terminal.exe.");
         return 1;
     }
+    if (!module_path_is_complete(launcher_length, launcher_path_capacity)) {
+        show_error_message(L"vnm_terminal", L"The portable launcher path is too long.");
+        return 1;
+    }
 
-    lstrcpynW(launcher_dir, launcher_path, VNM_TERMINAL_MAX_PATH_CHARS);
+    // lstrcpynW's count includes the terminating NUL, so it must be the full element count
+    // of the destination. The guard above bounds the source below that count, so the copy
+    // reproduces the launcher path exactly instead of dropping its last character.
+    lstrcpynW(launcher_dir, launcher_path, (int)launcher_dir_capacity);
     trim_to_directory(launcher_dir);
 
     target_path[0] = L'\0';

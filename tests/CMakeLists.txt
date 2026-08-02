@@ -131,6 +131,24 @@ if(WIN32)
 
     vnm_terminal_add_target_test(vnm_terminal_portable_launcher_text
     )
+
+    add_executable(vnm_terminal_portable_launcher_win
+        terminal_app/portable_launcher_win_tests.c
+        "${PROJECT_SOURCE_DIR}/src/portable_launcher_text.c"
+    )
+
+    target_link_libraries(vnm_terminal_portable_launcher_win PRIVATE
+        shell32
+    )
+
+    set_target_properties(vnm_terminal_portable_launcher_win PROPERTIES
+        AUTOMOC OFF
+    )
+
+    vnm_terminal_configure_test_process(vnm_terminal_portable_launcher_win)
+
+    vnm_terminal_add_target_test(vnm_terminal_portable_launcher_win
+    )
 endif()
 
 add_executable(vnm_terminal_app_presentation_metrics
