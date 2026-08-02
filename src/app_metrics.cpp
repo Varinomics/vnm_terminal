@@ -3,6 +3,7 @@
 #include "app_common.h"
 
 #include "vnm_terminal/diagnostics/metrics_json.h"
+#include "vnm_terminal/internal/metrics_json_writers.h"
 
 #include <QByteArray>
 #include <QFile>
@@ -21,16 +22,7 @@ namespace vnm_terminal::terminal_app {
 
 namespace {
 
-template<typename Value>
-void insert_json_counter(
-    QJsonObject&  object,
-    const char*   name,
-    Value         value)
-{
-    object.insert(
-        QString::fromLatin1(name),
-        QString::number(static_cast<qulonglong>(value)));
-}
+using vnm_terminal::diagnostics::insert_json_counter;
 
 constexpr const char* k_runtime_frame_rate_elapsed_basis =
     "app_exec_elapsed_ms_including_process_startup_excluding_profile_write";

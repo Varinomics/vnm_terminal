@@ -3,6 +3,7 @@
 #if VNM_TERMINAL_PROFILING_ENABLED
 
 #include "vnm_terminal/diagnostics/profile_text.h"
+#include "vnm_terminal/internal/profile_text_writers.h"
 
 #include <QByteArray>
 #include <QDir>
@@ -11,9 +12,6 @@
 #include <QIODevice>
 #include <QString>
 #include <QTextStream>
-
-#include <chrono>
-#include <cstdint>
 
 namespace vnm_terminal::terminal_app {
 
@@ -45,81 +43,6 @@ bool prepare_profile_text_file(
     return true;
 }
 
-qint64 profile_nanoseconds(std::chrono::nanoseconds duration)
-{
-    return static_cast<qint64>(duration.count());
-}
-
-qint64 profile_mean_nanoseconds(
-    std::chrono::nanoseconds   total_time,
-    std::uint64_t              call_count)
-{
-    return call_count == 0U
-        ? 0
-        : static_cast<qint64>(
-            total_time.count() / static_cast<std::int64_t>(call_count));
-}
-
-void append_profile_node_text(
-    QTextStream&                           stream,
-    const term::Profile_node_snapshot&     node,
-    int                                    depth)
-{
-    const QString indent(depth * 2, QLatin1Char(' '));
-    stream
-        << indent
-        << QString::fromStdString(node.name)
-        << " calls="    << static_cast<qulonglong>(node.call_count)
-        << " total_ns=" << profile_nanoseconds(node.total_time)
-        << " mean_ns="  << profile_mean_nanoseconds(node.total_time, node.call_count)
-        << " self_ns="  << profile_nanoseconds(node.self_time)
-        << " child_ns=" << profile_nanoseconds(node.child_time)
-        << " min_ns="   << profile_nanoseconds(node.min_time)
-        << " max_ns="   << profile_nanoseconds(node.max_time)
-        << '\n';
-
-    for (const term::Profile_node_snapshot& child : node.children) {
-        append_profile_node_text(stream, child, depth + 1);
-    }
-}
-
-void append_profile_timeline_text(
-    QTextStream&                           stream,
-    const QString&                         label,
-    const term::Profile_timeline_snapshot& timeline)
-{
-    stream
-        << label
-        << "_timeline bucket_width_ms="
-        << static_cast<qulonglong>(timeline.bucket_width.count())
-        << " buckets=" << static_cast<qulonglong>(timeline.buckets.size())
-        << '\n';
-
-    for (const term::Profile_timeline_bucket_snapshot& bucket : timeline.buckets) {
-        if (bucket.scopes.empty()) {
-            continue;
-        }
-
-        stream
-            << "  bucket start_ms="
-            << static_cast<qulonglong>(bucket.start_time.count())
-            << " end_ms=" << static_cast<qulonglong>(bucket.end_time.count())
-            << " scopes=" << static_cast<qulonglong>(bucket.scopes.size())
-            << '\n';
-        for (const term::Profile_timeline_scope_snapshot& scope : bucket.scopes) {
-            stream
-                << "    " << QString::fromStdString(scope.name)
-                << " calls="    << static_cast<qulonglong>(scope.call_count)
-                << " total_ns=" << profile_nanoseconds(scope.total_time)
-                << " mean_ns="
-                << profile_mean_nanoseconds(scope.total_time, scope.call_count)
-                << " min_ns="   << profile_nanoseconds(scope.min_time)
-                << " max_ns="   << profile_nanoseconds(scope.max_time)
-                << '\n';
-        }
-    }
-}
-
 bool write_profile_text(
     const QString&                     path,
     VNM_TerminalSurface&               surface,
@@ -149,9 +72,9 @@ bool write_profile_text(
     stream << '\n';
     diag::append_slow_text_layout_diagnostics_text(surface, stream);
     stream << "\ngui_thread\n";
-    append_profile_node_text(stream, gui_profiler.root_snapshot(), 1);
+    diag::append_profile_node_text(stream, gui_profiler.root_snapshot(), 1);
     stream << '\n';
-    append_profile_timeline_text(stream, QStringLiteral("gui_thread"), gui_timeline);
+    diag::append_profile_timeline_text(stream, QStringLiteral("gui_thread"), gui_timeline);
     stream << '\n';
     diag::append_render_thread_profile_text(surface, stream);
     stream.flush();
