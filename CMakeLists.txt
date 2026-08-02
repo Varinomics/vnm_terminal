@@ -246,6 +246,8 @@ if(WIN32)
     vnm_terminal_copy_qt_qml_module(QtQuick)
 
     add_executable(vnm_terminal_portable_launcher WIN32
+        src/portable_launcher_text.c
+        src/portable_launcher_text.h
         src/portable_launcher_win.c
         src/vnm_terminal.rc
     )

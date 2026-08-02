@@ -113,6 +113,26 @@ set_target_properties(vnm_terminal_title_metadata PROPERTIES
 vnm_terminal_add_target_test(vnm_terminal_title_metadata
 )
 
+if(WIN32)
+    add_executable(vnm_terminal_portable_launcher_text
+        terminal_app/portable_launcher_text_tests.cpp
+        "${PROJECT_SOURCE_DIR}/src/portable_launcher_text.c"
+    )
+
+    target_link_libraries(vnm_terminal_portable_launcher_text PRIVATE
+        shell32
+    )
+
+    set_target_properties(vnm_terminal_portable_launcher_text PROPERTIES
+        AUTOMOC OFF
+    )
+
+    vnm_terminal_configure_test_process(vnm_terminal_portable_launcher_text)
+
+    vnm_terminal_add_target_test(vnm_terminal_portable_launcher_text
+    )
+endif()
+
 add_executable(vnm_terminal_app_presentation_metrics
     terminal_app/app_presentation_metrics_tests.cpp
     "${PROJECT_SOURCE_DIR}/src/app_presentation_metrics.cpp"

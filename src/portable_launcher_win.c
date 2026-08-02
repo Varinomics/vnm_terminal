@@ -1,8 +1,10 @@
+#include "portable_launcher_text.h"
+
 #include <windows.h>
 #include <shellapi.h>
 
-#define VNM_TERMINAL_MAX_CMDLINE   32767
-#define VNM_TERMINAL_MAX_PATH_CHARS 32767
+static const wchar_t k_runtime_relative_path[] =
+    L"\\vnm_terminal_runtime\\vnm_terminal.exe";
 
 static void show_error_message(const wchar_t* title, const wchar_t* message)
 {
@@ -22,12 +24,19 @@ static void show_last_error(const wchar_t* title, const wchar_t* prefix)
         (DWORD)(sizeof(system_message) / sizeof(system_message[0])),
         NULL);
 
+    // The appends are not checked because there is no better message to fall back to on
+    // an error path, and a short message is a complete diagnostic on its own. The buffer
+    // is NUL-terminated either way, so a partial assembly is still safe to display.
     wchar_t combined[1400];
+    const size_t combined_capacity = sizeof(combined) / sizeof(combined[0]);
+    size_t       combined_length   = 0;
+    combined[0] = L'\0';
+    portable_launcher_append_text(combined, combined_capacity, &combined_length, prefix);
     if (len > 0) {
-        wsprintfW(combined, L"%s\n\n%s", prefix, system_message);
-    }
-    else {
-        lstrcpynW(combined, prefix, (int)(sizeof(combined) / sizeof(combined[0])));
+        portable_launcher_append_text(
+            combined, combined_capacity, &combined_length, L"\n\n");
+        portable_launcher_append_text(
+            combined, combined_capacity, &combined_length, system_message);
     }
     show_error_message(title, combined);
 }
@@ -46,66 +55,19 @@ static void trim_to_directory(wchar_t* path)
     path[0] = L'\0';
 }
 
-static size_t append_quoted_arg(wchar_t* dst, size_t offset, const wchar_t* arg)
-{
-    int needs_quotes = arg[0] == L'\0';
-    for (const wchar_t* p = arg; *p; ++p) {
-        if (*p == L' ' || *p == L'\t' || *p == L'\n' || *p == L'\v' || *p == L'"') {
-            needs_quotes = 1;
-            break;
-        }
-    }
-
-    if (!needs_quotes) {
-        while (*arg) {
-            dst[offset++] = *arg++;
-        }
-        dst[offset] = L'\0';
-        return offset;
-    }
-
-    dst[offset++] = L'"';
-    {
-        unsigned backslashes = 0;
-        for (const wchar_t* p = arg; *p; ++p) {
-            if (*p == L'\\') {
-                backslashes++;
-                continue;
-            }
-            if (*p == L'"') {
-                for (unsigned i = 0; i < backslashes * 2 + 1; ++i) {
-                    dst[offset++] = L'\\';
-                }
-                dst[offset++] = L'"';
-                backslashes = 0;
-                continue;
-            }
-            while (backslashes > 0) {
-                dst[offset++] = L'\\';
-                backslashes--;
-            }
-            dst[offset++] = *p;
-        }
-        while (backslashes > 0) {
-            dst[offset++] = L'\\';
-            dst[offset++] = L'\\';
-            backslashes--;
-        }
-    }
-    dst[offset++] = L'"';
-    dst[offset] = L'\0';
-    return offset;
-}
-
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cmd)
 {
     wchar_t launcher_path[VNM_TERMINAL_MAX_PATH_CHARS + 1];
     wchar_t launcher_dir[ VNM_TERMINAL_MAX_PATH_CHARS + 1];
     wchar_t target_path[  VNM_TERMINAL_MAX_PATH_CHARS + 1];
     wchar_t command_line[ VNM_TERMINAL_MAX_CMDLINE    + 1];
-    LPWSTR* argv   = NULL;
-    int     argc   = 0;
-    size_t  offset = 0;
+    const size_t target_path_capacity  = sizeof(target_path)  / sizeof(target_path[0]);
+    const size_t command_line_capacity = sizeof(command_line) / sizeof(command_line[0]);
+    LPWSTR* argv               = NULL;
+    int     argc               = 0;
+    size_t  target_path_length = 0;
+    size_t  offset             = 0;
+    int     assembled          = 0;
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
     DWORD exit_code = 1;
@@ -122,12 +84,15 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, 
     lstrcpynW(launcher_dir, launcher_path, VNM_TERMINAL_MAX_PATH_CHARS);
     trim_to_directory(launcher_dir);
 
-    if (wsprintfW(
-            target_path,
-            L"%s\\vnm_terminal_runtime\\vnm_terminal.exe",
-            launcher_dir) <= 0)
+    target_path[0] = L'\0';
+    if (!portable_launcher_append_text(
+            target_path, target_path_capacity, &target_path_length, launcher_dir) ||
+        !portable_launcher_append_text(
+            target_path, target_path_capacity, &target_path_length, k_runtime_relative_path))
     {
-        show_error_message(L"vnm_terminal", L"Failed to prepare the runtime path.");
+        show_error_message(
+            L"vnm_terminal",
+            L"The runtime path is too long to start the packaged application.");
         return 1;
     }
 
@@ -146,14 +111,25 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, 
     }
 
     command_line[0] = L'\0';
-    offset = append_quoted_arg(command_line, 0, target_path);
-    for (int i = 1; i < argc; ++i) {
-        command_line[offset++] = L' ';
-        command_line[offset]   = L'\0';
-        offset                 = append_quoted_arg(command_line, offset, argv[i]);
+    offset          = 0;
+    assembled       = portable_launcher_append_quoted_arg(
+        command_line, command_line_capacity, &offset, target_path);
+    for (int i = 1; assembled && i < argc; ++i) {
+        assembled =
+            portable_launcher_append_text(
+                command_line, command_line_capacity, &offset, L" ") &&
+            portable_launcher_append_quoted_arg(
+                command_line, command_line_capacity, &offset, argv[i]);
     }
 
-    SetEnvironmentVariableW(L"VNM_TERMINAL_PORTABLE_ROOT", launcher_dir);
+    if (!assembled) {
+        show_error_message(
+            L"vnm_terminal",
+            L"The command line is too long to start the packaged application.");
+        LocalFree(argv);
+        return 1;
+    }
+
     SetCurrentDirectoryW(launcher_dir);
 
     ZeroMemory(&si, sizeof(si));
