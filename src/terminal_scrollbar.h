@@ -57,12 +57,6 @@ private:
     bool   scroll_page_from_track_position(
         qreal                  position_y);
 
-    int    vertical_wheel_steps(
-        const QWheelEvent&     event,
-        qreal                  pixel_step_size,
-        qreal&                 angle_remainder,
-        qreal&                 pixel_remainder);
-
     bool   zoom_surface_from_wheel(
         QWheelEvent*           event);
 

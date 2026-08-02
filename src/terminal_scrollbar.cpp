@@ -1,5 +1,7 @@
 #include "terminal_scrollbar.h"
 
+#include "vnm_terminal/internal/wheel_gesture.h"
+
 #include <QColor>
 #include <QHoverEvent>
 #include <QMouseEvent>
@@ -11,6 +13,7 @@
 #include <cmath>
 
 namespace scrollbar = vnm_terminal::terminal_app;
+namespace term      = vnm_terminal::internal;
 
 namespace {
 
@@ -18,11 +21,6 @@ constexpr qreal k_track_vertical_inset        = 3.0;
 constexpr qreal k_track_width                 = 10.0;
 constexpr qreal k_thumb_min_height            = 24.0;
 constexpr qreal k_thumb_radius                = 5.0;
-constexpr qreal k_angle_delta_per_wheel_step  = 120.0;
-constexpr qreal k_font_zoom_min_pixel_size    = 6.0;
-constexpr qreal k_font_zoom_max_pixel_size    = 72.0;
-constexpr qreal k_font_zoom_wheel_step        = 1.0;
-constexpr int   k_scroll_lines_per_wheel_step = 3;
 
 QColor track_color(bool active)
 {
@@ -48,11 +46,6 @@ QColor terminal_background_color(const VNM_TerminalSurface* surface)
     const QVariantMap preview = surface->color_scheme_preview(surface->color_scheme());
     const QVariant background = preview.value(QStringLiteral("background"));
     return background.canConvert<QColor>() ? background.value<QColor>() : QColor(0, 0, 0);
-}
-
-bool has_vertical_wheel_delta(const QWheelEvent& event)
-{
-    return event.angleDelta().y() != 0 || event.pixelDelta().y() != 0;
 }
 
 } // namespace
@@ -420,44 +413,9 @@ bool scrollbar::Terminal_scrollbar::scroll_page_from_track_position(qreal positi
     return diagnostic.event_accepted;
 }
 
-int scrollbar::Terminal_scrollbar::vertical_wheel_steps(
-    const QWheelEvent& event,
-    qreal              pixel_step_size,
-    qreal&             angle_remainder,
-    qreal&             pixel_remainder)
-{
-    const auto steps_from_delta = [](int delta, qreal step_size, qreal& remainder) {
-        if (delta == 0 || !std::isfinite(step_size) || step_size <= 0.0) {
-            return 0;
-        }
-
-        remainder += static_cast<qreal>(delta);
-        const int steps = static_cast<int>(std::trunc(remainder / step_size));
-        remainder -= static_cast<qreal>(steps) * step_size;
-        return steps;
-    };
-
-    const int angle_delta = event.angleDelta().y();
-    if (angle_delta != 0) {
-        pixel_remainder = 0.0;
-        return steps_from_delta(
-            angle_delta,
-            k_angle_delta_per_wheel_step,
-            angle_remainder);
-    }
-
-    const int pixel_delta = event.pixelDelta().y();
-    if (pixel_delta == 0) {
-        return 0;
-    }
-
-    angle_remainder = 0.0;
-    return steps_from_delta(pixel_delta, pixel_step_size, pixel_remainder);
-}
-
 bool scrollbar::Terminal_scrollbar::zoom_surface_from_wheel(QWheelEvent* event)
 {
-    if (!has_vertical_wheel_delta(*event)) {
+    if (!term::has_vertical_wheel_delta(*event)) {
         record_wheel_trace_event(
             *event,
             QStringLiteral("control_zoom"),
@@ -470,9 +428,9 @@ bool scrollbar::Terminal_scrollbar::zoom_surface_from_wheel(QWheelEvent* event)
         return false;
     }
 
-    const int steps = vertical_wheel_steps(
+    const int steps = term::vertical_wheel_steps(
         *event,
-        k_angle_delta_per_wheel_step,
+        term::k_angle_delta_per_wheel_step,
         m_wheel_zoom_angle_remainder,
         m_wheel_zoom_pixel_remainder);
     if (steps == 0) {
@@ -488,11 +446,9 @@ bool scrollbar::Terminal_scrollbar::zoom_surface_from_wheel(QWheelEvent* event)
         return true;
     }
 
-    const qreal previous_font_size = m_surface->font_size();
-    const qreal requested_font_size = std::clamp(
-        previous_font_size + static_cast<qreal>(steps) * k_font_zoom_wheel_step,
-        k_font_zoom_min_pixel_size,
-        k_font_zoom_max_pixel_size);
+    const qreal previous_font_size  = m_surface->font_size();
+    const qreal requested_font_size =
+        term::font_size_after_wheel_zoom(previous_font_size, steps);
     m_surface->set_font_size(requested_font_size);
     record_wheel_trace_event(
         *event,
@@ -510,7 +466,7 @@ bool scrollbar::Terminal_scrollbar::zoom_surface_from_wheel(QWheelEvent* event)
 
 bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event)
 {
-    if (!has_vertical_wheel_delta(*event)) {
+    if (!term::has_vertical_wheel_delta(*event)) {
         record_wheel_trace_event(
             *event,
             QStringLiteral("local_scroll"),
@@ -532,7 +488,7 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
     const bool boundary_before_surface =
         (raw_delta > 0 && m_offset_from_tail >= m_scrollback_rows) ||
         (raw_delta < 0 && m_offset_from_tail <= 0);
-    const int wheel_steps = vertical_wheel_steps(
+    const int wheel_steps = term::vertical_wheel_steps(
         *event,
         pixel_step_size,
         m_wheel_scroll_angle_remainder,
@@ -551,7 +507,7 @@ bool scrollbar::Terminal_scrollbar::scroll_surface_from_wheel(QWheelEvent* event
     }
 
     const int line_delta = event->angleDelta().y() != 0
-        ? wheel_steps * k_scroll_lines_per_wheel_step
+        ? wheel_steps * term::k_plain_scroll_lines_per_angle_step
         : wheel_steps;
     const VNM_TerminalSurface::wheel_scroll_diagnostic_result_t diagnostic =
         m_surface->scroll_viewport_lines_with_diagnostics(
