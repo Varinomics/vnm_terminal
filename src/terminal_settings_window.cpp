@@ -794,24 +794,17 @@ R"qml(
                 S_Combo {
                     objectName: "renderer_mode_combo"
                     Layout.fillWidth: true
-                    // "MSDF" maps to Auto (Text_renderer_mode 0): crisp,
-                    // resolution-independent MSDF with automatic per-glyph
-                    // glyph-atlas fallback. "Glyph" forces the bitmap atlas
-                    // (2). The MSDF entry is disabled when MSDF cannot render
-                    // the selected font, so the panel never offers a renderer
-                    // that would silently do nothing.
+                    // Automatic maps to Text_renderer_mode 0: it prefers MSDF
+                    // and falls back to the glyph renderer wherever needed.
+                    // Glyph only maps to Text_renderer_mode 2.
                     textRole: "label"
                     model: [
-                        { label: "MSDF",  is_glyph: false },
-                        { label: "Glyph", is_glyph: true }
+                        { label: "Automatic (MSDF preferred)" },
+                        { label: "Glyph only" }
                     ]
-                    row_enabled: (row) => row.is_glyph || surface.msdfTextAvailable
-                    // Read the renderer actually in effect: when MSDF cannot
-                    // render the font, the combo shows Glyph (the real
-                    // fallback) instead of claiming MSDF. The mode preference
-                    // is left untouched, so a capable font shows MSDF again.
-                    currentIndex: (surface.textRendererMode === 2
-                        || !surface.msdfTextAvailable) ? 1 : 0
+                    // Show the selected policy. Automatic remains selected
+                    // when it falls back, while the status below explains why.
+                    currentIndex: surface.textRendererMode === 2 ? 1 : 0
                     onActivated: (index) =>
                         surface.textRendererMode = index === 1 ? 2 : 0
                 }
@@ -828,7 +821,8 @@ R"qml(
 
                         Text {
                             objectName: "renderer_warning_glyph"
-                            visible: !surface.msdfTextChecking
+                            visible: surface.textRendererMode !== 2
+                                && !surface.msdfTextChecking
                                 && !surface.msdfTextAvailable
                             text: "\u26A0"
                             font.pixelSize: 12
@@ -840,16 +834,20 @@ R"qml(
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             font.pixelSize: 11
-                            color: (!surface.msdfTextChecking && !surface.msdfTextAvailable)
+                            color: (surface.textRendererMode !== 2
+                                && !surface.msdfTextChecking
+                                && !surface.msdfTextAvailable)
                                 ? win.warning_color : win.hint_color
                             text: {
-                                if (surface.msdfTextChecking)
-                                    return "Checking whether MSDF can render this font..."
-                                if (!surface.msdfTextAvailable)
-                                    return "MSDF is not available for this font; rendering with the glyph atlas."
                                 if (surface.textRendererMode === 2)
-                                    return "Rendering: glyph atlas."
-                                return "Rendering: MSDF."
+                                    return "Using glyph rendering only."
+                                if (surface.msdfTextChecking)
+                                    return "Checking MSDF availability for "
+                                        + surface.fontFamily + "..."
+                                if (!surface.msdfTextAvailable)
+                                    return "MSDF is unavailable for " + surface.fontFamily
+                                        + "; using glyph rendering."
+                                return "MSDF preferred; unsupported text automatically uses glyph rendering."
                             }
                         }
                     }

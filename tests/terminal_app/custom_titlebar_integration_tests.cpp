@@ -2184,6 +2184,66 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
                 !interaction_diagnostics_switch->isVisible(),
             "interaction diagnostics switch stays hidden without the startup unlock");
 
+        auto* renderer_mode_combo = settings_qml_window->findChild<QQuickItem*>(
+            QStringLiteral("renderer_mode_combo"));
+        auto* renderer_status_label = settings_qml_window->findChild<QQuickItem*>(
+            QStringLiteral("renderer_status_label"));
+        ok &= check(renderer_mode_combo != nullptr,
+            "settings panel builds the renderer policy picker");
+        ok &= check(renderer_status_label != nullptr,
+            "settings panel builds the renderer policy status");
+        if (renderer_mode_combo != nullptr && renderer_status_label != nullptr) {
+            ok &= check(
+                renderer_mode_combo->property("currentText").toString() ==
+                    QStringLiteral("Automatic (MSDF preferred)"),
+                "renderer picker names the automatic fallback policy");
+            if (surface.msdf_text_available()) {
+                ok &= check(
+                    renderer_status_label->property("text").toString() ==
+                        QStringLiteral(
+                            "MSDF preferred; unsupported text automatically uses glyph rendering."),
+                    "automatic renderer status explains per-text glyph fallback");
+            }
+
+            surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::GLYPH);
+            pump_events(app);
+            ok &= check(
+                renderer_mode_combo->property("currentText").toString() ==
+                    QStringLiteral("Glyph only"),
+                "renderer picker names the glyph-only policy");
+            ok &= check(
+                renderer_status_label->property("text").toString() ==
+                    QStringLiteral("Using glyph rendering only."),
+                "glyph-only renderer status matches the selected policy");
+
+            surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::AUTO);
+            const QString unavailable_font =
+                QStringLiteral("VNM unavailable MSDF integration test font");
+            surface.set_font_family(unavailable_font);
+            for (int attempt = 0;
+                 attempt < 500 && surface.msdf_text_checking();
+                 ++attempt)
+            {
+                pump_events(app);
+                QThread::msleep(10);
+            }
+            pump_events(app);
+            ok &= check(!surface.msdf_text_checking(),
+                "renderer availability check completes for a missing font");
+            ok &= check(!surface.msdf_text_available(),
+                "a missing font is unavailable to the MSDF renderer");
+            ok &= check(
+                renderer_mode_combo->property("currentText").toString() ==
+                    QStringLiteral("Automatic (MSDF preferred)"),
+                "renderer picker keeps showing the selected automatic policy after fallback");
+            ok &= check(
+                renderer_status_label->property("text").toString() ==
+                    QStringLiteral(
+                        "MSDF is unavailable for VNM unavailable MSDF integration test font; "
+                        "using glyph rendering."),
+                "automatic renderer fallback status names the selected font");
+        }
+
         auto* build_provenance_text = settings_qml_window->findChild<QQuickItem*>(
             QStringLiteral("build_provenance_text"));
         ok &= check(build_provenance_text != nullptr,
