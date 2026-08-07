@@ -158,9 +158,7 @@ Item {
         custom_buttons: root.settings_button_visible
             ? [{
                 object_name: "settings_button",
-                glyph: "\uE713",
-                font_family: "Segoe Fluent Icons",
-                pixel_size: 16,
+                component: settings_gear_component,
                 tooltip: "Settings",
                 action: function() { root.settings_requested() }
             }]
@@ -171,6 +169,120 @@ Item {
         onMinimize_requested: root.minimize_requested()
         onMaximize_toggle_requested: root.maximize_toggle_requested()
         onClose_requested: root.close_requested()
+    }
+
+    // The settings gear is stroked here rather than taken from an icon font.
+    // No single font family carries a gear on every platform, and the ones
+    // that do disagree on how it looks, so a glyph would render as a different
+    // drawing per system and as a missing-glyph box where none is installed.
+    // Stroke weight and colour match the minimize/maximize/close marks the
+    // chrome paints beside it.
+    Component {
+        id: settings_gear_component
+
+        Canvas {
+            anchors.fill: parent
+
+            property color icon_color: terminal_chrome_theme.titlebar_button_icon
+
+            // Proportions follow the Heroicons "cog-6-tooth" outline icon
+            // (heroicons.com, MIT), measured off its path: a 24-unit box with
+            // tip radius 9, root radius 6.75, hub radius 3, and a 1.5 stroke.
+            // The geometry below is generated rather than traced, so it stays
+            // resolution-independent and carries no bundled asset. The joins
+            // depart from the reference deliberately; see the paint handler.
+            readonly property int tooth_count: 6
+            readonly property real stroke_width: 1.3
+            // The reference draws its stroke at 1/6 of the tip radius. Solving
+            // that for a 1.3 stroke gives a 7.8 radius, hence this box: the
+            // stroke straddles the path, so the box also carries half a stroke
+            // of inset to keep the teeth inside it.
+            readonly property real icon_size: 17
+            // The tip radius the reference would use for this box. Body, hub
+            // and tip width are all measured against it, so extending the
+            // teeth below moves nothing else.
+            readonly property real reference_radius: icon_size / 2 - stroke_width / 2
+            readonly property real root_radius: reference_radius * 0.75
+            readonly property real hub_radius: reference_radius * 0.333
+            // Teeth run longer than the reference's, which reads better at
+            // this size. Only the tips move: they grow outward from the same
+            // root circle, so the gear body and hub are untouched. The teeth
+            // overshoot the nominal box by a fraction of a pixel, which the
+            // button around them absorbs.
+            readonly property real tooth_length_factor: 1.15
+            readonly property real outer_radius:
+                root_radius + (reference_radius - root_radius) * tooth_length_factor
+            // Half-widths in radians of a tooth at its tip, on the outer
+            // radius, and at its base, on the root radius. A gear tooth is a
+            // trapezoid that narrows towards the tip, and arc length grows
+            // with radius, so the tip needs the smaller share of the two: the
+            // tooth only tapers outward while
+            //     tip_half_angle < base_half_angle * (root_radius/outer_radius)
+            // Equal angles would draw the flanks radially and flare the tooth
+            // out into a petal instead. The reference tapers hard, to roughly
+            // a third of the base width, which leaves the roots as narrow
+            // valleys rather than flats.
+            //
+            // The tip half-angle is scaled back by the same factor the tips
+            // moved out. An angle subtends more arc the further out it is, so
+            // holding it fixed would have widened the tips as well as
+            // lengthening them; this keeps the tip exactly as wide as the
+            // reference's and lets the teeth only grow longer.
+            readonly property real tip_half_angle: 0.144 * reference_radius / outer_radius
+            readonly property real base_half_angle: 0.504
+            // Half a tooth pitch, which for six teeth is 30 degrees. Teeth
+            // generated straight from angle zero straddle the vertical and
+            // leave a valley pointing up; the reference points a tooth up
+            // instead, and this phase puts one back on the axis.
+            readonly property real tooth_phase: Math.PI / tooth_count
+
+            onIcon_colorChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+
+            onPaint: {
+                const ctx = getContext("2d")
+                ctx.clearRect(0, 0, width, height)
+                ctx.strokeStyle = icon_color
+                ctx.lineWidth = stroke_width
+                // Mitred rather than the reference's round joins, which blunt
+                // the teeth at this size. The limit is what keeps that safe:
+                // a tooth tip turns gently enough to be mitred to a crisp
+                // corner, while the far sharper turn at the root of a valley
+                // exceeds the limit and falls back to a bevel instead of
+                // growing the long spike an unbounded miter would produce.
+                ctx.lineJoin = "miter"
+                ctx.miterLimit = 2
+
+                const cx = width / 2
+                const cy = height / 2
+                const step = 2 * Math.PI / tooth_count
+
+                // One closed outline. Each arc() call first draws a straight
+                // line from the previous arc's end to its own start, which is
+                // exactly the flank between a tooth and the root beside it.
+                ctx.beginPath()
+                for (var i = 0; i < tooth_count; ++i) {
+                    const tooth_centre = i * step + tooth_phase
+                    ctx.arc(
+                        cx, cy, outer_radius,
+                        tooth_centre - tip_half_angle,
+                        tooth_centre + tip_half_angle,
+                        false)
+                    ctx.arc(
+                        cx, cy, root_radius,
+                        tooth_centre + base_half_angle,
+                        tooth_centre + step - base_half_angle,
+                        false)
+                }
+                ctx.closePath()
+                ctx.stroke()
+
+                ctx.beginPath()
+                ctx.arc(cx, cy, hub_radius, 0, 2 * Math.PI, false)
+                ctx.stroke()
+            }
+        }
     }
 
     Component {

@@ -120,6 +120,51 @@ QQuickItem* find_quick_item_recursive(QObject* root, const QString& object_name)
     return qobject_cast<QQuickItem*>(find_object_recursive(root, object_name));
 }
 
+// The chrome nests a button's icon inside its content item, so what the button
+// draws is a descendant rather than a direct child.
+QQuickItem* find_item_of_type_recursive(QQuickItem* root, const char* class_name)
+{
+    if (root == nullptr) {
+        return nullptr;
+    }
+
+    const auto children = root->childItems();
+    for (QQuickItem* child : children) {
+        if (child->inherits(class_name)) {
+            return child;
+        }
+        if (QQuickItem* found = find_item_of_type_recursive(child, class_name)) {
+            return found;
+        }
+    }
+
+    return nullptr;
+}
+
+// Whether anything under `root` puts glyphs on screen. The chrome always
+// instantiates its glyph slot, so an idle empty text item does not count.
+bool draws_any_glyph(QQuickItem* root)
+{
+    if (root == nullptr) {
+        return false;
+    }
+
+    const auto children = root->childItems();
+    for (QQuickItem* child : children) {
+        if (child->inherits("QQuickText") &&
+            child->isVisible() &&
+            !child->property("text").toString().isEmpty())
+        {
+            return true;
+        }
+        if (draws_any_glyph(child)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool check_rect_equal(
     const QRectF&      actual,
     const QRectF&      expected,
@@ -2288,6 +2333,38 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     ok &= check(gear->isVisible(), "settings gear button is visible by default");
     ok &= check(gear->width() > 0.0 && gear->height() > 0.0,
         "settings gear button has a nonzero hit area");
+
+    // The gear is stroked, not spelled. A font glyph would be a different
+    // drawing on every platform and a missing-glyph box wherever no installed
+    // family carries it, so nothing inside the button may be text.
+    QQuickItem* gear_canvas =
+        find_item_of_type_recursive(gear, "QQuickCanvasItem");
+    ok &= check(gear_canvas != nullptr,
+        "settings gear button draws its icon on a canvas");
+    ok &= check(!draws_any_glyph(gear),
+        "settings gear button draws no font glyph");
+    if (gear_canvas != nullptr) {
+        ok &= check(gear_canvas->width() > 0.0 && gear_canvas->height() > 0.0,
+            "settings gear canvas has a nonzero paint area");
+
+        // The gear follows the same theme colour as the minimize, maximize
+        // and close marks, including when the window goes inactive.
+        titlebar.set_active(true);
+        pump_events(app);
+        const QColor active_icon_color =
+            gear_canvas->property("icon_color").value<QColor>();
+        titlebar.set_active(false);
+        pump_events(app);
+        const QColor inactive_icon_color =
+            gear_canvas->property("icon_color").value<QColor>();
+        titlebar.set_active(true);
+        pump_events(app);
+
+        ok &= check(active_icon_color == QColor(QStringLiteral("#e2e8f0")),
+            "settings gear uses the active titlebar icon colour");
+        ok &= check(inactive_icon_color == QColor(QStringLiteral("#8e97a3")),
+            "settings gear dims with the inactive titlebar");
+    }
 
     int settings_requests = 0;
     QObject::connect(
