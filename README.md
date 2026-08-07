@@ -116,6 +116,10 @@ without the macOS Cmd+V shortcut, `ctrl-shift-v` restricts pasting to
 Ctrl+Shift+V only, and `disabled` turns the paste shortcut off entirely. Mode
 values are case-insensitive. Copy shortcuts are unaffected.
 
+Copy on selection is disabled by default. Enable **Copy on selection** under
+Settings > Behavior to copy completed mouse selections to the system clipboard
+as plain text. Explicit copy shortcuts remain available when it is enabled.
+
 Synchronized-output scrolling is deferred until content publication by default.
 Pass `--synchronized-output-scroll-policy immediate-public` before `--` to
 opt in to immediate public-projection scrolling during DEC synchronized-output

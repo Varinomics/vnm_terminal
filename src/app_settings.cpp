@@ -228,6 +228,35 @@ void apply_persisted_appearance_settings(
     }
 }
 
+Persisted_interaction_settings load_persisted_interaction_settings(
+    QSettings& settings)
+{
+    Persisted_interaction_settings state;
+    settings.beginGroup(QLatin1String(k_interaction_settings_group));
+    state.copy_on_select = settings_bool_value(settings, k_interaction_copy_on_select);
+    settings.endGroup();
+    return state;
+}
+
+void save_persisted_interaction_settings(
+    QSettings& settings,
+    bool       copy_on_select)
+{
+    settings.beginGroup(QLatin1String(k_interaction_settings_group));
+    settings.setValue(QLatin1String(k_interaction_copy_on_select), copy_on_select);
+    settings.endGroup();
+    settings.sync();
+}
+
+void apply_persisted_interaction_settings(
+    const Persisted_interaction_settings& state,
+    App_options*                          options)
+{
+    if (state.copy_on_select.has_value()) {
+        options->copy_on_select = *state.copy_on_select;
+    }
+}
+
 bool terminal_window_persistence_enabled()
 {
     return QGuiApplication::platformName() != QStringLiteral("offscreen");

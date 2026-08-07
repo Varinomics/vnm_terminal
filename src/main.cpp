@@ -69,6 +69,7 @@ namespace chrome = vnm_terminal::terminal_app;
 
 using chrome::App_options;
 using chrome::apply_persisted_appearance_settings;
+using chrome::apply_persisted_interaction_settings;
 using chrome::apply_persisted_terminal_window_state;
 using chrome::apply_primary_repaint_recovery_option;
 using chrome::apply_retained_history_capacity_option;
@@ -118,6 +119,7 @@ using chrome::k_window_settings_width;
 using chrome::k_window_settings_x;
 using chrome::k_window_settings_y;
 using chrome::load_persisted_appearance_settings;
+using chrome::load_persisted_interaction_settings;
 using chrome::load_persisted_terminal_window_state;
 using chrome::Metrics_timeline_jsonl_writer;
 using chrome::Metrics_timeline_sample_kind;
@@ -135,6 +137,7 @@ using chrome::read_clipboard_text_with_broker;
 using chrome::resize_window_for_text_area_request;
 using chrome::restorable_terminal_window_state;
 using chrome::save_persisted_appearance_settings;
+using chrome::save_persisted_interaction_settings;
 using chrome::Runtime_state;
 using chrome::save_persisted_terminal_window_state;
 using chrome::settings_font_size;
@@ -382,6 +385,9 @@ int main(int argc, char** argv)
         apply_persisted_appearance_settings(
             load_persisted_appearance_settings(settings),
             &options);
+        apply_persisted_interaction_settings(
+            load_persisted_interaction_settings(settings),
+            &options);
     }
 
     QQmlEngine chrome_engine;
@@ -427,6 +433,7 @@ int main(int argc, char** argv)
     surface->set_font_family(options.font_family);
     surface->set_font_size(options.font_size);
     surface->set_color_scheme(options.color_scheme);
+    surface->set_copy_on_select(options.copy_on_select);
     surface->set_wheel_event_policy(
         VNM_TerminalSurface::Wheel_event_policy::LOCAL_SCROLLBACK_FIRST);
     apply_scrollback_limit_option(*surface, options);
@@ -504,6 +511,22 @@ int main(int argc, char** argv)
     auto* shortcut_filter =
         new Terminal_shortcut_filter(surface, options.paste_shortcut_policy);
     window.installEventFilter(shortcut_filter);
+
+    const auto persist_interaction = [persistence_enabled, surface] {
+        if (!persistence_enabled) {
+            return;
+        }
+
+        QSettings settings;
+        save_persisted_interaction_settings(
+            settings,
+            surface->copy_on_select());
+    };
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::copy_on_select_changed,
+        surface,
+        persist_interaction);
 
     auto settings_controller =
         std::make_unique<chrome::Terminal_settings_controller>();

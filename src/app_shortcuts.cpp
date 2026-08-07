@@ -104,7 +104,8 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
     if (copy_shortcut) {
         m_surface->record_interaction_diagnostic(
             "app-shortcut", "routed", QStringLiteral("copy"));
-        return copy_selected_text();
+        (void)copy_selected_text();
+        return true;
     }
 
     m_surface->record_interaction_diagnostic(

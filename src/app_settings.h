@@ -33,6 +33,9 @@ constexpr char k_appearance_lcd_subpixel_order[]    = "lcd_subpixel_order";
 constexpr char k_appearance_row_timestamp_tooltip[] = "row_timestamp_tooltip";
 constexpr char k_appearance_scrollback_limit[]      = "scrollback_limit";
 
+constexpr char k_interaction_settings_group[] = "interaction";
+constexpr char k_interaction_copy_on_select[] = "copy_on_select";
+
 struct Persisted_terminal_window_state
 {
     std::optional<QPoint> position;
@@ -49,6 +52,11 @@ struct Persisted_appearance_settings
     std::optional<int>     lcd_subpixel_order;
     std::optional<bool>    row_timestamp_tooltip;
     std::optional<int>     scrollback_limit;
+};
+
+struct Persisted_interaction_settings
+{
+    std::optional<bool> copy_on_select;
 };
 
 bool persisted_window_axis_is_valid(int value);
@@ -75,6 +83,17 @@ void save_persisted_appearance_settings(
 void apply_persisted_appearance_settings(
     const Persisted_appearance_settings& state,
     App_options*                         options);
+
+Persisted_interaction_settings load_persisted_interaction_settings(
+    QSettings& settings);
+
+void save_persisted_interaction_settings(
+    QSettings& settings,
+    bool       copy_on_select);
+
+void apply_persisted_interaction_settings(
+    const Persisted_interaction_settings& state,
+    App_options*                          options);
 
 bool terminal_window_persistence_enabled();
 

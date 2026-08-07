@@ -66,6 +66,7 @@ struct App_options
     bool               keep_open_after_process_exits      = false;
     bool               require_output                     = false;
     bool               custom_titlebar                    = k_custom_titlebar_default_enabled;
+    bool               copy_on_select                     = false;
     bool               selection_trace_enabled            = false;
     bool               interaction_diagnostics_unlocked   = false;
     bool               transcript_snapshot_diagnostics    = false;

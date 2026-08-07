@@ -313,6 +313,33 @@ bool test_save_appearance_settings_from_surface()
     return ok;
 }
 
+bool test_interaction_settings_round_trip()
+{
+    QTemporaryDir dir;
+    bool ok = check(dir.isValid(), "temporary interaction-settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+    save_persisted_interaction_settings(writer, true);
+
+    QSettings reader(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+    const vnm_terminal::terminal_app::Persisted_interaction_settings state =
+        load_persisted_interaction_settings(reader);
+
+    ok &= check(state.copy_on_select.has_value() && *state.copy_on_select,
+        "persisted copy-on-selection toggle round-trips");
+
+    App_options options;
+    ok &= check(!options.copy_on_select,
+        "copy on selection defaults off");
+    apply_persisted_interaction_settings(state, &options);
+    ok &= check(options.copy_on_select,
+        "persisted copy-on-selection toggle is applied");
+    return ok;
+}
+
 }
 
 int main(int argc, char** argv)
@@ -326,5 +353,6 @@ int main(int argc, char** argv)
     ok &= test_invalid_persisted_values_are_ignored();
     ok &= test_appearance_settings_round_trip();
     ok &= test_save_appearance_settings_from_surface();
+    ok &= test_interaction_settings_round_trip();
     return ok ? 0 : 1;
 }

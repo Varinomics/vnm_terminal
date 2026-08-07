@@ -196,9 +196,9 @@ Window {
     objectName: "terminal_settings_window"
 
     width: 560
-    height: 660
+    height: 690
     minimumWidth: 480
-    minimumHeight: 560
+    minimumHeight: 590
     visible: false
     flags: Qt.Tool | Qt.FramelessWindowHint
     color: "#202020"
@@ -911,6 +911,14 @@ R"qml(
                     objectName: "row_timestamp_switch"
                     checked: surface.rowTimestampTooltipEnabled
                     onToggled: surface.rowTimestampTooltipEnabled = checked
+                }
+
+                S_Label { text: "Copy on selection" }
+
+                S_Switch {
+                    objectName: "copy_on_select_switch"
+                    checked: surface.copyOnSelect
+                    onToggled: surface.copyOnSelect = checked
                 }
 
                 S_SectionHeader {

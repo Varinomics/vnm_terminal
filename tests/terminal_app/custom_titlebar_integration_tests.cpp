@@ -11,6 +11,7 @@
 #include "helpers/test_check.h"
 
 #include <QByteArray>
+#include <QClipboard>
 #include <QColor>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -20,6 +21,7 @@
 #include <QImage>
 #include <QJsonObject>
 #include <QKeyEvent>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPointF>
 #include <QQmlComponent>
@@ -144,6 +146,19 @@ void pump_events(QGuiApplication& app)
     for (int index = 0; index < 5; ++index) {
         app.processEvents(QEventLoop::AllEvents, 20);
     }
+}
+
+QPointF point_in_terminal_grid_cell(
+    const VNM_TerminalSurface& surface,
+    int                        row,
+    int                        column)
+{
+    const term::terminal_cell_metrics_t metrics =
+        term::VNM_TerminalSurface_render_bridge::cell_metrics(surface);
+    return {
+        (static_cast<qreal>(column) + 0.5) * metrics.width,
+        (static_cast<qreal>(row)    + 0.5) * metrics.height,
+    };
 }
 
 bool wait_for_exposed_window(
@@ -2038,6 +2053,178 @@ bool test_paste_shortcut_consumes_null_clipboard_reader(QGuiApplication& app)
     return ok;
 }
 
+bool test_copy_on_select_copies_completed_plain_text_selection(QGuiApplication& app)
+{
+    QQuickWindow window;
+    window.resize(360, 240);
+    VNM_TerminalSurface surface(window.contentItem());
+    surface.setSize(QSizeF(360.0, 240.0));
+
+    auto backend = std::make_unique<Metadata_seed_backend>(
+        QByteArrayLiteral("alpha beta\r\n"));
+    const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+        surface,
+        std::move(backend),
+        {QStringLiteral("copy-on-select-seed")});
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    window.show();
+    pump_events(app);
+
+    bool ok = check(started, "copy-on-selection fixture starts");
+    QClipboard* clipboard = QGuiApplication::clipboard();
+    ok &= check(clipboard != nullptr,
+        "copy-on-selection fixture has a system clipboard");
+    if (!started || clipboard == nullptr) {
+        return ok;
+    }
+
+    const QPointF start_point = point_in_terminal_grid_cell(surface, 0, 1);
+    const QPointF end_point   = point_in_terminal_grid_cell(surface, 0, 4);
+    const auto select_text = [
+            &app,
+            &end_point,
+            &ok,
+            &start_point,
+            &surface
+        ] {
+        ok &= send_item_mouse_event(
+            surface,
+            QEvent::MouseButtonPress,
+            start_point,
+            Qt::LeftButton,
+            Qt::LeftButton,
+            true,
+            "copy-on-selection press is accepted");
+        ok &= send_item_mouse_event(
+            surface,
+            QEvent::MouseMove,
+            end_point,
+            Qt::NoButton,
+            Qt::LeftButton,
+            true,
+            "copy-on-selection drag is accepted");
+        ok &= send_item_mouse_event(
+            surface,
+            QEvent::MouseButtonRelease,
+            end_point,
+            Qt::LeftButton,
+            Qt::NoButton,
+            true,
+            "copy-on-selection release is accepted");
+        pump_events(app);
+    };
+
+    clipboard->setText(QStringLiteral("copy-disabled-sentinel"), QClipboard::Clipboard);
+    select_text();
+    ok &= check(surface.selected_text() == QStringLiteral("lpha"),
+        "copy-on-selection fixture produces the expected selection");
+    ok &= check(
+        clipboard->text(QClipboard::Clipboard) == QStringLiteral("copy-disabled-sentinel"),
+        "disabled copy on selection leaves the clipboard unchanged");
+
+    surface.clear_selection();
+    surface.set_copy_on_select(true);
+    clipboard->setText(QStringLiteral("copy-enabled-sentinel"), QClipboard::Clipboard);
+    select_text();
+    ok &= check(clipboard->text(QClipboard::Clipboard) == QStringLiteral("lpha"),
+        "enabled copy on selection copies after mouse release");
+    const QMimeData* mime_data = clipboard->mimeData(QClipboard::Clipboard);
+    ok &= check(mime_data != nullptr && mime_data->hasText() && !mime_data->hasHtml(),
+        "copy on selection writes plain text without HTML formatting");
+
+    surface.clear_selection();
+    const int last_column = std::max(0, surface.columns() - 1);
+    ok &= check(last_column > 12,
+        "copy-on-selection empty-range fixture has enough columns");
+    if (last_column > 12) {
+        const QPointF empty_start = point_in_terminal_grid_cell(surface, 0, 12);
+        const QPointF empty_end =
+            point_in_terminal_grid_cell(surface, 0, last_column);
+        clipboard->setText(
+            QStringLiteral("empty-range-sentinel"),
+            QClipboard::Clipboard);
+        ok &= send_item_mouse_event(
+            surface,
+            QEvent::MouseButtonPress,
+            empty_start,
+            Qt::LeftButton,
+            Qt::LeftButton,
+            true,
+            "copy-on-selection empty-range press is accepted");
+        ok &= send_item_mouse_event(
+            surface,
+            QEvent::MouseMove,
+            empty_end,
+            Qt::NoButton,
+            Qt::LeftButton,
+            true,
+            "copy-on-selection empty-range drag is accepted");
+        ok &= send_item_mouse_event(
+            surface,
+            QEvent::MouseButtonRelease,
+            empty_end,
+            Qt::LeftButton,
+            Qt::NoButton,
+            true,
+            "copy-on-selection empty-range release is accepted");
+        pump_events(app);
+        ok &= check(
+            surface.selection_state() == VNM_TerminalSurface::Selection_state::ACTIVE &&
+                surface.selected_text().isEmpty(),
+            "copy-on-selection empty-range fixture produces an active empty selection");
+        ok &= check(
+            clipboard->text(QClipboard::Clipboard) == QStringLiteral("empty-range-sentinel"),
+            "an active empty selection does not overwrite the clipboard");
+    }
+
+    clipboard->setText(QStringLiteral("outside-click-sentinel"), QClipboard::Clipboard);
+    const QPointF outside_point(-1.0, -1.0);
+    ok &= send_item_mouse_event(
+        surface,
+        QEvent::MouseButtonPress,
+        outside_point,
+        Qt::LeftButton,
+        Qt::LeftButton,
+        false,
+        "copy-on-selection outside press is ignored");
+    ok &= send_item_mouse_event(
+        surface,
+        QEvent::MouseButtonRelease,
+        outside_point,
+        Qt::LeftButton,
+        Qt::NoButton,
+        false,
+        "copy-on-selection outside release is ignored");
+    pump_events(app);
+    ok &= check(
+        clipboard->text(QClipboard::Clipboard) == QStringLiteral("outside-click-sentinel"),
+        "a click that creates no selection does not recopy an existing selection");
+
+    surface.clear_selection();
+    clipboard->setText(QStringLiteral("empty-selection-sentinel"), QClipboard::Clipboard);
+    ok &= send_item_mouse_event(
+        surface,
+        QEvent::MouseButtonPress,
+        start_point,
+        Qt::LeftButton,
+        Qt::LeftButton,
+        true,
+        "copy-on-selection empty press is accepted");
+    ok &= send_item_mouse_event(
+        surface,
+        QEvent::MouseButtonRelease,
+        start_point,
+        Qt::LeftButton,
+        Qt::NoButton,
+        true,
+        "copy-on-selection empty release is accepted");
+    pump_events(app);
+    ok &= check(
+        clipboard->text(QClipboard::Clipboard) == QStringLiteral("empty-selection-sentinel"),
+        "an empty selection does not overwrite the clipboard");
+    return ok;
+}
+
 #if defined(Q_OS_MACOS)
 bool test_macos_command_shortcuts_are_host_shortcuts(QGuiApplication& app)
 {
@@ -2133,7 +2320,8 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
         "clicking the settings gear emits exactly one settings request");
 
     chrome_test::Terminal_settings_controller settings_controller;
-    chrome_test::Terminal_settings_window settings_window(engine, surface, settings_controller);
+    chrome_test::Terminal_settings_window settings_window(
+        engine, surface, settings_controller);
     ok &= check(settings_window.is_valid(), "settings window initializes");
     if (!settings_window.is_valid()) {
         std::cerr << settings_window.error_string().toStdString() << '\n';
@@ -2177,6 +2365,23 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
             settings_qml_window->findChild<QQuickItem*>(
                 QStringLiteral("row_timestamp_switch")) != nullptr,
             "settings panel builds the row-timestamp switch");
+        auto* copy_on_select_switch = settings_qml_window->findChild<QQuickItem*>(
+            QStringLiteral("copy_on_select_switch"));
+        ok &= check(copy_on_select_switch != nullptr,
+            "settings panel builds the copy-on-selection switch");
+        if (copy_on_select_switch != nullptr) {
+            ok &= check(!copy_on_select_switch->property("checked").toBool(),
+                "copy-on-selection switch defaults off");
+            const bool toggle_invoked =
+                copy_on_select_switch->setProperty("checked", true) &&
+                QMetaObject::invokeMethod(
+                    copy_on_select_switch,
+                    "toggled",
+                    Qt::DirectConnection);
+            pump_events(app);
+            ok &= check(toggle_invoked && surface.copy_on_select(),
+                "copy-on-selection switch updates the live surface policy");
+        }
         auto* interaction_diagnostics_switch = settings_qml_window->findChild<QQuickItem*>(
             QStringLiteral("interaction_diagnostics_switch"));
         ok &= check(
@@ -2455,6 +2660,7 @@ int main(int argc, char** argv)
     ok &= test_paste_shortcut_should_paste_predicate();
     ok &= test_clipboard_broker_mode_argument_detection();
     ok &= test_paste_shortcut_consumes_null_clipboard_reader(app);
+    ok &= test_copy_on_select_copies_completed_plain_text_selection(app);
     ok &= test_window_state_sync();
     ok &= test_settings_gear_button_and_window(app);
     ok &= test_settings_shortcut_requests_settings(app);
