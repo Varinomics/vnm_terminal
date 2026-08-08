@@ -53,6 +53,21 @@ int clamp_axis(int value, int min_value, int max_value)
     return qBound(min_value, value, max_value);
 }
 
+QScreen* screen_for_anchor(const QWindow* anchor, const QRect& anchor_geometry)
+{
+    if (anchor != nullptr && anchor->screen() != nullptr) {
+        return anchor->screen();
+    }
+
+    if (!anchor_geometry.isEmpty()) {
+        if (QScreen* screen = QGuiApplication::screenAt(anchor_geometry.center())) {
+            return screen;
+        }
+    }
+
+    return QGuiApplication::primaryScreen();
+}
+
 #ifdef Q_OS_WIN
 struct Window_title_search
 {
@@ -182,8 +197,9 @@ QRect fallback_anchor_geometry(const QString& preferred_window_title)
 // definitions over QtQuick.Controls.Basic, carrying the S_ prefix) because the
 // stock Basic style is light-themed and clashes with the dark chrome. The
 // palette is derived from the chrome colors of the main terminal window so the
-// two windows read as one family. Only the color-scheme grid scrolls; the form
-// below it is always fully visible.
+// two windows read as one family. The form keeps its natural height when the
+// screen can contain it; on a smaller screen its body scrolls below the fixed
+// titlebar.
 constexpr const char* k_settings_window_qml = R"qml(
 import QtQuick
 import QtQuick.Window
@@ -195,10 +211,27 @@ Window {
     id: win
     objectName: "terminal_settings_window"
 
-    width: 560
-    height: 690
-    minimumWidth: 480
-    minimumHeight: 590
+    readonly property int preferred_width: 560
+    readonly property int unconstrained_maximum_size: 16777215
+    property int available_width_limit: 0
+    property int available_height_limit: 0
+    readonly property int effective_width_limit: available_width_limit > 0
+        ? available_width_limit : unconstrained_maximum_size
+    readonly property int effective_height_limit: available_height_limit > 0
+        ? available_height_limit : unconstrained_maximum_size
+    readonly property int natural_height: Math.ceil(
+        2 * frame_border_width
+        + titlebar_height
+        + 2 * body_margin
+        + settings_body.implicitHeight)
+    readonly property int preferred_height: Math.max(690, natural_height)
+
+    width: Math.min(preferred_width, effective_width_limit)
+    height: Math.min(preferred_height, effective_height_limit)
+    minimumWidth: Math.min(480, effective_width_limit)
+    minimumHeight: Math.min(natural_height, effective_height_limit)
+    maximumWidth: effective_width_limit
+    maximumHeight: effective_height_limit
     visible: false
     flags: Qt.Tool | Qt.FramelessWindowHint
     color: "#202020"
@@ -209,6 +242,7 @@ Window {
     signal resize_requested(int edges)
 
     readonly property int titlebar_height: 32
+    readonly property int body_margin: 16
     readonly property real frame_border_width: 1
     readonly property bool resize_enabled: visibility === Window.Windowed
     readonly property real resize_outward_extent:
@@ -232,6 +266,23 @@ Window {
     readonly property color card_color:         "#252525"
     readonly property color card_hover_color:   "#2d2d2d"
     readonly property color card_border_color:  "#383838"
+
+    function enforce_size_limits() {
+        const bounded_width = Math.max(minimumWidth, Math.min(width, maximumWidth))
+        const bounded_height = Math.max(minimumHeight, Math.min(height, maximumHeight))
+        if (width !== bounded_width)
+            width = bounded_width
+        if (height !== bounded_height)
+            height = bounded_height
+    }
+
+    onWidthChanged: enforce_size_limits()
+    onHeightChanged: enforce_size_limits()
+    onMinimumWidthChanged: enforce_size_limits()
+    onMinimumHeightChanged: enforce_size_limits()
+    onMaximumWidthChanged: enforce_size_limits()
+    onMaximumHeightChanged: enforce_size_limits()
+    Component.onCompleted: enforce_size_limits()
 
     component S_SectionHeader: RowLayout {
         property alias text: section_text.text
@@ -270,7 +321,7 @@ Window {
 
         implicitWidth: 8
         padding: 2
-        policy: Basic.ScrollBar.AlwaysOn
+        policy: Basic.ScrollBar.AsNeeded
         visible: bar.size < 1.0
 
         background: Rectangle {
@@ -615,14 +666,48 @@ R"qml(
             onClose_requested: win.close_requested()
         }
 
-        ColumnLayout {
-            objectName: "settings_window_body"
-
+        Item {
+            id: settings_body_viewport
+            objectName: "settings_window_body_viewport"
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: settings_titlebar.bottom
             anchors.bottom: parent.bottom
-            anchors.margins: 16
+            anchors.margins: win.body_margin
+
+            Flickable {
+                id: settings_body_flickable
+                objectName: "settings_window_body_flickable"
+
+                anchors.fill: parent
+                contentWidth: settings_body.width
+                contentHeight: settings_body.height
+                clip: true
+                flickableDirection: Flickable.VerticalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                boundsMovement: Flickable.StopAtBounds
+                interactive: contentHeight > height
+
+                Basic.ScrollBar.vertical: S_ScrollBar {
+                    id: settings_body_scrollbar
+                    objectName: "settings_window_body_scrollbar"
+
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    z: 1
+                }
+            }
+        }
+
+        ColumnLayout {
+            id: settings_body
+            objectName: "settings_window_body"
+
+            parent: settings_body_flickable.contentItem
+            width: settings_body_flickable.width -
+                (settings_body_scrollbar.visible ? settings_body_scrollbar.width : 0)
+            height: implicitHeight
             spacing: 10
 
             S_SectionHeader { text: "Color scheme" }
@@ -1048,6 +1133,31 @@ settings::Terminal_settings_window::Terminal_settings_window(
         SIGNAL(resize_requested(int)),
         this,
         SLOT(handle_resize_requested(int)));
+    QObject::connect(
+        m_window,
+        &QWindow::screenChanged,
+        this,
+        [this](QScreen* screen) {
+            if (m_window == nullptr || !m_window->isVisible() || screen == nullptr) {
+                return;
+            }
+
+            watch_available_geometry(screen);
+            apply_available_geometry(screen->availableGeometry());
+            clamp_to_available_geometry(screen->availableGeometry());
+        });
+
+    const auto clamp_resized_window = [this](int) {
+        if (m_window != nullptr &&
+            m_window->isVisible() &&
+            m_available_geometry_screen != nullptr)
+        {
+            clamp_to_available_geometry(
+                m_available_geometry_screen->availableGeometry());
+        }
+    };
+    QObject::connect(m_window, &QWindow::widthChanged, this, clamp_resized_window);
+    QObject::connect(m_window, &QWindow::heightChanged, this, clamp_resized_window);
 }
 
 settings::Terminal_settings_window::~Terminal_settings_window() = default;
@@ -1064,8 +1174,23 @@ QString settings::Terminal_settings_window::error_string() const
 
 void settings::Terminal_settings_window::set_transient_parent(QWindow* parent)
 {
-    if (m_window != nullptr) {
-        m_window->setTransientParent(parent);
+    if (m_window == nullptr) {
+        return;
+    }
+
+    QObject::disconnect(m_transient_parent_screen_connection);
+    m_window->setTransientParent(parent);
+    if (parent != nullptr) {
+        m_transient_parent_screen_connection = QObject::connect(
+            parent,
+            &QWindow::screenChanged,
+            this,
+            [this](QScreen*) {
+                if (m_window != nullptr && m_window->isVisible()) {
+                    m_positioned = false;
+                    place_within_transient_parent();
+                }
+            });
     }
 }
 
@@ -1093,6 +1218,54 @@ void settings::Terminal_settings_window::show_window()
     m_window->requestActivate();
 }
 
+void settings::Terminal_settings_window::apply_available_geometry(
+    const QRect& available_geometry)
+{
+    if (m_window == nullptr || available_geometry.isEmpty()) {
+        return;
+    }
+
+    m_window->setProperty(
+        "available_width_limit",
+        available_geometry.width());
+    m_window->setProperty(
+        "available_height_limit",
+        available_geometry.height());
+
+    const int bounded_width = qBound(
+        1,
+        m_window->width(),
+        available_geometry.width());
+    const int bounded_height = qBound(
+        1,
+        m_window->height(),
+        available_geometry.height());
+    if (bounded_width != m_window->width() || bounded_height != m_window->height()) {
+        m_window->resize(bounded_width, bounded_height);
+    }
+}
+
+void settings::Terminal_settings_window::clamp_to_available_geometry(
+    const QRect& available_geometry)
+{
+    if (m_window == nullptr || available_geometry.isEmpty()) {
+        return;
+    }
+
+    const int width = qMin(m_window->width(), available_geometry.width());
+    const int height = qMin(m_window->height(), available_geometry.height());
+    QPoint top_left = m_window->position();
+    top_left.setX(clamp_axis(
+        top_left.x(),
+        available_geometry.left(),
+        available_geometry.left() + available_geometry.width() - width));
+    top_left.setY(clamp_axis(
+        top_left.y(),
+        available_geometry.top(),
+        available_geometry.top() + available_geometry.height() - height));
+    m_window->setPosition(top_left);
+}
+
 void settings::Terminal_settings_window::place_within_transient_parent()
 {
     if (m_window == nullptr) {
@@ -1108,6 +1281,15 @@ void settings::Terminal_settings_window::place_within_transient_parent()
         return;
     }
 
+    QScreen* screen = screen_for_anchor(anchor, anchor_geometry);
+    if (screen == nullptr || screen->availableGeometry().isEmpty()) {
+        return;
+    }
+
+    const QRect available_geometry = screen->availableGeometry();
+    watch_available_geometry(screen);
+    apply_available_geometry(available_geometry);
+
     const int width = qMax(1, m_window->width());
     const int height = qMax(1, m_window->height());
     QPoint top_left = m_positioned
@@ -1116,15 +1298,37 @@ void settings::Terminal_settings_window::place_within_transient_parent()
 
     top_left.setX(clamp_axis(
         top_left.x(),
-        anchor_geometry.left(),
-        anchor_geometry.left() + anchor_geometry.width() - width));
+        available_geometry.left(),
+        available_geometry.left() + available_geometry.width() - width));
     top_left.setY(clamp_axis(
         top_left.y(),
-        anchor_geometry.top(),
-        anchor_geometry.top() + anchor_geometry.height() - height));
+        available_geometry.top(),
+        available_geometry.top() + available_geometry.height() - height));
 
     m_window->setPosition(top_left);
     m_positioned = true;
+}
+
+void settings::Terminal_settings_window::watch_available_geometry(QScreen* screen)
+{
+    if (m_available_geometry_screen == screen) {
+        return;
+    }
+
+    QObject::disconnect(m_available_geometry_connection);
+    m_available_geometry_screen = screen;
+    if (screen != nullptr) {
+        m_available_geometry_connection = QObject::connect(
+            screen,
+            &QScreen::availableGeometryChanged,
+            this,
+            [this](const QRect& available_geometry) {
+                if (m_window != nullptr && m_window->isVisible()) {
+                    apply_available_geometry(available_geometry);
+                    clamp_to_available_geometry(available_geometry);
+                }
+            });
+    }
 }
 
 void settings::Terminal_settings_window::handle_close_requested()

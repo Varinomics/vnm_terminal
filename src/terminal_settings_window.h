@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QMetaObject>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -8,6 +9,8 @@
 
 class QQmlEngine;
 class QQuickWindow;
+class QRect;
+class QScreen;
 class QWindow;
 class VNM_TerminalSurface;
 
@@ -49,10 +52,16 @@ private slots:
     void handle_resize_requested(int edges);
 
 private:
+    void apply_available_geometry(const QRect& available_geometry);
+    void clamp_to_available_geometry(const QRect& available_geometry);
     void place_within_transient_parent();
+    void watch_available_geometry(QScreen* screen);
 
     std::unique_ptr<QObject> m_root_object;
     QPointer<QQuickWindow>   m_window;
+    QPointer<QScreen>        m_available_geometry_screen;
+    QMetaObject::Connection  m_available_geometry_connection;
+    QMetaObject::Connection  m_transient_parent_screen_connection;
     QString                  m_error_string;
     QString                  m_fallback_anchor_window_title;
     bool                     m_positioned = false;

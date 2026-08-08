@@ -206,6 +206,112 @@ QPointF point_in_terminal_grid_cell(
     };
 }
 
+QRectF scene_rect(const QQuickItem& item)
+{
+    return QRectF(
+        item.mapToScene(QPointF(0.0, 0.0)),
+        QSizeF(item.width(), item.height()));
+}
+
+bool check_settings_window_screen_scrolling(
+    QGuiApplication&   app,
+    QQuickWindow&      window,
+    const std::string& context)
+{
+    auto* viewport = find_quick_item_recursive(
+        &window, QStringLiteral("settings_window_body_viewport"));
+    auto* flickable = find_quick_item_recursive(
+        &window, QStringLiteral("settings_window_body_flickable"));
+    auto* body = find_quick_item_recursive(
+        &window, QStringLiteral("settings_window_body"));
+    auto* scrollbar = find_quick_item_recursive(
+        &window, QStringLiteral("settings_window_body_scrollbar"));
+
+    bool ok = true;
+    ok &= check(viewport != nullptr,
+        context + " builds its settings viewport");
+    ok &= check(flickable != nullptr,
+        context + " builds its body scroller");
+    ok &= check(body != nullptr,
+        context + " builds its settings body");
+    ok &= check(scrollbar != nullptr,
+        context + " builds its body scrollbar");
+    if (viewport == nullptr || flickable == nullptr || body == nullptr || scrollbar == nullptr) {
+        return ok;
+    }
+
+    const int preferred_width = window.property("preferred_width").toInt();
+    const int preferred_height = window.property("preferred_height").toInt();
+    ok &= check(preferred_width > 0 && preferred_height > 0,
+        context + " publishes a positive preferred extent");
+    if (preferred_width <= 0 || preferred_height <= 0) {
+        return ok;
+    }
+
+    window.setProperty("available_width_limit", preferred_width + 128);
+    window.setProperty("available_height_limit", preferred_height + 128);
+    pump_events(app);
+    ok &= check(window.width() == preferred_width && window.height() == preferred_height,
+        context + " keeps its full preferred extent when the screen can contain it");
+    ok &= check(!scrollbar->isVisible(),
+        context + " hides its body scrollbar when the full body fits");
+    ok &= check(
+        flickable->height() + 0.5 >= flickable->property("contentHeight").toReal(),
+        context + " needs no body scrolling at its preferred extent");
+
+    const int natural_height = window.property("natural_height").toInt();
+    const int constrained_height = std::max(1, natural_height - 128);
+    ok &= check(constrained_height < natural_height,
+        context + " provides a deterministic constrained-screen fixture");
+    window.setProperty("available_height_limit", constrained_height);
+    pump_events(app);
+
+    ok &= check(window.height() == constrained_height,
+        context + " caps its height to the available screen height");
+    ok &= check(window.minimumHeight() == constrained_height &&
+            window.maximumHeight() == constrained_height,
+        context + " binds the constrained window to the available screen height");
+    ok &= check(scrollbar->isVisible(),
+        context + " shows its body scrollbar only when the body is constrained");
+    ok &= check(
+        flickable->property("contentHeight").toReal() > flickable->height() + 0.5,
+        context + " exposes the complete oversized body through scrolling");
+
+    const QRectF viewport_geometry = scene_rect(*viewport);
+    const QRectF flickable_geometry = scene_rect(*flickable);
+    const QRectF body_geometry = scene_rect(*body);
+    const QRectF scrollbar_geometry = scene_rect(*scrollbar);
+    ok &= check(
+        nearly_equal(scrollbar_geometry.top(), viewport_geometry.top()) &&
+            nearly_equal(scrollbar_geometry.right(), viewport_geometry.right()) &&
+            nearly_equal(scrollbar_geometry.bottom(), viewport_geometry.bottom()),
+        context + " binds the scrollbar to the viewport edges");
+    ok &= check(
+        nearly_equal(flickable_geometry.right(), viewport_geometry.right()) &&
+            body_geometry.right() <= scrollbar_geometry.left() + 0.5,
+        context + " reserves scrollbar width outside the settings content");
+
+    const qreal maximum_content_y =
+        flickable->property("contentHeight").toReal() - flickable->height();
+    flickable->setProperty("contentY", maximum_content_y);
+    pump_events(app);
+    const qreal scrollbar_position = scrollbar->property("position").toReal();
+    const qreal scrollbar_size = scrollbar->property("size").toReal();
+    ok &= check(
+        scrollbar_position >= -0.000001 &&
+            scrollbar_position + scrollbar_size <= 1.000001,
+        context + " keeps the scrollbar within its normalized track at the bottom bound");
+
+    window.setProperty("available_height_limit", preferred_height + 128);
+    pump_events(app);
+    ok &= check(!scrollbar->isVisible(),
+        context + " hides the scrollbar again when the screen constraint is removed");
+    ok &= check(std::abs(flickable->property("contentY").toReal()) <= 0.5,
+        context + " returns the full body to its top bound when scrolling is no longer needed");
+
+    return ok;
+}
+
 bool wait_for_exposed_window(
     QGuiApplication& app,
     QWindow&         window)
@@ -2396,6 +2502,19 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     ok &= check(settings_requests == 1,
         "clicking the settings gear emits exactly one settings request");
 
+    QRect anchor_available_geometry;
+    if (QScreen* screen = window.screen()) {
+        anchor_available_geometry = screen->availableGeometry();
+        if (!anchor_available_geometry.isEmpty()) {
+            window.setPosition(
+                anchor_available_geometry.left() +
+                    std::max(0, (anchor_available_geometry.width() - window.width()) / 2),
+                anchor_available_geometry.top() +
+                    std::max(0, anchor_available_geometry.height() - window.height()));
+            pump_events(app);
+        }
+    }
+
     chrome_test::Terminal_settings_controller settings_controller;
     chrome_test::Terminal_settings_window settings_window(
         engine, surface, settings_controller);
@@ -2426,6 +2545,23 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
             settings_qml_window->findChild<QQuickItem*>(
                 QStringLiteral("settings_window_titlebar")) != nullptr,
             "settings window builds its chrome titlebar");
+        if (!anchor_available_geometry.isEmpty()) {
+            ok &= check(
+                anchor_available_geometry.contains(settings_qml_window->geometry()),
+                "settings window stays inside the transient parent's available screen");
+            ok &= check(
+                settings_qml_window->property("available_width_limit").toInt() ==
+                    anchor_available_geometry.width() &&
+                    settings_qml_window->property("available_height_limit").toInt() ==
+                        anchor_available_geometry.height(),
+                "settings window adopts the transient parent's available screen extent");
+        }
+        ok &= check_settings_window_screen_scrolling(
+            app,
+            *settings_qml_window,
+            "settings window");
+        settings_window.show_window();
+        pump_events(app);
 
         auto* scheme_list = settings_qml_window->findChild<QQuickItem*>(
             QStringLiteral("scheme_list"));
@@ -2563,6 +2699,7 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     pump_events(app);
     bool unlocked_switch_visible = false;
     QQuickItem* unlocked_diagnostics_switch = nullptr;
+    QQuickWindow* unlocked_qml_window = nullptr;
     for (QWindow* top_level : QGuiApplication::topLevelWindows()) {
         auto* quick_window = qobject_cast<QQuickWindow*>(top_level);
         auto* diagnostics_switch = quick_window != nullptr
@@ -2574,10 +2711,19 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
             (diagnostics_switch != nullptr && diagnostics_switch->isVisible());
         if (diagnostics_switch != nullptr && diagnostics_switch->isVisible()) {
             unlocked_diagnostics_switch = diagnostics_switch;
+            unlocked_qml_window = quick_window;
         }
     }
     ok &= check(unlocked_switch_visible,
         "startup unlock makes the interaction diagnostics switch visible");
+    if (unlocked_qml_window != nullptr) {
+        ok &= check_settings_window_screen_scrolling(
+            app,
+            *unlocked_qml_window,
+            "unlocked settings window");
+        unlocked_settings_window.show_window();
+        pump_events(app);
+    }
     ok &= check(!surface.interaction_diagnostics_enabled(),
         "unlocking the setting alone does not start capture");
     const QString trace_path = surface.interaction_diagnostics_path();
