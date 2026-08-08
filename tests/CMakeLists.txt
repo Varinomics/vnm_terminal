@@ -20,6 +20,16 @@ add_test(
         -P "${CMAKE_CURRENT_SOURCE_DIR}/build_info_generation_tests.cmake"
 )
 
+add_test(
+    NAME vnm_terminal_qml_chrome_dependency_contract
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DVNM_TERMINAL_TEST_ROOT=${PROJECT_BINARY_DIR}/tests/qml_chrome_dependency_contract"
+        "-DVNM_TERMINAL_VERSION=${PROJECT_VERSION}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/qml_chrome_dependency_contract_tests.cmake"
+)
+
 function(vnm_terminal_require_qt_plugin_file plugin_target purpose)
     if(NOT TARGET ${plugin_target})
         message(FATAL_ERROR

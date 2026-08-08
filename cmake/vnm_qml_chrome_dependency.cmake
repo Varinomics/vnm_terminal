@@ -1,10 +1,9 @@
 set(VNM_QML_CHROME_SOURCE_DIR "" CACHE PATH
     "Path to a source checkout of vnm_qml_chrome.")
 
-# Minimum is major.minor, not the full patch version, so an app patch bump does
-# not force lockstep re-tags of vnm_qml_chrome (which release CI tracks on
-# master). Same-major compatibility is still enforced separately below.
-set(VNM_QML_CHROME_MIN_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+# The titlebar settings icon uses the Component custom-button contract from
+# 1.4. Earlier providers accept the dynamic button map but draw no icon.
+set(VNM_QML_CHROME_MIN_VERSION "1.4")
 
 if(NOT VNM_QML_CHROME_SOURCE_DIR)
     set(vnm_terminal_default_qml_chrome_dirs
