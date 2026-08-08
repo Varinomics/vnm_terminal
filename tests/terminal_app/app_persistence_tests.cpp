@@ -181,6 +181,10 @@ bool test_appearance_settings_round_trip()
         return false;
     }
 
+    const App_options default_options;
+    ok &= check(default_options.color_scheme == QStringLiteral("Classic"),
+        "app color scheme defaults to Classic");
+
     QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     writer.beginGroup(QLatin1String(k_appearance_settings_group));
     writer.setValue(QLatin1String(k_appearance_color_scheme), QStringLiteral("Solarized Dark"));

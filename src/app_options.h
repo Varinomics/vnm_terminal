@@ -46,7 +46,7 @@ struct App_options
     int                metrics_timeline_interval_ms = k_default_metrics_timeline_interval_ms;
     QString            font_family  = vnm_terminal::default_monospace_font_family();
     qreal              font_size    = vnm_terminal::k_default_font_pixel_size;
-    QString            color_scheme = QStringLiteral("Campbell");
+    QString            color_scheme = QStringLiteral("Classic");
     QSize              window_size  = QSize(900, 600);
     std::optional<QPoint> window_position;
     VNM_TerminalSurface::Alternate_screen_wheel_policy alternate_screen_wheel_policy =

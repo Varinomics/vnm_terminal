@@ -2758,8 +2758,8 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     (void)QFile::remove(trace_path);
     (void)QFile::remove(trace_path + QStringLiteral(".previous"));
 
-    ok &= check(surface.color_scheme() == QStringLiteral("Campbell"),
-        "surface defaults to the Campbell color scheme");
+    ok &= check(surface.color_scheme() == QStringLiteral("Classic"),
+        "surface defaults to the Classic color scheme");
     ok &= check(surface.available_color_schemes().size() == 17,
         "surface exposes the bundled color schemes");
     surface.set_color_scheme(QStringLiteral("Tango Dark"));
