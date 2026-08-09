@@ -76,7 +76,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.1
         with:
-          version: '6.10.1'
+          version: '6.11.1'
           arch: 'clang_64'
           archives: 'qtbase qtdeclarative'
           cache: 'true'
