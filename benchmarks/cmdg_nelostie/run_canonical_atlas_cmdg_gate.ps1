@@ -2,7 +2,7 @@ param(
     [string] $TerminalRepo = (Resolve-Path "$PSScriptRoot\..\..").Path,
     [string] $SurfaceRepo = (Resolve-Path "$PSScriptRoot\..\..\..\vnm_terminal_surface").Path,
     [string] $ArtifactTag = "canonical_atlas_cmdg_gate_$(Get-Date -Format yyyyMMdd_HHmmss)",
-    [string] $QtRoot = "C:\Qt\6.10.1\msvc2022_64",
+    [string] $QtRoot = "C:\Qt\6.11.1\msvc2022_64",
     [string] $VcvarsAll = "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat",
     [string] $SceneList = "AssemblyWinter2025;Example2D;Plasma;JuliaSetTest;ParticleVortex;Example3D",
     [string] $MotivatingScenes = "Plasma;ParticleVortex",

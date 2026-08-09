@@ -57,10 +57,11 @@ Source builds are the release baseline. Clone `vnm_terminal_surface` and
 `-DVNM_TERMINAL_SURFACE_SOURCE_DIR=<path>` and
 `-DVNM_QML_CHROME_SOURCE_DIR=<path>` during configure. `vnm_terminal_surface`
 must exactly match this app's `project()` version. `vnm_qml_chrome` must share
-the app's major version and provide at least the 1.5 titlebar contract;
+the app's major version and provide at least the 1.5 titlebar contract, which
+requires Qt 6.11.1 or newer;
 installed CMake packages must satisfy the corresponding version request. The
-release CI source-dependency baseline tracks `vnm_terminal_surface` from
-`master` and the `vnm_qml_chrome` revision declared in each platform workflow;
+release CI source-dependency baseline tracks the `master` branches of
+`vnm_terminal_surface` and `vnm_qml_chrome`;
 installed packages are supported by CMake but are not the release validation
 baseline unless a release workflow explicitly validates an installed-prefix
 build.
