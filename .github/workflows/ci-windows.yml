@@ -185,13 +185,23 @@ jobs:
         working-directory: vnm_terminal
         run: cmd.exe /d /c build_windows_packages.bat
 
-      - name: Validate MSI payload
+      - name: Validate MSI contract and payload
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path vnm_terminal/dist -Filter 'vnm_terminal_v*_windows_x64.msi' |
               Select-Object -First 1
           if (-not $msi) {
               throw 'MSI package was not created.'
+          }
+
+          $installer = New-Object -ComObject WindowsInstaller.Installer
+          $database = $installer.OpenDatabase($msi.FullName, 0)
+          $view = $database.OpenView(
+              'SELECT `Value` FROM `Property` WHERE `Property` = ''ALLUSERS''')
+          $view.Execute()
+          $record = $view.Fetch()
+          if (-not $record -or $record.StringData(1) -ne '1') {
+              throw 'MSI must request an elevated, per-machine installation.'
           }
 
           $extractDir = Join-Path $env:RUNNER_TEMP 'vnm_terminal_msi_extract'

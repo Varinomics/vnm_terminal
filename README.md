@@ -32,9 +32,9 @@ repository metadata.
 Binary packages are built for x64 systems and attached when the corresponding
 platform release build succeeds:
 
-- Windows: `vnm_terminal_v<version>_windows_x64.msi` is the normal per-user
-  installer. It adds a Start menu shortcut and an Installed Apps entry without
-  requiring administrator privileges. The portable
+- Windows: `vnm_terminal_v<version>_windows_x64.msi` is the normal per-machine
+  installer. It requests administrator approval, installs under `Program Files`,
+  and adds a Start menu shortcut and an Installed Apps entry. The portable
   `vnm_terminal_v<version>_w64.zip` remains available; unpack it and run the
   top-level `vnm_terminal.exe` launcher.
 - Linux: install `vnm-terminal_<version>_amd64.deb` with
@@ -100,8 +100,9 @@ Qt and MinGW paths, install WiX Toolset 3, and run:
 build_windows_packages.bat
 ```
 
-This produces the portable ZIP and MSI under `dist\`. The MSI is unsigned until
-a Windows code-signing certificate is configured, so Windows may show an
+This produces the portable ZIP and MSI under `dist\`. The MSI requests
+administrator approval before installing under `Program Files`. It is unsigned
+until a Windows code-signing certificate is configured, so Windows may show an
 unknown-publisher warning.
 
 On Linux, CPack produces the native packages from a configured release build:

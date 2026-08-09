@@ -172,7 +172,7 @@ if(WIN32)
     set(CPACK_WIX_VERSION 3)
     set(CPACK_WIX_UPGRADE_GUID
         "F2D514D2-2D09-4DDB-A857-B27F65DD8BC0")
-    set(CPACK_WIX_INSTALL_SCOPE perUser)
+    set(CPACK_WIX_INSTALL_SCOPE perMachine)
     set(CPACK_WIX_PRODUCT_ICON
         "${CMAKE_CURRENT_SOURCE_DIR}/src/vnm_terminal.ico")
     set(CPACK_WIX_PROGRAM_MENU_FOLDER "vnm_terminal")
