@@ -6,9 +6,12 @@ set(VNM_QML_CHROME_SOURCE_DIR "" CACHE PATH
 set(VNM_QML_CHROME_MIN_VERSION "1.4")
 
 if(NOT VNM_QML_CHROME_SOURCE_DIR)
+    # Both candidates are siblings of this repository: the checkout may sit
+    # beside it, or inside a sibling directory that groups the BSD-licensed
+    # dependencies. `..` is therefore the last segment either path may drop.
     set(vnm_terminal_default_qml_chrome_dirs
         "${CMAKE_CURRENT_SOURCE_DIR}/../vnm_qml_chrome"
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../bsd_licensed/vnm_qml_chrome")
+        "${CMAKE_CURRENT_SOURCE_DIR}/../bsd_licensed/vnm_qml_chrome")
     foreach(vnm_terminal_default_qml_chrome_candidate IN LISTS
             vnm_terminal_default_qml_chrome_dirs)
         get_filename_component(vnm_terminal_default_qml_chrome_dir
