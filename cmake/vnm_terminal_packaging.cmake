@@ -146,7 +146,16 @@ set(CPACK_PACKAGE_DESCRIPTION
 set(CPACK_PACKAGE_HOMEPAGE_URL
     "https://github.com/Varinomics/vnm_terminal")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(vnm_terminal_cpack_license "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+if(WIN32)
+    set(vnm_terminal_cpack_license
+        "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+        "${vnm_terminal_cpack_license}"
+        COPYONLY)
+endif()
+set(CPACK_RESOURCE_FILE_LICENSE "${vnm_terminal_cpack_license}")
 set(CPACK_PACKAGE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
 set(CPACK_PACKAGE_CHECKSUM SHA256)
 set(CPACK_STRIP_FILES ON)
