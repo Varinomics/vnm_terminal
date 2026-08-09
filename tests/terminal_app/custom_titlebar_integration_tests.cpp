@@ -224,6 +224,8 @@ bool check_settings_window_screen_scrolling(
         &window, QStringLiteral("settings_window_body_flickable"));
     auto* body = find_quick_item_recursive(
         &window, QStringLiteral("settings_window_body"));
+    auto* scheme_grid = find_quick_item_recursive(
+        &window, QStringLiteral("scheme_list"));
     auto* scrollbar = find_quick_item_recursive(
         &window, QStringLiteral("settings_window_body_scrollbar"));
 
@@ -234,9 +236,13 @@ bool check_settings_window_screen_scrolling(
         context + " builds its body scroller");
     ok &= check(body != nullptr,
         context + " builds its settings body");
+    ok &= check(scheme_grid != nullptr,
+        context + " builds its color-scheme grid");
     ok &= check(scrollbar != nullptr,
         context + " builds its body scrollbar");
-    if (viewport == nullptr || flickable == nullptr || body == nullptr || scrollbar == nullptr) {
+    if (viewport == nullptr || flickable == nullptr || body == nullptr ||
+        scheme_grid == nullptr || scrollbar == nullptr)
+    {
         return ok;
     }
 
@@ -258,6 +264,26 @@ bool check_settings_window_screen_scrolling(
     ok &= check(
         flickable->height() + 0.5 >= flickable->property("contentHeight").toReal(),
         context + " needs no body scrolling at its preferred extent");
+
+    const qreal preferred_flickable_height = flickable->height();
+    const qreal preferred_scheme_height    = scheme_grid->height();
+    const int expanded_height              = preferred_height + 96;
+    window.setHeight(expanded_height);
+    pump_events(app);
+
+    ok &= check(window.height() == expanded_height,
+        context + " accepts additional vertical space");
+    ok &= check(nearly_equal(body->height(), flickable->height()),
+        context + " expands its settings body to the viewport height");
+    const qreal gained_body_height = flickable->height() - preferred_flickable_height;
+    ok &= check(
+        nearly_equal(
+            scheme_grid->height(),
+            preferred_scheme_height + gained_body_height),
+        context + " assigns additional vertical space to the color-scheme grid");
+
+    window.setHeight(preferred_height);
+    pump_events(app);
 
     const int natural_height = window.property("natural_height").toInt();
     const int constrained_height = std::max(1, natural_height - 128);

@@ -707,7 +707,7 @@ R"qml(
             parent: settings_body_flickable.contentItem
             width: settings_body_flickable.width -
                 (settings_body_scrollbar.visible ? settings_body_scrollbar.width : 0)
-            height: implicitHeight
+            height: Math.max(implicitHeight, settings_body_flickable.height)
             spacing: 10
 
             S_SectionHeader { text: "Color scheme" }
