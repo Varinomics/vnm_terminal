@@ -17,6 +17,7 @@ permissions:
 
 env:
   CMAKE_BUILD_TYPE: Release
+  VNM_QML_CHROME_REF: b1b98ad02487276a7c8955d7345e3cdcdf3438d1
 
 jobs:
   build-and-test:
@@ -44,7 +45,7 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ env.VNM_QML_CHROME_REF }}
 
       - name: Checkout MSDF text
         uses: actions/checkout@v4
@@ -76,7 +77,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4.3.1
         with:
-          version: '6.11.1'
+          version: '6.10.1'
           arch: 'clang_64'
           archives: 'qtbase qtdeclarative'
           cache: 'true'

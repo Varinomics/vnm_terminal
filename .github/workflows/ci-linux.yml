@@ -17,6 +17,7 @@ defaults:
 
 env:
   CMAKE_BUILD_TYPE: Release
+  VNM_QML_CHROME_REF: b1b98ad02487276a7c8955d7345e3cdcdf3438d1
   LINUX_SYSTEM_DEPS: >-
     libgl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
     libxi-dev libxext-dev libwayland-dev libxkbcommon-dev libvulkan-dev
@@ -49,7 +50,7 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ env.VNM_QML_CHROME_REF }}
 
       - name: Install dependencies
         run: |
@@ -105,7 +106,7 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ env.VNM_QML_CHROME_REF }}
 
       - name: Install dependencies
         run: |
@@ -162,7 +163,7 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ env.VNM_QML_CHROME_REF }}
 
       - name: Checkout MSDF text
         uses: actions/checkout@v4
