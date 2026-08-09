@@ -113,6 +113,8 @@ cpack -G RPM --config build-package/CPackConfig.cmake
 
 The Linux CI package job shows the complete release configuration, stages and
 smoke-tests the install tree, and creates the AppImage from that same tree.
+GitHub Actions retains only the newest source and platform package artifacts;
+published GitHub release downloads are independent and are not pruned.
 
 ## Run
 
