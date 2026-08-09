@@ -13,6 +13,8 @@ set QT_PREFIX=C:\Qt\6.10.1\mingw_64
 set MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin
 set CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe
 set NINJA=C:\Qt\Tools\Ninja\ninja.exe
+REM Optional: cpack.exe beside CMake is used when this is unset.
+REM set CPACK=C:\Qt\Tools\CMake_64\bin\cpack.exe
 set VNM_TERMINAL_SURFACE_SOURCE_DIR=C:\plms\varinomics\vnm_terminal_surface
 set VNM_QML_CHROME_SOURCE_DIR=C:\plms\varinomics\vnm_qml_chrome
 REM Optional: if unset, build_portable.bat clones vnm_msdf_text under build_portable\_deps.

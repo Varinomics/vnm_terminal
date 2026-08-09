@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=vnm_terminal
+GenericName=Terminal Emulator
+Comment=Run command-line shells and applications
+Exec=vnm_terminal
+Icon=com.varinomics.vnm-terminal
+Categories=System;TerminalEmulator;
+Keywords=shell;prompt;command;commandline;
+StartupNotify=true
+Terminal=false

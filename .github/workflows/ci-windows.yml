@@ -122,6 +122,107 @@ jobs:
           path: vnm_terminal/dist/vnm_terminal_v*_source.zip
           if-no-files-found: error
 
+  package:
+    name: Portable ZIP and MSI (Windows x64)
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+        with:
+          path: vnm_terminal
+
+      - name: Checkout surface
+        uses: actions/checkout@v4
+        with:
+          repository: Varinomics/vnm_terminal_surface
+          path: vnm_terminal_surface
+          ref: master
+          token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
+
+      - name: Checkout chrome
+        uses: actions/checkout@v4
+        with:
+          repository: imakris/vnm_qml_chrome
+          path: vnm_qml_chrome
+          ref: master
+
+      - name: Install Qt and MinGW
+        uses: jurplel/install-qt-action@v4.3.1
+        with:
+          version: '6.10.1'
+          arch: 'win64_mingw'
+          archives: 'qtbase qtdeclarative'
+          tools: 'tools_mingw1310,qt.tools.win64_mingw1310'
+          cache: 'true'
+
+      - name: Write package build configuration
+        shell: pwsh
+        run: |
+          $config = @(
+              '@echo off',
+              "set QT_PREFIX=$env:QT_ROOT_DIR",
+              "set MINGW_BIN=$env:IQTA_TOOLS\mingw1310_64\bin",
+              "set CMAKE=$((Get-Command cmake.exe).Source)",
+              "set CPACK=$((Get-Command cpack.exe).Source)",
+              "set NINJA=$((Get-Command ninja.exe).Source)",
+              "set VNM_TERMINAL_SURFACE_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_terminal_surface",
+              "set VNM_QML_CHROME_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qml_chrome"
+          )
+          [System.IO.File]::WriteAllLines(
+              "$env:GITHUB_WORKSPACE\vnm_terminal\build_config.bat",
+              $config,
+              [System.Text.Encoding]::ASCII)
+
+      - name: Build Windows packages
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: cmd.exe /d /c build_windows_packages.bat
+
+      - name: Validate MSI payload
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path vnm_terminal/dist -Filter 'vnm_terminal_v*_windows_x64.msi' |
+              Select-Object -First 1
+          if (-not $msi) {
+              throw 'MSI package was not created.'
+          }
+
+          $extractDir = Join-Path $env:RUNNER_TEMP 'vnm_terminal_msi_extract'
+          Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $extractDir | Out-Null
+
+          $arguments = "/a `"$($msi.FullName)`" /qn TARGETDIR=`"$extractDir`""
+          $process = Start-Process msiexec.exe -ArgumentList $arguments -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+              throw "MSI administrative extraction failed with exit code $($process.ExitCode)."
+          }
+
+          $executable = Get-ChildItem -Path $extractDir -Filter vnm_terminal.exe -Recurse |
+              Select-Object -First 1
+          if (-not $executable) {
+              throw 'MSI payload does not contain vnm_terminal.exe.'
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $executable.DirectoryName 'qt.conf'))) {
+              throw 'MSI payload does not contain qt.conf beside vnm_terminal.exe.'
+          }
+
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          & $executable.FullName --help | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Upload Windows package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vnm-terminal-windows-x64
+          path: |
+            vnm_terminal/dist/vnm_terminal_v*_w64.zip
+            vnm_terminal/dist/vnm_terminal_v*_windows_x64.msi
+            vnm_terminal/dist/vnm_terminal_v*_windows_x64.msi.sha256
+          if-no-files-found: error
+
   attach-source-archive:
     name: Attach source archive (release)
     if: github.event_name == 'release'
@@ -148,3 +249,24 @@ jobs:
             exit 1
           fi
           gh release upload "${GITHUB_REF_NAME}" "${archive}" --repo "${GITHUB_REPOSITORY}" --clobber
+
+  attach-release-packages:
+    name: Attach Windows packages
+    if: github.event_name == 'release'
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download Windows package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: vnm-terminal-windows-x64
+          path: dist
+
+      - name: Attach Windows packages to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber

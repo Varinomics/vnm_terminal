@@ -29,16 +29,26 @@ Release source archives are attached to
 `tools/create_source_archive.ps1` and exclude generated CMDG build output and
 repository metadata.
 
-Binary packages may also be attached when the corresponding platform release
-build has produced them:
+Binary packages are built for x64 systems and attached when the corresponding
+platform release build succeeds:
 
-- Windows: `vnm_terminal_v<version>_w64.zip` is a portable distribution.
-  Unpack it and run the top-level `vnm_terminal.exe` launcher.
+- Windows: `vnm_terminal_v<version>_windows_x64.msi` is the normal per-user
+  installer. It adds a Start menu shortcut and an Installed Apps entry without
+  requiring administrator privileges. The portable
+  `vnm_terminal_v<version>_w64.zip` remains available; unpack it and run the
+  top-level `vnm_terminal.exe` launcher.
+- Linux: install `vnm-terminal_<version>_amd64.deb` with
+  `sudo apt install ./vnm-terminal_<version>_amd64.deb`, or install the RPM with
+  `sudo dnf install ./vnm-terminal-<version>-<release>.x86_64.rpm`. The
+  `vnm_terminal_v<version>_x86_64.AppImage` is a portable cross-distribution
+  alternative: make it executable and run it directly.
 - macOS: `vnm_terminal_v<version>_macos_x64_unnotarized.zip` contains the app
   bundle. It is not Apple-notarized; see the macOS Bundle Build section for
   the Gatekeeper quarantine step.
 
-On Linux, build from source as described below.
+The downloadable Windows and Linux packages are self-contained and carry their
+private Qt runtime. DEB and RPM are direct-download packages rather than
+distribution-maintained repository packages.
 
 ## Build
 
@@ -70,6 +80,38 @@ Visual Studio C++ environment has already been initialized:
 ```bat
 cmake --build build --target vnm_terminal --config Release
 ```
+
+## Package Builds
+
+Every package is generated from the `vnm_terminal_runtime` CMake install
+component. Configure package builds with both
+`VNM_TERMINAL_DISTRIBUTION_BUILD=ON` and
+`VNM_TERMINAL_BUILD_PACKAGES=ON`. Release package builds use an installed
+`vnm_msdf_text` dependency and
+`VNM_TERMINAL_MSDF_TEXT_RENDERER_USE_SYSTEM_LIBS=ON`, keeping dependency-owned
+install rules out of the application package.
+
+On Windows, copy `build_config.bat.example` to `build_config.bat`, set the local
+Qt and MinGW paths, install WiX Toolset 3, and run:
+
+```bat
+build_windows_packages.bat
+```
+
+This produces the portable ZIP and MSI under `dist\`. The MSI is unsigned until
+a Windows code-signing certificate is configured, so Windows may show an
+unknown-publisher warning.
+
+On Linux, CPack produces the native packages from a configured release build:
+
+```bash
+cmake --build build-package --parallel
+cpack -G DEB --config build-package/CPackConfig.cmake
+cpack -G RPM --config build-package/CPackConfig.cmake
+```
+
+The Linux CI package job shows the complete release configuration, stages and
+smoke-tests the install tree, and creates the AppImage from that same tree.
 
 ## Run
 

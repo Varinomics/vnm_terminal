@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.varinomics.vnm-terminal</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>vnm_terminal</name>
+  <summary>A cross-platform GPU-accelerated terminal emulator</summary>
+  <description>
+    <p>
+      vnm_terminal runs command-line shells and applications in a
+      GPU-accelerated terminal with scrollback, selection, configurable
+      shortcuts, and safe clipboard defaults.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.varinomics.vnm-terminal.desktop</launchable>
+  <provides>
+    <binary>vnm_terminal</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>TerminalEmulator</category>
+  </categories>
+  <url type="homepage">https://github.com/Varinomics/vnm_terminal</url>
+  <url type="bugtracker">https://github.com/Varinomics/vnm_terminal/issues</url>
+  <developer id="com.varinomics">
+    <name>Varinomics</name>
+  </developer>
+  <content_rating type="oars-1.1" />
+</component>

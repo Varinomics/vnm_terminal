@@ -17,11 +17,20 @@ option(VNM_TERMINAL_DISTRIBUTION_BUILD
 option(VNM_TERMINAL_APP_BUILD_BENCHMARKS
     "Build opt-in vnm_terminal benchmark runners"
     OFF)
+option(VNM_TERMINAL_BUILD_PACKAGES
+    "Generate self-contained platform packages from the install tree"
+    OFF)
 
 if(VNM_TERMINAL_DISTRIBUTION_BUILD AND VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
     message(FATAL_ERROR
         "VNM_TERMINAL_DISTRIBUTION_BUILD=ON requires "
         "VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=OFF")
+endif()
+
+if(VNM_TERMINAL_BUILD_PACKAGES AND NOT VNM_TERMINAL_DISTRIBUTION_BUILD)
+    message(FATAL_ERROR
+        "VNM_TERMINAL_BUILD_PACKAGES=ON requires "
+        "VNM_TERMINAL_DISTRIBUTION_BUILD=ON")
 endif()
 
 find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2)
@@ -51,7 +60,7 @@ add_custom_target(vnm_terminal_build_info ALL
     COMMENT "Refreshing build provenance"
     VERBATIM)
 
-add_executable(vnm_terminal
+set(vnm_terminal_sources
     src/main.cpp
     src/app_cli.cpp
     src/app_cli.h
@@ -85,6 +94,17 @@ add_executable(vnm_terminal
     src/terminal_window.cpp
     src/terminal_window.h
 )
+
+if(VNM_TERMINAL_BUILD_PACKAGES)
+    qt_add_executable(vnm_terminal
+        ${vnm_terminal_sources}
+        packaging/vnm_terminal_runtime_imports.qml
+    )
+else()
+    add_executable(vnm_terminal
+        ${vnm_terminal_sources}
+    )
+endif()
 
 add_dependencies(vnm_terminal vnm_terminal_build_info)
 
@@ -271,3 +291,5 @@ endif()
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
+
+include(cmake/vnm_terminal_packaging.cmake)
