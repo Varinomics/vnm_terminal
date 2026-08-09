@@ -175,6 +175,12 @@ if(WIN32)
     set(CPACK_WIX_INSTALL_SCOPE perMachine)
     set(CPACK_WIX_PRODUCT_ICON
         "${CMAKE_CURRENT_SOURCE_DIR}/src/vnm_terminal.ico")
+    # WiX renders these fixed-size assets behind the welcome/completion
+    # dialogs and across the top of the remaining installer pages.
+    set(CPACK_WIX_UI_DIALOG
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_dialog.bmp")
+    set(CPACK_WIX_UI_BANNER
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_banner.bmp")
     set(CPACK_WIX_PROGRAM_MENU_FOLDER "vnm_terminal")
     set(CPACK_WIX_PROPERTY_ARPCOMMENTS
         "Cross-platform GPU-accelerated terminal emulator")

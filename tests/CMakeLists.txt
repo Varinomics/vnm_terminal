@@ -30,6 +30,14 @@ add_test(
         -P "${CMAKE_CURRENT_SOURCE_DIR}/qml_chrome_dependency_contract_tests.cmake"
 )
 
+add_test(
+    NAME vnm_terminal_windows_packaging_asset_contract
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/windows_packaging_asset_contract_tests.cmake"
+)
+
 function(vnm_terminal_require_qt_plugin_file plugin_target purpose)
     if(NOT TARGET ${plugin_target})
         message(FATAL_ERROR
