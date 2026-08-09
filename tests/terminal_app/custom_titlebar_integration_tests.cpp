@@ -186,6 +186,31 @@ bool check_rect_equal(
     return false;
 }
 
+bool check_titlebar_mark_left_alignment(
+    const chrome_test::Terminal_qml_chrome& titlebar,
+    const VNM_TerminalSurface&               surface,
+    const std::string&                       context)
+{
+    titlebar.root_item()->ensurePolished();
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+
+    QQuickItem* const mark = find_quick_item_recursive(
+        titlebar.titlebar_item(),
+        QStringLiteral("vnm_animated_mark"));
+    bool ok = true;
+    ok &= check(mark != nullptr, context + " creates the Varinomics mark");
+    if (mark == nullptr) {
+        return ok;
+    }
+
+    const QPointF mark_origin =
+        mark->mapToItem(surface.parentItem(), QPointF(0.0, 0.0));
+    ok &= check(
+        nearly_equal(mark_origin.x(), surface.x()),
+        context + " aligns the mark's left edge with the terminal surface");
+    return ok;
+}
+
 void pump_events(QGuiApplication& app)
 {
     for (int index = 0; index < 5; ++index) {
@@ -886,6 +911,10 @@ bool test_custom_titlebar_geometry()
 
     ok &= check_rect_equal(item_rect(surface), QRectF(5.0, 31.0, 778.0, 444.0),
         "custom terminal is inset inside the content border");
+    ok &= check_titlebar_mark_left_alignment(
+        titlebar,
+        surface,
+        "custom titlebar");
     ok &= check_rect_equal(item_rect(scrollbar), QRectF(783.0, 31.0, 12.0, 444.0),
         "custom scrollbar touches the inner right frame edge");
     ok &= check(surface.y() >= titlebar.titlebar_item()->y() + titlebar.titlebar_item()->height(),
@@ -937,6 +966,10 @@ bool test_custom_titlebar_geometry()
         item_rect(hidpi_surface),
         QRectF(5.6, 31.2, 1896.8, 1043.2),
         "custom titlebar terminal rect rounds to physical pixels at fractional DPR");
+    ok &= check_titlebar_mark_left_alignment(
+        hidpi_titlebar,
+        hidpi_surface,
+        "fractional-DPR custom titlebar");
     ok &= check_rect_equal(
         item_rect(hidpi_scrollbar),
         QRectF(1902.4, 31.2, 12.0, 1043.2),
@@ -1004,6 +1037,10 @@ bool test_custom_titlebar_geometry()
         scrollbar,
         "maximized custom terminal consumes the shell content interior",
         "maximized custom scrollbar remains inside content bounds");
+    ok &= check_titlebar_mark_left_alignment(
+        titlebar,
+        surface,
+        "maximized custom titlebar");
 
     window.setWindowStates(Qt::WindowFullScreen);
     sync_chrome_window_state(titlebar, window);
@@ -1044,6 +1081,10 @@ bool test_custom_titlebar_geometry()
         scrollbar,
         "fullscreen custom terminal uses the shell content interior",
         "fullscreen custom scrollbar remains inside shell content bounds");
+    ok &= check_titlebar_mark_left_alignment(
+        titlebar,
+        surface,
+        "fullscreen custom titlebar");
 
     window.setWindowStates(Qt::WindowNoState);
     sync_chrome_window_state(titlebar, window);

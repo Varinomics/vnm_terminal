@@ -148,6 +148,11 @@ Item {
         frame_inner_edge_color: root.frame_edge_color
         device_pixel_ratio: root.device_pixel_ratio
         titlebar_height: Math.min(root.reduced_titlebar_height, root.height)
+        // Product invariant: the Varinomics mark aligns with the terminal
+        // surface itself. The shared default instead clears the larger resize
+        // hit band and moves the mark right of the surface. Keep this explicit
+        // content-edge override when changing frame or titlebar geometry.
+        titlebar_content_left_inset: frame_shell.content_interior_x
         title: root.title
         active: root.active
         maximized: root.maximized
