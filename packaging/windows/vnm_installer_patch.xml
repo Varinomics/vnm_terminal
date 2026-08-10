@@ -20,6 +20,15 @@
             Value="[ProgramFiles64Folder]vnm_terminal\"/>
         <CustomAction Id="VnmTerminalRejectUnsafePathLocation"
             Error="The command-line PATH feature requires the default Program Files installation directory."/>
+        <CustomAction Id="VnmTerminalInitializeStartMenuOption"
+            Property="VnmTerminalStartMenuSelected"
+            Value="1"/>
+        <CustomAction Id="VnmTerminalInitializeSystemPathOption"
+            Property="VnmTerminalSystemPathSelected"
+            Value="1"/>
+        <CustomAction Id="VnmTerminalInitializeDesktopOption"
+            Property="VnmTerminalDesktopSelected"
+            Value="1"/>
 
         <UI>
             <Publish Dialog="ExitDialog"
@@ -35,6 +44,19 @@
             <Custom Action="VnmTerminalRejectUnsafePathLocation"
                 After="VnmTerminalSetExpectedInstallRoot"><![CDATA[&VnmTerminalSystemPathFeature = 3 AND INSTALL_ROOT ~<> VNM_TERMINAL_EXPECTED_INSTALL_ROOT AND NOT REMOVE~="ALL"]]></Custom>
         </InstallExecuteSequence>
+
+        <!-- Costing and MigrateFeatureStates establish each feature's requested
+             state before the dialog sequence begins. Mirroring local states
+             into private checkbox properties makes fresh installs, maintenance,
+             and major upgrades all show the choice MSI will actually apply. -->
+        <InstallUISequence>
+            <Custom Action="VnmTerminalInitializeStartMenuOption"
+                After="MigrateFeatureStates">&amp;VnmTerminalStartMenuFeature = 3</Custom>
+            <Custom Action="VnmTerminalInitializeSystemPathOption"
+                After="VnmTerminalInitializeStartMenuOption">&amp;VnmTerminalSystemPathFeature = 3</Custom>
+            <Custom Action="VnmTerminalInitializeDesktopOption"
+                After="VnmTerminalInitializeSystemPathOption">&amp;VnmTerminalDesktopFeature = 3</Custom>
+        </InstallUISequence>
 
         <!-- A machine PATH must never resolve through a standard-user-writable
              install directory. The execute-sequence guard applies to full UI

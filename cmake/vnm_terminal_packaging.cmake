@@ -164,6 +164,10 @@ set(CPACK_INSTALL_CMAKE_PROJECTS
     "${CMAKE_BINARY_DIR};${PROJECT_NAME};${vnm_terminal_runtime_component};/")
 
 if(WIN32)
+    # Native Linux package identifiers conventionally use the hyphenated
+    # vnm-terminal name. Keep the Windows ProductName aligned with the app,
+    # executable, shortcuts, and Start Menu branding instead.
+    set(CPACK_PACKAGE_NAME "vnm_terminal")
     set(CPACK_GENERATOR WIX)
     set(CPACK_PACKAGE_FILE_NAME
         "vnm_terminal_v${PROJECT_VERSION}_windows_x64")
@@ -180,12 +184,13 @@ if(WIN32)
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_dialog.bmp")
     set(CPACK_WIX_UI_BANNER
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_banner.bmp")
-    set(CPACK_WIX_UI_REF "WixUI_FeatureTree")
+    set(CPACK_WIX_UI_REF "VnmTerminalInstallerUI")
     set(CPACK_WIX_EXTENSIONS WixUtilExtension)
     set(CPACK_WIX_PATCH_FILE
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_patch.xml")
     set(CPACK_WIX_EXTRA_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_features.wxs")
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_features.wxs"
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_ui.wxs")
     set(CPACK_WIX_PROPERTY_ARPCOMMENTS
         "Cross-platform GPU-accelerated terminal emulator")
     set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT

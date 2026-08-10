@@ -34,7 +34,7 @@ platform release build succeeds:
 
 - Windows: `vnm_terminal_v<version>_windows_x64.msi` is the normal per-machine
   installer. It requests administrator approval, installs under `Program Files`,
-  and adds Start Menu shortcuts by default. Its feature page can also add the
+  and adds Start Menu shortcuts by default. Its options page can also add the
   binary directory to the system `PATH` or create a public desktop shortcut;
   both are off by default. System `PATH` integration requires the default
   `Program Files` destination. The completion-page launch option is on by

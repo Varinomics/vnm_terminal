@@ -102,6 +102,8 @@ try {
 
     Assert-MsiContract ($propertyValues['ALLUSERS'] -eq '1') `
         'the package must install per-machine'
+    Assert-MsiContract ($propertyValues['ProductName'] -eq 'vnm_terminal') `
+        'the Windows product name must match the application branding'
     Assert-MsiContract (
         $propertyValues['WIXUI_EXITDIALOGOPTIONALCHECKBOX'] -eq '1') `
         'launch-after-install must be selected by default'
@@ -117,6 +119,8 @@ try {
         -not $propertyValues.ContainsKey('INSTALLLEVEL') -or
         $propertyValues['INSTALLLEVEL'] -eq '1') `
         'the feature install level must preserve the authored defaults'
+    Assert-MsiContract (-not $propertyValues.ContainsKey('ARPNOMODIFY')) `
+        'maintenance mode must allow the integration choices to be changed'
 
     $features = @(Get-MsiRows $database 'Feature' @(
         'Feature', 'Feature_Parent', 'Level', 'Display', 'Attributes'))
@@ -380,11 +384,89 @@ try {
 
     $controls = @(Get-MsiRows $database 'Control' @(
         'Dialog_', 'Control', 'Type', 'Property'))
-    $selectionTree = @($controls | Where-Object {
-        $_.Dialog_ -eq 'CustomizeDlg' -and $_.Type -eq 'SelectionTree'
+    $expectedOptionCheckBoxes = @{
+        'StartMenuCheckBox' = 'VnmTerminalStartMenuSelected'
+        'SystemPathCheckBox' = 'VnmTerminalSystemPathSelected'
+        'DesktopCheckBox' = 'VnmTerminalDesktopSelected'
+    }
+    foreach ($controlId in $expectedOptionCheckBoxes.Keys) {
+        $optionCheckBox = Get-OnlyMsiRow $controls {
+            $_.Dialog_ -eq 'VnmTerminalOptionsDlg' -and
+            $_.Control -eq $controlId
+        } "installer option check box '$controlId'"
+        Assert-MsiContract (
+            $optionCheckBox.Type -eq 'CheckBox' -and
+            $optionCheckBox.Property -eq
+                $expectedOptionCheckBoxes[$controlId]) `
+            "installer option '$controlId' must remain a check box"
+    }
+    $selectionTrees = @($controls | Where-Object {
+        $_.Type -eq 'SelectionTree'
     })
-    Assert-MsiContract ($selectionTree.Count -eq 1) `
-        'the installer UI must expose the optional MSI features'
+    Assert-MsiContract ($selectionTrees.Count -eq 0) `
+        'the installer must not expose the generic MSI feature tree'
+
+    $expectedOptionFeatures = @{
+        'VnmTerminalStartMenuFeature' = 'VnmTerminalStartMenuSelected'
+        'VnmTerminalSystemPathFeature' = 'VnmTerminalSystemPathSelected'
+        'VnmTerminalDesktopFeature' = 'VnmTerminalDesktopSelected'
+    }
+    foreach ($featureId in $expectedOptionFeatures.Keys) {
+        $propertyId = $expectedOptionFeatures[$featureId]
+        $addEvent = Get-OnlyMsiRow $controlEvents {
+            $_.Dialog_ -eq 'VnmTerminalOptionsDlg' -and
+            $_.Control_ -eq 'Next' -and
+            $_.Event -eq 'AddLocal' -and
+            $_.Argument -eq $featureId
+        } "AddLocal event for '$featureId'"
+        Assert-MsiContract ($addEvent.Condition -eq "$propertyId = 1") `
+            "checking '$propertyId' must select '$featureId'"
+        $removeEvent = Get-OnlyMsiRow $controlEvents {
+            $_.Dialog_ -eq 'VnmTerminalOptionsDlg' -and
+            $_.Control_ -eq 'Next' -and
+            $_.Event -eq 'Remove' -and
+            $_.Argument -eq $featureId
+        } "Remove event for '$featureId'"
+        Assert-MsiContract ($removeEvent.Condition -eq "NOT $propertyId") `
+            "clearing '$propertyId' must deselect '$featureId'"
+    }
+    $optionsNext = Get-OnlyMsiRow $controlEvents {
+        $_.Dialog_ -eq 'VnmTerminalOptionsDlg' -and
+        $_.Control_ -eq 'Next' -and
+        $_.Event -eq 'NewDialog' -and
+        $_.Argument -eq 'VerifyReadyDlg'
+    } 'options-page Next navigation'
+    $optionStateEvents = @($controlEvents | Where-Object {
+        $_.Dialog_ -eq 'VnmTerminalOptionsDlg' -and
+        $_.Control_ -eq 'Next' -and
+        $_.Event -in @('AddLocal', 'Remove')
+    })
+    Assert-MsiContract (
+        $optionStateEvents.Count -eq 6 -and
+        @($optionStateEvents | Where-Object {
+            [int]$_.Ordering -ge [int]$optionsNext.Ordering
+        }).Count -eq 0) `
+        'all checkbox states must be applied before leaving the options page'
+
+    [void](Get-OnlyMsiRow $controlEvents {
+        $_.Dialog_ -eq 'InstallDirDlg' -and
+        $_.Control_ -eq 'Next' -and
+        $_.Event -eq 'NewDialog' -and
+        $_.Argument -eq 'VnmTerminalOptionsDlg'
+    } 'install-directory to options-page navigation')
+    [void](Get-OnlyMsiRow $controlEvents {
+        $_.Dialog_ -eq 'MaintenanceTypeDlg' -and
+        $_.Control_ -eq 'ChangeButton' -and
+        $_.Event -eq 'NewDialog' -and
+        $_.Argument -eq 'VnmTerminalOptionsDlg'
+    } 'maintenance change to options-page navigation')
+    [void](Get-OnlyMsiRow $controlEvents {
+        $_.Dialog_ -eq 'VerifyReadyDlg' -and
+        $_.Control_ -eq 'Back' -and
+        $_.Event -eq 'NewDialog' -and
+        $_.Argument -eq 'VnmTerminalOptionsDlg'
+    } 'confirmation back to options-page navigation')
+
     $launchCheckBox = Get-OnlyMsiRow $controls {
         $_.Dialog_ -eq 'ExitDialog' -and
         $_.Control -eq 'OptionalCheckBox'
@@ -409,9 +491,48 @@ try {
 
     $uiSequence = @(Get-MsiRows $database 'InstallUISequence' @(
         'Action', 'Condition', 'Sequence'))
-    [void](Get-OnlyMsiRow $uiSequence {
+    $uiMigration = Get-OnlyMsiRow $uiSequence {
         $_.Action -eq 'MigrateFeatureStates'
-    } 'interactive feature-state migration sequence')
+    } 'interactive feature-state migration sequence'
+    $expectedInitializers = @{
+        'VnmTerminalInitializeStartMenuOption' = @(
+            'VnmTerminalStartMenuSelected',
+            '&VnmTerminalStartMenuFeature = 3')
+        'VnmTerminalInitializeSystemPathOption' = @(
+            'VnmTerminalSystemPathSelected',
+            '&VnmTerminalSystemPathFeature = 3')
+        'VnmTerminalInitializeDesktopOption' = @(
+            'VnmTerminalDesktopSelected',
+            '&VnmTerminalDesktopFeature = 3')
+    }
+    $initializerSequences = @()
+    foreach ($actionId in $expectedInitializers.Keys) {
+        $initializer = Get-OnlyMsiRow $customActions {
+            $_.Action -eq $actionId
+        } "checkbox initializer '$actionId'"
+        Assert-MsiContract (
+            $initializer.Type -eq '51' -and
+            $initializer.Source -eq $expectedInitializers[$actionId][0] -and
+            $initializer.Target -eq '1') `
+            "checkbox initializer '$actionId' has the wrong property mapping"
+        $initializerSequence = Get-OnlyMsiRow $uiSequence {
+            $_.Action -eq $actionId
+        } "checkbox initializer sequence '$actionId'"
+        Assert-MsiContract (
+            $initializerSequence.Condition -eq
+                $expectedInitializers[$actionId][1]) `
+            "checkbox initializer '$actionId' must mirror local feature state"
+        $initializerSequences += [int]$initializerSequence.Sequence
+    }
+    $firstInstallerDialog = @($uiSequence | Where-Object {
+        $_.Action -in @('WelcomeDlg', 'MaintenanceWelcomeDlg')
+    } | Sort-Object { [int]$_.Sequence } | Select-Object -First 1)[0]
+    Assert-MsiContract (
+        @($initializerSequences | Where-Object {
+            $_ -le [int]$uiMigration.Sequence -or
+            $_ -ge [int]$firstInstallerDialog.Sequence
+        }).Count -eq 0) `
+        'checkboxes must mirror migrated feature state before the first dialog'
 
     $upgradeRows = @(Get-MsiRows $database 'Upgrade' @(
         'UpgradeCode', 'Attributes', 'ActionProperty'))
