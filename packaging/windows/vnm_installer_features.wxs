@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Fragment>
+        <DirectoryRef Id="TARGETDIR">
+            <!-- ALLUSERS=1 makes these context-aware MSI directories resolve
+                 to the all-users Start Menu and public desktop. Their shortcut
+                 components still require HKCU keypaths under ICE38/ICE43 so
+                 Windows Installer can track profile resources per user. -->
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="VnmTerminalProgramMenuFolder"
+                    Name="vnm_terminal"/>
+            </Directory>
+            <Directory Id="DesktopFolder"/>
+        </DirectoryRef>
+
+        <DirectoryRef Id="VnmTerminalProgramMenuFolder">
+            <Component Id="VnmTerminalStartMenuShortcuts"
+                Guid="D53177D9-0752-46DC-87FC-065711185E1A">
+                <Shortcut Id="VnmTerminalStartMenuShortcut"
+                    Name="vnm_terminal"
+                    Description="GPU-accelerated terminal emulator"
+                    Target="[CM_DP_bin]vnm_terminal.exe"
+                    WorkingDirectory="CM_DP_bin"
+                    Icon="ProductIcon.ico"
+                    IconIndex="0"/>
+                <Shortcut Id="VnmTerminalUninstallShortcut"
+                    Name="Uninstall vnm_terminal"
+                    Description="Uninstall vnm_terminal"
+                    Target="[SystemFolder]msiexec.exe"
+                    Arguments="/x [ProductCode]"/>
+                <RemoveFolder Id="VnmTerminalRemoveProgramMenuFolder"
+                    On="uninstall"/>
+                <RegistryValue Root="HKCU"
+                    Key="Software\Varinomics\vnm-terminal\InstallerFeatures\StartMenu"
+                    Name="Installed"
+                    Type="integer"
+                    Value="1"
+                    KeyPath="yes"/>
+                <RemoveRegistryKey Id="VnmTerminalRemoveStartMenuRegistryKey"
+                    Root="HKCU"
+                    Key="Software\Varinomics\vnm-terminal\InstallerFeatures\StartMenu"
+                    Action="removeOnUninstall"/>
+            </Component>
+        </DirectoryRef>
+
+        <DirectoryRef Id="DesktopFolder">
+            <Component Id="VnmTerminalDesktopShortcut"
+                Guid="855835E3-3467-4C8E-8A1C-8AD2BC1D162A">
+                <Shortcut Id="VnmTerminalDesktopShortcutLink"
+                    Name="vnm_terminal"
+                    Description="GPU-accelerated terminal emulator"
+                    Target="[CM_DP_bin]vnm_terminal.exe"
+                    WorkingDirectory="CM_DP_bin"
+                    Icon="ProductIcon.ico"
+                    IconIndex="0"/>
+                <RegistryValue Root="HKCU"
+                    Key="Software\Varinomics\vnm-terminal\InstallerFeatures\Desktop"
+                    Name="Installed"
+                    Type="integer"
+                    Value="1"
+                    KeyPath="yes"/>
+                <RemoveRegistryKey Id="VnmTerminalRemoveDesktopRegistryKey"
+                    Root="HKCU"
+                    Key="Software\Varinomics\vnm-terminal\InstallerFeatures\Desktop"
+                    Action="removeOnUninstall"/>
+            </Component>
+        </DirectoryRef>
+
+        <DirectoryRef Id="CM_DP_bin">
+            <Component Id="VnmTerminalSystemPath"
+                Guid="3DA2C1E4-CC06-4BD0-8B9E-219A7AD40D7A">
+                <Environment Id="VnmTerminalSystemPathEntry"
+                    Action="set"
+                    Name="PATH"
+                    Part="last"
+                    System="yes"
+                    Value="[CM_DP_bin]"/>
+                <RegistryValue Root="HKLM"
+                    Key="Software\Varinomics\vnm-terminal\InstallerFeatures\Path"
+                    Name="Installed"
+                    Type="integer"
+                    Value="1"
+                    KeyPath="yes"/>
+                <RemoveRegistryKey Id="VnmTerminalRemovePathRegistryKey"
+                    Root="HKLM"
+                    Key="Software\Varinomics\vnm-terminal\InstallerFeatures\Path"
+                    Action="removeOnUninstall"/>
+            </Component>
+        </DirectoryRef>
+    </Fragment>
+
+</Wix>

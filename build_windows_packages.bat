@@ -1,7 +1,7 @@
 @echo off
 setlocal
 REM ========================================================================
-REM build_windows_packages.bat - Build the portable ZIP and per-user MSI
+REM build_windows_packages.bat - Build the portable ZIP and per-machine MSI
 REM ========================================================================
 
 cd /d "%~dp0"
@@ -48,6 +48,14 @@ for %%F in ("%~dp0dist\vnm_terminal_v*_windows_x64.msi") do (
 )
 if "%MSI_PATH%"=="" (
     echo ERROR: CPack completed without creating the expected MSI.
+    exit /b 1
+)
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass ^
+    -File "%~dp0tests\windows_msi_contract_tests.ps1" ^
+    -MsiPath "%MSI_PATH%"
+if errorlevel 1 (
+    echo ERROR: MSI contract validation failed.
     exit /b 1
 )
 

@@ -168,7 +168,6 @@ if(WIN32)
     set(CPACK_PACKAGE_FILE_NAME
         "vnm_terminal_v${PROJECT_VERSION}_windows_x64")
     set(CPACK_PACKAGE_INSTALL_DIRECTORY "vnm_terminal")
-    set(CPACK_PACKAGE_EXECUTABLES "vnm_terminal" "vnm_terminal")
     set(CPACK_WIX_VERSION 3)
     set(CPACK_WIX_UPGRADE_GUID
         "F2D514D2-2D09-4DDB-A857-B27F65DD8BC0")
@@ -181,7 +180,12 @@ if(WIN32)
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_dialog.bmp")
     set(CPACK_WIX_UI_BANNER
         "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_banner.bmp")
-    set(CPACK_WIX_PROGRAM_MENU_FOLDER "vnm_terminal")
+    set(CPACK_WIX_UI_REF "WixUI_FeatureTree")
+    set(CPACK_WIX_EXTENSIONS WixUtilExtension)
+    set(CPACK_WIX_PATCH_FILE
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_patch.xml")
+    set(CPACK_WIX_EXTRA_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_features.wxs")
     set(CPACK_WIX_PROPERTY_ARPCOMMENTS
         "Cross-platform GPU-accelerated terminal emulator")
     set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT

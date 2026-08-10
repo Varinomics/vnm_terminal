@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<CPackWiXPatch>
+    <CPackWiXFragment Id="#PRODUCT">
+        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX"
+            Value="1"/>
+        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
+            Value="Launch vnm_terminal"/>
+        <Property Id="WixShellExecTarget"
+            Value="[#CM_FP_bin.vnm_terminal.exe]"/>
+
+        <CustomAction Id="VnmTerminalLaunchAfterInstall"
+            BinaryKey="WixCA"
+            DllEntry="WixShellExec"
+            Execute="immediate"
+            Impersonate="yes"
+            Return="ignore"/>
+        <CustomAction Id="VnmTerminalSetExpectedInstallRoot"
+            Property="VNM_TERMINAL_EXPECTED_INSTALL_ROOT"
+            Value="[ProgramFiles64Folder]vnm_terminal\"/>
+        <CustomAction Id="VnmTerminalRejectUnsafePathLocation"
+            Error="The command-line PATH feature requires the default Program Files installation directory."/>
+
+        <UI>
+            <Publish Dialog="ExitDialog"
+                Control="Finish"
+                Event="DoAction"
+                Value="VnmTerminalLaunchAfterInstall"
+                Order="1">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed</Publish>
+        </UI>
+
+        <InstallExecuteSequence>
+            <Custom Action="VnmTerminalSetExpectedInstallRoot"
+                After="MigrateFeatureStates">1</Custom>
+            <Custom Action="VnmTerminalRejectUnsafePathLocation"
+                After="VnmTerminalSetExpectedInstallRoot"><![CDATA[&VnmTerminalSystemPathFeature = 3 AND INSTALL_ROOT ~<> VNM_TERMINAL_EXPECTED_INSTALL_ROOT AND NOT REMOVE~="ALL"]]></Custom>
+        </InstallExecuteSequence>
+
+        <!-- A machine PATH must never resolve through a standard-user-writable
+             install directory. The execute-sequence guard applies to full UI
+             and unattended installs; the standard Program Files destination
+             inherits the required machine-wide protection. -->
+
+        <!-- Taskbar pinning is intentionally not an installer feature.
+             Windows reserves pin requests for a running foreground app with
+             explicit user approval and directs installers not to call the API:
+             https://learn.microsoft.com/windows/apps/develop/windows-integration/pin-to-taskbar -->
+    </CPackWiXFragment>
+
+    <CPackWiXFragment Id="#PRODUCTFEATURE">
+        <!-- INSTALLLEVEL defaults to 1. Level 1 is selected by default;
+             level 2 remains visible but starts unselected. Keeping each
+             Windows integration in its own MSI feature also lets repair,
+             maintenance, upgrade, and uninstall use native MSI ownership. -->
+        <Feature Id="VnmTerminalStartMenuFeature"
+            Title="Start Menu shortcuts"
+            Description="Add vnm_terminal and its uninstaller to the Start Menu."
+            Level="1"
+            Absent="allow"
+            AllowAdvertise="no"
+            InstallDefault="local">
+            <ComponentRef Id="VnmTerminalStartMenuShortcuts"/>
+        </Feature>
+        <Feature Id="VnmTerminalSystemPathFeature"
+            Title="Command-line PATH"
+            Description="Add the vnm_terminal binary directory to the system PATH."
+            Level="2"
+            Absent="allow"
+            AllowAdvertise="no"
+            InstallDefault="local">
+            <ComponentRef Id="VnmTerminalSystemPath"/>
+        </Feature>
+        <Feature Id="VnmTerminalDesktopFeature"
+            Title="Desktop shortcut"
+            Description="Add a vnm_terminal shortcut to the public desktop."
+            Level="2"
+            Absent="allow"
+            AllowAdvertise="no"
+            InstallDefault="local">
+            <ComponentRef Id="VnmTerminalDesktopShortcut"/>
+        </Feature>
+    </CPackWiXFragment>
+</CPackWiXPatch>
