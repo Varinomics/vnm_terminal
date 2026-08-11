@@ -1311,15 +1311,21 @@ bool test_terminal_scrollbar_tracks_surface_viewport(QGuiApplication& app)
         QPainter painter(&painted_scrollbar);
         scrollbar.paint(&painter);
     }
-    const QColor gutter_color = painted_scrollbar.pixelColor(1, 3);
+    const QColor top_gutter_color = painted_scrollbar.pixelColor(1, 0);
+    const QColor bottom_gutter_color = painted_scrollbar.pixelColor(1, 199);
     int square_track_top_pixels = 0;
+    int square_track_bottom_pixels = 0;
     for (int x = 2; x < painted_scrollbar.width(); ++x) {
-        if (painted_scrollbar.pixelColor(x, 3) != gutter_color) {
+        if (painted_scrollbar.pixelColor(x, 0) != top_gutter_color) {
             ++square_track_top_pixels;
         }
+        if (painted_scrollbar.pixelColor(x, 199) != bottom_gutter_color) {
+            ++square_track_bottom_pixels;
+        }
     }
-    ok &= check(square_track_top_pixels == 10,
-        "scrollbar track paints a square top edge across its full width");
+    ok &= check(
+        square_track_top_pixels == 10 && square_track_bottom_pixels == 10,
+        "scrollbar track paints full-width square edges against both decorations");
 
     const QRectF tail_thumb = scrollbar.thumb_rect();
     ok &= check(!tail_thumb.isEmpty(),

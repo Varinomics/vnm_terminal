@@ -17,7 +17,6 @@ namespace term      = vnm_terminal::internal;
 
 namespace {
 
-constexpr qreal k_track_vertical_inset        = 3.0;
 constexpr qreal k_track_width                 = 10.0;
 constexpr qreal k_thumb_min_height            = 24.0;
 constexpr qreal k_thumb_radius                = 5.0;
@@ -319,12 +318,11 @@ QRectF scrollbar::Terminal_scrollbar::track_rect() const
 {
     const qreal track_width = std::min(k_track_width, std::max<qreal>(0.0, width()));
     const qreal left        = std::max<qreal>(0.0, width() - track_width);
-    const qreal top         = std::min(k_track_vertical_inset, std::max<qreal>(0.0, height() / 2.0));
     return QRectF(
         left,
-        top,
+        0.0,
         track_width,
-        std::max<qreal>(0.0, height() - top * 2.0));
+        std::max<qreal>(0.0, height()));
 }
 
 qreal scrollbar::Terminal_scrollbar::thumb_height(qreal track_height) const
