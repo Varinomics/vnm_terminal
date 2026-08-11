@@ -2,24 +2,49 @@
 
 [![CI Linux](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml) [![CI Windows](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml) [![CI macOS](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-macos.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-macos.yml)
 
-`vnm_terminal` is a cross-platform terminal emulator for Windows, macOS, and
-Linux. It is built on
+`vnm_terminal` is a focused, single-session terminal emulator for Windows,
+macOS, and Linux. It starts the platform's default shell or an explicit command
+and keeps one terminal session per window; tabs, splits, and connection
+management are outside the application's scope. It is built on
 [`vnm_terminal_surface`](https://github.com/Varinomics/vnm_terminal_surface),
 which provides terminal parsing, process hosting (ConPTY/PTY), screen state,
 and GPU-accelerated rendering, while this repository owns the application
 window, command-line options, window chrome, and packaging-facing behavior.
 
-Notable behavior:
+![vnm_terminal hosting Codex as an example interactive child process](docs/images/terminal_session.png)
 
+*An interactive child process in `vnm_terminal`; the row-change timestamp is
+shown at the right.*
+
+<p align="center">
+  <img
+    src="docs/images/settings.png"
+    alt="vnm_terminal appearance and behavior settings"
+    width="60%">
+</p>
+
+<p align="center"><em>Built-in appearance and behavior settings.</em></p>
+
+Highlights:
+
+- Native ConPTY/PTY process hosting with alternate-screen applications, cursor
+  addressing, keyboard and mouse reporting, bracketed paste, selection, IME
+  input, and terminal replies.
 - GPU glyph-atlas text rendering with MSDF and glyph renderers and LCD
   subpixel modes.
+- Reproducible terminal-cell widths from an owned
+  [Unicode 16.0 policy](https://github.com/Varinomics/vnm_terminal_surface/blob/master/docs/unicode_width_policy.md)
+  rather than rendering-library glyph metrics.
+- With the built-in chrome, a row timestamp tooltip shows when the content under
+  the pointer last changed.
+- Bundled color schemes, font and rendering controls, scrollback settings, and
+  persisted window and appearance configuration.
 - Built-in window chrome on validated platforms, with `--native-titlebar` to
   use the platform frame instead.
 - Safe clipboard defaults: OSC 52 clipboard writes from the hosted program are
   denied unless explicitly allowed with `--osc52-clipboard allow`.
-- Configurable paste shortcuts (`--paste-shortcut`) and DEC
-  synchronized-output scroll policy
-  (`--synchronized-output-scroll-policy`).
+- DEC synchronized output keeps partial updates hidden until publication, with
+  a configurable scroll policy (`--synchronized-output-scroll-policy`).
 
 ## Download
 
