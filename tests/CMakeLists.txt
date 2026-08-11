@@ -252,6 +252,21 @@ vnm_terminal_add_target_test(vnm_terminal_app_cli
         ${vnm_terminal_qt_unscaled_environment}
 )
 
+add_executable(vnm_terminal_app_hyperlink_policy
+    terminal_app/app_hyperlink_policy_tests.cpp
+    "${PROJECT_SOURCE_DIR}/src/app_hyperlink_policy.cpp"
+)
+
+target_link_libraries(vnm_terminal_app_hyperlink_policy PRIVATE
+    Qt6::Core
+)
+
+set_target_properties(vnm_terminal_app_hyperlink_policy PROPERTIES
+    AUTOMOC OFF
+)
+
+vnm_terminal_add_target_test(vnm_terminal_app_hyperlink_policy)
+
 add_executable(vnm_terminal_backend_output_capture_probe
     terminal_app/backend_output_capture_probe.cpp
 )
@@ -1241,6 +1256,7 @@ set(vnm_terminal_test_process_targets
     vnm_terminal_title_metadata
     vnm_terminal_app_presentation_metrics
     vnm_terminal_app_cli
+    vnm_terminal_app_hyperlink_policy
     vnm_terminal_custom_titlebar_integration
     vnm_terminal_app_persistence
 )

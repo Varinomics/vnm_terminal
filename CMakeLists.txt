@@ -70,6 +70,8 @@ set(vnm_terminal_sources
     src/app_clipboard_policy.h
     src/app_common.cpp
     src/app_common.h
+    src/app_hyperlink_policy.cpp
+    src/app_hyperlink_policy.h
     src/app_metrics.cpp
     src/app_metrics.h
     src/app_options.cpp

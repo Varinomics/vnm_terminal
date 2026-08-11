@@ -17,6 +17,9 @@ Notable behavior:
   use the platform frame instead.
 - Safe clipboard defaults: OSC 52 clipboard writes from the hosted program are
   denied unless explicitly allowed with `--osc52-clipboard allow`.
+- Explicit OSC 8 links request activation only on Ctrl+left-click. The app
+  dispatches absolute HTTP, HTTPS, and mailto targets; other schemes are
+  rejected.
 - Configurable paste shortcuts (`--paste-shortcut`) and DEC
   synchronized-output scroll policy
   (`--synchronized-output-scroll-policy`).

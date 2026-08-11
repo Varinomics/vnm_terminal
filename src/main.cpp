@@ -2,6 +2,7 @@
 #include "app_clipboard_reader.h"
 #include "app_clipboard_policy.h"
 #include "app_common.h"
+#include "app_hyperlink_policy.h"
 #include "app_metrics.h"
 #include "app_options.h"
 #include "app_profile_text.h"
@@ -29,6 +30,7 @@
 #include <QByteArray>
 #include <QColor>
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QGuiApplication>
@@ -46,6 +48,7 @@
 #include <QStringList>
 #include <QSurfaceFormat>
 #include <QTimer>
+#include <QUrl>
 #include <QWindow>
 #include <QtGlobal>
 
@@ -87,6 +90,7 @@ using chrome::default_window_title;
 using chrome::enum_key;
 using chrome::environment_or_default;
 using chrome::handle_clipboard_write_request;
+using chrome::validated_terminal_hyperlink_url;
 using chrome::install_wheel_delivery_indicator_filter;
 using chrome::k_custom_titlebar_default_enabled;
 using chrome::k_custom_titlebar_height;
@@ -561,6 +565,20 @@ int main(int argc, char** argv)
 
     connect_terminal_metadata_to_chrome(*surface, window, titlebar_ptr);
     connect_row_timestamp_tooltip_to_chrome(*surface, titlebar_ptr);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::explicit_hyperlink_activation_requested,
+        surface,
+        [](const QByteArray& target) {
+            const std::optional<QUrl> url = validated_terminal_hyperlink_url(target);
+            if (!url.has_value()) {
+                return;
+            }
+
+            if (!QDesktopServices::openUrl(*url)) {
+                print_error(QStringLiteral("hyperlink could not be opened"));
+            }
+        });
     QObject::connect(
         surface,
         &VNM_TerminalSurface::clipboard_write_requested,
