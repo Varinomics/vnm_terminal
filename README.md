@@ -81,14 +81,14 @@ vnm_terminal [application options] [-- command [arguments...]]
 
 Common application options:
 
-| Option | Purpose |
-| --- | --- |
-| `--window-size <width>x<height>` | Initial window dimensions. |
-| `--native-titlebar` | Platform-provided window frame. |
-| `--text-renderer auto|msdf|glyph` | Terminal text-renderer policy. |
-| `--lcd-subpixel auto|none|rgb|bgr|vrgb|vbgr` | MSDF LCD sampling policy. |
-| `--paste-shortcut <mode>` | Configurable paste-shortcut policy. |
-| `--synchronized-output-scroll-policy defer|immediate-public` | Scroll behavior during DEC synchronized output. |
+| Option | Values | Purpose |
+| --- | --- | --- |
+| `--window-size` | `<width>x<height>` | Initial window dimensions. |
+| `--native-titlebar` | — | Platform-provided window frame. |
+| `--text-renderer` | `auto`, `msdf`, `glyph` | Terminal text-renderer policy. |
+| `--lcd-subpixel` | `auto`, `none`, `rgb`, `bgr`, `vrgb`, `vbgr` | MSDF LCD sampling policy. |
+| `--paste-shortcut` | `<mode>` | Configurable paste-shortcut policy. |
+| `--synchronized-output-scroll-policy` | `defer`, `immediate-public` | Scroll behavior during DEC synchronized output. |
 
 Example:
 
