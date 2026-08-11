@@ -24,6 +24,7 @@
 #include <QKeyEvent>
 #include <QMimeData>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPointF>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -1303,6 +1304,22 @@ bool test_terminal_scrollbar_tracks_surface_viewport(QGuiApplication& app)
         "scrollbar test surface has scrollback rows");
     ok &= check(scrollbar.scrollbar_visible(),
         "scrollbar becomes visible when surface has scrollback");
+
+    QImage painted_scrollbar(12, 200, QImage::Format_ARGB32_Premultiplied);
+    painted_scrollbar.fill(Qt::transparent);
+    {
+        QPainter painter(&painted_scrollbar);
+        scrollbar.paint(&painter);
+    }
+    const QColor gutter_color = painted_scrollbar.pixelColor(1, 3);
+    int square_track_top_pixels = 0;
+    for (int x = 2; x < painted_scrollbar.width(); ++x) {
+        if (painted_scrollbar.pixelColor(x, 3) != gutter_color) {
+            ++square_track_top_pixels;
+        }
+    }
+    ok &= check(square_track_top_pixels == 10,
+        "scrollbar track paints a square top edge across its full width");
 
     const QRectF tail_thumb = scrollbar.thumb_rect();
     ok &= check(!tail_thumb.isEmpty(),

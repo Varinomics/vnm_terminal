@@ -177,7 +177,7 @@ void scrollbar::Terminal_scrollbar::paint(QPainter* painter)
     const bool   active = m_hovered || m_drag_active;
     const QRectF track  = track_rect();
     painter->setBrush(track_color(active));
-    painter->drawRoundedRect(track, k_thumb_radius, k_thumb_radius);
+    painter->drawRect(track);
 
     painter->setBrush(thumb_color(active));
     painter->drawRoundedRect(thumb_rect(), k_thumb_radius, k_thumb_radius);
