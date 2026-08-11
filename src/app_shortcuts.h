@@ -17,6 +17,15 @@ enum class Paste_shortcut_policy
     PLATFORM_DEFAULT,
 };
 
+enum class Search_shortcut_action
+{
+    NONE,
+    SHOW,
+    NEXT,
+    PREVIOUS,
+    DISMISS,
+};
+
 // Decide whether a key press should paste under the given policy. The caller
 // pre-masks modifiers to Ctrl|Shift|Alt|Meta; the predicate masks too so it is
 // safe to call with raw modifiers. PLATFORM_DEFAULT includes macOS Cmd+V; the
@@ -25,6 +34,12 @@ bool paste_shortcut_should_paste(
     Paste_shortcut_policy   policy,
     int                     key,
     Qt::KeyboardModifiers   modifiers);
+
+Search_shortcut_action terminal_search_shortcut_action(
+    int                     key,
+    Qt::KeyboardModifiers   modifiers,
+    bool                    search_ui_visible,
+    bool                    query_active);
 
 class Terminal_shortcut_filter final : public QObject
 {
@@ -35,8 +50,14 @@ public:
         VNM_TerminalSurface*  surface,
         Paste_shortcut_policy paste_policy = Paste_shortcut_policy::PLATFORM_DEFAULT);
 
+    void set_search_ui_visible(bool visible);
+
 signals:
     void settings_requested();
+    void search_requested();
+    void search_next_requested();
+    void search_previous_requested();
+    void search_dismiss_requested();
 
 protected:
     bool eventFilter(QObject*, QEvent* event) override;
@@ -47,6 +68,7 @@ private:
 
     VNM_TerminalSurface*  m_surface      = nullptr;
     Paste_shortcut_policy m_paste_policy = Paste_shortcut_policy::PLATFORM_DEFAULT;
+    bool                  m_search_ui_visible = false;
 };
 
 } // namespace vnm_terminal::terminal_app

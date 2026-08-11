@@ -88,6 +88,8 @@ set(vnm_terminal_sources
     src/qml_chrome.h
     src/terminal_scrollbar.cpp
     src/terminal_scrollbar.h
+    src/terminal_search_bar.cpp
+    src/terminal_search_bar.h
     src/terminal_settings_controller.cpp
     src/terminal_settings_controller.h
     src/terminal_settings_window.cpp

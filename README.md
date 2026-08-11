@@ -46,6 +46,8 @@ Highlights:
 - Explicit OSC 8 links request activation only on Ctrl+left-click. The app
   dispatches absolute HTTP, HTTPS, and mailto targets; other schemes are
   rejected.
+- Retained terminal output is searchable from a compact overlay without
+  exposing unpublished synchronized output.
 - DEC synchronized output keeps partial updates hidden until publication, with
   a configurable scroll policy (`--synchronized-output-scroll-policy`).
 
@@ -199,6 +201,12 @@ values are case-insensitive. Copy shortcuts are unaffected.
 Copy on selection is disabled by default. Enable **Copy on selection** under
 Settings > Behavior to copy completed mouse selections to the system clipboard
 as plain text. Explicit copy shortcuts remain available when it is enabled.
+
+Press Ctrl+F (Cmd+F on macOS also works) to open terminal search. Search is a
+case-sensitive literal over retained physical rows; it does not join wrapped
+fragments. Enter, F3, or Ctrl+G selects the next match, while Shift+Enter,
+Shift+F3, or Ctrl+Shift+G selects the previous match. Navigation wraps. Escape
+or the close button dismisses the overlay and clears its highlights.
 
 Synchronized-output scrolling is deferred until content publication by default.
 Pass `--synchronized-output-scroll-policy immediate-public` before `--` to

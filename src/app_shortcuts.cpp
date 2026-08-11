@@ -39,6 +39,49 @@ bool paste_shortcut_should_paste(
     }
 }
 
+Search_shortcut_action terminal_search_shortcut_action(
+    int                     key,
+    Qt::KeyboardModifiers   modifiers,
+    bool                    search_ui_visible,
+    bool                    query_active)
+{
+    const Qt::KeyboardModifiers masked =
+        modifiers &
+        (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
+    const bool search_modifier = masked == Qt::ControlModifier
+#if defined(Q_OS_MACOS)
+        || masked == Qt::MetaModifier
+#endif
+        ;
+    const bool reverse_search_modifier =
+        masked == (Qt::ControlModifier | Qt::ShiftModifier)
+#if defined(Q_OS_MACOS)
+        || masked == (Qt::MetaModifier | Qt::ShiftModifier)
+#endif
+        ;
+
+    if (key == Qt::Key_F && search_modifier) {
+        return Search_shortcut_action::SHOW;
+    }
+    if (search_ui_visible && key == Qt::Key_Escape && masked == Qt::NoModifier) {
+        return Search_shortcut_action::DISMISS;
+    }
+    if (!query_active) {
+        return Search_shortcut_action::NONE;
+    }
+    if ((key == Qt::Key_F3 && masked == Qt::NoModifier) ||
+        (key == Qt::Key_G && search_modifier))
+    {
+        return Search_shortcut_action::NEXT;
+    }
+    if ((key == Qt::Key_F3 && masked == Qt::ShiftModifier) ||
+        (key == Qt::Key_G && reverse_search_modifier))
+    {
+        return Search_shortcut_action::PREVIOUS;
+    }
+    return Search_shortcut_action::NONE;
+}
+
 Terminal_shortcut_filter::Terminal_shortcut_filter(
     VNM_TerminalSurface*  surface,
     Paste_shortcut_policy paste_policy)
@@ -47,6 +90,11 @@ Terminal_shortcut_filter::Terminal_shortcut_filter(
     m_surface(surface),
     m_paste_policy(paste_policy)
 {}
+
+void Terminal_shortcut_filter::set_search_ui_visible(bool visible)
+{
+    m_search_ui_visible = visible;
+}
 
 bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
 {
@@ -62,6 +110,36 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
         "app-shortcut",
         "key-press",
         *key_event);
+
+    const Search_shortcut_action search_action = terminal_search_shortcut_action(
+        key_event->key(),
+        modifiers,
+        m_search_ui_visible,
+        !m_surface->search_query().isEmpty());
+    switch (search_action) {
+        case Search_shortcut_action::SHOW:
+            m_surface->record_interaction_diagnostic(
+                "app-shortcut", "routed", QStringLiteral("search"));
+            emit search_requested();
+            return true;
+        case Search_shortcut_action::NEXT:
+            m_surface->record_interaction_diagnostic(
+                "app-shortcut", "routed", QStringLiteral("search-next"));
+            emit search_next_requested();
+            return true;
+        case Search_shortcut_action::PREVIOUS:
+            m_surface->record_interaction_diagnostic(
+                "app-shortcut", "routed", QStringLiteral("search-previous"));
+            emit search_previous_requested();
+            return true;
+        case Search_shortcut_action::DISMISS:
+            m_surface->record_interaction_diagnostic(
+                "app-shortcut", "routed", QStringLiteral("search-dismiss"));
+            emit search_dismiss_requested();
+            return true;
+        case Search_shortcut_action::NONE:
+            break;
+    }
 
     if (key_event->key() == Qt::Key_Comma) {
         // Settings shortcut: Ctrl+, everywhere, Cmd+, on macOS (the platform

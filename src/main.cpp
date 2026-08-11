@@ -10,6 +10,7 @@
 #include "app_shortcuts.h"
 #include "qml_chrome.h"
 #include "terminal_scrollbar.h"
+#include "terminal_search_bar.h"
 #include "terminal_settings_controller.h"
 #include "terminal_settings_window.h"
 #include "terminal_window.h"
@@ -515,6 +516,40 @@ int main(int argc, char** argv)
     auto* shortcut_filter =
         new Terminal_shortcut_filter(surface, options.paste_shortcut_policy);
     window.installEventFilter(shortcut_filter);
+    auto search_bar = std::make_unique<chrome::Terminal_search_bar>(
+        chrome_engine,
+        window,
+        *surface);
+    if (!search_bar->is_valid()) {
+        print_error(QStringLiteral("failed to create terminal search bar: %1")
+            .arg(search_bar->error_string()));
+        return k_exit_start_failed;
+    }
+    QObject::connect(
+        shortcut_filter,
+        &Terminal_shortcut_filter::search_requested,
+        search_bar.get(),
+        &chrome::Terminal_search_bar::show_search);
+    QObject::connect(
+        shortcut_filter,
+        &Terminal_shortcut_filter::search_next_requested,
+        surface,
+        [surface] { (void)surface->search_next(); });
+    QObject::connect(
+        shortcut_filter,
+        &Terminal_shortcut_filter::search_previous_requested,
+        surface,
+        [surface] { (void)surface->search_previous(); });
+    QObject::connect(
+        shortcut_filter,
+        &Terminal_shortcut_filter::search_dismiss_requested,
+        search_bar.get(),
+        &chrome::Terminal_search_bar::dismiss_search);
+    QObject::connect(
+        search_bar.get(),
+        &chrome::Terminal_search_bar::visibility_changed,
+        shortcut_filter,
+        &Terminal_shortcut_filter::set_search_ui_visible);
 
     const auto persist_interaction = [persistence_enabled, surface] {
         if (!persistence_enabled) {

@@ -17,6 +17,7 @@
 #include <QDateTime>
 #include <QEventLoop>
 #include <QFile>
+#include <QFont>
 #include <QGuiApplication>
 #include <QImage>
 #include <QJsonObject>
@@ -2214,6 +2215,190 @@ bool test_paste_shortcut_should_paste_predicate()
     return ok;
 }
 
+bool test_search_shortcut_predicate()
+{
+    using chrome_test::Search_shortcut_action;
+    using chrome_test::terminal_search_shortcut_action;
+
+    const Qt::KeyboardModifiers ctrl = Qt::ControlModifier;
+    const Qt::KeyboardModifiers ctrl_shift =
+        Qt::ControlModifier | Qt::ShiftModifier;
+
+    bool ok = true;
+    ok &= check(
+        terminal_search_shortcut_action(
+            Qt::Key_F, ctrl, false, false) == Search_shortcut_action::SHOW,
+        "Ctrl+F shows terminal search without an active query");
+    ok &= check(
+        terminal_search_shortcut_action(
+            Qt::Key_F3, Qt::NoModifier, true, true) == Search_shortcut_action::NEXT,
+        "F3 navigates to the next active terminal match");
+    ok &= check(
+        terminal_search_shortcut_action(
+            Qt::Key_F3, Qt::ShiftModifier, true, true) ==
+                Search_shortcut_action::PREVIOUS,
+        "Shift+F3 navigates to the previous active terminal match");
+    ok &= check(
+        terminal_search_shortcut_action(
+            Qt::Key_G, ctrl, true, true) == Search_shortcut_action::NEXT &&
+        terminal_search_shortcut_action(
+            Qt::Key_G, ctrl_shift, true, true) == Search_shortcut_action::PREVIOUS,
+        "Ctrl+G and Ctrl+Shift+G navigate active terminal search");
+    ok &= check(
+        terminal_search_shortcut_action(
+            Qt::Key_F3, Qt::NoModifier, false, false) == Search_shortcut_action::NONE,
+        "F3 remains terminal input when no query is active");
+    ok &= check(
+        terminal_search_shortcut_action(
+            Qt::Key_Escape, Qt::NoModifier, true, false) ==
+                Search_shortcut_action::DISMISS &&
+        terminal_search_shortcut_action(
+            Qt::Key_Escape, Qt::NoModifier, false, false) ==
+                Search_shortcut_action::NONE,
+        "Escape dismisses only a visible search bar");
+    ok &= check(
+        terminal_search_shortcut_action(
+            Qt::Key_F, Qt::AltModifier, false, false) == Search_shortcut_action::NONE,
+        "unrelated modifier chords are not captured as search shortcuts");
+
+#if defined(Q_OS_MACOS)
+    ok &= check(
+        terminal_search_shortcut_action(
+            Qt::Key_F, Qt::MetaModifier, false, false) == Search_shortcut_action::SHOW,
+        "Cmd+F shows terminal search on macOS");
+#endif
+    return ok;
+}
+
+bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
+{
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(480, 280);
+    VNM_TerminalSurface surface(window.contentItem());
+    chrome_test::Terminal_scrollbar scrollbar(window.contentItem());
+    surface.setX(12);
+    surface.setY(18);
+    surface.setWidth(444);
+    surface.setHeight(246);
+    scrollbar.setX(456);
+    scrollbar.setY(18);
+    scrollbar.setWidth(12);
+    scrollbar.setHeight(246);
+    scrollbar.set_surface(&surface);
+
+    chrome_test::Terminal_search_bar search_bar(engine, window, surface);
+    bool ok = true;
+    ok &= check(search_bar.is_valid(), "terminal search bar QML loads");
+    if (!search_bar.is_valid()) {
+        std::cerr << search_bar.error_string().toStdString() << '\n';
+        return ok;
+    }
+
+    window.show();
+    pump_events(app);
+    ok &= check(!search_bar.is_visible(), "terminal search bar starts hidden");
+
+    int visibility_changes = 0;
+    QObject::connect(
+        &search_bar,
+        &chrome_test::Terminal_search_bar::visibility_changed,
+        &search_bar,
+        [&visibility_changes](bool) { ++visibility_changes; });
+    search_bar.show_search();
+    pump_events(app);
+
+    QQuickItem* const root = search_bar.root_item();
+    QQuickItem* const input = root != nullptr
+        ? root->findChild<QQuickItem*>(
+            QStringLiteral("terminal_search_query_input"))
+        : nullptr;
+    QQuickItem* const panel = find_quick_item_recursive(
+        root,
+        QStringLiteral("terminal_search_bar_panel"));
+    QQuickItem* const left_edge = find_quick_item_recursive(
+        root,
+        QStringLiteral("terminal_search_left_edge"));
+    QQuickItem* const right_edge = find_quick_item_recursive(
+        root,
+        QStringLiteral("terminal_search_right_edge"));
+    QQuickItem* const bottom_edge = find_quick_item_recursive(
+        root,
+        QStringLiteral("terminal_search_bottom_edge"));
+    QQuickItem* const previous_icon = find_quick_item_recursive(
+        root,
+        QStringLiteral("terminal_search_previous_icon"));
+    QQuickItem* const next_icon = find_quick_item_recursive(
+        root,
+        QStringLiteral("terminal_search_next_icon"));
+    ok &= check(search_bar.is_visible() && root != nullptr && root->isVisible(),
+        "showing search exposes the restrained overlay");
+    ok &= check(input != nullptr && input->hasActiveFocus(),
+        "showing search focuses its query input");
+    ok &= check(
+        panel != nullptr &&
+        nearly_equal(panel->height(), 30.0) &&
+        nearly_equal(panel->y(), surface.y()) &&
+        nearly_equal(panel->x() + panel->width(), root->width() - surface.x()) &&
+        nearly_equal(panel->property("radius").toReal(), 0.0),
+        "search strip is compact, square, and flush with the top-right decoration");
+    const QColor expected_edge_color =
+        chrome_test::terminal_chrome_frame_edge_color(search_bar.chrome_active());
+    ok &= check(
+        panel != nullptr &&
+        panel->property("color").value<QColor>() == search_bar.chrome_background_color() &&
+        left_edge   != nullptr &&
+        right_edge  != nullptr &&
+        bottom_edge != nullptr &&
+        left_edge->property("color").value<QColor>()   == expected_edge_color &&
+        right_edge->property("color").value<QColor>()  == expected_edge_color &&
+        bottom_edge->property("color").value<QColor>() == expected_edge_color &&
+        find_quick_item_recursive(
+            root,
+            QStringLiteral("terminal_search_top_edge")) == nullptr,
+        "search strip reuses the live chrome palette and omits a top border");
+    ok &= check(
+        previous_icon != nullptr &&
+        next_icon     != nullptr &&
+        previous_icon->property("text").toString() == scalar_text(0xf139) &&
+        next_icon->property("text").toString()     == scalar_text(0xf13a) &&
+        previous_icon->property("font").value<QFont>().family() ==
+            QStringLiteral("FontAwesome") &&
+        next_icon->property("font").value<QFont>().family() ==
+            QStringLiteral("FontAwesome"),
+        "search navigation uses the requested Font Awesome up/down glyphs");
+
+    surface.set_search_query(QStringLiteral("needle"));
+    pump_events(app);
+    ok &= check(
+        surface.search_result_state() ==
+            VNM_TerminalSurface::Search_result_state::SOURCE_UNAVAILABLE &&
+        search_bar.result_text() == QStringLiteral("Unavailable"),
+        "search bar reports a query whose session source is unavailable");
+
+    auto backend = std::make_unique<Metadata_seed_backend>(numbered_scroll_lines(80));
+    const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+        surface,
+        std::move(backend),
+        {QStringLiteral("search-scrollbar-seed")});
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    pump_events(app);
+    ok &= check(started && scrollbar.scrollbar_visible(),
+        "search bar fixture exposes a visible scrollbar after retained output");
+    ok &= check(
+        panel != nullptr &&
+        nearly_equal(panel->x() + panel->width(), scrollbar.x()),
+        "visible scrollbar remains unobscured beside the search strip");
+
+    search_bar.dismiss_search();
+    pump_events(app);
+    ok &= check(!search_bar.is_visible() && surface.search_query().isEmpty(),
+        "dismissing search hides the overlay and clears matches");
+    ok &= check(visibility_changes == 2,
+        "search bar publishes one visibility transition per show and dismiss");
+    return ok;
+}
+
 bool test_clipboard_broker_mode_argument_detection()
 {
     using chrome_test::clipboard_broker_mode_requested;
@@ -2948,6 +3133,8 @@ int main(int argc, char** argv)
     ok &= test_surface_option_application_helpers();
     ok &= test_row_timestamp_tooltip_chrome(app);
     ok &= test_paste_shortcut_should_paste_predicate();
+    ok &= test_search_shortcut_predicate();
+    ok &= test_terminal_search_bar_lifecycle(app);
     ok &= test_clipboard_broker_mode_argument_detection();
     ok &= test_paste_shortcut_consumes_null_clipboard_reader(app);
     ok &= test_copy_on_select_copies_completed_plain_text_selection(app);
