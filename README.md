@@ -2,19 +2,41 @@
 
 [![CI Linux](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml) [![CI Windows](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml) [![CI macOS](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-macos.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-macos.yml)
 
+> **Latest release:** [Windows installer and other platform downloads](https://github.com/Varinomics/vnm_terminal/releases/latest)
+>
+> The primary Windows package is
+> `vnm_terminal_v<version>_windows_x64.msi`.
+
 `vnm_terminal` is a focused, single-session terminal emulator for Windows,
-macOS, and Linux. It starts the platform's default shell or an explicit command
-and keeps one terminal session per window; tabs, splits, and connection
-management are outside the application's scope. It is built on
+macOS, and Linux. Each window hosts the platform's default shell or one explicit
+command. Tabs, splits, and connection management are outside the application's
+scope.
+
+The application is built on
 [`vnm_terminal_surface`](https://github.com/Varinomics/vnm_terminal_surface),
-which provides terminal parsing, process hosting (ConPTY/PTY), screen state,
-and GPU-accelerated rendering, while this repository owns the application
-window, command-line options, window chrome, and packaging-facing behavior.
+which owns terminal parsing, ConPTY/PTY process hosting, screen state, and
+GPU-accelerated rendering.
 
-![vnm_terminal hosting Codex as an example interactive child process](docs/images/terminal_session.png)
+![vnm_terminal hosting an interactive child process](docs/images/terminal_session.png)
 
-*An interactive child process in `vnm_terminal`; the row-change timestamp is
-shown at the right.*
+*An interactive child process with a row-change timestamp at the right.*
+
+## Highlights
+
+- Native ConPTY/PTY hosting with alternate-screen applications, keyboard and
+  mouse reporting, bracketed paste, selection, and IME input.
+- GPU glyph-atlas text rendering with automatic MSDF and glyph-renderer
+  selection, including LCD subpixel modes.
+- Reproducible terminal-cell widths based on an owned
+  [Unicode 16.0 policy](https://github.com/Varinomics/vnm_terminal_surface/blob/master/docs/unicode_width_policy.md).
+- Built-in window chrome, color schemes, font controls, scrollback settings,
+  and persisted appearance and window configuration.
+- Retained-output search with result navigation and synchronized-output-safe
+  publication semantics.
+- Explicit OSC 8 hyperlink interaction with host-side HTTP, HTTPS, and mailto
+  scheme validation.
+- Safe clipboard defaults: terminal-originated OSC 52 writes remain denied
+  unless the application policy explicitly allows them.
 
 <p align="center">
   <img
@@ -25,295 +47,81 @@ shown at the right.*
 
 <p align="center"><em>Built-in appearance and behavior settings.</em></p>
 
-Highlights:
+## Release packages
 
-- Native ConPTY/PTY process hosting with alternate-screen applications, cursor
-  addressing, keyboard and mouse reporting, bracketed paste, selection, IME
-  input, and terminal replies.
-- GPU glyph-atlas text rendering with MSDF and glyph renderers and LCD
-  subpixel modes.
-- Reproducible terminal-cell widths from an owned
-  [Unicode 16.0 policy](https://github.com/Varinomics/vnm_terminal_surface/blob/master/docs/unicode_width_policy.md)
-  rather than rendering-library glyph metrics.
-- With the built-in chrome, a row timestamp tooltip shows when the content under
-  the pointer last changed.
-- Bundled color schemes, font and rendering controls, scrollback settings, and
-  persisted window and appearance configuration.
-- Built-in window chrome on validated platforms, with `--native-titlebar` to
-  use the platform frame instead.
-- Safe clipboard defaults: OSC 52 clipboard writes from the hosted program are
-  denied unless explicitly allowed with `--osc52-clipboard allow`.
-- Explicit OSC 8 links request activation only on Ctrl+left-click. The app
-  dispatches absolute HTTP, HTTPS, and mailto targets; other schemes are
-  rejected.
-- Retained terminal output is searchable from a compact overlay without
-  exposing unpublished synchronized output.
-- DEC synchronized output keeps partial updates hidden until publication, with
-  a configurable scroll policy (`--synchronized-output-scroll-policy`).
+All published packages are available from the
+[latest release](https://github.com/Varinomics/vnm_terminal/releases/latest).
 
-## Download
+| Platform | Packages | Notes |
+| --- | --- | --- |
+| Windows x64 | MSI, portable ZIP | The MSI installs under `Program Files` and includes Start Menu integration. The portable ZIP contains a top-level launcher. |
+| Linux x64 | DEB, RPM, AppImage | DEB and RPM are direct-download packages. The AppImage is the portable cross-distribution option. |
+| macOS x64 | Application ZIP | The application bundle is ad-hoc signed but not Apple-notarized. Gatekeeper may quarantine it on first launch. |
 
-Release source archives are attached to
-[GitHub releases](https://github.com/Varinomics/vnm_terminal/releases) as
-`vnm_terminal_v<version>_source.zip`. They are generated by
-`tools/create_source_archive.ps1` and exclude generated CMDG build output and
-repository metadata.
+Windows and Linux packages include their private Qt runtime. Release source
+archives are available on the same page.
 
-Binary packages are built for x64 systems and attached when the corresponding
-platform release build succeeds:
+## Interaction
 
-- Windows: `vnm_terminal_v<version>_windows_x64.msi` is the normal per-machine
-  installer. It requests administrator approval, installs under `Program Files`,
-  and adds Start Menu shortcuts by default. Its options page can also add the
-  binary directory to the system `PATH` or create a public desktop shortcut;
-  both are off by default. System `PATH` integration requires the default
-  `Program Files` destination. The completion-page launch option is on by
-  default. Taskbar pinning remains a user action managed by Windows. The portable
-  `vnm_terminal_v<version>_w64.zip` remains available; unpack it and run the
-  top-level `vnm_terminal.exe` launcher.
-- Linux: install `vnm-terminal_<version>_amd64.deb` with
-  `sudo apt install ./vnm-terminal_<version>_amd64.deb`, or install the RPM with
-  `sudo dnf install ./vnm-terminal-<version>-<release>.x86_64.rpm`. The
-  `vnm_terminal_v<version>_x86_64.AppImage` is a portable cross-distribution
-  alternative: make it executable and run it directly.
-- macOS: `vnm_terminal_v<version>_macos_x64_unnotarized.zip` contains the app
-  bundle. It is not Apple-notarized; see the macOS Bundle Build section for
-  the Gatekeeper quarantine step.
+| Action | Default interaction |
+| --- | --- |
+| Search | `Ctrl+F` (`Cmd+F` on macOS) opens the search overlay. `Enter` or `F3` advances; the corresponding Shift chord selects the previous result. |
+| Explicit hyperlink | `Ctrl+left-click` requests activation. Only absolute HTTP, HTTPS, and mailto targets are dispatched. |
+| Paste | `Ctrl+V` and `Ctrl+Shift+V`; the exact policy is configurable. |
+| Copy on selection | Disabled by default and available under **Settings > Behavior**. |
+| Native titlebar | Available through `--native-titlebar`; built-in chrome is the validated default. |
 
-The downloadable Windows and Linux packages are self-contained and carry their
-private Qt runtime. DEB and RPM are direct-download packages rather than
-distribution-maintained repository packages.
+## Command line
 
-## Build
+Without an explicit command after `--`, the platform's default shell starts.
 
-Source builds are the release baseline. Clone `vnm_terminal_surface` and
-`vnm_qml_chrome` beside this repository, or pass
-`-DVNM_TERMINAL_SURFACE_SOURCE_DIR=<path>` and
-`-DVNM_QML_CHROME_SOURCE_DIR=<path>` during configure. `vnm_terminal_surface`
-must exactly match this app's `project()` version. `vnm_qml_chrome` must share
-the app's major version and provide at least the 1.5 titlebar contract, which
-requires Qt 6.11.1 or newer;
-installed CMake packages must satisfy the corresponding version request. The
-release CI source-dependency baseline tracks the `master` branches of
-`vnm_terminal_surface` and `vnm_qml_chrome`;
-installed packages are supported by CMake but are not the release validation
-baseline unless a release workflow explicitly validates an installed-prefix
-build.
-
-```powershell
-cmake -S . -B build -DBUILD_TESTING=ON
+```text
+vnm_terminal [application options] [-- command [arguments...]]
 ```
 
-Transcript capture/replay is sensitive debugging infrastructure and is compiled
-out by default. Enable it only for local diagnostic builds with
-`-DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON`. Distribution builds use
-`-DVNM_TERMINAL_DISTRIBUTION_BUILD=ON`, which is incompatible with transcript
-capture/replay.
+Common application options:
 
-Build from an x64 MSVC Developer Command Prompt or another shell where the
-Visual Studio C++ environment has already been initialized:
+| Option | Purpose |
+| --- | --- |
+| `--window-size <width>x<height>` | Initial window dimensions. |
+| `--native-titlebar` | Platform-provided window frame. |
+| `--text-renderer auto|msdf|glyph` | Terminal text-renderer policy. |
+| `--lcd-subpixel auto|none|rgb|bgr|vrgb|vbgr` | MSDF LCD sampling policy. |
+| `--paste-shortcut <mode>` | Configurable paste-shortcut policy. |
+| `--synchronized-output-scroll-policy defer|immediate-public` | Scroll behavior during DEC synchronized output. |
 
-```bat
-cmake --build build --target vnm_terminal --config Release
-```
-
-## Package Builds
-
-Every package is generated from the `vnm_terminal_runtime` CMake install
-component. Configure package builds with both
-`VNM_TERMINAL_DISTRIBUTION_BUILD=ON` and
-`VNM_TERMINAL_BUILD_PACKAGES=ON`. Release package builds use an installed
-`vnm_msdf_text` dependency and
-`VNM_TERMINAL_MSDF_TEXT_RENDERER_USE_SYSTEM_LIBS=ON`, keeping dependency-owned
-install rules out of the application package.
-
-On Windows, copy `build_config.bat.example` to `build_config.bat`, set the local
-Qt and MinGW paths, install WiX Toolset 3, and run:
-
-```bat
-build_windows_packages.bat
-```
-
-This produces the portable ZIP and MSI under `dist\`. The MSI requests
-administrator approval before installing under `Program Files`. It is unsigned
-until a Windows code-signing certificate is configured, so Windows may show an
-unknown-publisher warning.
-
-On Linux, CPack produces the native packages from a configured release build:
-
-```bash
-cmake --build build-package --parallel
-cpack -G DEB --config build-package/CPackConfig.cmake
-cpack -G RPM --config build-package/CPackConfig.cmake
-```
-
-The Linux CI package job shows the complete release configuration, stages and
-smoke-tests the install tree, and creates the AppImage from that same tree.
-GitHub Actions retains only the newest source and platform package artifacts;
-published GitHub release downloads are independent and are not pruned.
-
-## Run
-
-```powershell
-.\build\Release\vnm_terminal.exe
-```
-
-On Windows, build the `vnm_terminal` target before launching the raw build
-artifact. The build copies the required Qt runtime DLLs beside
-`vnm_terminal.exe` and copies the platform plugin to `platforms\`. A stale build
-directory created before that post-build deployment step must be rebuilt before
-manual launch. Do not move the raw executable away from its neighboring DLLs and
-`platforms\` directory.
-
-The app starts the platform default shell when no explicit command follows
-`--`. On validated platforms it uses built-in window chrome by default; pass
-`--native-titlebar` to use the platform frame instead.
-
-Pass `--text-renderer msdf` or `--text-renderer glyph` before `--` to force one
-terminal text renderer for manual comparison. The default `--text-renderer auto`
-uses the surface renderer's automatic selection and fallback behavior.
-Pass `--lcd-subpixel auto|none|rgb|bgr|vrgb|vbgr` before `--` to choose MSDF
-LCD sampling. The default `auto` uses the display order reported by Qt and, on
-Windows, falls back to the system ClearType orientation when Qt reports no
-subpixel order.
-
-Pass `--selection-trace` before `--` to write selection diagnostics to stderr.
-Diagnostic builds configured with
-`VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON` also accept
-`--capture-transcript <path>` and `--transcript-snapshot-diagnostics` for
-deterministic terminal replay diagnostics. Distribution builds omit those
-options. Transcripts are sensitive: they include launch argv, launch cwd,
-backend output bytes, typed and pasted input, resize, scroll, selection events,
-and any optional snapshot text diagnostics.
-
-Pass `--disable-primary-repaint-recovery` before `--` to disable primary repaint
-scrollback recovery for the launched session. It is enabled by default on
-Windows and disabled by default elsewhere.
-
-Pass `--paste-shortcut <mode>` before `--` to choose the keyboard shortcut that
-pastes clipboard text into the terminal. The default `platform-default` enables
-Ctrl+V and Ctrl+Shift+V on every platform, plus Cmd+V on macOS.
-`ctrl-v-and-ctrl-shift-v` keeps the Ctrl combinations
-without the macOS Cmd+V shortcut, `ctrl-shift-v` restricts pasting to
-Ctrl+Shift+V only, and `disabled` turns the paste shortcut off entirely. Mode
-values are case-insensitive. Copy shortcuts are unaffected.
-
-Copy on selection is disabled by default. Enable **Copy on selection** under
-Settings > Behavior to copy completed mouse selections to the system clipboard
-as plain text. Explicit copy shortcuts remain available when it is enabled.
-
-Press Ctrl+F (Cmd+F on macOS also works) to open terminal search. Search is a
-case-sensitive literal over retained physical rows; it does not join wrapped
-fragments. Enter, F3, or Ctrl+G selects the next match, while Shift+Enter,
-Shift+F3, or Ctrl+Shift+G selects the previous match. Navigation wraps. Escape
-or the close button dismisses the overlay and clears its highlights.
-
-Synchronized-output scrolling is deferred until content publication by default.
-Pass `--synchronized-output-scroll-policy immediate-public` before `--` to
-opt in to immediate public-projection scrolling during DEC synchronized-output
-holds. Pass `--synchronized-output-scroll-policy defer` to request the default
-policy explicitly. Policy values are case-insensitive.
-
-Manual validation for immediate public scrolling should use an app build whose
-post-build deployment step has copied the Qt DLLs and `platforms\` plugin
-beside `vnm_terminal.exe`. Diagnostic trace validation also requires a local
-build configured with `VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON`; those
-transcript and wheel-trace flags are not present in distribution builds.
-
-```powershell
-.\tools\synchronized_output_scroll_policy_repro.ps1 `
-    -TerminalExe .\build\Release\vnm_terminal.exe `
-    -Policy immediate-public `
-    -CaptureTranscript .\build\sync-scroll.ndjson `
-    -WheelTrace `
-    -TranscriptSnapshotDiagnostics
-```
-
-The launcher validates that the selected app has the Qt runtime DLLs and
-`platforms\qwindows.dll` plugin deployed beside it, or that it is a portable
-launcher with that deployed layout under `vnm_terminal_runtime\`. It then passes
-the policy and diagnostic flags to the app and runs the deterministic payload in
-`-PayloadOnly` mode as the child process. During the repro, scroll the terminal
-while the script is inside the hold. The transcript should show an immediate
-effective policy for the hold, a `PUBLIC_PROJECTION` scroll snapshot before
-release, no hidden sentinel rows or metadata before release, a release
-reconciliation result, and the post-release suffix only after release.
-
-Run a specific command by placing it after `--`:
+Example:
 
 ```powershell
 .\build\Release\vnm_terminal.exe --window-size 1000x640 -- cmd.exe
 ```
 
-Run tests:
+## Source build
+
+The release dependency layout places `vnm_terminal_surface` and
+`vnm_qml_chrome` beside this repository. Custom locations are supported through
+`VNM_TERMINAL_SURFACE_SOURCE_DIR` and `VNM_QML_CHROME_SOURCE_DIR`.
+
+`vnm_terminal_surface` requires the same `project()` version as the
+application. `vnm_qml_chrome` requires the same major version and at least the
+1.5 titlebar contract. The validated Qt baseline is Qt 6.11.1 or newer.
 
 ```powershell
+cmake -S . -B build -DBUILD_TESTING=ON
+cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-## Windows Portable Build
+The Windows build target deploys the required Qt DLLs and `platforms` plugin
+beside `vnm_terminal.exe`. The executable and its deployed runtime form one
+launchable build artifact.
 
-Windows portable zips use the same layout as the local portable distribution:
-the top-level `vnm_terminal.exe` is a launcher, and the real Qt application plus
-deployed runtime files live in `vnm_terminal_runtime\`.
-
-Copy `build_config.bat.example` to `build_config.bat`, adjust the local Qt
-MinGW, CMake, Ninja, `vnm_terminal_surface`, and `vnm_qml_chrome` paths, then
-run:
-
-```bat
-build_portable.bat
-```
-
-The script writes `dist\portable_candidate\` and `dist\vnm_terminal_v<version>_w64.zip`,
-where `<version>` is the `project()` version in `CMakeLists.txt` (derived from
-the configured CMake cache, not hardcoded).
-`build_portable.bat` is the release-provenance build path and requires Git
-metadata for the app, `vnm_terminal_surface`, and `vnm_qml_chrome` checkouts.
-When building from a source archive without `.git` directories, use the regular
-CMake source build instructions above instead of this portable release script.
-Portable releases are built with `VNM_TERMINAL_DISTRIBUTION_BUILD=ON`,
-`VNM_TERMINAL_ENABLE_PROFILING=OFF`, and transcript capture/replay disabled.
-They are packaged from the Qt MinGW kit and include the required Qt and MinGW
-runtime DLLs beside the real application in `vnm_terminal_runtime\`. The build
-info file records the app, surface, and chrome Git revisions used for the
-package.
-Launch the portable distribution through `dist\portable_candidate\vnm_terminal.exe`.
-That top-level executable is a launcher; do not launch the raw
-`build_portable\vnm_terminal.exe` as a substitute for portable validation.
-
-## Source Archive
-
-Create the release source archive with:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\create_source_archive.ps1
-```
-
-The script writes `dist\vnm_terminal_v<version>_source.zip` and fails if the
-archive would contain `.git` contents or generated
-`THIRD_PARTY/CMDG/CMDG/bin` or `THIRD_PARTY/CMDG/CMDG/obj` output.
-
-## macOS Bundle Build
-
-The macOS GitHub Actions workflow builds a Release `vnm_terminal.app` with
-`VNM_TERMINAL_DISTRIBUTION_BUILD=ON`, `VNM_TERMINAL_ENABLE_PROFILING=OFF`, and
-transcript capture/replay disabled, deploys its Qt runtime with `macdeployqt`,
-ad-hoc signs the unsigned bundle, and uploads
-`vnm_terminal_v<version>_macos_x64_unnotarized.zip` as a workflow artifact.
-When a GitHub release is published, the workflow also attaches that ZIP to the
-release. The bundle includes `Contents/Resources/vnm_terminal_build_info.txt`
-with the app, surface, chrome, Qt, and build-configuration provenance used for
-that artifact.
-
-The macOS bundle is not Apple-notarized. Gatekeeper may block it on first run.
-Users who trust the downloaded build can remove the quarantine attribute:
-
-```bash
-xattr -dr com.apple.quarantine /path/to/vnm_terminal.app
-open /path/to/vnm_terminal.app
-```
+Transcript capture/replay is excluded from normal builds. Local diagnostic
+builds expose it through
+`-DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON`; distribution builds use
+`-DVNM_TERMINAL_DISTRIBUTION_BUILD=ON` and reject transcript capture.
 
 ## License
 
-GNU General Public License version 3 only. See [LICENSE](LICENSE).
+GNU General Public License version 3 only. [LICENSE](LICENSE) contains the full
+license text.
