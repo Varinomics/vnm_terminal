@@ -33,7 +33,7 @@ if(VNM_TERMINAL_BUILD_PACKAGES AND NOT VNM_TERMINAL_DISTRIBUTION_BUILD)
         "VNM_TERMINAL_DISTRIBUTION_BUILD=ON")
 endif()
 
-find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2)
 include(cmake/vnm_terminal_surface_dependency.cmake)
 include(cmake/vnm_qml_chrome_dependency.cmake)
 
@@ -224,11 +224,11 @@ if(WIN32)
         )
     endfunction()
 
-    find_package(Qt6Gui 6.7 REQUIRED COMPONENTS
+    find_package(Qt6Gui 6.11 REQUIRED COMPONENTS
         QICOPlugin
         QWindowsIntegrationPlugin
     )
-    find_package(Qt6 6.7 REQUIRED COMPONENTS
+    find_package(Qt6 6.11 REQUIRED COMPONENTS
         QuickControls2Basic
         QuickControls2BasicStyleImpl
         QuickControls2Fusion
