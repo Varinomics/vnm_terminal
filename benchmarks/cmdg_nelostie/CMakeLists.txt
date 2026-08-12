@@ -69,7 +69,7 @@ if(NOT VNM_TERMINAL_CMDG_ARTIFACT_TAG STREQUAL "" AND
 endif()
 
 if(VNM_TERMINAL_CMDG_NELOSTIE_OFFSCREEN)
-    find_package(Qt6Gui 6.7 REQUIRED COMPONENTS QOffscreenIntegrationPlugin)
+    find_package(Qt6Gui 6.11 REQUIRED COMPONENTS QOffscreenIntegrationPlugin)
     set(vnm_terminal_cmdg_offscreen_plugin_dir
         "$<TARGET_FILE_DIR:Qt6::QOffscreenIntegrationPlugin>")
 else()

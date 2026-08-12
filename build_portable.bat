@@ -20,7 +20,7 @@ if not exist "%~dp0build_config.bat" (
     echo Copy build_config.bat.example to build_config.bat and set the paths
     echo for your local Qt / MinGW installation. For example:
     echo.
-    echo   set QT_PREFIX=C:\Qt\6.10.1\mingw_64
+    echo   set QT_PREFIX=C:\Qt\6.11.1\mingw_64
     echo   set MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin
     echo   set CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe
     echo   set NINJA=C:\Qt\Tools\Ninja\ninja.exe
