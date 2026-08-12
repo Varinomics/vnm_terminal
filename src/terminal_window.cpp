@@ -16,6 +16,8 @@
 #include <QWindow>
 #include <algorithm>
 #include <cmath>
+#include <memory>
+#include <optional>
 
 namespace vnm_terminal::terminal_app {
 
@@ -227,6 +229,23 @@ QString visible_terminal_title(QString terminal_title)
     return terminal_title.isEmpty() ? default_window_title() : terminal_title;
 }
 
+namespace {
+
+void apply_window_title(
+    QQuickWindow& window,
+    Terminal_qml_chrome* titlebar,
+    const QString& window_title,
+    const Terminal_title_content& titlebar_content)
+{
+    window.setTitle(window_title);
+    if (titlebar != nullptr) {
+        titlebar->set_title(titlebar_content.display_title);
+        titlebar->set_activity_marker_text(activity_marker_text(titlebar_content));
+    }
+}
+
+} // namespace
+
 void sync_terminal_title(
     QQuickWindow&                  window,
     Terminal_qml_chrome*           titlebar,
@@ -234,13 +253,11 @@ void sync_terminal_title(
     const QString&                 terminal_icon_name)
 {
     const QString visible_title = visible_terminal_title(terminal_title);
-    window.setTitle(visible_title);
-    if (titlebar != nullptr) {
-        const Terminal_title_content content =
-            derive_terminal_title_content(visible_title, terminal_icon_name);
-        titlebar->set_title(content.display_title);
-        titlebar->set_activity_marker_text(activity_marker_text(content));
-    }
+    apply_window_title(
+        window,
+        titlebar,
+        visible_title,
+        derive_terminal_title_content(visible_title, terminal_icon_name));
 }
 
 void connect_terminal_metadata_to_chrome(
@@ -248,7 +265,21 @@ void connect_terminal_metadata_to_chrome(
     QQuickWindow&                  window,
     Terminal_qml_chrome*           titlebar)
 {
-    auto sync_metadata = [titlebar, &window, &surface] {
+    auto user_title = std::make_shared<std::optional<QString>>();
+    auto sync_metadata = [titlebar, &window, &surface, user_title] {
+        if (user_title->has_value()) {
+            Terminal_title_content content = derive_terminal_title_content(
+                visible_terminal_title(surface.terminal_title()),
+                surface.terminal_icon_name());
+            content.display_title = **user_title;
+            apply_window_title(
+                window,
+                titlebar,
+                **user_title,
+                content);
+            return;
+        }
+
         sync_terminal_title(
             window,
             titlebar,
@@ -266,6 +297,16 @@ void connect_terminal_metadata_to_chrome(
         &VNM_TerminalSurface::terminal_icon_name_changed,
         &window,
         sync_metadata);
+    if (titlebar != nullptr) {
+        QObject::connect(
+            titlebar,
+            &Terminal_qml_chrome::title_edit_accepted,
+            &window,
+            [user_title, sync_metadata](const QString& title) {
+                *user_title = title;
+                sync_metadata();
+            });
+    }
     sync_metadata();
 }
 

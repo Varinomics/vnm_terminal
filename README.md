@@ -69,6 +69,7 @@ archives are available on the same page.
 | Explicit hyperlink | `Ctrl+left-click` requests activation. Only absolute HTTP, HTTPS, and mailto targets are dispatched. |
 | Paste | `Ctrl+V` and `Ctrl+Shift+V`; the exact policy is configurable. |
 | Copy on selection | Disabled by default and available under **Settings > Behavior**. |
+| Custom window title | Alt+left-click the built-in titlebar, edit the title, then press `Enter` or click elsewhere. |
 | Native titlebar | Available through `--native-titlebar`; built-in chrome is the validated default. |
 
 ## Command line
@@ -104,7 +105,7 @@ The release dependency layout places `vnm_terminal_surface` and
 
 `vnm_terminal_surface` requires the same `project()` version as the
 application. `vnm_qml_chrome` requires the same major version and at least the
-1.5 titlebar contract. The validated Qt baseline is Qt 6.11.1 or newer.
+1.6 titlebar contract. The validated Qt baseline is Qt 6.11.1 or newer.
 
 ```powershell
 cmake -S . -B build -DBUILD_TESTING=ON

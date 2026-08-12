@@ -4,10 +4,27 @@
 #include <QEvent>
 #include <QGuiApplication>
 #include <QKeyEvent>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QString>
 #include <QtGlobal>
 
 namespace vnm_terminal::terminal_app {
+
+namespace {
+
+bool item_belongs_to(QQuickItem* item, const QQuickItem* root)
+{
+    while (item != nullptr) {
+        if (item == root) {
+            return true;
+        }
+        item = item->parentItem();
+    }
+    return false;
+}
+
+} // namespace
 
 bool paste_shortcut_should_paste(
     Paste_shortcut_policy   policy,
@@ -91,6 +108,11 @@ Terminal_shortcut_filter::Terminal_shortcut_filter(
     m_paste_policy(paste_policy)
 {}
 
+void Terminal_shortcut_filter::set_search_ui_root(QQuickItem* root_item)
+{
+    m_search_ui_root = root_item;
+}
+
 void Terminal_shortcut_filter::set_search_ui_visible(bool visible)
 {
     m_search_ui_visible = visible;
@@ -110,6 +132,12 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
         "app-shortcut",
         "key-press",
         *key_event);
+
+    if (!host_shortcuts_have_focus()) {
+        m_surface->record_interaction_diagnostic(
+            "app-shortcut", "routed", QStringLiteral("inactive-focus"));
+        return false;
+    }
 
     const Search_shortcut_action search_action = terminal_search_shortcut_action(
         key_event->key(),
@@ -204,6 +232,17 @@ bool Terminal_shortcut_filter::copy_selected_text()
         clipboard->setText(text);
     }
     return true;
+}
+
+bool Terminal_shortcut_filter::host_shortcuts_have_focus() const
+{
+    if (m_surface == nullptr || m_surface->window() == nullptr) {
+        return false;
+    }
+
+    QQuickItem* const active_focus_item = m_surface->window()->activeFocusItem();
+    return item_belongs_to(active_focus_item, m_surface) ||
+        item_belongs_to(active_focus_item, m_search_ui_root);
 }
 
 bool Terminal_shortcut_filter::paste_clipboard_text()

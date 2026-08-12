@@ -3,9 +3,11 @@
 #include "vnm_terminal/vnm_terminal_surface.h"
 
 #include <QObject>
+#include <QPointer>
 #include <Qt>
 
 class QEvent;
+class QQuickItem;
 
 namespace vnm_terminal::terminal_app {
 
@@ -50,6 +52,7 @@ public:
         VNM_TerminalSurface*  surface,
         Paste_shortcut_policy paste_policy = Paste_shortcut_policy::PLATFORM_DEFAULT);
 
+    void set_search_ui_root(QQuickItem* root_item);
     void set_search_ui_visible(bool visible);
 
 signals:
@@ -63,12 +66,14 @@ protected:
     bool eventFilter(QObject*, QEvent* event) override;
 
 private:
+    bool host_shortcuts_have_focus() const;
     bool copy_selected_text();
     bool paste_clipboard_text();
 
-    VNM_TerminalSurface*  m_surface      = nullptr;
-    Paste_shortcut_policy m_paste_policy = Paste_shortcut_policy::PLATFORM_DEFAULT;
-    bool                  m_search_ui_visible = false;
+    VNM_TerminalSurface*   m_surface      = nullptr;
+    Paste_shortcut_policy  m_paste_policy = Paste_shortcut_policy::PLATFORM_DEFAULT;
+    QPointer<QQuickItem>   m_search_ui_root;
+    bool                   m_search_ui_visible = false;
 };
 
 } // namespace vnm_terminal::terminal_app

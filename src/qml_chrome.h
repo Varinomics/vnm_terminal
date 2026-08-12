@@ -55,6 +55,7 @@ public:
 
 signals:
     void settings_requested();
+    void title_edit_accepted(const QString& title);
 
 private slots:
     void handle_move_requested();
@@ -63,6 +64,7 @@ private slots:
     void handle_maximize_toggle_requested();
     void handle_close_requested();
     void handle_settings_requested();
+    void handle_title_edit_accepted(const QString& title);
 
 private:
     void connect_window_commands();

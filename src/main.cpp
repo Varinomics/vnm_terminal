@@ -151,7 +151,6 @@ using chrome::settings_window_position;
 using chrome::settings_window_size;
 using chrome::split_terminal_area;
 using chrome::sync_chrome_window_state;
-using chrome::sync_terminal_title;
 using chrome::Terminal_shortcut_filter;
 using chrome::terminal_window_persistence_enabled;
 using chrome::visible_terminal_title;
@@ -525,6 +524,7 @@ int main(int argc, char** argv)
             .arg(search_bar->error_string()));
         return k_exit_start_failed;
     }
+    shortcut_filter->set_search_ui_root(search_bar->root_item());
     QObject::connect(
         shortcut_filter,
         &Terminal_shortcut_filter::search_requested,

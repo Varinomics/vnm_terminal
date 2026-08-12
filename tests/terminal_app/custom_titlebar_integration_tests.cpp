@@ -682,6 +682,14 @@ QByteArray osc1_icon_name_sequence(const QString& icon_name)
     return bytes;
 }
 
+QByteArray osc2_title_sequence(const QString& title)
+{
+    QByteArray bytes("\x1b]2;", 4);
+    bytes += title.toUtf8();
+    bytes += '\a';
+    return bytes;
+}
+
 QByteArray numbered_scroll_lines(int count)
 {
     QByteArray bytes;
@@ -1754,11 +1762,31 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
         return ok;
     }
 
+    QQuickItem* const shared_titlebar = titlebar.titlebar_item();
+    QQuickItem* const shared_title_label = find_quick_item_recursive(
+        shared_titlebar, QStringLiteral("title_label"));
+    QQuickItem* const shared_activity_marker = find_quick_item_recursive(
+        shared_titlebar, QStringLiteral("activity_marker_label"));
+    ok &= check(shared_titlebar != nullptr,
+        "terminal chrome exposes the shared titlebar item");
+    ok &= check(shared_title_label != nullptr,
+        "terminal chrome exposes the shared title label");
+    ok &= check(shared_activity_marker != nullptr,
+        "terminal chrome exposes the shared activity marker");
+    if (shared_titlebar == nullptr ||
+        shared_title_label == nullptr ||
+        shared_activity_marker == nullptr)
+    {
+        return ok;
+    }
+
     sync_terminal_title(window, &titlebar, QString(), QString());
     ok &= check(window.title() == default_window_title(),
         "empty terminal title uses native fallback title");
     ok &= check(titlebar.root_item()->property("title").toString() == default_window_title(),
         "empty terminal title initializes shared titlebar fallback title");
+    ok &= check(shared_title_label->property("text").toString() == default_window_title(),
+        "empty terminal title reaches the rendered shared title label");
 
     sync_terminal_title(window, &titlebar, QStringLiteral("   "), QString());
     ok &= check(window.title() == default_window_title(),
@@ -1777,6 +1805,10 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
         "shared titlebar extracts activity marker after title trim");
     ok &= check(titlebar.root_item()->property("title").toString() == QStringLiteral("build"),
         "shared titlebar display title strips leading marker and one separator");
+    ok &= check(shared_title_label->property("text").toString() == QStringLiteral("build"),
+        "trimmed terminal title reaches the rendered shared title label");
+    ok &= check(shared_activity_marker->property("text").toString() == spinner,
+        "activity marker reaches the rendered shared marker label");
 
     titlebar.set_title(QStringLiteral("sentinel"));
     titlebar.set_activity_marker_text(QStringLiteral("marker-sentinel"));
@@ -1784,6 +1816,7 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
     const QString surface_icon_name = icon_spinner + QStringLiteral("surface-icon");
     auto backend = std::make_unique<Metadata_seed_backend>(
         osc1_icon_name_sequence(surface_icon_name));
+    Metadata_seed_backend* backend_ptr = backend.get();
     const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
         surface,
         std::move(backend),
@@ -1803,6 +1836,57 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
     ok &= check(
         titlebar.root_item()->property("activity_marker_text").toString() == icon_spinner,
         "metadata connection initializes shared activity marker from current icon name");
+
+    ok &= check(
+        shared_titlebar->property("title_editing_enabled").toBool(),
+        "terminal chrome enables shared user-title editing");
+    const QString user_title = QStringLiteral("deployment shell");
+    const bool title_edit_emitted = QMetaObject::invokeMethod(
+        titlebar.root_item(),
+        "title_edit_accepted",
+        Q_ARG(QString, user_title));
+    ok &= check(title_edit_emitted,
+        "shared titlebar emits an accepted user title");
+    ok &= check(window.title() == user_title,
+        "accepted user title becomes the native window title");
+    ok &= check(titlebar.root_item()->property("title").toString() == user_title,
+        "accepted user title becomes the shared titlebar title");
+    ok &= check(shared_title_label->property("text").toString() == user_title,
+        "accepted user title reaches the rendered shared title label");
+
+    const QString updated_marker = scalar_text(chrome_test::k_activity_marker_dingbat_last);
+    backend_ptr->emit_output(
+        osc1_icon_name_sequence(updated_marker + QStringLiteral("updated-icon")) +
+        osc2_title_sequence(QStringLiteral("process-updated title")));
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    pump_events(app);
+    ok &= check(window.title() == user_title,
+        "terminal metadata does not overwrite an accepted user title");
+    ok &= check(titlebar.root_item()->property("title").toString() == user_title,
+        "terminal metadata preserves the shared user title");
+    ok &= check(
+        titlebar.root_item()->property("activity_marker_text").toString() == updated_marker,
+        "activity-marker metadata keeps updating after a user title is accepted");
+    ok &= check(shared_activity_marker->property("text").toString() == updated_marker,
+        "updated activity marker reaches the rendered shared marker label");
+
+    const bool empty_title_edit_emitted = QMetaObject::invokeMethod(
+        titlebar.root_item(),
+        "title_edit_accepted",
+        Q_ARG(QString, QString()));
+    ok &= check(empty_title_edit_emitted,
+        "shared titlebar relays an accepted empty user title");
+    ok &= check(window.title().isEmpty(),
+        "an accepted empty title remains a valid native window title");
+    ok &= check(shared_title_label->property("text").toString().isEmpty(),
+        "an accepted empty title remains blank in the shared titlebar");
+
+    backend_ptr->emit_output(
+        osc2_title_sequence(QStringLiteral("metadata after empty user title")));
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    pump_events(app);
+    ok &= check(window.title().isEmpty(),
+        "terminal metadata preserves an accepted empty user title");
 
     return ok;
 }
@@ -3095,6 +3179,75 @@ bool test_settings_shortcut_requests_settings(QGuiApplication& app)
     return ok;
 }
 
+bool test_host_shortcuts_preserve_title_editor_keys(QGuiApplication& app)
+{
+    QQuickWindow window;
+    window.resize(360, 240);
+    VNM_TerminalSurface surface(window.contentItem());
+    QQuickItem search_root(window.contentItem());
+    QQuickItem search_input(&search_root);
+    QQuickItem title_editor(window.contentItem());
+
+    Recording_event_filter   key_filter(QEvent::KeyPress);
+    Terminal_shortcut_filter shortcut_filter(&surface);
+    shortcut_filter.set_search_ui_root(&search_root);
+    shortcut_filter.set_search_ui_visible(true);
+    window.installEventFilter(&key_filter);
+    window.installEventFilter(&shortcut_filter);
+    window.show();
+    pump_events(app);
+
+    int search_requests  = 0;
+    int dismiss_requests = 0;
+    int settings_requests = 0;
+    QObject::connect(
+        &shortcut_filter,
+        &Terminal_shortcut_filter::search_requested,
+        &shortcut_filter,
+        [&search_requests] { ++search_requests; });
+    QObject::connect(
+        &shortcut_filter,
+        &Terminal_shortcut_filter::search_dismiss_requested,
+        &shortcut_filter,
+        [&dismiss_requests] { ++dismiss_requests; });
+    QObject::connect(
+        &shortcut_filter,
+        &Terminal_shortcut_filter::settings_requested,
+        &shortcut_filter,
+        [&settings_requests] { ++settings_requests; });
+
+    title_editor.forceActiveFocus();
+    pump_events(app);
+    QKeyEvent escape_event(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QCoreApplication::sendEvent(&window, &escape_event);
+    QKeyEvent search_event(QEvent::KeyPress, Qt::Key_F, Qt::ControlModifier);
+    QCoreApplication::sendEvent(&window, &search_event);
+#if defined(Q_OS_MACOS)
+    const Qt::KeyboardModifiers settings_modifier = Qt::MetaModifier;
+#else
+    const Qt::KeyboardModifiers settings_modifier = Qt::ControlModifier;
+#endif
+    QKeyEvent settings_event(QEvent::KeyPress, Qt::Key_Comma, settings_modifier);
+    QCoreApplication::sendEvent(&window, &settings_event);
+
+    bool ok = true;
+    ok &= check(
+        search_requests == 0 && dismiss_requests == 0 && settings_requests == 0,
+        "terminal host shortcuts do not consume title-editor keys");
+    ok &= check(key_filter.recorded_count == 3,
+        "title-editor keys continue through the window shortcut filter");
+
+    search_input.forceActiveFocus();
+    pump_events(app);
+    QKeyEvent search_escape_event(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QCoreApplication::sendEvent(&window, &search_escape_event);
+    ok &= check(dismiss_requests == 1,
+        "Escape remains a host shortcut while the search field has focus");
+    ok &= check(key_filter.recorded_count == 3,
+        "the search-field Escape shortcut is consumed before terminal delivery");
+    return ok;
+}
+
 bool test_renderer_mode_enum_assignment_from_qml(QGuiApplication& app)
 {
     QQmlEngine engine;
@@ -3164,6 +3317,7 @@ int main(int argc, char** argv)
     ok &= test_window_state_sync();
     ok &= test_settings_gear_button_and_window(app);
     ok &= test_settings_shortcut_requests_settings(app);
+    ok &= test_host_shortcuts_preserve_title_editor_keys(app);
     ok &= test_renderer_mode_enum_assignment_from_qml(app);
 #if defined(Q_OS_MACOS)
     ok &= test_macos_command_shortcuts_are_host_shortcuts(app);

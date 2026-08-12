@@ -40,6 +40,7 @@ Item {
     objectName: "terminal_qml_chrome_root"
 
     property string title: ""
+    property bool title_editing_enabled: true
     property string activity_marker_text: ""
     property bool active: true
     property bool maximized: false
@@ -103,6 +104,7 @@ Item {
     signal maximize_toggle_requested()
     signal close_requested()
     signal settings_requested()
+    signal title_edit_accepted(string title)
 
     VNM_ChromeTheme {
         id: terminal_chrome_theme
@@ -154,6 +156,7 @@ Item {
         // content-edge override when changing frame or titlebar geometry.
         titlebar_content_left_inset: frame_shell.content_interior_x
         title: root.title
+        title_editing_enabled: root.title_editing_enabled
         active: root.active
         maximized: root.maximized
         resize_enabled: root.resize_enabled
@@ -174,6 +177,7 @@ Item {
         onMinimize_requested: root.minimize_requested()
         onMaximize_toggle_requested: root.maximize_toggle_requested()
         onClose_requested: root.close_requested()
+        onTitle_edit_accepted: (title) => root.title_edit_accepted(title)
     }
 
     // The settings gear is stroked here rather than taken from an icon font.
@@ -563,6 +567,11 @@ void chrome::Terminal_qml_chrome::connect_window_commands()
         SIGNAL(settings_requested()),
         this,
         SLOT(handle_settings_requested()));
+    QObject::connect(
+        m_root_object.get(),
+        SIGNAL(title_edit_accepted(QString)),
+        this,
+        SLOT(handle_title_edit_accepted(QString)));
 }
 
 void chrome::Terminal_qml_chrome::handle_move_requested()
@@ -601,6 +610,11 @@ void chrome::Terminal_qml_chrome::handle_close_requested()
 void chrome::Terminal_qml_chrome::handle_settings_requested()
 {
     emit settings_requested();
+}
+
+void chrome::Terminal_qml_chrome::handle_title_edit_accepted(const QString& title)
+{
+    emit title_edit_accepted(title);
 }
 
 void chrome::Terminal_qml_chrome::set_property(
