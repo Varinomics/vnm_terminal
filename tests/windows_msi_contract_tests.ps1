@@ -460,12 +460,24 @@ try {
         $_.Event -eq 'NewDialog' -and
         $_.Argument -eq 'VnmTerminalOptionsDlg'
     } 'maintenance change to options-page navigation')
-    [void](Get-OnlyMsiRow $controlEvents {
+    $optionsBack = Get-OnlyMsiRow $controlEvents {
         $_.Dialog_ -eq 'VerifyReadyDlg' -and
         $_.Control_ -eq 'Back' -and
         $_.Event -eq 'NewDialog' -and
         $_.Argument -eq 'VnmTerminalOptionsDlg'
-    } 'confirmation back to options-page navigation')
+    } 'confirmation back to options-page navigation'
+    $maintenanceBack = Get-OnlyMsiRow $controlEvents {
+        $_.Dialog_ -eq 'VerifyReadyDlg' -and
+        $_.Control_ -eq 'Back' -and
+        $_.Event -eq 'NewDialog' -and
+        $_.Argument -eq 'MaintenanceTypeDlg'
+    } 'confirmation back to maintenance-type navigation'
+    Assert-MsiContract (
+        $optionsBack.Condition -eq
+            'NOT Installed OR WixUI_InstallMode = "Change"' -and
+        $maintenanceBack.Condition -eq
+            'Installed AND NOT PATCH AND WixUI_InstallMode <> "Change"') `
+        'confirmation Back routes must remain exclusive in maintenance Change mode'
 
     $launchCheckBox = Get-OnlyMsiRow $controls {
         $_.Dialog_ -eq 'ExitDialog' -and
