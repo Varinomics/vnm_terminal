@@ -283,7 +283,7 @@
                 Control="Back"
                 Event="NewDialog"
                 Value="MaintenanceTypeDlg"
-                Order="2">Installed AND NOT PATCH</Publish>
+                Order="2">Installed AND NOT PATCH AND WixUI_InstallMode &lt;&gt; "Change"</Publish>
             <Publish Dialog="VerifyReadyDlg"
                 Control="Back"
                 Event="NewDialog"
