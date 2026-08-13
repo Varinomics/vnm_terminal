@@ -47,6 +47,28 @@ function Assert-DirectoryExists {
     }
 }
 
+function Get-Sha256FileHash {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $stream = [System.IO.File]::OpenRead($Path)
+        try {
+            $hashBytes = $sha256.ComputeHash($stream)
+            return ([System.BitConverter]::ToString($hashBytes)).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+    finally {
+        $sha256.Dispose()
+    }
+}
+
 function Get-DirectoryInventory {
     param(
         [Parameter(Mandatory = $true)]
@@ -59,8 +81,7 @@ function Get-DirectoryInventory {
         Sort-Object FullName |
         ForEach-Object {
             $relativePath = $_.FullName.Substring($resolvedPath.Length + 1)
-            $inventory[$relativePath] =
-                (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+            $inventory[$relativePath] = Get-Sha256FileHash $_.FullName
         }
     return $inventory
 }
@@ -141,8 +162,7 @@ function Resolve-IfwRoot {
         Invoke-WebRequest -Uri $ifwArchiveUrl -OutFile $archivePath
     }
 
-    $archiveHash =
-        (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $archiveHash = Get-Sha256FileHash $archivePath
     if ($archiveHash -ne $ifwArchiveSha256) {
         throw "Qt IFW archive checksum mismatch: expected $ifwArchiveSha256, got $archiveHash"
     }
@@ -378,8 +398,7 @@ else {
     }
 }
 
-$artifactHash =
-    (Get-FileHash -LiteralPath $artifactPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$artifactHash = Get-Sha256FileHash $artifactPath
 [System.IO.File]::WriteAllText(
     $checksumPath,
     "$artifactHash  $artifactName`n",

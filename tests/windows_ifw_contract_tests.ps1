@@ -164,6 +164,52 @@ if (lookupCount !== 1 || hiddenColumn !== 5 ||
     }
 }
 
+function Assert-IfwBuildHashRuntime {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BuildScriptPath
+    )
+
+    $tokens = $null
+    $parseErrors = $null
+    $buildScriptAst = [Management.Automation.Language.Parser]::ParseFile(
+        $BuildScriptPath,
+        [ref]$tokens,
+        [ref]$parseErrors)
+    Assert-IfwContract ($parseErrors.Count -eq 0) `
+        'the IFW build script must parse in Windows PowerShell'
+
+    $hashFunctions = @($buildScriptAst.FindAll(
+        {
+            param($node)
+            return $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Get-Sha256FileHash'
+        },
+        $true))
+    Assert-IfwContract ($hashFunctions.Count -eq 1) `
+        'the IFW build script must define one SHA-256 file helper'
+
+    $probePath = [System.IO.Path]::GetTempFileName()
+    try {
+        [System.IO.File]::WriteAllText(
+            $probePath,
+            'Varinomics IFW hash probe',
+            [System.Text.UTF8Encoding]::new($false))
+        Invoke-Expression $hashFunctions[0].Extent.Text
+        function Get-FileHash {
+            throw 'Get-FileHash is unavailable in the hosted packaging shell.'
+        }
+
+        $hash = Get-Sha256FileHash $probePath
+        Assert-IfwContract `
+            ($hash -eq 'fe133befaa3576ebe217cdfcb5a1a1c55263a311e9dfeb3c697085cbf0554cf4') `
+            'archive hashing must work when Get-FileHash is unavailable'
+    }
+    finally {
+        Remove-Item -LiteralPath $probePath -Force -ErrorAction SilentlyContinue
+    }
+}
+
 $resolvedSourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $ifwRoot = Join-Path $resolvedSourceRoot 'packaging\windows\ifw'
 $configPath = Join-Path $ifwRoot 'config.xml.in'
@@ -210,6 +256,7 @@ $brandRenderer = Get-Content -Raw -LiteralPath $brandRendererPath
 $notices = Get-Content -Raw -LiteralPath $noticesPath
 
 Assert-IfwReadyPageRuntime $controllerScriptPath
+Assert-IfwBuildHashRuntime $buildScriptPath
 
 Assert-IfwContract ($config.Installer.Name -eq 'vnm_terminal') `
     'the product name must match the application'
