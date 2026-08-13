@@ -5,7 +5,9 @@ param(
 
     [string]$ArtifactPath,
 
-    [string]$DumpPath
+    [string]$DumpPath,
+
+    [string]$IfwArchivePath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -164,22 +166,25 @@ if (lookupCount !== 1 || hiddenColumn !== 5 ||
     }
 }
 
-function Assert-IfwBuildHashRuntime {
+function Assert-IfwHashRuntime {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$BuildScriptPath
+        [string]$ScriptPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
     )
 
     $tokens = $null
     $parseErrors = $null
-    $buildScriptAst = [Management.Automation.Language.Parser]::ParseFile(
-        $BuildScriptPath,
+    $scriptAst = [Management.Automation.Language.Parser]::ParseFile(
+        $ScriptPath,
         [ref]$tokens,
         [ref]$parseErrors)
     Assert-IfwContract ($parseErrors.Count -eq 0) `
-        'the IFW build script must parse in Windows PowerShell'
+        "$Description must parse in Windows PowerShell"
 
-    $hashFunctions = @($buildScriptAst.FindAll(
+    $hashFunctions = @($scriptAst.FindAll(
         {
             param($node)
             return $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
@@ -187,7 +192,7 @@ function Assert-IfwBuildHashRuntime {
         },
         $true))
     Assert-IfwContract ($hashFunctions.Count -eq 1) `
-        'the IFW build script must define one SHA-256 file helper'
+        "$Description must define one SHA-256 file helper"
 
     $probePath = [System.IO.Path]::GetTempFileName()
     try {
@@ -203,10 +208,137 @@ function Assert-IfwBuildHashRuntime {
         $hash = Get-Sha256FileHash $probePath
         Assert-IfwContract `
             ($hash -eq 'fe133befaa3576ebe217cdfcb5a1a1c55263a311e9dfeb3c697085cbf0554cf4') `
-            'archive hashing must work when Get-FileHash is unavailable'
+            "$Description hashing must work when Get-FileHash is unavailable"
     }
     finally {
         Remove-Item -LiteralPath $probePath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Assert-IfwPowerShellParses {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    $tokens = $null
+    $parseErrors = $null
+    [void][Management.Automation.Language.Parser]::ParseFile(
+        $Path,
+        [ref]$tokens,
+        [ref]$parseErrors)
+    Assert-IfwContract ($parseErrors.Count -eq 0) `
+        "$Description must parse in Windows PowerShell"
+}
+
+function Assert-IfwProvisionerRuntime {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProvisionScriptPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$ArchivePath
+    )
+
+    $resolvedArchivePath = (Resolve-Path -LiteralPath $ArchivePath).Path
+    $testRoot = Join-Path ([IO.Path]::GetTempPath()) (
+        'vnm-ifw-provision-test-' + [Guid]::NewGuid().ToString('N'))
+    $destinationPath = Join-Path $testRoot 'root'
+    $corruptArchivePath = Join-Path $testRoot 'corrupt.7z'
+    $corruptDestinationPath = Join-Path $testRoot 'corrupt-root'
+    $extractionFailureDestinationPath = Join-Path $testRoot 'extraction-failure-root'
+    $fakeToolsPath = Join-Path $testRoot 'fake-tools'
+
+    function Invoke-Provisioner {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$InputArchivePath,
+
+            [Parameter(Mandatory = $true)]
+            [string]$OutputRootPath,
+
+            [string]$PathPrefix
+        )
+
+        $originalPath = $env:PATH
+        $originalErrorActionPreference = $ErrorActionPreference
+        try {
+            if ($PathPrefix) {
+                $env:PATH = "$PathPrefix;$originalPath"
+            }
+            $ErrorActionPreference = 'Continue'
+            $output = & powershell.exe -NoLogo -NoProfile -NonInteractive `
+                -ExecutionPolicy Bypass `
+                -File $ProvisionScriptPath `
+                -ArchivePath $InputArchivePath `
+                -DestinationPath $OutputRootPath 2>&1 |
+                    Out-String
+            return [pscustomobject]@{
+                ExitCode = $LASTEXITCODE
+                Output = $output
+            }
+        }
+        finally {
+            $env:PATH = $originalPath
+            $ErrorActionPreference = $originalErrorActionPreference
+        }
+    }
+
+    try {
+        [void](New-Item -ItemType Directory -Path $testRoot)
+
+        $freshResult = Invoke-Provisioner $resolvedArchivePath $destinationPath
+        Assert-IfwContract ($freshResult.ExitCode -eq 0) `
+            "fresh explicit-archive provisioning must succeed: $($freshResult.Output)"
+        Assert-IfwContract `
+            (Test-Path -LiteralPath (Join-Path $destinationPath 'bin\binarycreator.exe') -PathType Leaf) `
+            'fresh provisioning must publish binarycreator in the requested root'
+        Assert-IfwContract `
+            (Test-Path -LiteralPath (Join-Path $destinationPath 'bin\installerbase.exe') -PathType Leaf) `
+            'fresh provisioning must publish installerbase in the requested root'
+        $markerPath = Join-Path $destinationPath '.vnm-ifw-provisioned.json'
+        Assert-IfwContract (Test-Path -LiteralPath $markerPath -PathType Leaf) `
+            'fresh provisioning must atomically publish its verification marker with the root'
+        $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
+        Assert-IfwContract ($marker.version -eq '4.11.0') `
+            'the provisioned root marker must identify IFW 4.11.0'
+        Assert-IfwContract `
+            ($marker.archive_sha256 -eq 'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1') `
+            'the provisioned root marker must record the verified official archive hash'
+
+        $staleSentinelPath = Join-Path $destinationPath 'must-not-survive-reprovision.txt'
+        [IO.File]::WriteAllText($staleSentinelPath, 'stale extraction')
+        $secondResult = Invoke-Provisioner $resolvedArchivePath $destinationPath
+        Assert-IfwContract ($secondResult.ExitCode -eq 0) `
+            "a second extraction from the same cache input must succeed: $($secondResult.Output)"
+        Assert-IfwContract (-not (Test-Path -LiteralPath $staleSentinelPath)) `
+            'a cache-input hit must still rehash and extract a complete fresh root'
+
+        [IO.File]::WriteAllText($corruptArchivePath, 'not the official IFW archive')
+        $corruptResult = Invoke-Provisioner $corruptArchivePath $corruptDestinationPath
+        Assert-IfwContract ($corruptResult.ExitCode -ne 0) `
+            'a corrupt explicit archive must fail provisioning'
+        Assert-IfwContract (-not (Test-Path -LiteralPath $corruptDestinationPath)) `
+            'a corrupt archive must not leave a committed IFW root'
+
+        [void](New-Item -ItemType Directory -Path $fakeToolsPath)
+        Copy-Item -LiteralPath "$env:SystemRoot\System32\where.exe" `
+            -Destination (Join-Path $fakeToolsPath '7z.exe')
+        $extractionFailureResult = Invoke-Provisioner `
+            $resolvedArchivePath `
+            $extractionFailureDestinationPath `
+            $fakeToolsPath
+        Assert-IfwContract ($extractionFailureResult.ExitCode -ne 0) `
+            'an extraction-tool failure must fail provisioning'
+        Assert-IfwContract `
+            (-not (Test-Path -LiteralPath $extractionFailureDestinationPath)) `
+            'an extraction failure must not leave a committed IFW root'
+    }
+    finally {
+        Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -232,6 +364,10 @@ $installScriptPath = Join-Path $ifwRoot 'installscript.qs'
 $maintenancePackagePath = Join-Path $ifwRoot 'maintenance_package.xml.in'
 $maintenanceInstallScriptPath = Join-Path $ifwRoot 'maintenance_installscript.qs'
 $buildScriptPath = Join-Path $resolvedSourceRoot 'tools\build_windows_ifw_installer.ps1'
+$provisionScriptPath = Join-Path $resolvedSourceRoot 'tools\provision_windows_ifw.ps1'
+$windowsWorkflowPath = Join-Path $resolvedSourceRoot '.github\workflows\ci-windows.yml'
+$windowsPackagesPath = Join-Path $resolvedSourceRoot 'build_windows_packages.bat'
+$buildConfigExamplePath = Join-Path $resolvedSourceRoot 'build_config.bat.example'
 $brandRendererPath = Join-Path $resolvedSourceRoot 'tools\render_windows_ifw_brand_assets.py'
 $noticesPath = Join-Path $resolvedSourceRoot 'THIRD_PARTY_NOTICES.md'
 
@@ -252,11 +388,20 @@ $logPathProbe = Get-Content -Raw -LiteralPath $logPathProbePath
 $installScript = Get-Content -Raw -LiteralPath $installScriptPath
 $maintenanceInstallScript = Get-Content -Raw -LiteralPath $maintenanceInstallScriptPath
 $buildScript = Get-Content -Raw -LiteralPath $buildScriptPath
+$provisionScript = Get-Content -Raw -LiteralPath $provisionScriptPath
+$windowsWorkflow = Get-Content -Raw -LiteralPath $windowsWorkflowPath
+$windowsPackages = Get-Content -Raw -LiteralPath $windowsPackagesPath
+$buildConfigExample = Get-Content -Raw -LiteralPath $buildConfigExamplePath
 $brandRenderer = Get-Content -Raw -LiteralPath $brandRendererPath
 $notices = Get-Content -Raw -LiteralPath $noticesPath
 
 Assert-IfwReadyPageRuntime $controllerScriptPath
-Assert-IfwBuildHashRuntime $buildScriptPath
+Assert-IfwHashRuntime $buildScriptPath 'the IFW build script'
+Assert-IfwHashRuntime $provisionScriptPath 'the IFW provisioner'
+Assert-IfwPowerShellParses $provisionScriptPath 'the IFW provisioner'
+if ($IfwArchivePath) {
+    Assert-IfwProvisionerRuntime $provisionScriptPath $IfwArchivePath
+}
 
 Assert-IfwContract ($config.Installer.Name -eq 'vnm_terminal') `
     'the product name must match the application'
@@ -734,11 +879,48 @@ Assert-IfwContract `
     ($maintenanceInstallScript -match '@TargetDir@/installerbase\.exe') `
     'the maintenance component must select its packaged installerbase'
 
-Assert-IfwContract ($buildScript -match '\$ifwVersion\s*=\s*''4\.11\.0''') `
+Assert-IfwContract ($provisionScript -match '\$ifwVersion\s*=\s*''4\.11\.0''') `
     'the IFW tool version must be pinned to 4.11.0'
 Assert-IfwContract `
-    ($buildScript -match 'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1') `
+    ($provisionScript -match 'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1') `
     'the official IFW archive checksum must remain pinned'
+Assert-IfwContract `
+    ($provisionScript -match 'https://download\.qt\.io/online/qtsdkrepository/windows_x86/ifw/' -and
+        $provisionScript -match '4\.11\.0-0-202603231357ifw-win-x64\.7z') `
+    'the provisioner must own the exact official IFW 4.11.0 archive URL'
+Assert-IfwContract `
+    ($provisionScript -match 'Get-Sha256FileHash\s+\$ArchivePath' -and
+        $provisionScript -match '--fail' -and
+        $provisionScript -match '--location' -and
+        $provisionScript -match '--retry\s+4' -and
+        $provisionScript -match '--max-time\s+600' -and
+        $provisionScript -match '\$partPath\s*=\s*"\$Path\.part"') `
+    'the provisioner must use BCL hashing and bounded curl retries through a part file'
+Assert-IfwContract `
+    ($provisionScript -match '\.staging-' -and
+        $provisionScript -match '\.vnm-ifw-provisioned\.json' -and
+        $provisionScript -notmatch 'RedirectStandardOutput' -and
+        $provisionScript -match '\*>\s*\$extractionOutputPath') `
+    'the provisioner must isolate extraction output and publish a marked staged root'
+Assert-IfwContract `
+    ($buildScript -notmatch 'Invoke-WebRequest|curl\.exe|ifwArchiveUrl|ifwArchiveSha256|Resolve-IfwRoot|Get-SevenZipPath|\.7z') `
+    'the installer builder must not own IFW network, archive, cache, or extraction behavior'
+Assert-IfwContract `
+    ($buildScript -match '(?s)\[Parameter\(Mandatory\s*=\s*\$true\)\]\s*\[ValidateNotNullOrEmpty\(\)\]\s*\[string\]\$IfwRoot') `
+    'the installer builder must require an explicit non-empty IFW root'
+Assert-IfwContract `
+    ($windowsPackages -match 'if\s+"%IFW_ROOT%"==""' -and
+        $windowsPackages -match '-IfwRoot\s+"%IFW_ROOT%"') `
+    'the Windows package entry point must require and pass IFW_ROOT explicitly'
+Assert-IfwContract ($buildConfigExample -match 'set IFW_ROOT=') `
+    'the local build configuration example must document IFW_ROOT'
+Assert-IfwContract `
+    ($windowsWorkflow -match 'actions/cache/restore@v4' -and
+        $windowsWorkflow -match 'actions/cache/save@v4' -and
+        $windowsWorkflow -match '\$\{\{ runner\.os \}\}-qt-ifw-4\.11\.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1' -and
+        $windowsWorkflow -match 'tools/provision_windows_ifw\.ps1' -and
+        $windowsWorkflow -match 'set IFW_ROOT=\$env:IFW_ROOT') `
+    'Windows CI must cache only the verified archive, reprovision IFW, and pass IFW_ROOT'
 Assert-IfwContract ($buildScript -match '--offline-only') `
     'binarycreator must force offline-only behavior'
 Assert-IfwContract `

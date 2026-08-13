@@ -1,7 +1,11 @@
 [CmdletBinding()]
 param(
     [string]$PayloadPath,
+
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
     [string]$IfwRoot,
+
     [string]$SignToolPath,
     [string]$TrustedSigningDlibPath,
     [string]$TrustedSigningMetadataPath
@@ -10,12 +14,6 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $ifwVersion = '4.11.0'
-$ifwArchiveUrl =
-    'https://download.qt.io/online/qtsdkrepository/windows_x86/ifw/' +
-    'tools_ifw_411/qt.tools.ifw.411/' +
-    '4.11.0-0-202603231357ifw-win-x64.7z'
-$ifwArchiveSha256 =
-    'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1'
 $timestampUrl = 'http://timestamp.acs.microsoft.com'
 $expectedPublisher = 'Varinomics Ltd'
 
@@ -128,57 +126,6 @@ function Get-PayloadVersion {
     return $Matches.version
 }
 
-function Get-SevenZipPath {
-    $sevenZip = Get-Command 7z.exe -ErrorAction SilentlyContinue
-    if ($sevenZip) {
-        return $sevenZip.Source
-    }
-
-    $standardPath = 'C:\Program Files\7-Zip\7z.exe'
-    Assert-FileExists $standardPath '7-Zip command-line tool'
-    return $standardPath
-}
-
-function Resolve-IfwRoot {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$RepositoryRoot,
-
-        [string]$RequestedRoot
-    )
-
-    if ($RequestedRoot) {
-        return (Resolve-Path -LiteralPath $RequestedRoot).Path
-    }
-
-    $cacheRoot = Join-Path $RepositoryRoot "build_ifw\qt-ifw-$ifwVersion"
-    $archivePath = Join-Path $cacheRoot 'ifw-win-x64.7z'
-    $extractedRoot = Join-Path $cacheRoot 'root'
-    $binaryCreatorPath = Join-Path $extractedRoot 'bin\binarycreator.exe'
-
-    New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
-    if (-not (Test-Path -LiteralPath $archivePath -PathType Leaf)) {
-        Write-Host "Downloading Qt Installer Framework $ifwVersion..."
-        Invoke-WebRequest -Uri $ifwArchiveUrl -OutFile $archivePath
-    }
-
-    $archiveHash = Get-Sha256FileHash $archivePath
-    if ($archiveHash -ne $ifwArchiveSha256) {
-        throw "Qt IFW archive checksum mismatch: expected $ifwArchiveSha256, got $archiveHash"
-    }
-
-    if (-not (Test-Path -LiteralPath $binaryCreatorPath -PathType Leaf)) {
-        $sevenZipPath = Get-SevenZipPath
-        New-Item -ItemType Directory -Force -Path $extractedRoot | Out-Null
-        & $sevenZipPath x $archivePath "-o$extractedRoot" -y
-        if ($LASTEXITCODE -ne 0) {
-            throw "Qt IFW extraction failed with exit code $LASTEXITCODE"
-        }
-    }
-
-    return $extractedRoot
-}
-
 function Write-Template {
     param(
         [Parameter(Mandatory = $true)]
@@ -259,7 +206,8 @@ Assert-FileExists `
 
 $packageVersion = Get-PayloadVersion $PayloadPath
 $releaseDate = Get-Date -Format 'yyyy-MM-dd'
-$resolvedIfwRoot = Resolve-IfwRoot $repositoryRoot $IfwRoot
+$resolvedIfwRoot = (Resolve-Path -LiteralPath $IfwRoot).Path
+Assert-DirectoryExists $resolvedIfwRoot 'Qt IFW root'
 $binaryCreatorPath = Join-Path $resolvedIfwRoot 'bin\binarycreator.exe'
 $installerBaseSourcePath = Join-Path $resolvedIfwRoot 'bin\installerbase.exe'
 Assert-FileExists $binaryCreatorPath 'Qt IFW binarycreator'

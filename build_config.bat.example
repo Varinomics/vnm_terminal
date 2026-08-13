@@ -15,5 +15,7 @@ set CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe
 set NINJA=C:\Qt\Tools\Ninja\ninja.exe
 set VNM_TERMINAL_SURFACE_SOURCE_DIR=C:\plms\varinomics\vnm_terminal_surface
 set VNM_QML_CHROME_SOURCE_DIR=C:\plms\varinomics\vnm_qml_chrome
+REM Provision this directory with tools\provision_windows_ifw.ps1 before packaging.
+set IFW_ROOT=C:\plms\varinomics\vnm_terminal\build_ifw\qt-ifw-4.11.0\root
 REM Optional: if unset, build_portable.bat clones vnm_msdf_text under build_portable\_deps.
 REM set VNM_MSDF_TEXT_SOURCE_DIR=C:\plms\bsd_licensed\vnm_msdf_text
