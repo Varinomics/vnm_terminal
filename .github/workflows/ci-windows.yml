@@ -128,7 +128,7 @@ jobs:
           if-no-files-found: error
 
   package:
-    name: Portable ZIP and MSI (Windows x64)
+    name: Portable ZIP and unsigned EXE (Windows x64)
     runs-on: windows-2022
 
     steps:
@@ -170,7 +170,6 @@ jobs:
               "set QT_PREFIX=$env:QT_ROOT_DIR",
               "set MINGW_BIN=$env:IQTA_TOOLS\mingw1310_64\bin",
               "set CMAKE=$((Get-Command cmake.exe).Source)",
-              "set CPACK=$((Get-Command cpack.exe).Source)",
               "set NINJA=$((Get-Command ninja.exe).Source)",
               "set VNM_TERMINAL_SURFACE_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_terminal_surface",
               "set VNM_QML_CHROME_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qml_chrome"
@@ -185,41 +184,39 @@ jobs:
         working-directory: vnm_terminal
         run: cmd.exe /d /c build_windows_packages.bat
 
-      - name: Validate MSI contract and payload
+      - name: Validate installer and packaged runtime
         shell: pwsh
         run: |
-          $msi = Get-ChildItem -Path vnm_terminal/dist -Filter 'vnm_terminal_v*_windows_x64.msi' |
+          $installer = Get-ChildItem -Path vnm_terminal/dist `
+              -Filter 'vnm_terminal_v*_windows_x64_unsigned.exe' |
               Select-Object -First 1
-          if (-not $msi) {
-              throw 'MSI package was not created.'
+          if (-not $installer) {
+              throw 'Qt IFW installer was not created.'
           }
 
-          & vnm_terminal/tests/windows_msi_contract_tests.ps1 `
-              -MsiPath $msi.FullName
-
-          $extractDir = Join-Path $env:RUNNER_TEMP 'vnm_terminal_msi_extract'
-          Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
-          New-Item -ItemType Directory -Path $extractDir | Out-Null
-
-          $arguments = "/a `"$($msi.FullName)`" /qn TARGETDIR=`"$extractDir`""
-          $process = Start-Process msiexec.exe -ArgumentList $arguments -Wait -PassThru
-          if ($process.ExitCode -ne 0) {
-              throw "MSI administrative extraction failed with exit code $($process.ExitCode)."
+          $installerHelp = & $installer.FullName --help 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0 -or
+              $installerHelp -notmatch 'Qt Installer Framework') {
+              throw 'The generated Qt IFW installer did not provide its command-line help.'
           }
 
-          $executable = Get-ChildItem -Path $extractDir -Filter vnm_terminal.exe -Recurse |
-              Select-Object -First 1
-          if (-not $executable) {
-              throw 'MSI payload does not contain vnm_terminal.exe.'
-          }
-          if (-not (Test-Path -LiteralPath (Join-Path $executable.DirectoryName 'qt.conf'))) {
-              throw 'MSI payload does not contain qt.conf beside vnm_terminal.exe.'
+          $packagePayload = 'vnm_terminal/dist/portable_candidate'
+          $launcher = Join-Path $packagePayload 'vnm_terminal.exe'
+          $runtime = Join-Path $packagePayload 'vnm_terminal_runtime\vnm_terminal.exe'
+          $windowsPlugin = Join-Path $packagePayload `
+              'vnm_terminal_runtime\platforms\qwindows.dll'
+          foreach ($requiredFile in @($launcher, $runtime, $windowsPlugin)) {
+              if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+                  throw "Installed payload is missing $requiredFile"
+              }
           }
 
-          $env:QT_QPA_PLATFORM = 'offscreen'
-          & $executable.FullName --help | Out-Null
-          if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
+          foreach ($executable in @($launcher, $runtime)) {
+              $process = Start-Process -FilePath $executable `
+                  -ArgumentList '--help' -Wait -PassThru
+              if ($process.ExitCode -ne 0) {
+                  throw "$executable --help failed with exit code $($process.ExitCode)."
+              }
           }
 
       - name: Upload Windows package artifacts
@@ -228,8 +225,8 @@ jobs:
           name: vnm-terminal-windows-x64
           path: |
             vnm_terminal/dist/vnm_terminal_v*_w64.zip
-            vnm_terminal/dist/vnm_terminal_v*_windows_x64.msi
-            vnm_terminal/dist/vnm_terminal_v*_windows_x64.msi.sha256
+            vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe
+            vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe.sha256
           if-no-files-found: error
 
   attach-source-archive:
@@ -278,4 +275,7 @@ jobs:
       - name: Attach Windows packages to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" \
+            dist/vnm_terminal_v*_w64.zip \
+            --repo "${GITHUB_REPOSITORY}" --clobber

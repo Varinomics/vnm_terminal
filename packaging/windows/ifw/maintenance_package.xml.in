@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package>
+    <DisplayName>vnm_terminal Maintenance Tool</DisplayName>
+    <Description>Signed Qt Installer Framework maintenance tool</Description>
+    <Version>@VNM_TERMINAL_IFW_VERSION@</Version>
+    <ReleaseDate>@VNM_TERMINAL_RELEASE_DATE@</ReleaseDate>
+    <Name>com.varinomics.vnm_terminal.maintenance</Name>
+    <ForcedInstallation>true</ForcedInstallation>
+    <Essential>true</Essential>
+    <Virtual>true</Virtual>
+    <RequiresAdminRights>true</RequiresAdminRights>
+    <Script>maintenance_installscript.qs</Script>
+</Package>

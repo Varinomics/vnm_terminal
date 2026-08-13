@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 440">
+  <!--
+    Static installer crop of the website hero's authored icosahedron.
+    The geometry uses the exact source vertex order and edge pairs from
+    website/src/pages/index.astro; only the fixed projection and crop differ.
+  -->
+  <defs>
+    <linearGradient id="depth" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#2e1a0f"/>
+      <stop offset="0.46" stop-color="#1f1f1f"/>
+      <stop offset="1" stop-color="#0f1424"/>
+    </linearGradient>
+    <radialGradient id="warm" cx="30%" cy="72%" r="67%">
+      <stop offset="0" stop-color="#2e1a0f" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#2e1a0f" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cool" cx="76%" cy="30%" r="72%">
+      <stop offset="0" stop-color="#0f1424" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#0f1424" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="760" height="440" fill="#111111"/>
+  <rect width="760" height="440" fill="url(#depth)"/>
+  <rect width="760" height="440" fill="url(#warm)"/>
+  <rect width="760" height="440" fill="url(#cool)"/>
+
+  <g fill="none" stroke="#c8c8c8" stroke-opacity="0.25" stroke-width="1.4">
+    <line x1="319.5" y1="399.76" x2="521.66" y2="411.9"/>
+    <line x1="319.5" y1="399.76" x2="543.23" y2="407.87"/>
+    <line x1="319.5" y1="399.76" x2="335.68" y2="261.83"/>
+    <line x1="319.5" y1="399.76" x2="242.31" y2="165.05"/>
+    <line x1="319.5" y1="399.76" x2="370.58" y2="255.3"/>
+    <line x1="521.66" y1="411.9" x2="543.23" y2="407.87"/>
+    <line x1="521.66" y1="411.9" x2="335.68" y2="261.83"/>
+    <line x1="521.66" y1="411.9" x2="569.42" y2="184.7"/>
+    <line x1="521.66" y1="411.9" x2="697.69" y2="274.95"/>
+    <line x1="418.34" y1="28.1" x2="620.5" y2="40.24"/>
+    <line x1="418.34" y1="28.1" x2="604.32" y2="178.17"/>
+    <line x1="418.34" y1="28.1" x2="396.77" y2="32.13"/>
+    <line x1="418.34" y1="28.1" x2="242.31" y2="165.05"/>
+    <line x1="418.34" y1="28.1" x2="370.58" y2="255.3"/>
+    <line x1="620.5" y1="40.24" x2="604.32" y2="178.17"/>
+    <line x1="620.5" y1="40.24" x2="396.77" y2="32.13"/>
+    <line x1="620.5" y1="40.24" x2="569.42" y2="184.7"/>
+    <line x1="620.5" y1="40.24" x2="697.69" y2="274.95"/>
+    <line x1="604.32" y1="178.17" x2="543.23" y2="407.87"/>
+    <line x1="604.32" y1="178.17" x2="697.69" y2="274.95"/>
+    <line x1="604.32" y1="178.17" x2="370.58" y2="255.3"/>
+    <line x1="543.23" y1="407.87" x2="697.69" y2="274.95"/>
+    <line x1="543.23" y1="407.87" x2="370.58" y2="255.3"/>
+    <line x1="396.77" y1="32.13" x2="335.68" y2="261.83"/>
+    <line x1="396.77" y1="32.13" x2="569.42" y2="184.7"/>
+    <line x1="396.77" y1="32.13" x2="242.31" y2="165.05"/>
+    <line x1="335.68" y1="261.83" x2="569.42" y2="184.7"/>
+    <line x1="335.68" y1="261.83" x2="242.31" y2="165.05"/>
+    <line x1="569.42" y1="184.7" x2="697.69" y2="274.95"/>
+    <line x1="242.31" y1="165.05" x2="370.58" y2="255.3"/>
+  </g>
+
+  <g fill="#c8c8c8" fill-opacity="0.38">
+    <circle cx="319.5" cy="399.76" r="1.5"/>
+    <circle cx="521.66" cy="411.9" r="1.5"/>
+    <circle cx="418.34" cy="28.1" r="1.5"/>
+    <circle cx="620.5" cy="40.24" r="1.5"/>
+    <circle cx="604.32" cy="178.17" r="1.5"/>
+    <circle cx="543.23" cy="407.87" r="1.5"/>
+    <circle cx="396.77" cy="32.13" r="1.5"/>
+    <circle cx="335.68" cy="261.83" r="1.5"/>
+    <circle cx="569.42" cy="184.7" r="1.5"/>
+    <circle cx="697.69" cy="274.95" r="1.5"/>
+    <circle cx="242.31" cy="165.05" r="1.5"/>
+    <circle cx="370.58" cy="255.3" r="1.5"/>
+  </g>
+
+  <rect x="0" y="0" width="5" height="440" fill="#c44d28"/>
+  <rect x="5" y="0" width="3" height="440" fill="#a7acb4"/>
+</svg>

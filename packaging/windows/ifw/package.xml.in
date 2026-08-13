@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Package>
+    <DisplayName>vnm_terminal</DisplayName>
+    <Description>Cross-platform GPU-accelerated terminal emulator</Description>
+    <Version>@VNM_TERMINAL_VERSION@</Version>
+    <ReleaseDate>@VNM_TERMINAL_RELEASE_DATE@</ReleaseDate>
+    <Name>com.varinomics.vnm_terminal</Name>
+    <Default>true</Default>
+    <ForcedInstallation>true</ForcedInstallation>
+    <RequiresAdminRights>true</RequiresAdminRights>
+    <Licenses>
+        <License name="GNU General Public License version 3" file="LICENSE.txt" />
+    </Licenses>
+    <Script>installscript.qs</Script>
+</Package>

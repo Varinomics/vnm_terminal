@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Installer>
+    <Name>vnm_terminal</Name>
+    <Version>@VNM_TERMINAL_VERSION@</Version>
+    <Title>vnm_terminal Setup</Title>
+    <Publisher>Varinomics Ltd</Publisher>
+    <ProductUrl>https://github.com/Varinomics/vnm_terminal</ProductUrl>
+    <InstallerApplicationIcon>vnm_terminal</InstallerApplicationIcon>
+    <WizardStyle>Modern</WizardStyle>
+    <Banner>varinomics_banner.png</Banner>
+    <StyleSheet>style.qss</StyleSheet>
+    <ControlScript>controller.qs</ControlScript>
+    <TitleColor>#E0E0E0</TitleColor>
+    <RunProgram>@TargetDir@/vnm_terminal.exe</RunProgram>
+    <RunProgramDescription>Launch vnm_terminal</RunProgramDescription>
+    <StartMenuDir>vnm_terminal</StartMenuDir>
+    <TargetDir>@ApplicationsDirX64@/vnm_terminal</TargetDir>
+    <MaintenanceToolName>vnm_terminal_maintenance</MaintenanceToolName>
+    <SupportsModify>false</SupportsModify>
+    <RepositorySettingsPageVisible>false</RepositorySettingsPageVisible>
+    <AllowRepositoriesForOfflineInstaller>false</AllowRepositoriesForOfflineInstaller>
+    <SaveDefaultRepositories>false</SaveDefaultRepositories>
+    <DisableAuthorizationFallback>true</DisableAuthorizationFallback>
+</Installer>

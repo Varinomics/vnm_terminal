@@ -136,68 +136,25 @@ install(CODE "${vnm_terminal_install_deploy_code}"
     COMPONENT "${vnm_terminal_runtime_component}"
 )
 
-set(CPACK_PACKAGE_NAME "vnm-terminal")
-set(CPACK_PACKAGE_VENDOR "Varinomics")
-set(CPACK_PACKAGE_CONTACT "Ioannis Makris <imak@imak.gr>")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
-    "Cross-platform GPU-accelerated terminal emulator")
-set(CPACK_PACKAGE_DESCRIPTION
-    "vnm_terminal is a cross-platform GPU-accelerated terminal emulator built with Qt Quick.")
-set(CPACK_PACKAGE_HOMEPAGE_URL
-    "https://github.com/Varinomics/vnm_terminal")
-set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(vnm_terminal_cpack_license "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-if(WIN32)
-    set(vnm_terminal_cpack_license
-        "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
-    configure_file(
-        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-        "${vnm_terminal_cpack_license}"
-        COPYONLY)
-endif()
-set(CPACK_RESOURCE_FILE_LICENSE "${vnm_terminal_cpack_license}")
-set(CPACK_PACKAGE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
-set(CPACK_PACKAGE_CHECKSUM SHA256)
-set(CPACK_STRIP_FILES ON)
-set(CPACK_COMPONENTS_ALL "${vnm_terminal_runtime_component}")
-set(CPACK_INSTALL_CMAKE_PROJECTS
-    "${CMAKE_BINARY_DIR};${PROJECT_NAME};${vnm_terminal_runtime_component};/")
-
-if(WIN32)
-    # Native Linux package identifiers conventionally use the hyphenated
-    # vnm-terminal name. Keep the Windows ProductName aligned with the app,
-    # executable, shortcuts, and Start Menu branding instead.
-    set(CPACK_PACKAGE_NAME "vnm_terminal")
-    set(CPACK_GENERATOR WIX)
-    set(CPACK_PACKAGE_FILE_NAME
-        "vnm_terminal_v${PROJECT_VERSION}_windows_x64")
-    set(CPACK_PACKAGE_INSTALL_DIRECTORY "vnm_terminal")
-    set(CPACK_WIX_VERSION 3)
-    set(CPACK_WIX_UPGRADE_GUID
-        "F2D514D2-2D09-4DDB-A857-B27F65DD8BC0")
-    set(CPACK_WIX_INSTALL_SCOPE perMachine)
-    set(CPACK_WIX_PRODUCT_ICON
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/vnm_terminal.ico")
-    # WiX renders these fixed-size assets behind the welcome/completion
-    # dialogs and across the top of the remaining installer pages.
-    set(CPACK_WIX_UI_DIALOG
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_dialog.bmp")
-    set(CPACK_WIX_UI_BANNER
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_banner.bmp")
-    set(CPACK_WIX_UI_REF "VnmTerminalInstallerUI")
-    set(CPACK_WIX_EXTENSIONS WixUtilExtension)
-    set(CPACK_WIX_PATCH_FILE
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_patch.xml")
-    set(CPACK_WIX_EXTRA_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_features.wxs"
-        "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/vnm_installer_ui.wxs")
-    set(CPACK_WIX_PROPERTY_ARPCOMMENTS
+if(UNIX AND NOT APPLE)
+    set(CPACK_PACKAGE_NAME "vnm-terminal")
+    set(CPACK_PACKAGE_VENDOR "Varinomics")
+    set(CPACK_PACKAGE_CONTACT "Ioannis Makris <imak@imak.gr>")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
         "Cross-platform GPU-accelerated terminal emulator")
-    set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT
+    set(CPACK_PACKAGE_DESCRIPTION
+        "vnm_terminal is a cross-platform GPU-accelerated terminal emulator built with Qt Quick.")
+    set(CPACK_PACKAGE_HOMEPAGE_URL
         "https://github.com/Varinomics/vnm_terminal")
-    set(CPACK_WIX_PROPERTY_ARPURLUPDATEINFO
-        "https://github.com/Varinomics/vnm_terminal/releases")
-else()
+    set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+    set(CPACK_RESOURCE_FILE_LICENSE
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+    set(CPACK_PACKAGE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
+    set(CPACK_PACKAGE_CHECKSUM SHA256)
+    set(CPACK_STRIP_FILES ON)
+    set(CPACK_COMPONENTS_ALL "${vnm_terminal_runtime_component}")
+    set(CPACK_INSTALL_CMAKE_PROJECTS
+        "${CMAKE_BINARY_DIR};${PROJECT_NAME};${vnm_terminal_runtime_component};/")
     set(CPACK_GENERATOR "DEB;RPM")
     set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
 
@@ -214,6 +171,6 @@ else()
     set(CPACK_RPM_PACKAGE_DESCRIPTION "${CPACK_PACKAGE_DESCRIPTION}")
     set(CPACK_RPM_SPEC_MORE_DEFINE
         "%global __requires_exclude ^lib(Qt6|icu).*")
-endif()
 
-include(CPack)
+    include(CPack)
+endif()

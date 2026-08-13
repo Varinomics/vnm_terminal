@@ -5,7 +5,7 @@
 > **Latest release:** [Windows installer and other platform downloads](https://github.com/Varinomics/vnm_terminal/releases/latest)
 >
 > The primary Windows package is
-> `vnm_terminal_v<version>_windows_x64.msi`.
+> `vnm_terminal_v<version>_windows_x64.exe`.
 
 `vnm_terminal` is a focused, single-session terminal emulator for Windows,
 macOS, and Linux. Each window hosts the platform's default shell or one explicit
@@ -54,12 +54,18 @@ All published packages are available from the
 
 | Platform | Packages | Notes |
 | --- | --- | --- |
-| Windows x64 | MSI, portable ZIP | The MSI installs under `Program Files` and includes Start Menu integration. The portable ZIP contains a top-level launcher. |
+| Windows x64 | EXE, portable ZIP | The signed Qt Installer Framework EXE installs under `Program Files` and includes Start Menu integration. The portable ZIP contains a top-level launcher. |
 | Linux x64 | DEB, RPM, AppImage | DEB and RPM are direct-download packages. The AppImage is the portable cross-distribution option. |
 | macOS x64 | Application ZIP | The application bundle is ad-hoc signed but not Apple-notarized. Gatekeeper may quarantine it on first launch. |
 
 Windows and Linux packages include their private Qt runtime. Release source
 archives are available on the same page.
+
+Windows CI produces an explicitly named
+`vnm_terminal_v<version>_windows_x64_unsigned.exe` verification artifact. It is
+not a release installer. A release EXE has the `_unsigned` suffix removed only
+after the payload, maintenance tool, and final installer have been
+successfully signed as Varinomics Ltd and timestamped.
 
 ## Interaction
 

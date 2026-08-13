@@ -41,6 +41,50 @@ and the Qt Company distribution materials:
 - https://www.qt.io/licensing/
 - https://doc.qt.io/qt-6/licenses-used-in-qt.html
 
+## Qt Installer Framework
+
+The Windows EXE installer and installed maintenance tool are built with Qt
+Installer Framework 4.11.0 under GPLv3 with The Qt Company GPL Exception 1.0.
+The exception text is installed as
+`QT_INSTALLER_FRAMEWORK_LICENSE_EXCEPTION.txt`.
+
+The complete corresponding upstream source is available without charge from:
+
+- https://download.qt.io/official_releases/qt-installer-framework/4.11.0/installer-framework-everywhere-src-4.11.0.zip
+- https://download.qt.io/archive/qt/6.9/6.9.3/single/qt-everywhere-src-6.9.3.zip
+
+No Varinomics modifications are made to Qt Installer Framework or its Qt
+runtime. The installer configuration and package scripts are included in this
+repository under `packaging/windows/ifw`.
+
+### libarchive 3.8.5
+
+Qt Installer Framework uses libarchive to read and write archive files.
+
+Copyright (c) 2003-2018 Tim Kientzle
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer in this position and
+   unchanged.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR(S) ``AS IS'' AND ANY EXPRESS OR
+IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+EVENT SHALL THE AUTHOR(S) BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+
 ## CMDG
 
 The source tree vendors CMDG as a terminal graphics workload and demo source

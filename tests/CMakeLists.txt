@@ -30,13 +30,15 @@ add_test(
         -P "${CMAKE_CURRENT_SOURCE_DIR}/qml_chrome_dependency_contract_tests.cmake"
 )
 
-add_test(
-    NAME vnm_terminal_windows_packaging_asset_contract
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/windows_packaging_asset_contract_tests.cmake"
-)
+if(WIN32)
+    add_test(
+        NAME vnm_terminal_windows_ifw_contract
+        COMMAND
+            powershell.exe -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/windows_ifw_contract_tests.ps1"
+            -SourceRoot "${PROJECT_SOURCE_DIR}"
+    )
+endif()
 
 function(vnm_terminal_require_qt_plugin_file plugin_target purpose)
     if(NOT TARGET ${plugin_target})

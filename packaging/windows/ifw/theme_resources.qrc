@@ -1,0 +1,14 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/installer-theme">
+        <file>checkbox_check.svg</file>
+        <file>radio_dot.svg</file>
+        <file>combo_arrow.svg</file>
+        <file>varinomics_geometry.png</file>
+        <file>varinomics_geometry@2x.png</file>
+        <file>log_path_probe.ps1</file>
+    </qresource>
+    <qresource prefix="/installer-config">
+        <file alias="varinomics_banner_png@2x." compression-algorithm="none">varinomics_banner@2x.png</file>
+    </qresource>
+</RCC>

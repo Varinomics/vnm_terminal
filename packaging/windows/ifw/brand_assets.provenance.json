@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "sourceRepository": "https://github.com/Varinomics/website",
+  "sourceBranch": "master",
+  "assets": {
+    "varinomics_logo.png": {
+      "source": "public/logo-dark.png",
+      "sha256": "35d11678fa347e37f29b85bf0bbe4a0f21b89011f1406a61c7bca4098e6232c7",
+      "transformation": "none"
+    },
+    "varinomics_geometry.svg": {
+      "geometrySource": "src/pages/index.astro",
+      "geometrySourceSha256": "9b7af692bb261943cf6a35987ec2f2fd929ed58b39eaf1fc7e7a147d2531d505",
+      "paletteSource": "src/styles/tokens.css",
+      "paletteSourceSha256": "87e5416cb1c2d456478cdff9e40e8da958d4ee9b8cb9b2b287c6376420a56a49",
+      "shaderSource": "src/components/ShaderBackground.astro",
+      "shaderSourceSha256": "d2d7f12c340c492cd1cf3d14ccfac27049ec17973b1a781e287bd8c154b8dff8",
+      "transformation": "fixed projection and installer crop of the authored vertex and edge data"
+    },
+    "varinomics_banner.png": {
+      "source": "varinomics_logo.png",
+      "renderer": "tools/render_windows_ifw_brand_assets.py",
+      "rendererQtVersion": "6.11.0",
+      "sha256": "ee98f36defaee87112f62b02e1dde6c26b1c3ec5fcf9d7fe50536e8b8bb79674",
+      "highDpiSha256": "23e02853788a3b547f3c4428e838829441ce759a6ec2d45e1fa690de82411334",
+      "transformation": "canonical wordmark scaled with preserved aspect ratio and aligned right on the website base color"
+    },
+    "varinomics_geometry.png": {
+      "source": "varinomics_geometry.svg",
+      "renderer": "tools/render_windows_ifw_brand_assets.py",
+      "rendererQtVersion": "6.11.0",
+      "sha256": "43543c0d3c20ced0acacc357b78ca9957b667cc5099c91dd5b34b57349759283",
+      "highDpiSha256": "82ea293d949f7e10eeb77e632dd7abc3a4ea566e6705975f88ec8dcd4eb99987",
+      "transformation": "Qt SVG rasterization for the Introduction page stylesheet image"
+    }
+  }
+}
