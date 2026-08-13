@@ -271,6 +271,24 @@ jobs:
               }
           }
 
+      - name: Exercise generated Qt IFW installation lifecycle
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          $installer = Get-ChildItem -Path dist `
+              -Filter 'vnm_terminal_v*_windows_x64_unsigned.exe' |
+              Select-Object -First 1
+          if (-not $installer) {
+              throw 'Qt IFW installer was not created.'
+          }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File tests/windows_ifw_installation_tests.ps1 `
+            -InstallerPath $installer.FullName
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
       - name: Upload Windows package artifacts
         uses: actions/upload-artifact@v4
         with:

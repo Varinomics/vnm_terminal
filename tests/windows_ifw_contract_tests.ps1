@@ -103,7 +103,9 @@ function Assert-IfwReadyPageRuntime {
     Assert-IfwContract ($null -ne $node) `
         'the Ready-page runtime contract requires node.exe'
 
-    $harnessPath = [IO.Path]::GetTempFileName() + '.js'
+    $harnessPath = [IO.Path]::Combine(
+        [IO.Path]::GetTempPath(),
+        "vnm-terminal-ifw-ready-$([Guid]::NewGuid().ToString('N')).js")
     try {
         $harness = @'
 const fs = require("fs");
@@ -160,6 +162,146 @@ if (lookupCount !== 1 || hiddenColumn !== 5 ||
             Out-String
         Assert-IfwContract ($LASTEXITCODE -eq 0) `
             "the Ready-page callback must use IFW's recursive object lookup without a runtime exception: $runtimeOutput"
+    }
+    finally {
+        Remove-Item -LiteralPath $harnessPath -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Assert-IfwStartMenuShortcutRuntime {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallScriptPath
+    )
+
+    $node = Get-Command node.exe -ErrorAction SilentlyContinue
+    Assert-IfwContract ($null -ne $node) `
+        'the Start Menu mapping contract requires node.exe'
+
+    $harnessPath = [IO.Path]::Combine(
+        [IO.Path]::GetTempPath(),
+        "vnm-terminal-ifw-start-menu-$([Guid]::NewGuid().ToString('N')).js")
+    try {
+        $harness = @'
+const fs = require("fs");
+const childProcess = require("child_process");
+const path = require("path");
+const installScript = fs.readFileSync(process.argv[2], "utf8");
+const userPrograms = "C:\\Users\\runner\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs";
+const allUsersPrograms = "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs";
+const values = {
+    StartMenuDir: "",
+    UserStartMenuProgramsPath: userPrograms,
+    AllUsersStartMenuProgramsPath: allUsersPrograms,
+    RootDir: path.parse(process.env.SystemRoot).root,
+};
+let defaultOperations = 0;
+let elevatedOperations = [];
+
+global.installer = {
+    value(name) { return values[name] || ""; },
+    fileExists(filePath) { return fs.existsSync(filePath); },
+    toNativeSeparators(filePath) { return filePath.replace(/\//g, "\\"); },
+    execute(executable, args, stdin) {
+        const result = childProcess.spawnSync(executable, args, {
+            encoding: "utf8",
+            input: stdin || "",
+            windowsHide: true,
+        });
+        return [result.stdout || "", result.status];
+    },
+};
+global.component = {
+    createOperations() { ++defaultOperations; },
+    addElevatedOperation() {
+        elevatedOperations.push(Array.from(arguments));
+    },
+};
+
+eval(installScript);
+
+function reset(selection) {
+    values.StartMenuDir = selection;
+    defaultOperations = 0;
+    elevatedOperations = [];
+}
+
+function expectMapped(selection, expectedShortcut) {
+    reset(selection);
+    Component.prototype.createOperations();
+    if (defaultOperations !== 1 || elevatedOperations.length !== 1)
+        throw new Error("the component did not add exactly one shortcut operation");
+
+    const operation = elevatedOperations[0];
+    if (operation.length !== 3 || operation[0] !== "CreateShortcut" ||
+        operation[1] !== "@TargetDir@/vnm_terminal.exe" ||
+        operation[2] !== expectedShortcut)
+    {
+        throw new Error("the component did not preserve the selected all-users group");
+    }
+}
+
+function expectRejected(selection) {
+    reset(selection);
+    let rejected = false;
+    try {
+        Component.prototype.createOperations();
+    }
+    catch (error) {
+        rejected = true;
+    }
+    if (!rejected || defaultOperations !== 0 || elevatedOperations.length !== 0)
+        throw new Error("an out-of-scope Start Menu selection was not rejected before operation creation");
+}
+
+expectMapped(
+    userPrograms + "\\Varinomics\\Chosen Group",
+    allUsersPrograms.replace(/\\/g, "/") + "/Varinomics/Chosen Group/vnm_terminal.lnk");
+expectMapped(
+    allUsersPrograms + "\\Another Group",
+    allUsersPrograms.replace(/\\/g, "/") + "/Another Group/vnm_terminal.lnk");
+expectMapped(
+    "c:/USERS/RUNNER/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Mixed Case Group",
+    allUsersPrograms.replace(/\\/g, "/") + "/Mixed Case Group/vnm_terminal.lnk");
+expectMapped(
+    "c:\\\\Users//runner\\AppData/Roaming/Microsoft/Windows/Start Menu/Programs\\Separator Group\\",
+    allUsersPrograms.replace(/\\/g, "/") + "/Separator Group/vnm_terminal.lnk");
+
+values.UserStartMenuProgramsPath =
+    "C:\\Users\\\u0130mak\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs";
+expectMapped(
+    values.UserStartMenuProgramsPath + "\\Chosen Group",
+    allUsersPrograms.replace(/\\/g, "/") + "/Chosen Group/vnm_terminal.lnk");
+expectRejected(
+    "C:\\Users\\I\u0307mak\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Lookalike Group");
+
+values.UserStartMenuProgramsPath =
+    "C:\\Users\\I\u0307mak\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs";
+expectMapped(
+    values.UserStartMenuProgramsPath + "\\Decomposed Group",
+    allUsersPrograms.replace(/\\/g, "/") + "/Decomposed Group/vnm_terminal.lnk");
+expectRejected(
+    "C:\\Users\\\u0130mak\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Composed Lookalike Group");
+
+values.UserStartMenuProgramsPath =
+    "C:\\Users\\O'Brien\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs";
+expectMapped(
+    values.UserStartMenuProgramsPath + "\\Chosen O'Brien Group",
+    allUsersPrograms.replace(/\\/g, "/") + "/Chosen O'Brien Group/vnm_terminal.lnk");
+
+values.UserStartMenuProgramsPath = userPrograms;
+expectRejected("D:\\Unrelated\\Programs\\Unexpected Group");
+expectRejected(userPrograms + " Unexpected\\Group");
+expectRejected(userPrograms + "\\..\\Escaped Group");
+'@
+        [IO.File]::WriteAllText(
+            $harnessPath,
+            $harness,
+            [Text.UTF8Encoding]::new($false))
+        $runtimeOutput = & $node.Source $harnessPath $InstallScriptPath 2>&1 |
+            Out-String
+        Assert-IfwContract ($LASTEXITCODE -eq 0) `
+            "the Start Menu group mapping must preserve scope at runtime: $runtimeOutput"
     }
     finally {
         Remove-Item -LiteralPath $harnessPath -Force -ErrorAction SilentlyContinue
@@ -526,29 +668,31 @@ function Assert-IfwProvisionerRuntime {
 }
 
 $resolvedSourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
-$ifwRoot = Join-Path $resolvedSourceRoot 'packaging\windows\ifw'
-$configPath = Join-Path $ifwRoot 'config.xml.in'
-$styleSheetPath = Join-Path $ifwRoot 'style.qss'
-$controllerScriptPath = Join-Path $ifwRoot 'controller.qs'
-$checkboxCheckPath = Join-Path $ifwRoot 'checkbox_check.svg'
-$radioDotPath = Join-Path $ifwRoot 'radio_dot.svg'
-$comboArrowPath = Join-Path $ifwRoot 'combo_arrow.svg'
-$brandLogoPath = Join-Path $ifwRoot 'varinomics_logo.png'
-$brandGeometryPath = Join-Path $ifwRoot 'varinomics_geometry.svg'
-$brandBannerPath = Join-Path $ifwRoot 'varinomics_banner.png'
-$brandBannerHighDpiPath = Join-Path $ifwRoot 'varinomics_banner@2x.png'
-$brandGeometryPngPath = Join-Path $ifwRoot 'varinomics_geometry.png'
-$brandGeometryHighDpiPath = Join-Path $ifwRoot 'varinomics_geometry@2x.png'
-$brandProvenancePath = Join-Path $ifwRoot 'brand_assets.provenance.json'
-$logPathProbePath = Join-Path $ifwRoot 'log_path_probe.ps1'
-$themeResourcesPath = Join-Path $ifwRoot 'theme_resources.qrc'
-$packagePath = Join-Path $ifwRoot 'package.xml.in'
-$installScriptPath = Join-Path $ifwRoot 'installscript.qs'
-$maintenancePackagePath = Join-Path $ifwRoot 'maintenance_package.xml.in'
-$maintenanceInstallScriptPath = Join-Path $ifwRoot 'maintenance_installscript.qs'
+$ifwSourceRoot = Join-Path $resolvedSourceRoot 'packaging\windows\ifw'
+$configPath = Join-Path $ifwSourceRoot 'config.xml.in'
+$styleSheetPath = Join-Path $ifwSourceRoot 'style.qss'
+$controllerScriptPath = Join-Path $ifwSourceRoot 'controller.qs'
+$checkboxCheckPath = Join-Path $ifwSourceRoot 'checkbox_check.svg'
+$radioDotPath = Join-Path $ifwSourceRoot 'radio_dot.svg'
+$comboArrowPath = Join-Path $ifwSourceRoot 'combo_arrow.svg'
+$brandLogoPath = Join-Path $ifwSourceRoot 'varinomics_logo.png'
+$brandGeometryPath = Join-Path $ifwSourceRoot 'varinomics_geometry.svg'
+$brandBannerPath = Join-Path $ifwSourceRoot 'varinomics_banner.png'
+$brandBannerHighDpiPath = Join-Path $ifwSourceRoot 'varinomics_banner@2x.png'
+$brandGeometryPngPath = Join-Path $ifwSourceRoot 'varinomics_geometry.png'
+$brandGeometryHighDpiPath = Join-Path $ifwSourceRoot 'varinomics_geometry@2x.png'
+$brandProvenancePath = Join-Path $ifwSourceRoot 'brand_assets.provenance.json'
+$logPathProbePath = Join-Path $ifwSourceRoot 'log_path_probe.ps1'
+$themeResourcesPath = Join-Path $ifwSourceRoot 'theme_resources.qrc'
+$packagePath = Join-Path $ifwSourceRoot 'package.xml.in'
+$installScriptPath = Join-Path $ifwSourceRoot 'installscript.qs'
+$maintenancePackagePath = Join-Path $ifwSourceRoot 'maintenance_package.xml.in'
+$maintenanceInstallScriptPath = Join-Path $ifwSourceRoot 'maintenance_installscript.qs'
 $buildScriptPath = Join-Path $resolvedSourceRoot 'tools\build_windows_ifw_installer.ps1'
 $provisionScriptPath = Join-Path $resolvedSourceRoot 'tools\provision_windows_ifw.ps1'
 $windowsWorkflowPath = Join-Path $resolvedSourceRoot '.github\workflows\ci-windows.yml'
+$installationTestsPath = Join-Path `
+    $resolvedSourceRoot 'tests\windows_ifw_installation_tests.ps1'
 $windowsPackagesPath = Join-Path $resolvedSourceRoot 'build_windows_packages.bat'
 $buildConfigExamplePath = Join-Path $resolvedSourceRoot 'build_config.bat.example'
 $brandRendererPath = Join-Path $resolvedSourceRoot 'tools\render_windows_ifw_brand_assets.py'
@@ -577,6 +721,7 @@ $windowsPackages = Get-Content -Raw -LiteralPath $windowsPackagesPath
 $buildConfigExample = Get-Content -Raw -LiteralPath $buildConfigExamplePath
 $brandRenderer = Get-Content -Raw -LiteralPath $brandRendererPath
 $notices = Get-Content -Raw -LiteralPath $noticesPath
+$installationTests = Get-Content -Raw -LiteralPath $installationTestsPath
 
 Assert-IfwReadyPageRuntime $controllerScriptPath
 Assert-IfwHashRuntime $buildScriptPath 'the IFW build script'
@@ -584,9 +729,12 @@ Assert-IfwHashRuntime $provisionScriptPath 'the IFW provisioner'
 Assert-IfwCertificateTableRuntime $buildScriptPath
 Assert-IfwSignedValidationRuntime $buildScriptPath
 Assert-IfwPowerShellParses $provisionScriptPath 'the IFW provisioner'
+Assert-IfwPowerShellParses `
+    $installationTestsPath 'the generated-installer lifecycle test'
 if ($IfwArchivePath) {
     Assert-IfwProvisionerRuntime $provisionScriptPath $IfwArchivePath
 }
+Assert-IfwStartMenuShortcutRuntime $installScriptPath
 
 Assert-IfwContract ($config.Installer.Name -eq 'vnm_terminal') `
     'the product name must match the application'
@@ -804,11 +952,14 @@ if ($DumpPath) {
         Join-Path $resolvedDumpPath 'metadata\installer-config\varinomics_banner_png'
     $dumpedBannerHighDpiPath =
         Join-Path $resolvedDumpPath 'metadata\installer-config\varinomics_banner_png@2x'
+    $dumpedInstallScriptPath = Join-Path `
+        $resolvedDumpPath 'metadata\com.varinomics.vnm_terminal\installscript.qs'
     Assert-IfwContract `
         ((Test-Path -LiteralPath $dumpedConfigPath -PathType Leaf) -and
             (Test-Path -LiteralPath $dumpedBannerPath -PathType Leaf) -and
-            (Test-Path -LiteralPath $dumpedBannerHighDpiPath -PathType Leaf)) `
-        'devtool dump must materialize the IFW config and both exact Banner density paths'
+            (Test-Path -LiteralPath $dumpedBannerHighDpiPath -PathType Leaf) -and
+            (Test-Path -LiteralPath $dumpedInstallScriptPath -PathType Leaf)) `
+        'devtool dump must materialize the IFW config, component script, and both Banner density paths'
 
     [xml]$dumpedConfig = Get-Content -LiteralPath $dumpedConfigPath -Raw
     $dumpedBannerHash =
@@ -818,8 +969,10 @@ if ($DumpPath) {
     Assert-IfwContract `
         ($dumpedConfig.Installer.Banner -eq 'varinomics_banner_png' -and
             $dumpedBannerHash -eq $brandBannerHash -and
-            $dumpedBannerHighDpiHash -eq $brandBannerHighDpiHash) `
-        'the dumped Banner setting and both embedded resources must match their exact source bodies'
+            $dumpedBannerHighDpiHash -eq $brandBannerHighDpiHash -and
+            (Get-Content -LiteralPath $dumpedInstallScriptPath -Raw) -eq
+                $installScript) `
+        'the dumped component script, Banner setting, and embedded resources must match their exact source bodies'
 
     $dumpedBannerDimensions = Get-IfwPngDimensions $dumpedBannerPath
     $dumpedBannerHighDpiDimensions = Get-IfwPngDimensions $dumpedBannerHighDpiPath
@@ -915,14 +1068,22 @@ Assert-IfwContract `
     'the package must present the project license'
 
 Assert-IfwContract `
-    ($installScript -match 'addElevatedOperation\s*\(\s*"CreateShortcut"') `
-    'the Start Menu shortcut must be created as an elevated operation'
-Assert-IfwContract `
-    ($installScript -match '@AllUsersStartMenuProgramsPath@') `
-    'the shortcut must be installed for all users'
+    ([regex]::Matches(
+        $installScript,
+        'addElevatedOperation\s*\(\s*"CreateShortcut"').Count -eq 1) `
+    'the Start Menu shortcut must use one elevated component operation'
 Assert-IfwContract `
     ($installScript -match '@TargetDir@/vnm_terminal\.exe') `
     'the shortcut must target the portable launcher'
+Assert-IfwContract `
+    ($installScript -match 'installer\.value\s*\(\s*"StartMenuDir"\s*\)' -and
+        $installScript -match `
+            'installer\.value\s*\(\s*"UserStartMenuProgramsPath"\s*\)' -and
+        $installScript -match `
+            'installer\.value\s*\(\s*"AllUsersStartMenuProgramsPath"\s*\)' -and
+        $installScript -notmatch `
+            '@AllUsersStartMenuProgramsPath@\s*/\s*@StartMenuDir@') `
+    'the final StartMenuDir group must be mapped once from an expected Programs root to the all-users root'
 Assert-IfwContract `
     ($installScript -notmatch 'setDefaultPageVisible|ComponentSelection|ReadyForInstallationPage|hideColumn') `
     'component scripts must not mutate wizard pages after the first frame is visible'
@@ -1139,7 +1300,33 @@ Assert-IfwContract `
         $windowsWorkflow -match 'actions/cache/save@v4' -and
         $windowsWorkflow -match 'tools/provision_windows_ifw\.ps1' -and
         $windowsWorkflow -match 'set IFW_ROOT=\$env:IFW_ROOT') `
-    'Windows CI must cache only the verified archive, reprovision IFW, and pass IFW_ROOT'
+    'Windows CI must cache only the verified archive, reprovision IFW, and pass IFW_ROOT to packaging'
+Assert-IfwContract `
+    ($windowsWorkflow -match `
+        '-File tests/windows_ifw_installation_tests\.ps1[\s\S]*?-InstallerPath \$installer\.FullName' -and
+        $installationTests -match `
+            '\$env:GITHUB_ACTIONS\s+-eq\s+''true''' -and
+        $installationTests -match `
+            'WindowsBuiltInRole\]::Administrator' -and
+        $installationTests -match `
+            'StartMenuDir=\$startMenuGroup' -and
+        $installationTests -match `
+            '''AllUsers=true''' -and
+        $installationTests -match `
+            '\[Environment\+SpecialFolder\]::CommonPrograms' -and
+        $installationTests -match `
+            'vnm_terminal_runtime\\platforms\\qwindows\.dll' -and
+        $installationTests -match `
+            'Get-ShortcutTarget\s+\$shortcutPath' -and
+        $installationTests -match `
+            'Get-InstallationRegistrations\s+\$installRoot' -and
+        $installationTests -match `
+            '''purge''[\s\S]*?--confirm-command' -and
+        $installationTests -match `
+            'Test-Path -LiteralPath \$installRoot' -and
+        $installationTests -match `
+            'Test-Path -LiteralPath \$startMenuRoot') `
+    'hosted Windows CI must commit an all-users installation, verify its shortcut and registration, run it, purge it, and check residue'
 Assert-IfwContract ($buildScript -match '--offline-only') `
     'binarycreator must force offline-only behavior'
 Assert-IfwContract `
