@@ -914,10 +914,36 @@ Assert-IfwContract `
     'the Windows package entry point must require and pass IFW_ROOT explicitly'
 Assert-IfwContract ($buildConfigExample -match 'set IFW_ROOT=') `
     'the local build configuration example must document IFW_ROOT'
+$jobLevelEnvironmentBlocks = [regex]::Matches(
+    $windowsWorkflow,
+    '(?m)^ {4}env:\s*\r?\n(?:(?:^ {6,}[^\r\n]*\r?\n)|(?:^\s*\r?\n))*')
+Assert-IfwContract `
+    (-not ($jobLevelEnvironmentBlocks.Value -match '\$\{\{\s*runner\.')) `
+    'job-level workflow environment must not reference runner context'
+$ifwPathInitializationIndex = $windowsWorkflow.IndexOf(
+    '- name: Initialize Qt IFW paths')
+$ifwCacheRestoreIndex = $windowsWorkflow.IndexOf(
+    '- name: Restore verified Qt IFW archive')
+Assert-IfwContract `
+    ($ifwPathInitializationIndex -ge 0 -and
+        $ifwCacheRestoreIndex -gt $ifwPathInitializationIndex -and
+        $windowsWorkflow -match '\$ifwArchivePath\s*=\s*Join-Path\s+\$env:RUNNER_TEMP' -and
+        $windowsWorkflow -match '\$ifwRoot\s*=\s*Join-Path\s+\$env:RUNNER_TEMP' -and
+        $windowsWorkflow -match '"IFW_ARCHIVE_PATH=\$ifwArchivePath"[\s\S]*?\$env:GITHUB_ENV' -and
+        $windowsWorkflow -match '"IFW_ROOT=\$ifwRoot"[\s\S]*?\$env:GITHUB_ENV') `
+    'Windows CI must derive IFW paths on the runner before the cache step and export them'
+$ifwCacheKeyPattern =
+    '\$\{\{ runner\.os \}\}-qt-ifw-4\.11\.0-' +
+    'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1'
+Assert-IfwContract `
+    ([regex]::Matches($windowsWorkflow, $ifwCacheKeyPattern).Count -eq 2 -and
+        [regex]::Matches(
+            $windowsWorkflow,
+            'path:\s*\$\{\{\s*env\.IFW_ARCHIVE_PATH\s*\}\}').Count -eq 2) `
+    'Windows CI restore and save steps must share the exact archive path and cache key'
 Assert-IfwContract `
     ($windowsWorkflow -match 'actions/cache/restore@v4' -and
         $windowsWorkflow -match 'actions/cache/save@v4' -and
-        $windowsWorkflow -match '\$\{\{ runner\.os \}\}-qt-ifw-4\.11\.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1' -and
         $windowsWorkflow -match 'tools/provision_windows_ifw\.ps1' -and
         $windowsWorkflow -match 'set IFW_ROOT=\$env:IFW_ROOT') `
     'Windows CI must cache only the verified archive, reprovision IFW, and pass IFW_ROOT'

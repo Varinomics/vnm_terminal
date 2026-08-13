@@ -130,11 +130,19 @@ jobs:
   package:
     name: Portable ZIP and unsigned EXE (Windows x64)
     runs-on: windows-2022
-    env:
-      IFW_ARCHIVE_PATH: ${{ runner.temp }}\vnm-ifw-cache\ifw-win-x64.7z
-      IFW_ROOT: ${{ runner.temp }}\vnm-ifw-4.11.0
 
     steps:
+      - name: Initialize Qt IFW paths
+        shell: pwsh
+        run: |
+          $ifwArchivePath = Join-Path $env:RUNNER_TEMP `
+              'vnm-ifw-cache\ifw-win-x64.7z'
+          $ifwRoot = Join-Path $env:RUNNER_TEMP 'vnm-ifw-4.11.0'
+          "IFW_ARCHIVE_PATH=$ifwArchivePath" | Out-File `
+              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "IFW_ROOT=$ifwRoot" | Out-File `
+              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Checkout app
         uses: actions/checkout@v4
         with:
@@ -159,7 +167,7 @@ jobs:
         id: ifw-cache
         uses: actions/cache/restore@v4
         with:
-          path: ${{ runner.temp }}\vnm-ifw-cache\ifw-win-x64.7z
+          path: ${{ env.IFW_ARCHIVE_PATH }}
           key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
 
       - name: Provision Qt Installer Framework
@@ -180,7 +188,7 @@ jobs:
         if: steps.ifw-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ${{ runner.temp }}\vnm-ifw-cache\ifw-win-x64.7z
+          path: ${{ env.IFW_ARCHIVE_PATH }}
           key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
 
       - name: Validate Qt IFW packaging contract
