@@ -234,6 +234,189 @@ function Assert-IfwPowerShellParses {
         "$Description must parse in Windows PowerShell"
 }
 
+function Assert-IfwCertificateTableRuntime {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BuildScriptPath
+    )
+
+    $tokens = $null
+    $parseErrors = $null
+    $scriptAst = [Management.Automation.Language.Parser]::ParseFile(
+        $BuildScriptPath,
+        [ref]$tokens,
+        [ref]$parseErrors)
+    Assert-IfwContract ($parseErrors.Count -eq 0) `
+        'the IFW build script must parse before certificate-table testing'
+
+    $certificateFunctions = @($scriptAst.FindAll(
+        {
+            param($node)
+            return $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Test-PeHasCertificateTable'
+        },
+        $true))
+    Assert-IfwContract ($certificateFunctions.Count -eq 1) `
+        'the IFW build script must define one PE certificate-table helper'
+
+    Invoke-Expression $certificateFunctions[0].Extent.Text
+    function Get-AuthenticodeSignature {
+        throw 'Get-AuthenticodeSignature is unavailable in the hosted packaging shell.'
+    }
+
+    $testRoot = Join-Path ([IO.Path]::GetTempPath()) (
+        'vnm-ifw-pe-test-' + [Guid]::NewGuid().ToString('N'))
+    $pe64Path = Join-Path $testRoot 'pe64.exe'
+    $pe32Path = Join-Path $testRoot 'pe32.exe'
+    try {
+        [void](New-Item -ItemType Directory -Path $testRoot)
+        $peBytes = [byte[]]::new(520)
+        [BitConverter]::GetBytes([uint16]0x5a4d).CopyTo($peBytes, 0)
+        [BitConverter]::GetBytes([uint32]0x80).CopyTo($peBytes, 0x3c)
+        [BitConverter]::GetBytes([uint32]0x00004550).CopyTo($peBytes, 0x80)
+        [BitConverter]::GetBytes([uint16]0x00f0).CopyTo($peBytes, 0x94)
+        [BitConverter]::GetBytes([uint16]0x020b).CopyTo($peBytes, 0x98)
+        [BitConverter]::GetBytes([uint32]16).CopyTo($peBytes, 0x104)
+        [IO.File]::WriteAllBytes($pe64Path, $peBytes)
+
+        Assert-IfwContract (-not (Test-PeHasCertificateTable $pe64Path)) `
+            'unsigned PE32+ detection must not depend on Get-AuthenticodeSignature'
+
+        [BitConverter]::GetBytes([uint32]4).CopyTo($peBytes, 0x104)
+        [IO.File]::WriteAllBytes($pe64Path, $peBytes)
+        Assert-IfwContract (-not (Test-PeHasCertificateTable $pe64Path)) `
+            'a PE with no declared security-directory entry must be unsigned'
+        [BitConverter]::GetBytes([uint32]16).CopyTo($peBytes, 0x104)
+
+        [BitConverter]::GetBytes([uint32]0x200).CopyTo($peBytes, 0x128)
+        [IO.File]::WriteAllBytes($pe64Path, $peBytes)
+        $inconsistentMessage = $null
+        try {
+            [void](Test-PeHasCertificateTable $pe64Path)
+        }
+        catch {
+            $inconsistentMessage = $_.Exception.Message
+        }
+        Assert-IfwContract ($inconsistentMessage -match 'inconsistent security directory') `
+            'a half-empty PE security-directory entry must be rejected as malformed'
+
+        [BitConverter]::GetBytes([uint32]8).CopyTo($peBytes, 0x12c)
+        [IO.File]::WriteAllBytes($pe64Path, $peBytes)
+        Assert-IfwContract (Test-PeHasCertificateTable $pe64Path) `
+            'a non-empty PE32+ certificate-table entry must be rejected as signed'
+
+        [BitConverter]::GetBytes([uint32]0).CopyTo($peBytes, 0x128)
+        [BitConverter]::GetBytes([uint32]0).CopyTo($peBytes, 0x12c)
+        [BitConverter]::GetBytes([uint16]0x00e0).CopyTo($peBytes, 0x94)
+        [BitConverter]::GetBytes([uint16]0x010b).CopyTo($peBytes, 0x98)
+        [BitConverter]::GetBytes([uint32]16).CopyTo($peBytes, 0xf4)
+        [IO.File]::WriteAllBytes($pe32Path, $peBytes)
+        Assert-IfwContract (-not (Test-PeHasCertificateTable $pe32Path)) `
+            'an empty PE32 security-directory entry must be unsigned'
+
+        [BitConverter]::GetBytes([uint32]0x200).CopyTo($peBytes, 0x118)
+        [BitConverter]::GetBytes([uint32]8).CopyTo($peBytes, 0x11c)
+        [IO.File]::WriteAllBytes($pe32Path, $peBytes)
+        Assert-IfwContract (Test-PeHasCertificateTable $pe32Path) `
+            'a non-empty PE32 certificate-table entry must be rejected as signed'
+    }
+    finally {
+        Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Assert-IfwSignedValidationRuntime {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BuildScriptPath
+    )
+
+    $tokens = $null
+    $parseErrors = $null
+    $scriptAst = [Management.Automation.Language.Parser]::ParseFile(
+        $BuildScriptPath,
+        [ref]$tokens,
+        [ref]$parseErrors)
+    Assert-IfwContract ($parseErrors.Count -eq 0) `
+        'the IFW build script must parse before signed-artifact testing'
+
+    $signingFunctions = @($scriptAst.FindAll(
+        {
+            param($node)
+            return $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Invoke-TrustedSigning'
+        },
+        $true))
+    Assert-IfwContract ($signingFunctions.Count -eq 1) `
+        'the IFW build script must define one trusted-signing helper'
+
+    Invoke-Expression $signingFunctions[0].Extent.Text
+
+    $testRoot = Join-Path ([IO.Path]::GetTempPath()) (
+        'vnm-ifw-signing-test-' + [Guid]::NewGuid().ToString('N'))
+    $artifactPath = Join-Path $testRoot 'artifact.exe'
+    $SignToolPath = Join-Path $testRoot 'signtool.cmd'
+    $TrustedSigningDlibPath = 'unused-dlib'
+    $TrustedSigningMetadataPath = 'unused-metadata'
+    $timestampUrl = 'https://timestamp.example.test'
+    $expectedPublisher = 'Varinomics Ltd'
+    $signatureFixture = $null
+    function Get-AuthenticodeSignature {
+        param([string]$LiteralPath)
+
+        if ($LiteralPath -ne $artifactPath) {
+            throw "Unexpected signature fixture path: $LiteralPath"
+        }
+        return $signatureFixture
+    }
+
+    function Assert-SigningFixtureThrows {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$ExpectedMessage
+        )
+
+        $message = $null
+        try {
+            Invoke-TrustedSigning $artifactPath
+        }
+        catch {
+            $message = $_.Exception.Message
+        }
+        Assert-IfwContract ($message -match $ExpectedMessage) `
+            "signed validation must reject the fixture with $ExpectedMessage"
+    }
+
+    try {
+        [void](New-Item -ItemType Directory -Path $testRoot)
+        [IO.File]::WriteAllBytes($artifactPath, [byte[]]::new(1))
+        [IO.File]::WriteAllText(
+            $SignToolPath,
+            "@echo off`r`nexit /b 0`r`n",
+            [Text.Encoding]::ASCII)
+
+        $signatureFixture = [pscustomobject]@{
+            Status = 'Valid'
+            StatusMessage = 'Signature is valid.'
+            SignerCertificate = [pscustomobject]@{
+                Subject = 'CN=Varinomics Ltd, O=Varinomics Ltd'
+            }
+        }
+        Invoke-TrustedSigning $artifactPath
+
+        $signatureFixture.Status = 'HashMismatch'
+        $signatureFixture.StatusMessage = 'The file hash does not match.'
+        Assert-SigningFixtureThrows 'is not valid'
+
+        $signatureFixture.Status = 'Valid'
+        $signatureFixture.SignerCertificate.Subject = 'CN=Unexpected Publisher'
+        Assert-SigningFixtureThrows 'does not identify Varinomics Ltd'
+    }
+    finally {
+        Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Assert-IfwProvisionerRuntime {
     param(
         [Parameter(Mandatory = $true)]
@@ -398,6 +581,8 @@ $notices = Get-Content -Raw -LiteralPath $noticesPath
 Assert-IfwReadyPageRuntime $controllerScriptPath
 Assert-IfwHashRuntime $buildScriptPath 'the IFW build script'
 Assert-IfwHashRuntime $provisionScriptPath 'the IFW provisioner'
+Assert-IfwCertificateTableRuntime $buildScriptPath
+Assert-IfwSignedValidationRuntime $buildScriptPath
 Assert-IfwPowerShellParses $provisionScriptPath 'the IFW provisioner'
 if ($IfwArchivePath) {
     Assert-IfwProvisionerRuntime $provisionScriptPath $IfwArchivePath
@@ -908,6 +1093,14 @@ Assert-IfwContract `
 Assert-IfwContract `
     ($buildScript -match '(?s)\[Parameter\(Mandatory\s*=\s*\$true\)\]\s*\[ValidateNotNullOrEmpty\(\)\]\s*\[string\]\$IfwRoot') `
     'the installer builder must require an explicit non-empty IFW root'
+Assert-IfwContract `
+    ($buildScript -match `
+            '(?s)else\s*\{\s*if \(Test-PeHasCertificateTable \$artifactPath\)\s*\{\s*throw ''Unsigned artifact unexpectedly contains an Authenticode certificate table\.''' -and
+        [regex]::Matches($buildScript, 'Get-AuthenticodeSignature').Count -eq 1 -and
+        $buildScript -match '\$signature\.Status\s+-ne\s+''Valid''' -and
+        $buildScript -match `
+            '\$signature\.SignerCertificate\.Subject\s+-notlike\s+"\*\$expectedPublisher\*"') `
+    'unsigned validation must inspect the PE certificate table while signed validation remains strict'
 Assert-IfwContract `
     ($windowsPackages -match 'if\s+"%IFW_ROOT%"==""' -and
         $windowsPackages -match '-IfwRoot\s+"%IFW_ROOT%"') `

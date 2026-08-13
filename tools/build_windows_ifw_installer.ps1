@@ -67,6 +67,88 @@ function Get-Sha256FileHash {
     }
 }
 
+function Test-PeHasCertificateTable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    $reader = [System.IO.BinaryReader]::new($stream)
+    try {
+        if ($stream.Length -lt 64) {
+            throw "Portable executable is too small to contain a DOS header: $Path"
+        }
+
+        if ($reader.ReadUInt16() -ne 0x5a4d) {
+            throw "Portable executable does not have an MZ header: $Path"
+        }
+
+        $stream.Position = 0x3c
+        $peHeaderOffset = $reader.ReadUInt32()
+        if ($peHeaderOffset -gt $stream.Length - 24) {
+            throw "Portable executable has an invalid PE header offset: $Path"
+        }
+
+        $stream.Position = $peHeaderOffset
+        if ($reader.ReadUInt32() -ne 0x00004550) {
+            throw "Portable executable does not have a PE header: $Path"
+        }
+
+        $stream.Position = $peHeaderOffset + 20
+        $optionalHeaderSize = $reader.ReadUInt16()
+        $optionalHeaderOffset = $peHeaderOffset + 24
+        if ($optionalHeaderSize -lt 2 -or
+            $optionalHeaderOffset + $optionalHeaderSize -gt $stream.Length) {
+            throw "Portable executable has a truncated optional header: $Path"
+        }
+
+        $stream.Position = $optionalHeaderOffset
+        $optionalHeaderMagic = $reader.ReadUInt16()
+        if ($optionalHeaderMagic -eq 0x010b) {
+            $dataDirectoryOffset = 96
+            $directoryCountOffset = 92
+        }
+        elseif ($optionalHeaderMagic -eq 0x020b) {
+            $dataDirectoryOffset = 112
+            $directoryCountOffset = 108
+        }
+        else {
+            throw "Portable executable has an unsupported optional header: $Path"
+        }
+
+        if ($optionalHeaderSize -lt $directoryCountOffset + 4) {
+            throw "Portable executable has no complete data-directory count: $Path"
+        }
+
+        $stream.Position = $optionalHeaderOffset + $directoryCountOffset
+        $directoryCount = $reader.ReadUInt32()
+        if ($directoryCount -lt 5) {
+            return $false
+        }
+
+        $certificateEntryOffset = $dataDirectoryOffset + 32
+        if ($optionalHeaderSize -lt $certificateEntryOffset + 8) {
+            throw "Portable executable has no complete security directory: $Path"
+        }
+
+        $stream.Position = $optionalHeaderOffset + $certificateEntryOffset
+        $certificateOffset = $reader.ReadUInt32()
+        $certificateSize = $reader.ReadUInt32()
+        if ($certificateOffset -eq 0 -and $certificateSize -eq 0) {
+            return $false
+        }
+        if ($certificateOffset -eq 0 -or $certificateSize -eq 0) {
+            throw "Portable executable has an inconsistent security directory: $Path"
+        }
+        return $true
+    }
+    finally {
+        $reader.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Get-DirectoryInventory {
     param(
         [Parameter(Mandatory = $true)]
@@ -340,9 +422,8 @@ if ($signingEnabled) {
     Invoke-TrustedSigning $artifactPath
 }
 else {
-    $signature = Get-AuthenticodeSignature -LiteralPath $artifactPath
-    if ($signature.Status -ne 'NotSigned') {
-        throw "Unsigned artifact unexpectedly has signature status $($signature.Status)"
+    if (Test-PeHasCertificateTable $artifactPath) {
+        throw 'Unsigned artifact unexpectedly contains an Authenticode certificate table.'
     }
 }
 
