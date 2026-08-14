@@ -122,7 +122,8 @@ The release dependency layout places `vnm_terminal_surface` and
 
 `vnm_terminal_surface` requires the same `project()` version as the
 application. `vnm_qml_chrome` requires the same major version and at least the
-1.6 titlebar contract. The validated Qt baseline is Qt 6.11.1 or newer.
+1.7 default PID-reveal titlebar contract. The validated Qt baseline is Qt 6.11.1
+or newer.
 
 ```powershell
 cmake -S . -B build -DBUILD_TESTING=ON
