@@ -156,6 +156,16 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
     state.row_timestamp_tooltip = settings_bool_value(settings, k_appearance_row_timestamp_tooltip);
     state.scrollback_limit      = settings_int_value(settings, k_appearance_scrollback_limit);
 
+    // Forced MSDF was once exposed by the settings UI, but it deliberately
+    // disables glyph fallback. Preserve fallback when adopting that stored value.
+    if (state.text_renderer_mode.has_value() &&
+        *state.text_renderer_mode ==
+            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::MSDF))
+    {
+        state.text_renderer_mode =
+            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO);
+    }
+
     settings.endGroup();
     return state;
 }
@@ -167,9 +177,13 @@ void save_persisted_appearance_settings(
     settings.beginGroup(QLatin1String(k_appearance_settings_group));
     settings.setValue(QLatin1String(k_appearance_color_scheme), surface.color_scheme());
     settings.setValue(QLatin1String(k_appearance_font_family),  surface.font_family());
-    settings.setValue(
-        QLatin1String(k_appearance_text_renderer_mode),
-        static_cast<int>(surface.text_renderer_mode()));
+    // Forced MSDF is a runtime diagnostic and must not replace the user's
+    // persisted AUTO or GLYPH preference when another appearance value changes.
+    if (surface.text_renderer_mode() != VNM_TerminalSurface::Text_renderer_mode::MSDF) {
+        settings.setValue(
+            QLatin1String(k_appearance_text_renderer_mode),
+            static_cast<int>(surface.text_renderer_mode()));
+    }
     settings.setValue(
         QLatin1String(k_appearance_lcd_subpixel_order),
         static_cast<int>(surface.lcd_subpixel_order()));

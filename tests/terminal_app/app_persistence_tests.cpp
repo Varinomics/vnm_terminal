@@ -276,6 +276,38 @@ bool test_appearance_settings_round_trip()
     return ok;
 }
 
+bool test_stored_forced_msdf_preference_uses_auto()
+{
+    QTemporaryDir dir;
+    bool ok = check(dir.isValid(), "temporary forced-renderer settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    const QString path = dir.filePath(QStringLiteral("settings.ini"));
+    QSettings writer(path, QSettings::IniFormat);
+    writer.beginGroup(QLatin1String(k_appearance_settings_group));
+    writer.setValue(
+        QLatin1String(k_appearance_text_renderer_mode),
+        static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::MSDF));
+    writer.endGroup();
+    writer.sync();
+
+    QSettings reader(path, QSettings::IniFormat);
+    const Persisted_appearance_settings state = load_persisted_appearance_settings(reader);
+    ok &= check(
+        state.text_renderer_mode.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO),
+        "stored forced MSDF preference loads as automatic fallback");
+
+    App_options options;
+    apply_persisted_appearance_settings(state, &options);
+    ok &= check(
+        options.text_renderer_mode == VNM_TerminalSurface::Text_renderer_mode::AUTO,
+        "stored forced MSDF preference applies automatic fallback");
+    return ok;
+}
+
 bool test_save_appearance_settings_from_surface()
 {
     QTemporaryDir dir;
@@ -314,6 +346,20 @@ bool test_save_appearance_settings_from_surface()
         "surface row timestamp toggle persists immediately");
     ok &= check(state.scrollback_limit.value_or(-1) == surface.scrollback_limit(),
         "surface scrollback limit persists immediately");
+
+    surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::MSDF);
+    save_persisted_appearance_settings(writer, surface);
+
+    QSettings forced_reader(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+    const Persisted_appearance_settings forced_state =
+        load_persisted_appearance_settings(forced_reader);
+    ok &= check(
+        forced_state.text_renderer_mode.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH),
+        "forced MSDF runtime preserves the existing renderer preference");
+    ok &= check(
+        surface.text_renderer_mode() == VNM_TerminalSurface::Text_renderer_mode::MSDF,
+        "saving appearance leaves the forced MSDF runtime unchanged");
     return ok;
 }
 
@@ -356,6 +402,7 @@ int main(int argc, char** argv)
     ok &= test_apply_persisted_window_state();
     ok &= test_invalid_persisted_values_are_ignored();
     ok &= test_appearance_settings_round_trip();
+    ok &= test_stored_forced_msdf_preference_uses_auto();
     ok &= test_save_appearance_settings_from_surface();
     ok &= test_interaction_settings_round_trip();
     return ok ? 0 : 1;
