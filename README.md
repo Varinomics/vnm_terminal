@@ -55,11 +55,22 @@ All published packages are available from the
 | Platform | Packages | Notes |
 | --- | --- | --- |
 | Windows x64 | EXE, portable ZIP | The signed Qt Installer Framework EXE installs under `Program Files` and includes Start Menu integration. The portable ZIP contains a top-level launcher. |
-| Linux x64 | DEB, RPM, AppImage | DEB and RPM are direct-download packages. The AppImage is the portable cross-distribution option. |
+| Linux x64 | RUN, DEB, RPM, AppImage | The graphical RUN installer uses Qt Installer Framework. DEB and RPM integrate with native package managers; AppImage is the portable option. |
 | macOS x64 | Application ZIP | The application bundle is ad-hoc signed but not Apple-notarized. Gatekeeper may quarantine it on first launch. |
 
 Windows and Linux packages include their private Qt runtime. Release source
 archives are available on the same page.
+
+The Linux Qt Installer Framework package installs under `/opt/vnm_terminal`,
+adds the `vnm_terminal` command under `/usr/local/bin`, and registers a desktop
+launcher. Run its installed `vnm_terminal_maintenance` tool to uninstall it.
+Build it from a staged CMake install tree with:
+
+```bash
+tools/build_linux_ifw_installer.sh \
+  --payload AppDir \
+  --ifw-root /path/to/QtInstallerFramework/4.7
+```
 
 Windows CI produces an explicitly named
 `vnm_terminal_v<version>_windows_x64_unsigned.exe` verification artifact. It is

@@ -1,0 +1,9 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/installer-theme">
+        <file>checkbox_check.svg</file>
+        <file>combo_arrow.svg</file>
+        <file>radio_dot.svg</file>
+        <file>varinomics_geometry.png</file>
+    </qresource>
+</RCC>

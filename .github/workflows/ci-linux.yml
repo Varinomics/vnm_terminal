@@ -1,6 +1,12 @@
 name: CI Linux
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional existing release tag to receive generated packages
+        required: false
+        type: string
   push:
     branches: [ master, main, dev ]
   pull_request:
@@ -334,6 +340,37 @@ jobs:
           QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 \
             "${appimage}" --help >/tmp/vnm_terminal_appimage_help.txt
 
+      - name: Build and test Linux Qt IFW installer
+        run: |
+          ifw_root="${RUNNER_TEMP}/QtInstallerFramework/4.7"
+          vnm_terminal/tools/provision_linux_ifw.sh \
+            --destination "${ifw_root}"
+          vnm_terminal/tools/build_linux_ifw_installer.sh \
+            --payload "${GITHUB_WORKSPACE}/vnm_terminal/AppDir" \
+            --ifw-root "${ifw_root}"
+
+          installer="$(find vnm_terminal/dist -maxdepth 1 -type f \
+            -name 'vnm_terminal_v*_linux_x64.run' -print -quit)"
+          test -n "${installer}"
+          sudo "${installer}" \
+            --root /opt/vnm_terminal \
+            --accept-licenses \
+            --confirm-command \
+            install
+          test -L /usr/local/bin/vnm_terminal
+          test -f \
+            /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
+          QT_QPA_PLATFORM=offscreen \
+            /usr/local/bin/vnm_terminal --help \
+              >/tmp/vnm_terminal_ifw_help.txt
+          sudo /opt/vnm_terminal/vnm_terminal_maintenance \
+            --confirm-command \
+            purge
+          test ! -e /opt/vnm_terminal
+          test ! -e /usr/local/bin/vnm_terminal
+          test ! -e \
+            /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
+
       - name: Upload Linux package artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -342,12 +379,15 @@ jobs:
             vnm_terminal/dist/*.AppImage
             vnm_terminal/dist/*.deb
             vnm_terminal/dist/*.rpm
+            vnm_terminal/dist/*.run
             vnm_terminal/dist/*.sha256
           if-no-files-found: error
 
   attach-release-packages:
     name: Attach Linux packages
-    if: github.event_name == 'release'
+    if: >-
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs: package
     runs-on: ubuntu-24.04
     permissions:
@@ -364,4 +404,5 @@ jobs:
       - name: Attach Linux packages to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+        run: gh release upload "${RELEASE_TAG}" dist/* --repo "${GITHUB_REPOSITORY}" --clobber
