@@ -31,9 +31,12 @@ add_test(
 )
 
 if(WIN32)
+    # CTest can inherit PowerShell 7 module paths from a pwsh parent. Let
+    # Windows PowerShell reconstruct its native module path before the test.
     add_test(
         NAME vnm_terminal_windows_ifw_contract
         COMMAND
+            "${CMAKE_COMMAND}" -E env "--unset=PSModulePath"
             powershell.exe -NoProfile -ExecutionPolicy Bypass
             -File "${CMAKE_CURRENT_SOURCE_DIR}/windows_ifw_contract_tests.ps1"
             -SourceRoot "${PROJECT_SOURCE_DIR}"
