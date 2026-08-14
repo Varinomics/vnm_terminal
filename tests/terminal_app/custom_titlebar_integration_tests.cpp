@@ -738,6 +738,8 @@ bool test_custom_titlebar_geometry()
         QStringLiteral("terminal_chrome_frame_shell"));
     ok &= check(frame_shell != nullptr, "terminal chrome creates the shared frame shell");
     if (frame_shell != nullptr) {
+        ok &= check(frame_shell->property("mark_pid_reveal_enabled").toBool(),
+            "terminal frame shell inherits enabled PID reveal");
         ok &= check(nearly_equal(frame_shell->property("frame_outer_edge").toReal(), 1.0),
             "frame shell uses a one-pixel outer edge");
         ok &= check(nearly_equal(frame_shell->property("frame_gap").toReal(), 3.0),
@@ -764,6 +766,17 @@ bool test_custom_titlebar_geometry()
             frame_shell->property("content_interior_rect").toRectF(),
             QRectF(5.0, 31.0, 790.0, 444.0),
             "frame shell reports the terminal content interior");
+    }
+
+    ok &= check(titlebar.titlebar_item()->property("mark_pid_reveal_enabled").toBool(),
+        "terminal titlebar inherits enabled PID reveal");
+    auto* animated_mark = find_quick_item_recursive(
+        titlebar.titlebar_item(),
+        QStringLiteral("vnm_animated_mark"));
+    ok &= check(animated_mark != nullptr, "terminal titlebar creates the animated mark");
+    if (animated_mark != nullptr) {
+        ok &= check(animated_mark->property("pid_reveal_enabled").toBool(),
+            "terminal animated mark inherits enabled PID reveal");
     }
 
     auto* shell_left_resize_area = find_quick_item_recursive(

@@ -1,8 +1,8 @@
 set(VNM_QML_CHROME_SOURCE_DIR "" CACHE PATH
     "Path to a source checkout of vnm_qml_chrome.")
 
-# The titlebar uses the opt-in user-title editing contract available from 1.6.
-set(VNM_QML_CHROME_MIN_VERSION "1.6")
+# The titlebar relies on the default-enabled PID reveal contract from 1.7.
+set(VNM_QML_CHROME_MIN_VERSION "1.7")
 
 if(NOT VNM_QML_CHROME_SOURCE_DIR)
     # Both candidates are siblings of this repository: the checkout may sit
