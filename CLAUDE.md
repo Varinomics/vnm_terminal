@@ -30,14 +30,29 @@ Canonical repo: `https://github.com/Varinomics/varinomics-standards`
 
 ## Local Windows Toolchain
 
-On this workstation, initialize native MSVC builds from:
-`C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat`
+The user-wide policy at `C:\Users\imak\.codex-vnm\AGENTS.md` is the single
+source of truth for native Windows build queueing, toolchain selection,
+FASTBuild configuration, and distributed-build flags. If that file is not
+available, the minimum requirements are Visual Studio 2026 with MSVC v145 and a
+fresh out-of-source FASTBuild tree. Start one `cmd.exe` shell, initialize it with
+`vcvarsall.bat x64 -vcvars_ver=14.51`, and keep the initial configure, every
+explicit or automatic regeneration, and every build inside that same initialized
+shell. Each compiler- or linker-capable step still runs through `queued-build`:
+configure and explicitly regenerate with
+`queued-build --slots 1 -- <cmake> ... -G FASTBuild`, and build with
+`queued-build --slots 2 -- <cmake> --build <build-dir> -- -dist -nolocalrace -monitor`.
+Do not supply another parallel-width flag or silently fall back to Visual Studio
+2022.
 
-Use the x64 environment for native x64 builds, for example:
-`cmd.exe /c 'call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvarsall.bat" x64 && cmake --build <build-dir>'`
+The supported `build_portable.bat` and `build_windows_packages.bat` workflows
+are project-specific MinGW/Ninja packaging exceptions. FASTBuild flags do not
+apply to them, but the compiler-invoking outer script still runs through the
+build queue: use `queued-build --slots all -- cmd.exe /c build_portable.bat` or
+`queued-build --slots all -- cmd.exe /c build_windows_packages.bat`.
 
 The Windows debuggers are installed at:
 `C:\Program Files\Windows Kits\10\Debuggers\x64`
 
-If a Ninja/MSVC build cannot find standard headers such as `stddef.h` or
-`optional`, first check that the shell was initialized through `vcvarsall.bat`.
+If a native build cannot find standard headers such as `stddef.h` or
+`optional`, verify the VS2026 developer environment and the generated
+FASTBuild `LocalEnv` before changing source code.
