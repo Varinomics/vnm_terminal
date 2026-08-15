@@ -7,6 +7,8 @@
 
 #include "vnm_terminal/font_metrics.h"
 
+#include <vnm_qt_dispatch/vnm_qt_dispatch.h>
+
 #include <QDateTime>
 #include <QEvent>
 #include <QPointF>
@@ -101,13 +103,18 @@ Terminal_content_geometry terminal_content_geometry(
     return geometry;
 }
 
-bool custom_titlebar_resize_border_active(const QQuickWindow& window)
+bool window_geometry_is_window_manager_owned(const QQuickWindow& window)
 {
     const Qt::WindowStates states = window.windowStates();
     return
-        !states.testFlag(Qt::WindowMaximized) &&
-        !states.testFlag(Qt::WindowMinimized) &&
-        !states.testFlag(Qt::WindowFullScreen);
+        states.testFlag(Qt::WindowMaximized) ||
+        states.testFlag(Qt::WindowMinimized) ||
+        states.testFlag(Qt::WindowFullScreen);
+}
+
+bool custom_titlebar_resize_border_active(const QQuickWindow& window)
+{
+    return !window_geometry_is_window_manager_owned(window);
 }
 
 void apply_terminal_shell_geometry(
@@ -191,6 +198,17 @@ bool resize_window_for_text_area_request(
         return false;
     }
 
+    // The window manager owns the geometry in these states, so honoring the
+    // request would drag the window off its maximized fill, or rewrite the
+    // restore geometry of a minimized window. This mirrors the DECCOLM stance
+    // recorded as dec-private-3 in the surface's terminal_sequence_matrix.md:
+    // geometry stays host controlled and the grid follows the item.
+    // connect_text_area_resize_policy() normally stops the request reaching the
+    // host at all in these states; this keeps the helper correct on its own.
+    if (window_geometry_is_window_manager_owned(window)) {
+        return false;
+    }
+
     const vnm_terminal::Cell_metrics cell_metrics = vnm_terminal::cell_metrics_for_font(
         surface.font_family(),
         surface.font_size(),
@@ -221,6 +239,64 @@ bool resize_window_for_text_area_request(
 
     window.resize(requested_size);
     return true;
+}
+
+void connect_text_area_resize_policy(
+    QQuickWindow&                  window,
+    VNM_TerminalSurface&           surface)
+{
+    const auto apply_policy = [&window, &surface] {
+        surface.set_text_area_resize_policy(
+            window_geometry_is_window_manager_owned(window)
+                ? VNM_TerminalSurface::Text_area_resize_policy::DISABLED
+                : VNM_TerminalSurface::Text_area_resize_policy::APPLICATION_CONTROLLED);
+    };
+
+    QObject::connect(
+        &window,
+        &QWindow::windowStateChanged,
+        &surface,
+        [apply_policy](Qt::WindowState) {
+            apply_policy();
+        });
+    QObject::connect(
+        &surface,
+        &VNM_TerminalSurface::text_area_resize_requested,
+        &window,
+        [&window, &surface](int rows, int columns) {
+            if (resize_window_for_text_area_request(window, surface, rows, columns)) {
+                // The window was resized, so a geometry change is on its way and
+                // VNM_TerminalSurface::geometryChange re-derives the grid when it
+                // lands. Reconciling here instead would be wrong, not redundant:
+                // QWindowsGuiEventDispatcher::sendPostedEvents drains Qt posted
+                // events before window-system events, and a plain resize does not
+                // flush its geometry change synchronously, so a posted refresh
+                // runs while the item is still the old size. It would re-derive
+                // the pre-request grid, resize the pty backwards, and let the
+                // real geometry change resize it forwards again.
+                return;
+            }
+
+            // Declined, so no geometry change is coming, and the model has
+            // already moved the grid. This is the only thing that can put it
+            // back. Deferred so the resize does not nest inside the session
+            // notification delivery this handler was called from.
+            if (surface.width() <= 0.0 || surface.height() <= 0.0) {
+                return;
+            }
+
+            const vnm::qt::Post_result post_result =
+                vnm::qt::post(&surface, [&surface] {
+                    surface.refresh_grid_from_item_geometry();
+                });
+            if (post_result != vnm::qt::Post_result::QUEUED) {
+                // Dropping the reconciliation would leave the grid off the item
+                // for good. Nesting is the lesser cost.
+                surface.refresh_grid_from_item_geometry();
+            }
+        });
+
+    apply_policy();
 }
 
 QString visible_terminal_title(QString terminal_title)

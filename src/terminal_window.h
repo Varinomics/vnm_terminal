@@ -62,7 +62,20 @@ Terminal_content_geometry terminal_content_geometry(
     const QRectF& content_interior_rect,
     qreal         device_pixel_ratio);
 
+// True while the window manager, not the application, decides this window's
+// geometry: maximized, fullscreen, or minimized. Client-driven geometry changes
+// have to be refused in those states.
+bool window_geometry_is_window_manager_owned(const QQuickWindow& window);
+
 bool custom_titlebar_resize_border_active(const QQuickWindow& window);
+
+// Applies the text-area resize policy to the surface for the window's current
+// state, and keeps it applied as the state changes. While the window manager
+// owns the geometry the surface ignores XTWINOPS outright, so no grid change
+// and no pty resize happen behind a request this host cannot honor.
+void connect_text_area_resize_policy(
+    QQuickWindow&                  window,
+    VNM_TerminalSurface&           surface);
 
 void apply_terminal_shell_geometry(
     QQuickWindow&                  window,

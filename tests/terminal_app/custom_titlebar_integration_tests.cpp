@@ -2230,6 +2230,184 @@ bool test_window_state_sync()
     return ok;
 }
 
+// A console client can ask the terminal to resize its text area with XTWINOPS
+// (CSI 8 ; rows ; cols t). While the window is maximized or fullscreen its
+// geometry belongs to the window manager, so honoring the request drags the
+// window off that fill. On Windows this does not self-correct: Qt fakes
+// frameless maximize with a plain MoveWindow, so the resize sticks while
+// windowStates() still reports WindowMaximized.
+bool test_text_area_resize_request_respects_window_state()
+{
+    QQuickWindow window;
+    window.resize(800, 480);
+
+    VNM_TerminalSurface surface(window.contentItem());
+    surface.set_font_family(vnm_terminal::default_monospace_font_family());
+    surface.set_font_size(vnm_terminal::k_default_font_pixel_size);
+    surface.setPosition(QPointF(0.0, 0.0));
+    surface.setSize(QSizeF(800.0, 480.0));
+
+    bool ok = true;
+    ok &= check(surface.rows() > 0 && surface.columns() > 0,
+        "surface reports a grid before text-area resize requests");
+
+    // Every case below uses the same 24x80 request, so window state is the only
+    // variable. Asserting the exact target size keeps a regression that resizes
+    // to the wrong geometry from passing a bare "the size changed" check, and
+    // pins the arithmetic instead of leaving it to the host's font metrics.
+    const vnm_terminal::Cell_metrics cell_metrics = vnm_terminal::cell_metrics_for_font(
+        surface.font_family(),
+        surface.font_size(),
+        window.devicePixelRatio());
+    ok &= check(vnm_terminal::cell_metrics_valid(cell_metrics),
+        "text-area resize fixture resolves cell metrics");
+
+    const auto expected_window_size = [&](int rows, int columns) {
+        return QSize(
+            static_cast<int>(std::round(
+                static_cast<qreal>(window.width()) +
+                cell_metrics.width * static_cast<qreal>(columns) - surface.width())),
+            static_cast<int>(std::round(
+                static_cast<qreal>(window.height()) +
+                cell_metrics.height * static_cast<qreal>(rows) - surface.height())));
+    };
+    // The item does not track the window in this fixture, so re-apply the
+    // window size to the surface between cases. Otherwise the second accept
+    // computes against a stale item size and lands on a geometry the running
+    // app never produces.
+    const auto relayout_surface = [&] {
+        surface.setSize(QSizeF(window.width(), window.height()));
+    };
+
+    // Baseline: a restored window must honor this exact request, otherwise the
+    // rejections below would pass for the wrong reason.
+    const QSize restored_expected = expected_window_size(24, 80);
+    ok &= check(restored_expected != window.size(),
+        "text-area resize fixture request would actually change the window size");
+    ok &= check(
+        chrome_test::resize_window_for_text_area_request(window, surface, 24, 80),
+        "restored window applies a text-area resize request");
+    ok &= check(window.size() == restored_expected,
+        "restored window geometry follows the text-area resize request");
+    relayout_surface();
+
+    for (const auto& state : {
+             std::pair{Qt::WindowMaximized,  "maximized"},
+             std::pair{Qt::WindowFullScreen, "fullscreen"},
+             std::pair{Qt::WindowMinimized,  "minimized"},
+         })
+    {
+        window.setWindowStates(state.first);
+        const QSize held_size = window.size();
+        ok &= check(
+            !chrome_test::resize_window_for_text_area_request(window, surface, 24, 80),
+            qPrintable(QStringLiteral("%1 window rejects a text-area resize request")
+                .arg(QString::fromLatin1(state.second))));
+        ok &= check(window.size() == held_size,
+            qPrintable(QStringLiteral("%1 window keeps its geometry across the request")
+                .arg(QString::fromLatin1(state.second))));
+    }
+
+    // Handing geometry back makes the same request honorable again, so the
+    // rejections above turned on window state alone. Restore the starting
+    // geometry first: the first accept already moved the window onto the 24x80
+    // target, where the request would be a no-op and decline for that reason
+    // instead of on window state.
+    window.setWindowStates(Qt::WindowNoState);
+    window.resize(800, 480);
+    relayout_surface();
+    const QSize reverted_expected = expected_window_size(24, 80);
+    ok &= check(reverted_expected != window.size(),
+        "restored text-area resize request would actually change the window size");
+    ok &= check(
+        chrome_test::resize_window_for_text_area_request(window, surface, 24, 80),
+        "restored window applies the same text-area resize request again");
+    ok &= check(window.size() == reverted_expected,
+        "restored window geometry follows the text-area resize request again");
+
+    return ok;
+}
+
+// The composed host behavior: the policy the surface is told to apply, and the
+// handler that keeps the grid on the item. Exercised through the connector the
+// app itself installs, because the wiring is the part that regressions remove.
+bool test_text_area_resize_policy_tracks_window_state(QGuiApplication& app)
+{
+    QQuickWindow window;
+    window.resize(800, 480);
+
+    VNM_TerminalSurface surface(window.contentItem());
+    surface.set_font_family(vnm_terminal::default_monospace_font_family());
+    surface.set_font_size(vnm_terminal::k_default_font_pixel_size);
+    surface.setPosition(QPointF(0.0, 0.0));
+    surface.setSize(QSizeF(800.0, 480.0));
+
+    bool ok = true;
+    ok &= check(
+        surface.text_area_resize_policy() ==
+            VNM_TerminalSurface::Text_area_resize_policy::APPLICATION_CONTROLLED,
+        "surface starts with the application-controlled text-area resize policy");
+
+    chrome_test::connect_text_area_resize_policy(window, surface);
+    pump_events(app);
+    ok &= check(
+        surface.text_area_resize_policy() ==
+            VNM_TerminalSurface::Text_area_resize_policy::APPLICATION_CONTROLLED,
+        "connecting a restored window leaves the request application controlled");
+
+    for (const auto& state : {
+             std::pair{Qt::WindowMaximized,  "maximized"},
+             std::pair{Qt::WindowFullScreen, "fullscreen"},
+             std::pair{Qt::WindowMinimized,  "minimized"},
+         })
+    {
+        window.setWindowStates(state.first);
+        pump_events(app);
+        ok &= check(
+            surface.text_area_resize_policy() ==
+                VNM_TerminalSurface::Text_area_resize_policy::DISABLED,
+            qPrintable(QStringLiteral("%1 window disables text-area resize requests")
+                .arg(QString::fromLatin1(state.second))));
+
+        window.setWindowStates(Qt::WindowNoState);
+        pump_events(app);
+        ok &= check(
+            surface.text_area_resize_policy() ==
+                VNM_TerminalSurface::Text_area_resize_policy::APPLICATION_CONTROLLED,
+            qPrintable(QStringLiteral("leaving %1 restores application-controlled requests")
+                .arg(QString::fromLatin1(state.second))));
+    }
+
+    // The handler arm. What this fixture can attribute to the connector is the
+    // window resize: the surface has no session here, so nothing can move the
+    // grid off the item, and the posted reconciliation would recompute the same
+    // grid from the same item whether or not it ran. Asserting the grid here
+    // would hold with the whole connector deleted. The reconciliation's effect
+    // is pinned in the surface suite instead, against a live session, by
+    // test_declined_text_area_resize_returns_grid_to_item_geometry.
+    const vnm_terminal::Cell_metrics cell_metrics = vnm_terminal::cell_metrics_for_font(
+        surface.font_family(),
+        surface.font_size(),
+        window.devicePixelRatio());
+    ok &= check(vnm_terminal::cell_metrics_valid(cell_metrics),
+        "text-area resize policy fixture resolves cell metrics");
+
+    const QSize honored_expected(
+        static_cast<int>(std::round(
+            static_cast<qreal>(window.width()) + cell_metrics.width * 80.0 - surface.width())),
+        static_cast<int>(std::round(
+            static_cast<qreal>(window.height()) + cell_metrics.height * 24.0 - surface.height())));
+    ok &= check(honored_expected != window.size(),
+        "text-area resize policy fixture request would actually change the window size");
+
+    emit surface.text_area_resize_requested(24, 80);
+    pump_events(app);
+    ok &= check(window.size() == honored_expected,
+        "the connected handler resizes the window for an honored request");
+
+    return ok;
+}
+
 bool test_paste_shortcut_should_paste_predicate()
 {
     using chrome_test::Paste_shortcut_policy;
@@ -3328,6 +3506,8 @@ int main(int argc, char** argv)
     ok &= test_paste_shortcut_consumes_null_clipboard_reader(app);
     ok &= test_copy_on_select_copies_completed_plain_text_selection(app);
     ok &= test_window_state_sync();
+    ok &= test_text_area_resize_request_respects_window_state();
+    ok &= test_text_area_resize_policy_tracks_window_state(app);
     ok &= test_settings_gear_button_and_window(app);
     ok &= test_settings_shortcut_requests_settings(app);
     ok &= test_host_shortcuts_preserve_title_editor_keys(app);

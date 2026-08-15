@@ -140,7 +140,7 @@ using chrome::prepare_profile_text_file;
 #endif
 using chrome::print_error;
 using chrome::read_clipboard_text_with_broker;
-using chrome::resize_window_for_text_area_request;
+using chrome::connect_text_area_resize_policy;
 using chrome::restorable_terminal_window_state;
 using chrome::save_persisted_appearance_settings;
 using chrome::save_persisted_interaction_settings;
@@ -637,17 +637,7 @@ int main(int argc, char** argv)
                 payload.size(),
                 policy);
         });
-    QObject::connect(
-        surface,
-        &VNM_TerminalSurface::text_area_resize_requested,
-        &window,
-        [&window, surface](int rows, int columns) {
-            (void)resize_window_for_text_area_request(
-                window,
-                *surface,
-                rows,
-                columns);
-        });
+    connect_text_area_resize_policy(window, *surface);
 
     QObject::connect(
         &window,
