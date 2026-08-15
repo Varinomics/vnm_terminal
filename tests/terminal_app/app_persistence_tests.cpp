@@ -4,6 +4,7 @@
 
 #include "helpers/test_check.h"
 
+#include <QColor>
 #include <QGuiApplication>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -363,6 +364,73 @@ bool test_save_appearance_settings_from_surface()
     return ok;
 }
 
+bool test_chrome_palette_settings()
+{
+    QTemporaryDir dir;
+    bool ok = check(dir.isValid(), "temporary chrome-palette settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    const chrome::Terminal_chrome_palette defaults =
+        chrome::default_terminal_chrome_palette();
+    ok &= check(
+        defaults.focused_background.lightness() > defaults.unfocused_background.lightness(),
+        "the focused chrome fill is brighter than the unfocused fill");
+    ok &= check(
+        defaults.focused_frame_edge.lightness() > defaults.unfocused_frame_edge.lightness(),
+        "the focused frame edge is brighter than the unfocused edge");
+    ok &= check(
+        defaults.focused_frame_edge.lightness() > defaults.focused_background.lightness(),
+        "the focused outline stays brighter than the focused fill");
+
+    QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+    writer.beginGroup(QLatin1String(k_appearance_settings_group));
+    writer.setValue(
+        QLatin1String(chrome::k_appearance_chrome_focused_background),
+        QStringLiteral("#204060"));
+    writer.setValue(
+        QLatin1String(chrome::k_appearance_chrome_focused_frame_edge),
+        QStringLiteral("#3a5a7a"));
+    writer.setValue(
+        QLatin1String(chrome::k_appearance_chrome_unfocused_frame_edge),
+        QStringLiteral("not a color"));
+    writer.endGroup();
+    writer.sync();
+
+    QSettings reader(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
+    const Persisted_appearance_settings state = load_persisted_appearance_settings(reader);
+    ok &= check(
+        state.chrome_focused_background.value_or(QColor()) == QColor(0x20, 0x40, 0x60),
+        "persisted focused chrome fill round-trips");
+    ok &= check(!state.chrome_unfocused_frame_edge.has_value(),
+        "an unreadable chrome color is ignored");
+
+    const chrome::Terminal_chrome_palette palette =
+        persisted_terminal_chrome_palette(state);
+    ok &= check(palette.focused_background == QColor(0x20, 0x40, 0x60),
+        "the persisted focused fill reaches the chrome palette");
+    ok &= check(palette.focused_frame_edge == QColor(0x3a, 0x5a, 0x7a),
+        "the persisted focused edge reaches the chrome palette");
+    ok &= check(palette.unfocused_background == defaults.unfocused_background,
+        "an absent chrome color keeps its default");
+    ok &= check(palette.unfocused_frame_edge == defaults.unfocused_frame_edge,
+        "an unreadable chrome color keeps its default");
+
+    set_terminal_chrome_palette(palette);
+    ok &= check(
+        chrome::terminal_chrome_background_color(true) == palette.focused_background,
+        "the configured palette drives the focused chrome background");
+    ok &= check(
+        chrome::terminal_chrome_frame_edge_color(false) == palette.unfocused_frame_edge,
+        "the configured palette drives the unfocused frame edge");
+    set_terminal_chrome_palette(defaults);
+    ok &= check(
+        chrome::terminal_chrome_background_color(true) == defaults.focused_background,
+        "the chrome palette can be restored to its defaults");
+    return ok;
+}
+
 bool test_interaction_settings_round_trip()
 {
     QTemporaryDir dir;
@@ -404,6 +472,7 @@ int main(int argc, char** argv)
     ok &= test_appearance_settings_round_trip();
     ok &= test_stored_forced_msdf_preference_uses_auto();
     ok &= test_save_appearance_settings_from_surface();
+    ok &= test_chrome_palette_settings();
     ok &= test_interaction_settings_round_trip();
     return ok ? 0 : 1;
 }

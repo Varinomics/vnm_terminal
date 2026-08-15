@@ -4,6 +4,7 @@
 
 #include "vnm_terminal/internal/terminal_color_scheme.h"
 
+#include <QColor>
 #include <QGuiApplication>
 #include <QLatin1String>
 #include <QRect>
@@ -44,6 +45,21 @@ std::optional<bool> settings_bool_value(QSettings& settings, const char* key)
     }
 
     return settings.value(QLatin1String(key)).toBool();
+}
+
+std::optional<QColor> settings_color_value(QSettings& settings, const char* key)
+{
+    const QString text = settings.value(QLatin1String(key)).toString().trimmed();
+    if (text.isEmpty()) {
+        return std::nullopt;
+    }
+
+    const QColor color = QColor::fromString(text);
+    if (!color.isValid()) {
+        return std::nullopt;
+    }
+
+    return color;
 }
 
 std::optional<qreal> settings_font_size(QSettings& settings)
@@ -156,6 +172,15 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
     state.row_timestamp_tooltip = settings_bool_value(settings, k_appearance_row_timestamp_tooltip);
     state.scrollback_limit      = settings_int_value(settings, k_appearance_scrollback_limit);
 
+    state.chrome_focused_background =
+        settings_color_value(settings, k_appearance_chrome_focused_background);
+    state.chrome_unfocused_background =
+        settings_color_value(settings, k_appearance_chrome_unfocused_background);
+    state.chrome_focused_frame_edge =
+        settings_color_value(settings, k_appearance_chrome_focused_frame_edge);
+    state.chrome_unfocused_frame_edge =
+        settings_color_value(settings, k_appearance_chrome_unfocused_frame_edge);
+
     // Forced MSDF was once exposed by the settings UI, but it deliberately
     // disables glyph fallback. Preserve fallback when adopting that stored value.
     if (state.text_renderer_mode.has_value() &&
@@ -240,6 +265,29 @@ void apply_persisted_appearance_settings(
     {
         options->scrollback_limit = *state.scrollback_limit;
     }
+}
+
+Terminal_chrome_palette persisted_terminal_chrome_palette(
+    const Persisted_appearance_settings& state)
+{
+    Terminal_chrome_palette palette = default_terminal_chrome_palette();
+    if (state.chrome_focused_background.has_value()) {
+        palette.focused_background = *state.chrome_focused_background;
+    }
+
+    if (state.chrome_unfocused_background.has_value()) {
+        palette.unfocused_background = *state.chrome_unfocused_background;
+    }
+
+    if (state.chrome_focused_frame_edge.has_value()) {
+        palette.focused_frame_edge = *state.chrome_focused_frame_edge;
+    }
+
+    if (state.chrome_unfocused_frame_edge.has_value()) {
+        palette.unfocused_frame_edge = *state.chrome_unfocused_frame_edge;
+    }
+
+    return palette;
 }
 
 Persisted_interaction_settings load_persisted_interaction_settings(

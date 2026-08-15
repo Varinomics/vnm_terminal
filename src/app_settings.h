@@ -1,9 +1,11 @@
 #pragma once
 
 #include "app_options.h"
+#include "qml_chrome.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <QColor>
 #include <QPoint>
 #include <QSize>
 #include <QString>
@@ -33,6 +35,14 @@ constexpr char k_appearance_lcd_subpixel_order[]    = "lcd_subpixel_order";
 constexpr char k_appearance_row_timestamp_tooltip[] = "row_timestamp_tooltip";
 constexpr char k_appearance_scrollback_limit[]      = "scrollback_limit";
 
+// Window-chrome colors, as color names or "#rrggbb" strings. Each key that is
+// absent or unreadable keeps its default from Terminal_chrome_palette. The app
+// never writes these back, so a stored value is the user's alone.
+constexpr char k_appearance_chrome_focused_background[]   = "chrome_focused_background";
+constexpr char k_appearance_chrome_unfocused_background[] = "chrome_unfocused_background";
+constexpr char k_appearance_chrome_focused_frame_edge[]   = "chrome_focused_frame_edge";
+constexpr char k_appearance_chrome_unfocused_frame_edge[] = "chrome_unfocused_frame_edge";
+
 constexpr char k_interaction_settings_group[] = "interaction";
 constexpr char k_interaction_copy_on_select[] = "copy_on_select";
 
@@ -52,6 +62,10 @@ struct Persisted_appearance_settings
     std::optional<int>     lcd_subpixel_order;
     std::optional<bool>    row_timestamp_tooltip;
     std::optional<int>     scrollback_limit;
+    std::optional<QColor>  chrome_focused_background;
+    std::optional<QColor>  chrome_unfocused_background;
+    std::optional<QColor>  chrome_focused_frame_edge;
+    std::optional<QColor>  chrome_unfocused_frame_edge;
 };
 
 struct Persisted_interaction_settings
@@ -63,6 +77,7 @@ bool persisted_window_axis_is_valid(int value);
 
 std::optional<int>    settings_int_value(QSettings& settings, const char* key);
 std::optional<bool>   settings_bool_value(QSettings& settings, const char* key);
+std::optional<QColor> settings_color_value(QSettings& settings, const char* key);
 std::optional<qreal>  settings_font_size(QSettings& settings);
 std::optional<QSize>  settings_window_size(QSettings& settings);
 std::optional<QPoint> settings_window_position(QSettings& settings);
@@ -83,6 +98,10 @@ void save_persisted_appearance_settings(
 void apply_persisted_appearance_settings(
     const Persisted_appearance_settings& state,
     App_options*                         options);
+
+// The default chrome palette with whatever the appearance settings override.
+Terminal_chrome_palette persisted_terminal_chrome_palette(
+    const Persisted_appearance_settings& state);
 
 Persisted_interaction_settings load_persisted_interaction_settings(
     QSettings& settings);

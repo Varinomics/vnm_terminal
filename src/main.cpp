@@ -132,6 +132,7 @@ using chrome::metrics_timing_t;
 using chrome::Osc52_clipboard_policy;
 using chrome::Persisted_appearance_settings;
 using chrome::Persisted_terminal_window_state;
+using chrome::persisted_terminal_chrome_palette;
 using chrome::persisted_window_axis_is_valid;
 using chrome::Presentation_metrics_recorder;
 #if VNM_TERMINAL_PROFILING_ENABLED
@@ -145,6 +146,7 @@ using chrome::save_persisted_appearance_settings;
 using chrome::save_persisted_interaction_settings;
 using chrome::Runtime_state;
 using chrome::save_persisted_terminal_window_state;
+using chrome::set_terminal_chrome_palette;
 using chrome::settings_font_size;
 using chrome::settings_int_value;
 using chrome::settings_window_position;
@@ -386,9 +388,12 @@ int main(int argc, char** argv)
         apply_persisted_terminal_window_state(
             load_persisted_terminal_window_state(settings),
             &options);
-        apply_persisted_appearance_settings(
-            load_persisted_appearance_settings(settings),
-            &options);
+        const Persisted_appearance_settings appearance =
+            load_persisted_appearance_settings(settings);
+        apply_persisted_appearance_settings(appearance, &options);
+        // The window and its chrome sample the palette while they are built,
+        // so the configured colors have to land before either exists.
+        set_terminal_chrome_palette(persisted_terminal_chrome_palette(appearance));
         apply_persisted_interaction_settings(
             load_persisted_interaction_settings(settings),
             &options);

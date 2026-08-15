@@ -12,6 +12,7 @@
 #include <QStringList>
 #include <QUrl>
 #include <QVariant>
+#include <QVariantMap>
 #include <QWindow>
 
 namespace chrome = vnm_terminal::terminal_app;
@@ -52,6 +53,13 @@ Item {
     property real row_timestamp_tooltip_anchor_x: 0
     property real row_timestamp_tooltip_anchor_y: 0
     property date row_timestamp_tooltip_timestamp: new Date()
+    // Set from Terminal_chrome_palette when the component is created. The
+    // colors are deliberately not spelled out here: C++ owns them so the
+    // window clear color and the search bar cannot drift from the chrome.
+    property color focused_frame_background_color
+    property color unfocused_frame_background_color
+    property color focused_frame_edge_color
+    property color unfocused_frame_edge_color
     property real device_pixel_ratio: Screen.devicePixelRatio
     readonly property real base_resize_border_width: 6
     readonly property real resize_border_physical_reduction: 2
@@ -75,8 +83,10 @@ Item {
     readonly property real shell_frame_gap: resize_enabled ? active_frame_gap : 0
     readonly property bool maximized_frame_overscan:
         maximized && !fullscreen && shell_outer_edge_thickness > 0
-    readonly property color frame_edge_color: active ? "#2a313c" : "#1f242c"
-    readonly property color frame_background_color: active ? "#12171e" : "#0e1116"
+    readonly property color frame_edge_color:
+        active ? focused_frame_edge_color : unfocused_frame_edge_color
+    readonly property color frame_background_color:
+        active ? focused_frame_background_color : unfocused_frame_background_color
     readonly property rect content_interior_rect: Qt.rect(
         content_interior_x,
         content_interior_y,
@@ -360,16 +370,49 @@ Item {
 }
 )";
 
+chrome::Terminal_chrome_palette& mutable_terminal_chrome_palette()
+{
+    static chrome::Terminal_chrome_palette palette =
+        chrome::default_terminal_chrome_palette();
+    return palette;
+}
+
 } // namespace
+
+chrome::Terminal_chrome_palette chrome::default_terminal_chrome_palette()
+{
+    // The focused fill and outline both sit a clear step above their unfocused
+    // counterparts, which is what makes focus read at a glance. The outline
+    // stays the brighter of the two, so the chrome keeps a defined border
+    // rather than reading as one flat surface.
+    Terminal_chrome_palette palette;
+    palette.focused_background   = QColor(33, 39, 47);
+    palette.unfocused_background = QColor(14, 17, 22);
+    palette.focused_frame_edge   = QColor(59, 69, 83);
+    palette.unfocused_frame_edge = QColor(31, 36, 44);
+    return palette;
+}
+
+const chrome::Terminal_chrome_palette& chrome::terminal_chrome_palette()
+{
+    return mutable_terminal_chrome_palette();
+}
+
+void chrome::set_terminal_chrome_palette(const Terminal_chrome_palette& palette)
+{
+    mutable_terminal_chrome_palette() = palette;
+}
 
 QColor chrome::terminal_chrome_background_color(bool active)
 {
-    return active ? QColor(18, 23, 30) : QColor(14, 17, 22);
+    const Terminal_chrome_palette& palette = terminal_chrome_palette();
+    return active ? palette.focused_background : palette.unfocused_background;
 }
 
 QColor chrome::terminal_chrome_frame_edge_color(bool active)
 {
-    return active ? QColor(42, 49, 60) : QColor(31, 36, 44);
+    const Terminal_chrome_palette& palette = terminal_chrome_palette();
+    return active ? palette.focused_frame_edge : palette.unfocused_frame_edge;
 }
 
 chrome::Terminal_qml_chrome::Terminal_qml_chrome(QQmlEngine& engine, QQuickWindow& window)
@@ -391,7 +434,15 @@ chrome::Terminal_qml_chrome::Terminal_qml_chrome(QQmlEngine& engine, QQuickWindo
         return;
     }
 
-    m_root_object.reset(component.create());
+    // The palette goes in as initial properties rather than after creation, so
+    // the first frame the chrome paints already carries the configured colors.
+    const Terminal_chrome_palette& palette = terminal_chrome_palette();
+    m_root_object.reset(component.createWithInitialProperties(QVariantMap{
+        {QStringLiteral("focused_frame_background_color"),   palette.focused_background},
+        {QStringLiteral("unfocused_frame_background_color"), palette.unfocused_background},
+        {QStringLiteral("focused_frame_edge_color"),         palette.focused_frame_edge},
+        {QStringLiteral("unfocused_frame_edge_color"),       palette.unfocused_frame_edge},
+    }));
     if (m_root_object == nullptr) {
         m_error_string = component_error_string(component);
         return;

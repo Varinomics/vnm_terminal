@@ -23,6 +23,26 @@ namespace vnm_terminal::terminal_app {
 constexpr qreal k_default_frameless_resize_border_width      = 6.0;
 constexpr qreal k_frameless_resize_border_physical_reduction = 2.0;
 
+// The window chrome carries one palette while the window holds focus and a
+// dimmer one while it does not. This is the single source for both: the QML
+// chrome, the window clear color and the search bar all paint from it, so the
+// three stay in step.
+struct Terminal_chrome_palette
+{
+    QColor focused_background;
+    QColor unfocused_background;
+    QColor focused_frame_edge;
+    QColor unfocused_frame_edge;
+};
+
+Terminal_chrome_palette default_terminal_chrome_palette();
+
+const Terminal_chrome_palette& terminal_chrome_palette();
+
+// Startup configuration. The QML chrome samples the palette once, when it is
+// constructed, so this must run before the terminal window is set up.
+void set_terminal_chrome_palette(const Terminal_chrome_palette& palette);
+
 QColor terminal_chrome_background_color(bool active);
 QColor terminal_chrome_frame_edge_color(bool active);
 
