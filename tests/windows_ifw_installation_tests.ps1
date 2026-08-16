@@ -137,6 +137,35 @@ Assert-InstallationContract ($env:GITHUB_ACTIONS -eq 'true') `
 Assert-InstallationContract `
     (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) `
     'RUNNER_TEMP must identify the ephemeral test root'
+function Assert-PeGuiSubsystem {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $guiSubsystem = 2
+    $stream = [IO.File]::OpenRead($Path)
+    $reader = [IO.BinaryReader]::new($stream)
+    try {
+        Assert-InstallationContract ($reader.ReadUInt16() -eq 0x5a4d) `
+            "$Path must be a portable executable"
+        $stream.Position = 0x3c
+        $peHeaderOffset = $reader.ReadUInt32()
+        $stream.Position = $peHeaderOffset
+        Assert-InstallationContract ($reader.ReadUInt32() -eq 0x00004550) `
+            "$Path must carry a PE header"
+
+        # Subsystem sits 68 bytes into the optional header in PE32 and PE32+.
+        $stream.Position = $peHeaderOffset + 24 + 68
+        Assert-InstallationContract ($reader.ReadUInt16() -eq $guiSubsystem) `
+            "$Path must be a graphical image so that Windows allocates it no console"
+    }
+    finally {
+        $reader.Dispose()
+        $stream.Dispose()
+    }
+}
+
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
 $isAdministrator = $principal.IsInRole(
@@ -246,6 +275,12 @@ try {
     )) {
         Assert-ProductSignature $productExecutable
     }
+
+    # A console-subsystem installer makes Windows create, show and destroy an
+    # empty terminal window before its wizard appears, and the maintenance tool
+    # is written from the same base binary.
+    Assert-PeGuiSubsystem $resolvedInstallerPath
+    Assert-PeGuiSubsystem $maintenancePath
 
     foreach ($executable in @($launcherPath, $runtimePath)) {
         $process = Start-Process -FilePath $executable `
