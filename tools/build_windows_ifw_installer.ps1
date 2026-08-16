@@ -149,6 +149,85 @@ function Test-PeHasCertificateTable {
     }
 }
 
+function Set-PeGuiSubsystem {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    $guiSubsystem = 2
+    $consoleSubsystem = 3
+    $checkSumFieldOffset = 64
+    $subsystemFieldOffset = 68
+
+    $stream = [System.IO.File]::Open(
+        $Path,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::ReadWrite,
+        [System.IO.FileShare]::None)
+    $reader = [System.IO.BinaryReader]::new($stream)
+    $writer = [System.IO.BinaryWriter]::new($stream)
+    try {
+        if ($stream.Length -lt 64) {
+            throw "Portable executable is too small to contain a DOS header: $Path"
+        }
+
+        if ($reader.ReadUInt16() -ne 0x5a4d) {
+            throw "Portable executable does not have an MZ header: $Path"
+        }
+
+        $stream.Position = 0x3c
+        $peHeaderOffset = $reader.ReadUInt32()
+        if ($peHeaderOffset -gt $stream.Length - 24) {
+            throw "Portable executable has an invalid PE header offset: $Path"
+        }
+
+        $stream.Position = $peHeaderOffset
+        if ($reader.ReadUInt32() -ne 0x00004550) {
+            throw "Portable executable does not have a PE header: $Path"
+        }
+
+        $stream.Position = $peHeaderOffset + 20
+        $optionalHeaderSize = $reader.ReadUInt16()
+        $optionalHeaderOffset = $peHeaderOffset + 24
+        if ($optionalHeaderSize -lt $subsystemFieldOffset + 2 -or
+            $optionalHeaderOffset + $optionalHeaderSize -gt $stream.Length) {
+            throw "Portable executable has a truncated optional header: $Path"
+        }
+
+        # CheckSum and Subsystem occupy the same optional-header offsets in PE32
+        # and PE32+, so the image magic needs no special case here.
+        $stream.Position = $optionalHeaderOffset + $checkSumFieldOffset
+        if ($reader.ReadUInt32() -ne 0) {
+            throw ('Portable executable carries a header checksum that this ' +
+                "rewrite would invalidate: $Path")
+        }
+
+        $stream.Position = $optionalHeaderOffset + $subsystemFieldOffset
+        $subsystem = $reader.ReadUInt16()
+        if ($subsystem -eq $guiSubsystem) {
+            return
+        }
+        if ($subsystem -ne $consoleSubsystem) {
+            throw "Portable executable has an unsupported subsystem ${subsystem}: $Path"
+        }
+
+        $stream.Position = $optionalHeaderOffset + $subsystemFieldOffset
+        $writer.Write([uint16]$guiSubsystem)
+        $writer.Flush()
+
+        $stream.Position = $optionalHeaderOffset + $subsystemFieldOffset
+        if ($reader.ReadUInt16() -ne $guiSubsystem) {
+            throw "Portable executable did not retain the GUI subsystem: $Path"
+        }
+    }
+    finally {
+        $writer.Dispose()
+        $reader.Dispose()
+        $stream.Dispose()
+    }
+}
+
 function Get-DirectoryInventory {
     param(
         [Parameter(Mandatory = $true)]
@@ -384,6 +463,15 @@ Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'log_path_probe.ps1') `
 Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'theme_resources.qrc') `
     -Destination $configRoot
 Copy-Item -LiteralPath $installerBaseSourcePath -Destination $privateInstallerBasePath
+# Qt ships installerbase as a console-subsystem image so that its headless
+# commands can print. Windows therefore allocates a console for every graphical
+# launch, and on Windows 11 that console is handed to the default terminal,
+# which shows and destroys an empty window before installerbase detaches. Both
+# delivered binaries are published as graphical images so no terminal window
+# ever appears; stdout still reaches an inherited console or pipe, so the
+# headless commands keep working. This runs before signing so the signature
+# covers the rewritten header.
+Set-PeGuiSubsystem $privateInstallerBasePath
 
 if ($signingEnabled) {
     Invoke-TrustedSigning (Join-Path $packageDataRoot 'vnm_terminal.exe')
@@ -417,6 +505,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "Qt IFW binarycreator failed with exit code $LASTEXITCODE"
 }
 Assert-FileExists $artifactPath 'Qt IFW installer artifact'
+# binarycreator appends the payload to the unsigned console-subsystem template,
+# so the finished installer inherits the same console allocation as the
+# maintenance-tool base above and needs the same header before it is signed.
+Set-PeGuiSubsystem $artifactPath
 
 if ($signingEnabled) {
     Invoke-TrustedSigning $artifactPath

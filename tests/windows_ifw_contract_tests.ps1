@@ -467,6 +467,134 @@ function Assert-IfwCertificateTableRuntime {
     }
 }
 
+function Assert-IfwGuiSubsystemRuntime {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$BuildScriptPath
+    )
+
+    $tokens = $null
+    $parseErrors = $null
+    $scriptAst = [Management.Automation.Language.Parser]::ParseFile(
+        $BuildScriptPath,
+        [ref]$tokens,
+        [ref]$parseErrors)
+    Assert-IfwContract ($parseErrors.Count -eq 0) `
+        'the IFW build script must parse before subsystem testing'
+
+    $subsystemFunctions = @($scriptAst.FindAll(
+        {
+            param($node)
+            return $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+                $node.Name -eq 'Set-PeGuiSubsystem'
+        },
+        $true))
+    Assert-IfwContract ($subsystemFunctions.Count -eq 1) `
+        'the IFW build script must define one PE subsystem helper'
+
+    Invoke-Expression $subsystemFunctions[0].Extent.Text
+
+    # The fixtures below place the PE header at 0x80, so their optional header
+    # starts at 0x98 and its CheckSum and Subsystem fields sit at 0xd8 and 0xdc.
+    $checkSumFieldPosition = 0xd8
+    $subsystemFieldPosition = 0xdc
+
+    function Get-FixtureSubsystem {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$Path
+        )
+
+        $stream = [IO.File]::OpenRead($Path)
+        $reader = [IO.BinaryReader]::new($stream)
+        try {
+            $stream.Position = $subsystemFieldPosition
+            return $reader.ReadUInt16()
+        }
+        finally {
+            $reader.Dispose()
+            $stream.Dispose()
+        }
+    }
+
+    function Assert-SubsystemFixtureThrows {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string]$Path,
+
+            [Parameter(Mandatory = $true)]
+            [string]$ExpectedMessage
+        )
+
+        $message = $null
+        try {
+            Set-PeGuiSubsystem $Path
+        }
+        catch {
+            $message = $_.Exception.Message
+        }
+        Assert-IfwContract ($message -match $ExpectedMessage) `
+            "the subsystem rewrite must reject the fixture with $ExpectedMessage"
+    }
+
+    $testRoot = Join-Path ([IO.Path]::GetTempPath()) (
+        'vnm-ifw-subsystem-test-' + [Guid]::NewGuid().ToString('N'))
+    $pe64Path = Join-Path $testRoot 'pe64.exe'
+    $pe32Path = Join-Path $testRoot 'pe32.exe'
+    try {
+        [void](New-Item -ItemType Directory -Path $testRoot)
+        $peBytes = [byte[]]::new(520)
+        [BitConverter]::GetBytes([uint16]0x5a4d).CopyTo($peBytes, 0)
+        [BitConverter]::GetBytes([uint32]0x80).CopyTo($peBytes, 0x3c)
+        [BitConverter]::GetBytes([uint32]0x00004550).CopyTo($peBytes, 0x80)
+        [BitConverter]::GetBytes([uint16]0x00f0).CopyTo($peBytes, 0x94)
+        [BitConverter]::GetBytes([uint16]0x020b).CopyTo($peBytes, 0x98)
+        [BitConverter]::GetBytes([uint16]3).CopyTo($peBytes, $subsystemFieldPosition)
+        [IO.File]::WriteAllBytes($pe64Path, $peBytes)
+
+        Set-PeGuiSubsystem $pe64Path
+        Assert-IfwContract ((Get-FixtureSubsystem $pe64Path) -eq 2) `
+            'a console-subsystem PE32+ image must be republished as a graphical image'
+        Set-PeGuiSubsystem $pe64Path
+        Assert-IfwContract ((Get-FixtureSubsystem $pe64Path) -eq 2) `
+            'rewriting an already graphical image must leave it unchanged'
+
+        [BitConverter]::GetBytes([uint16]0x00e0).CopyTo($peBytes, 0x94)
+        [BitConverter]::GetBytes([uint16]0x010b).CopyTo($peBytes, 0x98)
+        [IO.File]::WriteAllBytes($pe32Path, $peBytes)
+        Set-PeGuiSubsystem $pe32Path
+        Assert-IfwContract ((Get-FixtureSubsystem $pe32Path) -eq 2) `
+            'a console-subsystem PE32 image must be republished as a graphical image'
+        [BitConverter]::GetBytes([uint16]0x00f0).CopyTo($peBytes, 0x94)
+        [BitConverter]::GetBytes([uint16]0x020b).CopyTo($peBytes, 0x98)
+
+        [BitConverter]::GetBytes([uint32]0x12345678).CopyTo(
+            $peBytes, $checkSumFieldPosition)
+        [IO.File]::WriteAllBytes($pe64Path, $peBytes)
+        Assert-SubsystemFixtureThrows $pe64Path 'header checksum'
+        Assert-IfwContract ((Get-FixtureSubsystem $pe64Path) -eq 3) `
+            'a rejected checksummed image must keep its authored subsystem'
+        [BitConverter]::GetBytes([uint32]0).CopyTo($peBytes, $checkSumFieldPosition)
+
+        [BitConverter]::GetBytes([uint16]9).CopyTo($peBytes, $subsystemFieldPosition)
+        [IO.File]::WriteAllBytes($pe64Path, $peBytes)
+        Assert-SubsystemFixtureThrows $pe64Path 'unsupported subsystem'
+        [BitConverter]::GetBytes([uint16]3).CopyTo($peBytes, $subsystemFieldPosition)
+
+        [BitConverter]::GetBytes([uint16]69).CopyTo($peBytes, 0x94)
+        [IO.File]::WriteAllBytes($pe64Path, $peBytes)
+        Assert-SubsystemFixtureThrows $pe64Path 'truncated optional header'
+        [BitConverter]::GetBytes([uint16]0x00f0).CopyTo($peBytes, 0x94)
+
+        [BitConverter]::GetBytes([uint32]0).CopyTo($peBytes, 0x80)
+        [IO.File]::WriteAllBytes($pe64Path, $peBytes)
+        Assert-SubsystemFixtureThrows $pe64Path 'does not have a PE header'
+    }
+    finally {
+        Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Assert-IfwSignedValidationRuntime {
     param(
         [Parameter(Mandatory = $true)]
@@ -727,6 +855,7 @@ Assert-IfwReadyPageRuntime $controllerScriptPath
 Assert-IfwHashRuntime $buildScriptPath 'the IFW build script'
 Assert-IfwHashRuntime $provisionScriptPath 'the IFW provisioner'
 Assert-IfwCertificateTableRuntime $buildScriptPath
+Assert-IfwGuiSubsystemRuntime $buildScriptPath
 Assert-IfwSignedValidationRuntime $buildScriptPath
 Assert-IfwPowerShellParses $provisionScriptPath 'the IFW provisioner'
 Assert-IfwPowerShellParses `
@@ -1327,6 +1456,10 @@ Assert-IfwContract `
         $installationTests -match `
             'Test-Path -LiteralPath \$startMenuRoot') `
     'hosted Windows CI must commit an all-users installation, verify its shortcut and registration, run it, purge it, and check residue'
+Assert-IfwContract `
+    ($installationTests -match 'Assert-PeGuiSubsystem \$resolvedInstallerPath' -and
+        $installationTests -match 'Assert-PeGuiSubsystem \$maintenancePath') `
+    'the lifecycle gate must prove that neither delivered binary makes Windows allocate a console'
 Assert-IfwContract ($buildScript -match '--offline-only') `
     'binarycreator must force offline-only behavior'
 Assert-IfwContract `
@@ -1359,6 +1492,15 @@ Assert-IfwContract `
     'IFW must see the standard and @2x Banner siblings beside the rendered config before resource collection'
 Assert-IfwContract ($finalSigningIndex -gt $binaryCreatorIndex) `
     'the final installer must be signed after binarycreator finishes'
+$privateBaseSubsystemIndex = $buildScript.IndexOf(
+    'Set-PeGuiSubsystem $privateInstallerBasePath')
+$artifactSubsystemIndex = $buildScript.IndexOf('Set-PeGuiSubsystem $artifactPath')
+Assert-IfwContract `
+    ($privateBaseSubsystemIndex -ge 0 -and
+        $privateBaseSubsystemIndex -lt $installerBaseSigningIndex -and
+        $artifactSubsystemIndex -gt $binaryCreatorIndex -and
+        $artifactSubsystemIndex -lt $finalSigningIndex) `
+    'both delivered binaries must be republished as graphical images before they are signed'
 Assert-IfwContract `
     ($buildScript -match '--template \$installerBaseSourcePath') `
     'binarycreator must use the unsigned IFW template so the final PE remains signable'
