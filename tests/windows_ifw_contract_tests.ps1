@@ -867,6 +867,8 @@ Assert-IfwStartMenuShortcutRuntime $installScriptPath
 
 Assert-IfwContract ($config.Installer.Name -eq 'vnm_terminal') `
     'the product name must match the application'
+Assert-IfwContract ($config.Installer.Title -eq 'vnm_terminal') `
+    'the window title must stay the bare product name because IFW appends its own wizard wording'
 Assert-IfwContract ($config.Installer.Publisher -eq 'Varinomics Ltd') `
     'the publisher must be Varinomics Ltd'
 Assert-IfwContract `
