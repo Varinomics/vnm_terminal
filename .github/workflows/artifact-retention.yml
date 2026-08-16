@@ -20,6 +20,39 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          delete_artifact()
+          {
+              local family="$1"
+              local run_id="$2"
+              local artifact_id="$3"
+              local artifact_name="$4"
+              local output
+
+              echo "Deleting superseded ${family} artifact ${artifact_name} from run ${run_id}."
+              if output="$(
+                  gh api \
+                      --method DELETE \
+                      "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}" 2>&1
+              )"; then
+                  return
+              fi
+
+              # CI Linux, CI macOS and CI Windows each start one of these runs,
+              # so siblings prune the same listing concurrently, and an
+              # artifact can also expire between the listing and this delete.
+              # Absent is the end state this job wants, so a delete that finds
+              # nothing has succeeded. Any other failure still fails the job,
+              # because a job that cannot delete must not report that it
+              # pruned.
+              if [[ "${output}" == *"(HTTP 404)"* ]]; then
+                  echo "Artifact ${artifact_name} was already gone."
+                  return
+              fi
+
+              printf '%s\n' "${output}" >&2
+              return 1
+          }
+
           prune_rows()
           {
               local family="$1"
@@ -42,10 +75,11 @@ jobs:
                       continue
                   fi
 
-                  echo "Deleting superseded ${family} artifact ${artifact_name} from run ${run_id}."
-                  gh api \
-                      --method DELETE \
-                      "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+                  delete_artifact \
+                      "${family}" \
+                      "${run_id}" \
+                      "${artifact_id}" \
+                      "${artifact_name}"
               done <<< "${rows}"
           }
 
