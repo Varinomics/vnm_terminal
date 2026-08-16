@@ -131,6 +131,14 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+Automated runs must not write the user's persisted settings. Defining
+`VNM_TERMINAL_SETTINGS_NO_PERSIST` disables window and appearance persistence
+for the process. The check is on the variable being defined, not on its value:
+any value disables persistence, including `0` and the empty string. Re-enable
+persistence by removing the variable from the environment. The offscreen Qt
+platform disables persistence as well, and the test registrations define the
+variable themselves.
+
 The Windows build target deploys the required Qt DLLs and `platforms` plugin
 beside `vnm_terminal.exe`. The executable and its deployed runtime form one
 launchable build artifact.

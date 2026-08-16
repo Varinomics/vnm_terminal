@@ -286,6 +286,13 @@ set(ENV{CMDG_BENCHMARK_METRICS} "${cmdg_metrics}")
 set(ENV{CMDG_BENCHMARK_WINDOW_MS} "${metrics_interval_ms}")
 set(ENV{CMDG_BENCHMARK_HIDE_CURSOR} "${hide_cursor}")
 
+# The benchmark launches the real vnm_terminal with a benchmark font size and
+# window size, and it runs on the real platform plugin unless offscreen is
+# requested. Without this the run would persist those values into the user's
+# terminal settings scope. Set here, not on the ctest, because this script is
+# also invoked directly with cmake -P.
+set(ENV{VNM_TERMINAL_SETTINGS_NO_PERSIST} "1")
+
 if(offscreen)
     set(ENV{QT_QPA_PLATFORM} "offscreen")
     set(ENV{QT_QPA_PLATFORM_PLUGIN_PATH} "${offscreen_plugin_dir}")

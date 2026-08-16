@@ -11,6 +11,7 @@
 #include <QScreen>
 #include <QSettings>
 #include <QWindow>
+#include <QtGlobal>
 
 #include <cmath>
 
@@ -319,9 +320,16 @@ void apply_persisted_interaction_settings(
     }
 }
 
+// A positive opt-out for automated runs. The offscreen platform stays a
+// sufficient condition because some suites deliberately run on the real
+// platform plugin, and those must not write the user's settings either.
+constexpr char k_settings_no_persist_env[] = "VNM_TERMINAL_SETTINGS_NO_PERSIST";
+
 bool terminal_window_persistence_enabled()
 {
-    return QGuiApplication::platformName() != QStringLiteral("offscreen");
+    return
+        !qEnvironmentVariableIsSet(k_settings_no_persist_env) &&
+        QGuiApplication::platformName() != QStringLiteral("offscreen");
 }
 
 bool window_geometry_intersects_available_screen(

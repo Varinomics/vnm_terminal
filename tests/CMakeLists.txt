@@ -1280,3 +1280,16 @@ set(vnm_terminal_test_process_targets
 foreach(vnm_terminal_test_process_target IN LISTS vnm_terminal_test_process_targets)
     vnm_terminal_configure_test_process(${vnm_terminal_test_process_target})
 endforeach()
+
+# No test may write the user's persisted terminal settings. Most registrations
+# already run offscreen; this states the intent instead of inferring it from the
+# display backend. TESTS is a per-directory property, so this covers the
+# registrations in this directory only, after the last of them. The CMDG
+# benchmark launches the real executable through
+# benchmarks/cmdg_nelostie/run_cmdg_nelostie.cmake, which sets the variable
+# itself so a direct cmake -P run is covered as well.
+get_property(vnm_terminal_registered_tests DIRECTORY PROPERTY TESTS)
+foreach(vnm_terminal_registered_test IN LISTS vnm_terminal_registered_tests)
+    set_property(TEST ${vnm_terminal_registered_test} APPEND PROPERTY
+        ENVIRONMENT "VNM_TERMINAL_SETTINGS_NO_PERSIST=1")
+endforeach()
