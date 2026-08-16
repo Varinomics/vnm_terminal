@@ -40,6 +40,59 @@ Controller.prototype.TargetDirectoryPageCallback = function()
     var targetDirectoryPage = gui.pageWidgetByObjectName("TargetDirectoryPage");
     targetDirectoryPage.subTitle =
         "Choose where vnm_terminal will be installed.";
+
+    Controller.prototype.offerToRemoveExistingInstallation();
+}
+
+// Must name the file config.xml declares through MaintenanceToolName. IFW
+// refuses any target directory that contains it, which is how it recognizes
+// one of its own installations.
+Controller.prototype.maintenanceToolFileName = "vnm_terminal_maintenance";
+
+// An offline installer has no update mode, so installing this version over an
+// existing one means removing that installation first. Its own maintenance
+// tool owns the removal: it undoes the recorded operations, drops the launcher
+// symlink and the desktop entry, and deletes the installation directory.
+// Extracting over the files instead would leave every file the previous
+// version owned and this one does not.
+Controller.prototype.offerToRemoveExistingInstallation = function()
+{
+    var targetDirectory = installer.value("TargetDir");
+    var maintenanceToolPath =
+        targetDirectory + "/" + Controller.prototype.maintenanceToolFileName;
+    if (!installer.fileExists(maintenanceToolPath))
+        return;
+
+    var answer = QMessageBox.question(
+        "RemoveExistingInstallation",
+        "Existing installation",
+        "vnm_terminal is already installed in " + targetDirectory + ".\n\n"
+        + "Setup can remove that installation and then install this version "
+        + "into the same directory. Removal can take a few moments.\n\n"
+        + "Remove the existing installation?",
+        QMessageBox.Yes | QMessageBox.No);
+    if (answer != QMessageBox.Yes)
+        return;
+
+    // The maintenance tool deletes itself and then the installation directory
+    // before its own process exits, so the directory is a settled result by
+    // the time this call returns.
+    var result = installer.execute(
+        maintenanceToolPath,
+        ["purge", "--accept-messages", "--confirm-command"]);
+    if (result.length == 2 && result[1] == 0 &&
+        !installer.fileExists(targetDirectory))
+    {
+        return;
+    }
+
+    QMessageBox.critical(
+        "ExistingInstallationRetained",
+        "Error",
+        "Setup could not remove the installation in " + targetDirectory
+        + ".\n\nRun this installer with the privileges that directory needs, "
+        + "remove the installation with " + maintenanceToolPath
+        + ", or choose a different directory.");
 }
 
 Controller.prototype.LicenseAgreementPageCallback = function()

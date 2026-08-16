@@ -86,6 +86,94 @@ Controller.prototype.TargetDirectoryPageCallback = function()
     var targetDirectoryPage = gui.pageWidgetByObjectName("TargetDirectoryPage");
     targetDirectoryPage.subTitle =
         "Choose where vnm_terminal will be installed.";
+
+    Controller.prototype.offerToRemoveExistingInstallation();
+}
+
+// Must name the file config.xml declares through MaintenanceToolName. IFW
+// refuses any target directory that contains it, which is how it recognizes
+// one of its own installations.
+Controller.prototype.maintenanceToolFileName = "vnm_terminal_maintenance.exe";
+
+// An offline installer has no update mode, so installing this version over an
+// existing one means removing that installation first. Its own maintenance
+// tool owns the removal: it undoes the recorded operations, drops the Start
+// Menu shortcut, and unregisters the Windows uninstall entry. Extracting over
+// the files instead would strand that entry, because every installation
+// registers itself under a freshly generated UUID.
+Controller.prototype.offerToRemoveExistingInstallation = function()
+{
+    var targetDirectory =
+        installer.toNativeSeparators(installer.value("TargetDir"));
+    var maintenanceToolPath =
+        targetDirectory + "\\" + Controller.prototype.maintenanceToolFileName;
+    if (!installer.fileExists(maintenanceToolPath))
+        return;
+
+    var answer = QMessageBox.question(
+        "RemoveExistingInstallation",
+        "Existing installation",
+        "vnm_terminal is already installed in " + targetDirectory + ".\n\n"
+        + "Setup can remove that installation and then install this version "
+        + "into the same folder. Removal needs the same permissions as the "
+        + "installation and can take a few moments.\n\n"
+        + "Remove the existing installation?",
+        QMessageBox.Yes | QMessageBox.No);
+    if (answer != QMessageBox.Yes)
+        return;
+
+    var removed = Controller.prototype.removeInstallation(
+        maintenanceToolPath, targetDirectory);
+    if (removed)
+        return;
+
+    QMessageBox.critical(
+        "ExistingInstallationRetained",
+        "Error",
+        "Setup could not remove the installation in " + targetDirectory
+        + ".\n\nClose vnm_terminal if it is running and try again, remove it "
+        + "through Windows Settings, or choose a different folder.");
+}
+
+Controller.prototype.removeInstallation = function(
+    maintenanceToolPath, targetDirectory)
+{
+    var result = installer.execute(
+        maintenanceToolPath,
+        ["purge", "--accept-messages", "--confirm-command"]);
+    if (result.length != 2 || result[1] != 0)
+        return false;
+
+    // Windows cannot delete a running executable, so the maintenance tool
+    // hands its own removal, and the directory's, to a detached script that
+    // starts once its process has exited. That script reports to nobody, and
+    // IFW rejects the directory as soon as this page is left, which leaves the
+    // directory itself as the only available completion signal.
+    Controller.prototype.waitForDirectoryRemoval(targetDirectory);
+    return !installer.fileExists(targetDirectory);
+}
+
+Controller.prototype.waitForDirectoryRemoval = function(directory)
+{
+    var rootDirectory = installer.toNativeSeparators(installer.value("RootDir"));
+    var powershellPath = rootDirectory
+        + "Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+    var command = "$deadline = [DateTime]::UtcNow.AddSeconds(30)"
+        + ";while ([DateTime]::UtcNow -lt $deadline -and "
+        + "(Test-Path -LiteralPath "
+        + Controller.prototype.powershellLiteral(directory) + "))"
+        + "{Start-Sleep -Milliseconds 250}";
+    installer.execute(
+        powershellPath,
+        ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"],
+        command,
+        "UTF-8",
+        "UTF-8");
+}
+
+Controller.prototype.powershellLiteral = function(value)
+{
+    return "'" + value.replace(/'/g, "''") + "'";
 }
 
 Controller.prototype.LicenseAgreementPageCallback = function()

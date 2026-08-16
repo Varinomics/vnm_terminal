@@ -43,6 +43,15 @@ if(WIN32)
     )
 endif()
 
+# The Linux installer sources are packaging inputs, so this contract holds on
+# every host. Node is already the harness for the Windows control script.
+add_test(
+    NAME vnm_terminal_linux_ifw_contract
+    COMMAND
+        node "${CMAKE_CURRENT_SOURCE_DIR}/linux_ifw_contract_tests.js"
+        "${PROJECT_SOURCE_DIR}"
+)
+
 function(vnm_terminal_require_qt_plugin_file plugin_target purpose)
     if(NOT TARGET ${plugin_target})
         message(FATAL_ERROR
