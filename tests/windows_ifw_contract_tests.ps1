@@ -1327,6 +1327,11 @@ Assert-IfwContract `
         $logPathProbe -match '\$logStream\.Flush\(\$true\)') `
     'the helper must exclusively create and flush the exact unique file it returns'
 Assert-IfwContract `
+    ($logPathProbe -match '\[IO\.Directory\]::GetFiles\([\s\S]{0,40}?''InstallationLog-\*\.txt''\)' -and
+        $logPathProbe -match '\$staleIsEmpty\s*=\s*\$staleStream\.Length\s*-eq\s*0' -and
+        $logPathProbe -match '\[IO\.File\]::Delete\(\$staleLog\)') `
+    'the helper must reclaim the empty files that cancelled runs leave behind'
+Assert-IfwContract `
     ($controllerScript -match 'Controller\.prototype\.ReadyForInstallationPageCallback\s*=\s*function\s*\(\s*\)[\s\S]*?if\s*\(!installer\.isInstaller\(\)\)\s*return') `
     'summary customization must run in the supported post-entry callback and remain initial-install-only'
 Assert-IfwContract `
@@ -1538,6 +1543,7 @@ $validCandidate = Join-Path $probeTestRoot 'valid'
 $nonWritableCandidate = Join-Path $probeTestRoot 'non-writable'
 $missingCandidate = Join-Path $probeTestRoot 'missing'
 $lockedFixedLog = $null
+$lockedEmptyLog = $null
 $originalAcl = $null
 try {
     [void](New-Item -ItemType Directory -Path $validCandidate, $nonWritableCandidate)
@@ -1600,7 +1606,32 @@ try {
         [IO.FileAccess]::Read,
         [IO.FileShare]::None)
 
+    $staleEmptyLog = Join-Path $validLogDirectory (
+        'InstallationLog-{0}.txt' -f [Guid]::NewGuid().ToString('N'))
+    $staleContentLog = Join-Path $validLogDirectory (
+        'InstallationLog-{0}.txt' -f [Guid]::NewGuid().ToString('N'))
+    $runningEmptyLog = Join-Path $validLogDirectory (
+        'InstallationLog-{0}.txt' -f [Guid]::NewGuid().ToString('N'))
+    [IO.File]::WriteAllBytes($staleEmptyLog, [byte[]]::new(0))
+    [IO.File]::WriteAllText($staleContentLog, 'diagnostic log content')
+    [IO.File]::WriteAllBytes($runningEmptyLog, [byte[]]::new(0))
+    $lockedEmptyLog = [IO.File]::Open(
+        $runningEmptyLog,
+        [IO.FileMode]::Open,
+        [IO.FileAccess]::ReadWrite,
+        [IO.FileShare]::None)
+
     $validResult = Invoke-LogPathProbe $validCandidate
+    Assert-IfwContract (-not (Test-Path -LiteralPath $staleEmptyLog)) `
+        'the helper must reclaim an unlocked empty log left by a cancelled run'
+    Assert-IfwContract `
+        ((Test-Path -LiteralPath $staleContentLog -PathType Leaf) -and
+            (Get-Item -LiteralPath $staleContentLog).Length -gt 0) `
+        'the helper must keep a log that already carries diagnostic content'
+    Assert-IfwContract (Test-Path -LiteralPath $runningEmptyLog -PathType Leaf) `
+        'the helper must keep an empty log that a running installer still holds'
+    $lockedEmptyLog.Dispose()
+    $lockedEmptyLog = $null
     Assert-IfwContract `
         ($validResult.ExitCode -eq 0 -and
             [IO.Path]::IsPathRooted($validResult.Output) -and
@@ -1631,6 +1662,9 @@ try {
 finally {
     if ($null -ne $lockedFixedLog) {
         $lockedFixedLog.Dispose()
+    }
+    if ($null -ne $lockedEmptyLog) {
+        $lockedEmptyLog.Dispose()
     }
     if ($null -ne $originalAcl -and
         (Test-Path -LiteralPath $nonWritableCandidate)) {

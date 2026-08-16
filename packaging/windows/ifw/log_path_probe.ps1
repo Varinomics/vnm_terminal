@@ -33,6 +33,43 @@ foreach ($candidate in $CandidatePath) {
         $logDirectory = Join-Path $absoluteCandidate 'Varinomics\vnm_terminal'
         [void][IO.Directory]::CreateDirectory($logDirectory)
 
+        # A run that is closed before installing leaves its proven file empty,
+        # and IFW never removes it, so these accumulate for every cancelled
+        # launch. Reclaim them before adding another. An exclusive open proves
+        # the file belongs to no installer that is still running, and a file
+        # with content is a diagnostic log that must survive. Losing this race
+        # only costs a reclaim: IFW recreates a missing log when it appends.
+        foreach ($staleLog in [IO.Directory]::GetFiles(
+            $logDirectory, 'InstallationLog-*.txt'))
+        {
+            if ([IO.Path]::GetFileName($staleLog) -notmatch
+                '^InstallationLog-[0-9a-f]{32}\.txt$') {
+                continue
+            }
+
+            $staleStream = $null
+            try {
+                $staleStream = [IO.FileStream]::new(
+                    $staleLog,
+                    [IO.FileMode]::Open,
+                    [IO.FileAccess]::ReadWrite,
+                    [IO.FileShare]::None)
+                $staleIsEmpty = $staleStream.Length -eq 0
+                $staleStream.Dispose()
+                $staleStream = $null
+                if ($staleIsEmpty) {
+                    [IO.File]::Delete($staleLog)
+                }
+            }
+            catch {
+            }
+            finally {
+                if ($null -ne $staleStream) {
+                    $staleStream.Dispose()
+                }
+            }
+        }
+
         $logPath = Join-Path $logDirectory (
             'InstallationLog-{0}.txt' -f [Guid]::NewGuid().ToString('N'))
         $logStream = [IO.FileStream]::new(
