@@ -1,6 +1,12 @@
 name: CI Windows
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to receive the signed installer and portable zip
+        required: false
+        type: string
   push:
     branches: [ master, main, dev ]
   pull_request:
@@ -21,6 +27,13 @@ defaults:
 
 env:
   CMAKE_BUILD_TYPE: Release
+  # Microsoft Artifact Signing (formerly Trusted Signing) identifiers. These are
+  # public account identifiers, not credentials; authentication is an OIDC token
+  # minted per run, so no key material is stored in the repository.
+  ARTIFACT_SIGNING_CLIENT_VERSION: 1.0.128
+  TRUSTED_SIGNING_ENDPOINT: https://eus.codesigning.azure.net
+  TRUSTED_SIGNING_ACCOUNT: varinomicscodesign
+  TRUSTED_SIGNING_PROFILE: varinomics-public-trust
 
 jobs:
   build-and-test:
@@ -128,8 +141,22 @@ jobs:
           if-no-files-found: error
 
   package:
-    name: Portable ZIP and unsigned EXE (Windows x64)
+    name: Portable ZIP and EXE (Windows x64)
     runs-on: windows-2022
+    # Release runs additionally produce the signed installer, which needs an
+    # OIDC token to reach Microsoft Artifact Signing. Nothing else in this job
+    # needs credentials, so pushes and pull requests keep validating packaging
+    # exactly as before.
+    #
+    # The environment carries no protection rules. It exists to give the OIDC
+    # token a stable subject: a release run's ref is refs/tags/<tag>, which
+    # changes every release, so a ref-scoped federated credential would need
+    # recreating each time. Scoping to the environment keeps the subject fixed
+    # at repo:Varinomics/vnm_terminal:environment:release-signing.
+    environment: release-signing
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Initialize Qt IFW paths
@@ -289,6 +316,109 @@ jobs:
               exit $LASTEXITCODE
           }
 
+      # Signing repackages rather than post-signing the unsigned installer on
+      # purpose: build_windows_ifw_installer.ps1 signs vnm_terminal.exe, the
+      # maintenance tool and the installer base *before* binarycreator runs, so
+      # signing only the finished exe would ship a signed installer that
+      # installs unsigned binaries. The payload is already built, so this
+      # repackages rather than recompiles.
+      - name: Authenticate to Azure for signing
+        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.TRUSTED_SIGNING_CLIENT_ID }}
+          tenant-id: ${{ vars.TRUSTED_SIGNING_TENANT_ID }}
+          subscription-id: ${{ vars.TRUSTED_SIGNING_SUBSCRIPTION_ID }}
+
+      - name: Acquire Microsoft Artifact Signing client
+        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
+        shell: pwsh
+        run: |
+          $clientRoot = Join-Path $env:RUNNER_TEMP 'artifact-signing-client'
+          nuget install Microsoft.ArtifactSigning.Client `
+            -Version "$env:ARTIFACT_SIGNING_CLIENT_VERSION" `
+            -OutputDirectory $clientRoot `
+            -ExcludeVersion
+          if ($LASTEXITCODE -ne 0) {
+              throw "Failed to acquire Microsoft.ArtifactSigning.Client $env:ARTIFACT_SIGNING_CLIENT_VERSION."
+          }
+
+          $dlib = Join-Path $clientRoot 'Microsoft.ArtifactSigning.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
+          if (-not (Test-Path $dlib)) {
+              throw "Signing client library not found at $dlib."
+          }
+
+          $signTool = Get-ChildItem `
+              -Path 'C:\Program Files (x86)\Windows Kits\10\bin' `
+              -Filter signtool.exe -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -like '*\x64\*' } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+          if (-not $signTool) {
+              throw 'signtool.exe was not found in the Windows SDK.'
+          }
+
+          # No secrets here: endpoint, account and profile are public identifiers.
+          # The credential is the OIDC token azure/login already established.
+          $metadata = [ordered]@{
+              Endpoint               = $env:TRUSTED_SIGNING_ENDPOINT
+              CodeSigningAccountName = $env:TRUSTED_SIGNING_ACCOUNT
+              CertificateProfileName = $env:TRUSTED_SIGNING_PROFILE
+              CorrelationId          = "vnm-terminal-$env:GITHUB_RUN_ID"
+              ExcludeCredentials     = @(
+                  'SharedTokenCacheCredential',
+                  'VisualStudioCredential',
+                  'VisualStudioCodeCredential',
+                  'AzureDeveloperCliCredential',
+                  'InteractiveBrowserCredential'
+              )
+          }
+          $metadataPath = Join-Path $env:RUNNER_TEMP 'artifact-signing-metadata.json'
+          $metadata | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $metadataPath -Encoding utf8
+
+          "SIGNTOOL_PATH=$($signTool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SIGNING_DLIB_PATH=$dlib"             | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SIGNING_METADATA_PATH=$metadataPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build signed Windows installer
+        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File tools/build_windows_ifw_installer.ps1 `
+            -PayloadPath dist/portable_candidate `
+            -IfwRoot "$env:IFW_ROOT" `
+            -SignToolPath "$env:SIGNTOOL_PATH" `
+            -TrustedSigningDlibPath "$env:SIGNING_DLIB_PATH" `
+            -TrustedSigningMetadataPath "$env:SIGNING_METADATA_PATH"
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Verify the installer is signed
+        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -Path vnm_terminal/dist `
+              -Filter 'vnm_terminal_v*_windows_x64.exe' |
+              Where-Object { $_.Name -notlike '*_unsigned.exe' } |
+              Select-Object -First 1
+          if (-not $installer) {
+              throw 'Signed installer was not produced.'
+          }
+
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer.FullName
+          if ($signature.Status -ne 'Valid') {
+              throw "Installer signature is $($signature.Status), expected Valid."
+          }
+          if (-not $signature.TimeStamperCertificate) {
+              throw 'Installer signature is not timestamped; it would stop verifying when the certificate expires.'
+          }
+
+          Write-Host "Signed by: $($signature.SignerCertificate.Subject)"
+          Write-Host "Timestamped by: $($signature.TimeStamperCertificate.Subject)"
+
       - name: Upload Windows package artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -297,6 +427,8 @@ jobs:
             vnm_terminal/dist/vnm_terminal_v*_w64.zip
             vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe
             vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe.sha256
+            vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe
+            vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe.sha256
           if-no-files-found: error
 
   attach-source-archive:
@@ -328,7 +460,9 @@ jobs:
 
   attach-release-packages:
     name: Attach Windows packages
-    if: github.event_name == 'release'
+    if: >-
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs: package
     runs-on: ubuntu-24.04
     permissions:
@@ -348,4 +482,6 @@ jobs:
         run: |
           gh release upload "${GITHUB_REF_NAME}" \
             dist/vnm_terminal_v*_w64.zip \
+            dist/vnm_terminal_v*_windows_x64.exe \
+            dist/vnm_terminal_v*_windows_x64.exe.sha256 \
             --repo "${GITHUB_REPOSITORY}" --clobber
