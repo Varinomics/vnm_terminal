@@ -189,8 +189,16 @@ Command_line_setting_overrides command_line_setting_overrides(
     // is the snapshot. A window the platform sized differently never compares
     // equal, which releases the field on the first save and stores the real
     // geometry, exactly as an unforced run does.
+    //
+    // An explicit size forces the maximized state too, because
+    // apply_persisted_terminal_window_state() drops the stored maximized
+    // restore for it: the run cannot honor a size and a maximized window at
+    // once. So that state is forced to false and needs the same protection as
+    // the rest, or the run's own non-maximized window writes a preference back
+    // over one the user never asked to change.
     if (options.window_size_explicit) {
         overrides.window_size = options.window_size;
+        overrides.maximized   = false;
     }
 
     return overrides;
@@ -224,7 +232,10 @@ void save_persisted_terminal_window_state(
         settings.setValue(QLatin1String(k_window_settings_y), state.position->y());
     }
 
-    settings.setValue(QLatin1String(k_window_settings_maximized), state.maximized);
+    if (!command_line_override_still_holds(overrides.maximized, state.maximized)) {
+        settings.setValue(QLatin1String(k_window_settings_maximized), state.maximized);
+    }
+
     settings.endGroup();
     settings.sync();
 }

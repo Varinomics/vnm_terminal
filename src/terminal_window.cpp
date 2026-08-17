@@ -236,12 +236,23 @@ bool resize_window_for_text_area_request(
     const QSize requested_size(
         static_cast<int>(std::round(requested_window_width)),
         static_cast<int>(std::round(requested_window_height)));
-    if (requested_size == window.size()) {
+    const QSize size_before_resize = window.size();
+    if (requested_size == size_before_resize) {
         return false;
     }
 
     window.resize(requested_size);
-    return true;
+
+    // A window system that answers synchronously reports the clamped result
+    // right here: Windows caps a resize at the maximum track size, so a window
+    // that already fills the work area keeps the size it had and no WM_SIZE
+    // follows. Calling that honored would leave the model on the requested
+    // rows and columns with nothing left to reconcile it, which is the same
+    // end state as the request that was already a no-op above, so it takes the
+    // same answer. Where the resize is answered asynchronously the size still
+    // reads back as the requested one, so this stays the honored path and the
+    // geometry change does the reconciling.
+    return window.size() != size_before_resize;
 }
 
 void connect_text_area_resize_policy(

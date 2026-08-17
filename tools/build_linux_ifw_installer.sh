@@ -57,6 +57,31 @@ binary_creator="$ifw_root/bin/binarycreator"
     exit 1
 }
 
+# The library directory follows CMAKE_INSTALL_LIBDIR, which is
+# distribution-specific: Debian derivatives use a multiarch lib/<triple> while
+# others use lib64 or a plain lib. The payload is internally consistent with
+# whichever one it was installed under, so the staged package keeps the same
+# relative directory rather than the one this script happened to be written on.
+# An ambiguous payload is refused instead of resolved by picking a match.
+payload_libdir=
+for candidate in \
+    "$payload_path"/usr/lib*/vnm_terminal \
+    "$payload_path"/usr/lib*/*/vnm_terminal
+do
+    [ -d "$candidate" ] || continue
+    if [ -n "$payload_libdir" ]; then
+        echo "The payload contains more than one vnm_terminal library directory." >&2
+        exit 1
+    fi
+    payload_libdir=$candidate
+done
+[ -n "$payload_libdir" ] || {
+    echo "The payload has no usr/lib*/vnm_terminal directory: $payload_path" >&2
+    exit 1
+}
+package_libdir=${payload_libdir#"$payload_path/usr/"}
+package_libdir=${package_libdir%/vnm_terminal}
+
 package_version=$(sed -nE \
     's/^project\(vnm_terminal .* VERSION ([^ )]+)\).*/\1/p' \
     "$repository_root/CMakeLists.txt")
@@ -80,10 +105,8 @@ rm -rf -- "$stage_root"
 mkdir -p "$config_root" "$package_data_root" "$package_meta_root"
 
 cp -a "$payload_path/usr/bin" "$package_data_root/"
-mkdir -p "$package_data_root/lib/x86_64-linux-gnu" \
-    "$package_data_root/share/icons"
-cp -a "$payload_path/usr/lib/x86_64-linux-gnu/vnm_terminal" \
-    "$package_data_root/lib/x86_64-linux-gnu/"
+mkdir -p "$package_data_root/$package_libdir" "$package_data_root/share/icons"
+cp -a "$payload_libdir" "$package_data_root/$package_libdir/"
 cp -a "$repository_root/LICENSE" \
     "$repository_root/THIRD_PARTY_NOTICES.md" \
     "$package_data_root/"
