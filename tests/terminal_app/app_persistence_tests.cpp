@@ -66,8 +66,9 @@ bool test_save_and_load_window_state()
     expected.font_size = 18.0;
     expected.maximized = true;
 
+    Command_line_setting_overrides overrides;
     QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
-    save_persisted_terminal_window_state(writer, expected);
+    save_persisted_terminal_window_state(writer, expected, overrides);
 
     QSettings reader(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     const Persisted_terminal_window_state actual =
@@ -250,6 +251,7 @@ bool test_appearance_settings_round_trip()
     explicit_options.row_timestamp_tooltip_enabled  = true;
     explicit_options.row_timestamp_tooltip_explicit = true;
     explicit_options.scrollback_limit               = 4000;
+    explicit_options.scrollback_limit_explicit      = true;
     apply_persisted_appearance_settings(state, &explicit_options);
     ok &= check(explicit_options.color_scheme == QStringLiteral("Campbell"),
         "explicit color scheme overrides persisted scheme");
@@ -325,8 +327,9 @@ bool test_save_appearance_settings_from_surface()
     surface.set_row_timestamp_tooltip_enabled(false);
     surface.set_scrollback_limit(25000);
 
+    Command_line_setting_overrides overrides;
     QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
-    save_persisted_appearance_settings(writer, surface);
+    save_persisted_appearance_settings(writer, surface, overrides);
 
     QSettings reader(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     const Persisted_appearance_settings state = load_persisted_appearance_settings(reader);
@@ -349,7 +352,7 @@ bool test_save_appearance_settings_from_surface()
         "surface scrollback limit persists immediately");
 
     surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::MSDF);
-    save_persisted_appearance_settings(writer, surface);
+    save_persisted_appearance_settings(writer, surface, overrides);
 
     QSettings forced_reader(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     const Persisted_appearance_settings forced_state =
@@ -361,6 +364,167 @@ bool test_save_appearance_settings_from_surface()
     ok &= check(
         surface.text_renderer_mode() == VNM_TerminalSurface::Text_renderer_mode::MSDF,
         "saving appearance leaves the forced MSDF runtime unchanged");
+    return ok;
+}
+
+bool test_command_line_overrides_do_not_replace_stored_settings()
+{
+    QTemporaryDir dir;
+    bool ok = check(dir.isValid(), "temporary command-line-override settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    const QString path = dir.filePath(QStringLiteral("settings.ini"));
+
+    // What the user chose in the settings panel on an earlier run.
+    QSettings stored(path, QSettings::IniFormat);
+    stored.beginGroup(QLatin1String(k_appearance_settings_group));
+    stored.setValue(QLatin1String(k_appearance_color_scheme), QStringLiteral("Solarized Dark"));
+    stored.setValue(QLatin1String(k_appearance_font_family),  QStringLiteral("Cascadia Mono"));
+    stored.setValue(
+        QLatin1String(k_appearance_text_renderer_mode),
+        static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO));
+    stored.setValue(
+        QLatin1String(k_appearance_lcd_subpixel_order),
+        static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::NONE));
+    stored.setValue(QLatin1String(k_appearance_row_timestamp_tooltip), false);
+    stored.setValue(QLatin1String(k_appearance_scrollback_limit), 25000);
+    stored.endGroup();
+    stored.beginGroup(QLatin1String(k_window_settings_group));
+    stored.setValue(QLatin1String(k_window_settings_font_size), 14.0);
+    stored.setValue(QLatin1String(k_window_settings_width),  1024);
+    stored.setValue(QLatin1String(k_window_settings_height), 720);
+    stored.endGroup();
+    stored.sync();
+
+    // A run started with every appearance setting forced on the command line.
+    App_options options;
+    options.color_scheme                   = QStringLiteral("Campbell");
+    options.color_scheme_explicit          = true;
+    options.font_family                    = QStringLiteral("Consolas");
+    options.font_family_explicit           = true;
+    options.font_size                      = 30.0;
+    options.font_size_explicit             = true;
+    options.text_renderer_mode             = VNM_TerminalSurface::Text_renderer_mode::GLYPH;
+    options.text_renderer_mode_explicit    = true;
+    options.lcd_subpixel_order             = VNM_TerminalSurface::Lcd_subpixel_order::RGB;
+    options.lcd_subpixel_order_explicit    = true;
+    options.row_timestamp_tooltip_enabled  = true;
+    options.row_timestamp_tooltip_explicit = true;
+    options.scrollback_limit               = 4000;
+    options.scrollback_limit_explicit      = true;
+    options.window_size                    = QSize(640, 480);
+    options.window_size_explicit           = true;
+
+    VNM_TerminalSurface surface;
+    surface.set_color_scheme(options.color_scheme);
+    surface.set_font_family(options.font_family);
+    surface.set_font_size(options.font_size);
+    surface.set_text_renderer_mode(options.text_renderer_mode);
+    surface.set_lcd_subpixel_order(options.lcd_subpixel_order);
+    surface.set_row_timestamp_tooltip_enabled(options.row_timestamp_tooltip_enabled);
+    surface.set_scrollback_limit(*options.scrollback_limit);
+
+    Command_line_setting_overrides overrides =
+        command_line_setting_overrides(options, surface);
+
+    Persisted_terminal_window_state window_state;
+    window_state.font_size = surface.font_size();
+    window_state.size      = options.window_size;
+
+    QSettings writer(path, QSettings::IniFormat);
+    save_persisted_appearance_settings(writer, surface, overrides);
+    save_persisted_terminal_window_state(writer, window_state, overrides);
+
+    QSettings reader(path, QSettings::IniFormat);
+    const Persisted_appearance_settings appearance =
+        load_persisted_appearance_settings(reader);
+    const Persisted_terminal_window_state window =
+        load_persisted_terminal_window_state(reader);
+
+    ok &= check(appearance.color_scheme.value_or(QString()) == QStringLiteral("Solarized Dark"),
+        "an explicit color scheme leaves the stored scheme alone");
+    ok &= check(appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
+        "an explicit font family leaves the stored family alone");
+    ok &= check(
+        appearance.text_renderer_mode.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO),
+        "an explicit renderer mode leaves the stored mode alone");
+    ok &= check(
+        appearance.lcd_subpixel_order.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::NONE),
+        "an explicit lcd subpixel order leaves the stored order alone");
+    ok &= check(appearance.row_timestamp_tooltip.has_value() && !*appearance.row_timestamp_tooltip,
+        "an explicit row timestamp flag leaves the stored toggle alone");
+    ok &= check(appearance.scrollback_limit.value_or(-1) == 25000,
+        "an explicit scrollback limit leaves the stored limit alone");
+    ok &= check_optional_font_size(window.font_size, 14.0,
+        "stored font size under an explicit font size");
+    ok &= check_optional_size(window.size, QSize(1024, 720),
+        "stored window size under an explicit window size");
+
+    // Moving a forced setting during the session is the user's own choice and
+    // must reach their stored preferences.
+    surface.set_color_scheme(QStringLiteral("Solarized Light"));
+    surface.set_font_size(22.0);
+    surface.set_row_timestamp_tooltip_enabled(false);
+
+    Persisted_terminal_window_state changed_window_state;
+    changed_window_state.font_size = surface.font_size();
+    changed_window_state.size      = QSize(1280, 800);
+    save_persisted_appearance_settings(writer, surface, overrides);
+    save_persisted_terminal_window_state(writer, changed_window_state, overrides);
+
+    QSettings changed_reader(path, QSettings::IniFormat);
+    const Persisted_appearance_settings changed_appearance =
+        load_persisted_appearance_settings(changed_reader);
+    const Persisted_terminal_window_state changed_window =
+        load_persisted_terminal_window_state(changed_reader);
+
+    ok &= check(
+        changed_appearance.color_scheme.value_or(QString()) == QStringLiteral("Solarized Light"),
+        "a scheme chosen during the session replaces the stored scheme");
+    ok &= check_optional_font_size(changed_window.font_size, 22.0,
+        "a font size chosen during the session replaces the stored size");
+    ok &= check_optional_size(changed_window.size, QSize(1280, 800),
+        "a window size chosen during the session replaces the stored size");
+    ok &= check(
+        changed_appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
+        "changing one setting does not release the other forced values");
+
+    // Returning a setting to the value the command line forced is still the
+    // user's choice. Suppression that never lifts would make every two-valued
+    // setting unable to store half its states for the rest of the session.
+    surface.set_color_scheme(QStringLiteral("Campbell"));
+    surface.set_font_size(30.0);
+    surface.set_row_timestamp_tooltip_enabled(true);
+
+    Persisted_terminal_window_state restored_window_state;
+    restored_window_state.font_size = surface.font_size();
+    restored_window_state.size      = QSize(640, 480);
+    save_persisted_appearance_settings(writer, surface, overrides);
+    save_persisted_terminal_window_state(writer, restored_window_state, overrides);
+
+    QSettings restored_reader(path, QSettings::IniFormat);
+    const Persisted_appearance_settings restored_appearance =
+        load_persisted_appearance_settings(restored_reader);
+    const Persisted_terminal_window_state restored_window =
+        load_persisted_terminal_window_state(restored_reader);
+
+    ok &= check(
+        restored_appearance.color_scheme.value_or(QString()) == QStringLiteral("Campbell"),
+        "reselecting the forced scheme stores it");
+    ok &= check_optional_font_size(restored_window.font_size, 30.0,
+        "returning to the forced font size stores it");
+    ok &= check_optional_size(restored_window.size, QSize(640, 480),
+        "returning to the forced window size stores it");
+    ok &= check(
+        restored_appearance.row_timestamp_tooltip.value_or(false),
+        "toggling a forced flag off and back on stores the final choice");
+    ok &= check(
+        restored_appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
+        "a forced setting the user never moved is still not written back");
     return ok;
 }
 
@@ -472,6 +636,7 @@ int main(int argc, char** argv)
     ok &= test_appearance_settings_round_trip();
     ok &= test_stored_forced_msdf_preference_uses_auto();
     ok &= test_save_appearance_settings_from_surface();
+    ok &= test_command_line_overrides_do_not_replace_stored_settings();
     ok &= test_chrome_palette_settings();
     ok &= test_interaction_settings_round_trip();
     return ok ? 0 : 1;

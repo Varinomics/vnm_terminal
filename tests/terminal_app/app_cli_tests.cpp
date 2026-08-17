@@ -505,6 +505,10 @@ bool test_parse_scrollback_limit_option()
         limit_result.options.scrollback_limit.has_value() &&
             *limit_result.options.scrollback_limit == 200,
         "scrollback limit option selects requested row count");
+    ok &= check(limit_result.options.scrollback_limit_explicit,
+        "scrollback limit option records an explicit request");
+    ok &= check(!default_result.options.scrollback_limit_explicit,
+        "scrollback limit default records no explicit request");
     ok &= check(zero_result.error.isEmpty(), "scrollback limit accepts zero");
     ok &= check(
         zero_result.options.scrollback_limit.has_value() &&

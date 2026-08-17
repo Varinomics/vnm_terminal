@@ -73,6 +73,37 @@ struct Persisted_interaction_settings
     std::optional<bool> copy_on_select;
 };
 
+// The settings this run was forced to from the command line, as the surface
+// normalized them. A forced value is deliberately transient: writing it back
+// would replace a preference the user chose in the settings panel and never
+// asked to change. Each engaged field therefore suppresses its own write while
+// the live setting still holds it.
+//
+// The record is mutable and outlives a single save: the first save that finds
+// a field somewhere other than its forced value clears that field for good,
+// which is what lets a user who moves a forced setting and moves it back store
+// that choice. Pass the same instance to every save of a run.
+struct Command_line_setting_overrides
+{
+    std::optional<qreal>   font_size;
+    std::optional<QString> color_scheme;
+    std::optional<QString> font_family;
+    std::optional<int>     text_renderer_mode;
+    std::optional<int>     lcd_subpixel_order;
+    std::optional<bool>    row_timestamp_tooltip;
+    std::optional<int>     scrollback_limit;
+    std::optional<QSize>   window_size;
+};
+
+// Snapshots the forced settings from the surface, so call this once the startup
+// options have been applied to it. Taking the values from the surface rather
+// than from App_options is what makes the later comparison exact: the surface
+// canonicalizes a color scheme name and rounds a font size, so the raw
+// command-line text does not compare equal to the setting it produced.
+Command_line_setting_overrides command_line_setting_overrides(
+    const App_options&         options,
+    const VNM_TerminalSurface& surface);
+
 bool persisted_window_axis_is_valid(int value);
 
 std::optional<int>    settings_int_value(QSettings& settings, const char* key);
@@ -87,13 +118,15 @@ Persisted_terminal_window_state load_persisted_terminal_window_state(
 
 void save_persisted_terminal_window_state(
     QSettings&                             settings,
-    const Persisted_terminal_window_state& state);
+    const Persisted_terminal_window_state& state,
+    Command_line_setting_overrides&        overrides);
 
 Persisted_appearance_settings load_persisted_appearance_settings(QSettings& settings);
 
 void save_persisted_appearance_settings(
-    QSettings&                  settings,
-    const VNM_TerminalSurface&  surface);
+    QSettings&                      settings,
+    const VNM_TerminalSurface&      surface,
+    Command_line_setting_overrides& overrides);
 
 void apply_persisted_appearance_settings(
     const Persisted_appearance_settings& state,

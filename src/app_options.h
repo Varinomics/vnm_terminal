@@ -80,6 +80,7 @@ struct App_options
     bool               text_renderer_mode_explicit        = false;
     bool               lcd_subpixel_order_explicit        = false;
     bool               row_timestamp_tooltip_explicit     = false;
+    bool               scrollback_limit_explicit          = false;
     bool               window_size_explicit               = false;
     bool               restore_maximized_window_state     = false;
 };

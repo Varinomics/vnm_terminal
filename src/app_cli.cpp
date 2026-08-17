@@ -733,6 +733,7 @@ Parse_result parse_arguments(const QStringList& arguments)
                 return result;
             }
 
+            result.options.scrollback_limit_explicit = true;
             continue;
         }
 

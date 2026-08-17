@@ -17,6 +17,37 @@
 
 namespace vnm_terminal::terminal_app {
 
+namespace {
+
+// True while a setting the command line forced is still untouched, which is the
+// only state in which its write must be suppressed. The comparison is exact by
+// construction: both sides are the surface's own normalized value, one
+// snapshotted at startup and one read now.
+//
+// The first save that sees the setting anywhere else releases the field for
+// good, so a user who moves a forced setting and then returns it to the forced
+// value still gets that final choice stored. Comparing without releasing would
+// leave half the reachable states of a two-valued setting unpersistable for the
+// whole session.
+template <typename Value_t>
+bool command_line_override_still_holds(
+    std::optional<Value_t>& forced_value,
+    const Value_t&          live_value)
+{
+    if (!forced_value.has_value()) {
+        return false;
+    }
+
+    if (*forced_value == live_value) {
+        return true;
+    }
+
+    forced_value.reset();
+    return false;
+}
+
+} // namespace
+
 bool persisted_window_axis_is_valid(int value)
 {
     return
@@ -121,21 +152,68 @@ Persisted_terminal_window_state load_persisted_terminal_window_state(
     return state;
 }
 
+Command_line_setting_overrides command_line_setting_overrides(
+    const App_options&         options,
+    const VNM_TerminalSurface& surface)
+{
+    Command_line_setting_overrides overrides;
+    if (options.font_size_explicit) {
+        overrides.font_size = surface.font_size();
+    }
+
+    if (options.color_scheme_explicit) {
+        overrides.color_scheme = surface.color_scheme();
+    }
+
+    if (options.font_family_explicit) {
+        overrides.font_family = surface.font_family();
+    }
+
+    if (options.text_renderer_mode_explicit) {
+        overrides.text_renderer_mode = static_cast<int>(surface.text_renderer_mode());
+    }
+
+    if (options.lcd_subpixel_order_explicit) {
+        overrides.lcd_subpixel_order = static_cast<int>(surface.lcd_subpixel_order());
+    }
+
+    if (options.row_timestamp_tooltip_explicit) {
+        overrides.row_timestamp_tooltip = surface.row_timestamp_tooltip_enabled();
+    }
+
+    if (options.scrollback_limit_explicit) {
+        overrides.scrollback_limit = surface.scrollback_limit();
+    }
+
+    // The window has no normalizing setter to read back, so the requested size
+    // is the snapshot. A window the platform sized differently never compares
+    // equal, which releases the field on the first save and stores the real
+    // geometry, exactly as an unforced run does.
+    if (options.window_size_explicit) {
+        overrides.window_size = options.window_size;
+    }
+
+    return overrides;
+}
+
 void save_persisted_terminal_window_state(
-    QSettings& settings,
-    const Persisted_terminal_window_state& state)
+    QSettings&                             settings,
+    const Persisted_terminal_window_state& state,
+    Command_line_setting_overrides&        overrides)
 {
     settings.beginGroup(QLatin1String(k_window_settings_group));
     if (state.font_size.has_value() &&
         std::isfinite(*state.font_size) &&
-        *state.font_size > 0.0)
+        *state.font_size > 0.0 &&
+        !command_line_override_still_holds(overrides.font_size, *state.font_size))
     {
         settings.setValue(QLatin1String(k_window_settings_font_size), *state.font_size);
     }
 
     if (state.size.has_value() &&
         persisted_window_axis_is_valid(state.size->width()) &&
-        persisted_window_axis_is_valid(state.size->height()))
+        persisted_window_axis_is_valid(state.size->height()) &&
+        !command_line_override_still_holds(overrides.window_size, *state.size))
     {
         settings.setValue(QLatin1String(k_window_settings_width),  state.size->width());
         settings.setValue(QLatin1String(k_window_settings_height), state.size->height());
@@ -197,26 +275,52 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
 }
 
 void save_persisted_appearance_settings(
-    QSettings&                  settings,
-    const VNM_TerminalSurface&  surface)
+    QSettings&                      settings,
+    const VNM_TerminalSurface&      surface,
+    Command_line_setting_overrides& overrides)
 {
     settings.beginGroup(QLatin1String(k_appearance_settings_group));
-    settings.setValue(QLatin1String(k_appearance_color_scheme), surface.color_scheme());
-    settings.setValue(QLatin1String(k_appearance_font_family),  surface.font_family());
+    const QString color_scheme = surface.color_scheme();
+    if (!command_line_override_still_holds(overrides.color_scheme, color_scheme)) {
+        settings.setValue(QLatin1String(k_appearance_color_scheme), color_scheme);
+    }
+
+    const QString font_family = surface.font_family();
+    if (!command_line_override_still_holds(overrides.font_family, font_family)) {
+        settings.setValue(QLatin1String(k_appearance_font_family), font_family);
+    }
+
     // Forced MSDF is a runtime diagnostic and must not replace the user's
     // persisted AUTO or GLYPH preference when another appearance value changes.
-    if (surface.text_renderer_mode() != VNM_TerminalSurface::Text_renderer_mode::MSDF) {
-        settings.setValue(
-            QLatin1String(k_appearance_text_renderer_mode),
-            static_cast<int>(surface.text_renderer_mode()));
+    // An embedded host can select it without a command line, so this stays a
+    // suppression of the value itself, independent of the override rule.
+    const int text_renderer_mode = static_cast<int>(surface.text_renderer_mode());
+    if (surface.text_renderer_mode() != VNM_TerminalSurface::Text_renderer_mode::MSDF &&
+        !command_line_override_still_holds(overrides.text_renderer_mode, text_renderer_mode))
+    {
+        settings.setValue(QLatin1String(k_appearance_text_renderer_mode), text_renderer_mode);
     }
-    settings.setValue(
-        QLatin1String(k_appearance_lcd_subpixel_order),
-        static_cast<int>(surface.lcd_subpixel_order()));
-    settings.setValue(
-        QLatin1String(k_appearance_row_timestamp_tooltip),
-        surface.row_timestamp_tooltip_enabled());
-    settings.setValue(QLatin1String(k_appearance_scrollback_limit), surface.scrollback_limit());
+
+    const int lcd_subpixel_order = static_cast<int>(surface.lcd_subpixel_order());
+    if (!command_line_override_still_holds(overrides.lcd_subpixel_order, lcd_subpixel_order)) {
+        settings.setValue(QLatin1String(k_appearance_lcd_subpixel_order), lcd_subpixel_order);
+    }
+
+    const bool row_timestamp_tooltip = surface.row_timestamp_tooltip_enabled();
+    if (!command_line_override_still_holds(
+            overrides.row_timestamp_tooltip,
+            row_timestamp_tooltip))
+    {
+        settings.setValue(
+            QLatin1String(k_appearance_row_timestamp_tooltip),
+            row_timestamp_tooltip);
+    }
+
+    const int scrollback_limit = surface.scrollback_limit();
+    if (!command_line_override_still_holds(overrides.scrollback_limit, scrollback_limit)) {
+        settings.setValue(QLatin1String(k_appearance_scrollback_limit), scrollback_limit);
+    }
+
     settings.endGroup();
     settings.sync();
 }
@@ -260,8 +364,11 @@ void apply_persisted_appearance_settings(
         options->row_timestamp_tooltip_enabled = *state.row_timestamp_tooltip;
     }
 
-    if (!options->scrollback_limit.has_value() &&
-        state.scrollback_limit.has_value()     &&
+    // scrollback_limit_explicit is the single provenance signal, matching the
+    // other six fields. The optional says only whether a limit is known, which
+    // this very function then fills in.
+    if (!options->scrollback_limit_explicit &&
+        state.scrollback_limit.has_value()  &&
         *state.scrollback_limit >= 0)
     {
         options->scrollback_limit = *state.scrollback_limit;

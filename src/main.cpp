@@ -81,6 +81,8 @@ using chrome::apply_scrollback_limit_option;
 using chrome::apply_synchronized_output_scroll_policy_option;
 using chrome::apply_terminal_shell_geometry;
 using chrome::clipboard_broker_mode_requested;
+using chrome::Command_line_setting_overrides;
+using chrome::command_line_setting_overrides;
 using chrome::connect_presentation_metrics_recorder;
 using chrome::connect_row_timestamp_tooltip_to_chrome;
 using chrome::connect_terminal_metadata_to_chrome;
@@ -472,6 +474,14 @@ int main(int argc, char** argv)
         *scrollbar,
         titlebar_ptr,
         options.wheel_trace_enabled);
+    // Record what the command line forced now that the surface has normalized
+    // it, so a run started with an explicit override does not write that
+    // override back over the settings the user chose in the settings panel. Both
+    // persistence lambdas share the one record, because a field releases itself
+    // the first time a save finds the setting moved.
+    const auto command_line_overrides =
+        std::make_shared<Command_line_setting_overrides>(
+            command_line_setting_overrides(options, *surface));
     const bool custom_titlebar_enabled = options.custom_titlebar;
     std::optional<Persisted_terminal_window_state> latest_restorable_window_state =
         restorable_terminal_window_state(window, *surface);
@@ -480,7 +490,8 @@ int main(int argc, char** argv)
             persistence_enabled,
             surface,
             &window,
-            &latest_restorable_window_state
+            &latest_restorable_window_state,
+            command_line_overrides
         ] {
             if (!persistence_enabled) {
                 return;
@@ -500,16 +511,17 @@ int main(int argc, char** argv)
             state.maximized = window.windowStates().testFlag(Qt::WindowMaximized);
 
             QSettings settings;
-            save_persisted_terminal_window_state(settings, state);
+            save_persisted_terminal_window_state(settings, state, *command_line_overrides);
         };
-    const auto persist_appearance = [persistence_enabled, surface] {
-        if (!persistence_enabled) {
-            return;
-        }
+    const auto persist_appearance =
+        [persistence_enabled, surface, command_line_overrides] {
+            if (!persistence_enabled) {
+                return;
+            }
 
-        QSettings settings;
-        save_persisted_appearance_settings(settings, *surface);
-    };
+            QSettings settings;
+            save_persisted_appearance_settings(settings, *surface, *command_line_overrides);
+        };
 
     apply_terminal_shell_geometry(
         window,
