@@ -60,7 +60,12 @@ Item {
     property color unfocused_frame_background_color
     property color focused_frame_edge_color
     property color unfocused_frame_edge_color
-    property real device_pixel_ratio: Screen.devicePixelRatio
+    // The window ratio is the live one. Screen.devicePixelRatio never
+    // re-notifies while the window stays on one screen, and a Windows scale
+    // change updates that screen in place, so binding to it would pin the whole
+    // chrome to the scale that was in force when the window opened.
+    property real device_pixel_ratio:
+        Window.window ? Window.window.devicePixelRatio : Screen.devicePixelRatio
     readonly property real base_resize_border_width: 6
     readonly property real resize_border_physical_reduction: 2
     readonly property real reduced_resize_border_width:

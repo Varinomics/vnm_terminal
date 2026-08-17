@@ -133,6 +133,9 @@ void apply_terminal_shell_geometry(
             root_item->setVisible(custom_titlebar);
         }
         if (custom_titlebar) {
+            // The interior and the ratio are read as a pair on purpose: the
+            // chrome derived that interior at that ratio, and snapping it at a
+            // different one would place the terminal off the frame it sits in.
             content_interior_rect = titlebar->content_interior_rect();
             device_pixel_ratio = titlebar->device_pixel_ratio();
         }

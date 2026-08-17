@@ -691,6 +691,35 @@ int main(int argc, char** argv)
                 custom_titlebar_enabled);
             persist_window_state();
         });
+    // A display scale change keeps the window's logical size and its screen, so
+    // neither the size signals above nor screenChanged below report it. The
+    // chrome lays the terminal out against physical pixels, so the interior has
+    // to be recomputed. The geometry is unchanged in logical terms, so this
+    // deliberately does not persist the window state.
+    //
+    // Queued because the chrome's own interior bindings are driven by this same
+    // signal. Reading the interior from a direct slot would leave the result at
+    // the mercy of connection order; running after the emission settles reads
+    // the interior the chrome has actually recomputed.
+    QObject::connect(
+        &window,
+        &QQuickWindow::devicePixelRatioChanged,
+        surface,
+        [
+            titlebar_ptr,
+            &window,
+            surface,
+            scrollbar,
+            custom_titlebar_enabled
+        ] {
+            apply_terminal_shell_geometry(
+                window,
+                *surface,
+                *scrollbar,
+                titlebar_ptr,
+                custom_titlebar_enabled);
+        },
+        Qt::QueuedConnection);
     QObject::connect(
         &window,
         &QWindow::xChanged,

@@ -57,7 +57,11 @@ Item {
         y: terminalSurface.y
         color: searchBar.chromeBackgroundColor
 
-        readonly property real edge_width: 1 / Screen.devicePixelRatio
+        // The window ratio is the live one: the screen attached property never
+        // re-notifies on a scale change, which would leave this hairline at the
+        // width of the scale that was in force when the window opened.
+        readonly property real edge_width:
+            1 / (Window.window ? Window.window.devicePixelRatio : Screen.devicePixelRatio)
 
         Rectangle {
             objectName: "terminal_search_left_edge"
