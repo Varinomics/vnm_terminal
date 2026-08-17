@@ -93,6 +93,7 @@ struct Command_line_setting_overrides
     std::optional<bool>    row_timestamp_tooltip;
     std::optional<int>     scrollback_limit;
     std::optional<QSize>   window_size;
+    std::optional<bool>    maximized;
 };
 
 // Snapshots the forced settings from the surface, so call this once the startup
