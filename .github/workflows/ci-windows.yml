@@ -201,6 +201,33 @@ jobs:
           ref: master
           persist-credentials: false
 
+      # A dispatched run checks the application out at the workflow ref, which
+      # is independent of the release_tag input, so without this a build from
+      # one branch can be signed and uploaded to a release cut from another.
+      # Resolve the tag and refuse the run unless it names the commit that was
+      # actually built. A release event needs no check: its checkout already is
+      # the tag's commit.
+      - name: Verify the dispatched release tag names this build
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          tag_ref="repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
+          tag_sha="$(gh api "${tag_ref}" --jq '.object.sha')"
+          # An annotated tag's ref names the tag object, not the commit.
+          if [[ "$(gh api "${tag_ref}" --jq '.object.type')" == "tag" ]]; then
+            tag_sha="$(gh api \
+              "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')"
+          fi
+          built_sha="$(git -C vnm_terminal rev-parse HEAD)"
+          if [[ "${tag_sha}" != "${built_sha}" ]]; then
+            echo "Release tag ${RELEASE_TAG} names ${tag_sha}," >&2
+            echo "but this run built ${built_sha}." >&2
+            exit 1
+          fi
+          echo "Release tag ${RELEASE_TAG} names the built commit ${built_sha}."
+
       - name: Restore verified Qt IFW archive
         id: ifw-cache
         uses: actions/cache/restore@v4
