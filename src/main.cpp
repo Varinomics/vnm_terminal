@@ -165,6 +165,12 @@ using chrome::write_metrics_json;
 using chrome::write_profile_text;
 #endif
 
+// How long the window geometry has to settle before it is written back.
+// Dragging or resizing emits x, y, width and height separately, so one mouse
+// move can reach persistence two or four times, and only the geometry the
+// gesture ends on is worth storing.
+constexpr int k_window_state_save_settle_ms = 400;
+
 using chrome::parse_arguments;
 using chrome::Parse_result;
 using chrome::prepare_capture_file;
@@ -485,14 +491,26 @@ int main(int argc, char** argv)
     const bool custom_titlebar_enabled = options.custom_titlebar;
     std::optional<Persisted_terminal_window_state> latest_restorable_window_state =
         restorable_terminal_window_state(window, *surface);
+    // Every save constructs a QSettings, rewrites every window key and syncs
+    // it, which is a registry flush on Windows and a lock plus a full ini
+    // rewrite elsewhere. That is the right cost for a settled window and the
+    // wrong one for each intermediate position of a drag, so the geometry
+    // signals restart this timer instead of saving. Everything that is not a
+    // stream of intermediate values - a window-state change, a font size,
+    // shutdown - still saves immediately and cancels whatever is pending.
+    const auto pending_window_state_save = std::make_shared<QTimer>();
+    pending_window_state_save->setSingleShot(true);
+    pending_window_state_save->setInterval(k_window_state_save_settle_ms);
     const auto persist_window_state =
         [
             persistence_enabled,
             surface,
             &window,
             &latest_restorable_window_state,
-            command_line_overrides
+            command_line_overrides,
+            pending_window_state_save
         ] {
+            pending_window_state_save->stop();
             if (!persistence_enabled) {
                 return;
             }
@@ -512,6 +530,19 @@ int main(int argc, char** argv)
 
             QSettings settings;
             save_persisted_terminal_window_state(settings, state, *command_line_overrides);
+        };
+    QObject::connect(
+        pending_window_state_save.get(),
+        &QTimer::timeout,
+        surface,
+        persist_window_state);
+    const auto schedule_window_state_save =
+        [persistence_enabled, pending_window_state_save] {
+            if (!persistence_enabled) {
+                return;
+            }
+
+            pending_window_state_save->start();
         };
     const auto persist_appearance =
         [persistence_enabled, surface, command_line_overrides] {
@@ -661,7 +692,7 @@ int main(int argc, char** argv)
             surface,
             scrollbar,
             custom_titlebar_enabled,
-            persist_window_state
+            schedule_window_state_save
         ] {
             apply_terminal_shell_geometry(
                 window,
@@ -669,7 +700,7 @@ int main(int argc, char** argv)
                 *scrollbar,
                 titlebar_ptr,
                 custom_titlebar_enabled);
-            persist_window_state();
+            schedule_window_state_save();
         });
     QObject::connect(
         &window,
@@ -681,7 +712,7 @@ int main(int argc, char** argv)
             surface,
             scrollbar,
             custom_titlebar_enabled,
-            persist_window_state
+            schedule_window_state_save
         ] {
             apply_terminal_shell_geometry(
                 window,
@@ -689,21 +720,21 @@ int main(int argc, char** argv)
                 *scrollbar,
                 titlebar_ptr,
                 custom_titlebar_enabled);
-            persist_window_state();
+            schedule_window_state_save();
         });
     QObject::connect(
         &window,
         &QWindow::xChanged,
         surface,
-        [persist_window_state](int) {
-            persist_window_state();
+        [schedule_window_state_save](int) {
+            schedule_window_state_save();
         });
     QObject::connect(
         &window,
         &QWindow::yChanged,
         surface,
-        [persist_window_state](int) {
-            persist_window_state();
+        [schedule_window_state_save](int) {
+            schedule_window_state_save();
         });
     QObject::connect(
         &window,
