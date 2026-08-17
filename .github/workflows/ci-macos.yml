@@ -31,10 +31,16 @@ jobs:
       zip_name: ${{ steps.package.outputs.zip_name }}
 
     steps:
+      # persist-credentials is off on every checkout below: actions/checkout
+      # otherwise leaves its credential in the checkout's git config until the
+      # post-job step, and the build in between runs repository-controlled
+      # CMake and scripts from several repositories. Nothing here authenticates
+      # to a remote - the only git use is local - so no checkout needs it.
       - name: Checkout app
         uses: actions/checkout@v4
         with:
           path: vnm_terminal
+          persist-credentials: false
 
       - name: Checkout surface
         uses: actions/checkout@v4
@@ -42,6 +48,7 @@ jobs:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
           ref: master
+          persist-credentials: false
 
       - name: Checkout chrome
         uses: actions/checkout@v4
@@ -49,6 +56,7 @@ jobs:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
           ref: master
+          persist-credentials: false
 
       - name: Checkout MSDF text
         uses: actions/checkout@v4
@@ -56,6 +64,7 @@ jobs:
           repository: imakris/vnm_msdf_text
           path: vnm_msdf_text
           ref: master
+          persist-credentials: false
 
       - name: Derive package names
         id: package
