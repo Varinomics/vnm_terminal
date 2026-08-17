@@ -469,6 +469,9 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     surface.set_color_scheme(QStringLiteral("Solarized Light"));
     surface.set_font_size(22.0);
     surface.set_row_timestamp_tooltip_enabled(false);
+    surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::AUTO);
+    surface.set_lcd_subpixel_order(VNM_TerminalSurface::Lcd_subpixel_order::BGR);
+    surface.set_scrollback_limit(9000);
 
     Persisted_terminal_window_state changed_window_state;
     changed_window_state.font_size = surface.font_size();
@@ -490,6 +493,16 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     ok &= check_optional_size(changed_window.size, QSize(1280, 800),
         "a window size chosen during the session replaces the stored size");
     ok &= check(
+        changed_appearance.text_renderer_mode.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO),
+        "a renderer mode chosen during the session replaces the stored mode");
+    ok &= check(
+        changed_appearance.lcd_subpixel_order.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::BGR),
+        "a subpixel order chosen during the session replaces the stored order");
+    ok &= check(changed_appearance.scrollback_limit.value_or(-1) == 9000,
+        "a scrollback limit chosen during the session replaces the stored limit");
+    ok &= check(
         changed_appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
         "changing one setting does not release the other forced values");
 
@@ -499,6 +512,9 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     surface.set_color_scheme(QStringLiteral("Campbell"));
     surface.set_font_size(30.0);
     surface.set_row_timestamp_tooltip_enabled(true);
+    surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::GLYPH);
+    surface.set_lcd_subpixel_order(VNM_TerminalSurface::Lcd_subpixel_order::RGB);
+    surface.set_scrollback_limit(4000);
 
     Persisted_terminal_window_state restored_window_state;
     restored_window_state.font_size = surface.font_size();
@@ -522,6 +538,16 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     ok &= check(
         restored_appearance.row_timestamp_tooltip.value_or(false),
         "toggling a forced flag off and back on stores the final choice");
+    ok &= check(
+        restored_appearance.text_renderer_mode.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH),
+        "returning to the forced renderer mode stores it");
+    ok &= check(
+        restored_appearance.lcd_subpixel_order.value_or(-1) ==
+            static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::RGB),
+        "returning to the forced subpixel order stores it");
+    ok &= check(restored_appearance.scrollback_limit.value_or(-1) == 4000,
+        "returning to the forced scrollback limit stores it");
     ok &= check(
         restored_appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
         "a forced setting the user never moved is still not written back");
