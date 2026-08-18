@@ -24,10 +24,14 @@
 //
 // check is the ctest gate and never touches the network. resolve and refresh
 // call `gh api`, which is already how ci-windows.yml resolves a release tag.
+// Workflow structure comes from tools/github_workflow_structure.js, which the
+// release-manifest gate reads through as well.
 
 const child_process = require("child_process");
 const fs = require("fs");
 const path = require("path");
+
+const structure = require("./github_workflow_structure.js");
 
 const LOCK_RELATIVE_PATH = "release/dependencies.lock.json";
 const SUPPORTED_SCHEMA = 1;
@@ -84,55 +88,13 @@ function escapeRegExp(text)
     return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// --- Workflow structure -----------------------------------------------------
-
-function indentOf(line)
-{
-    return line.length - line.replace(/^\s*/, "").length;
-}
-
-// A step block runs from its `- name:` line to the next non-blank line at or
-// left of the dash. Deliberately the same shape as the release-manifest
-// extractor, so that a reader who has understood one has understood both.
-function stepBlocks(lines)
-{
-    const blocks = [];
-    for (let index = 0; index < lines.length; ++index) {
-        const start = /^(\s*)- name:/.exec(lines[index]);
-        if (!start)
-            continue;
-
-        const indent = start[1].length;
-        let end = index + 1;
-        while (end < lines.length) {
-            const line = lines[end];
-            if (line.trim() !== "" && indentOf(line) <= indent)
-                break;
-            ++end;
-        }
-        blocks.push({ firstLine: index, lastLine: end });
-    }
-    return blocks;
-}
-
-function jobNameAt(lines, lineIndex)
-{
-    let jobName = null;
-    for (let index = 0; index <= lineIndex; ++index) {
-        const job = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(lines[index]);
-        if (job)
-            jobName = job[1];
-    }
-    return jobName;
-}
-
 // Every actions/checkout step that names another repository, with the ref it
 // asks for. The application's own checkout takes no `repository:` and is not a
 // dependency, so it is not reported.
 function checkoutSites(lines)
 {
     const sites = [];
-    for (const block of stepBlocks(lines)) {
+    for (const block of structure.stepBlocks(lines)) {
         let isCheckout = false;
         let repository = null;
         let ref = null;
@@ -159,71 +121,13 @@ function checkoutSites(lines)
 
         sites.push({
             stepLine: block.firstLine + 1,
-            job: jobNameAt(lines, block.firstLine),
+            job: structure.jobNameAt(lines, block.firstLine),
             repository: repository,
             ref: ref,
             refLine: refLine || block.firstLine + 1
         });
     }
     return sites;
-}
-
-// The `needs:` of every job, in either the flow-sequence or the block-sequence
-// form. Both appear in this tree.
-function jobNeeds(lines)
-{
-    const needs = new Map();
-    let job = null;
-    for (let index = 0; index < lines.length; ++index) {
-        const header = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(lines[index]);
-        if (header) {
-            job = header[1];
-            needs.set(job, []);
-            continue;
-        }
-        if (job === null)
-            continue;
-
-        const inline = /^ {4}needs:\s*(.+?)\s*$/.exec(lines[index]);
-        if (inline) {
-            needs.set(job, inline[1]
-                .replace(/^\[|\]$/g, "")
-                .split(",")
-                .map(entry => entry.trim().replace(/^['"]|['"]$/g, ""))
-                .filter(Boolean));
-            continue;
-        }
-        if (!/^ {4}needs:\s*$/.test(lines[index]))
-            continue;
-
-        const listed = [];
-        for (let scan = index + 1; scan < lines.length; ++scan) {
-            const item = /^ {6}-\s*(.+?)\s*$/.exec(lines[scan]);
-            if (!item)
-                break;
-            listed.push(item[1].replace(/^['"]|['"]$/g, ""));
-        }
-        needs.set(job, listed);
-    }
-    return needs;
-}
-
-// The line span of every job, so that a rule can ask what a single job
-// contains without re-deriving the job boundaries at each use.
-function jobRegions(lines)
-{
-    const regions = new Map();
-    let current = null;
-    for (let index = 0; index < lines.length; ++index) {
-        const header = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(lines[index]);
-        if (!header)
-            continue;
-        if (current !== null)
-            regions.get(current).lastLine = index;
-        current = header[1];
-        regions.set(current, { firstLine: index, lastLine: lines.length });
-    }
-    return regions;
 }
 
 function resolveOutputExpression(output)
@@ -304,8 +208,8 @@ function checkCheckoutRefs(lock, workflowLines)
 
     const seen = new Set();
     for (const [workflow, lines] of workflowLines) {
-        const needs = jobNeeds(lines);
-        const regions = jobRegions(lines);
+        const needs = structure.jobNeeds(lines);
+        const regions = structure.jobRegions(lines);
         const jobsWithDependencies = new Set();
         for (const site of checkoutSites(lines)) {
             const entry = byRepository.get(site.repository);

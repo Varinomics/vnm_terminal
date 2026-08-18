@@ -14,13 +14,15 @@
 //   retention-families <root>  emit the prune families artifact-retention.yml
 //                              reads, one TSV row per family
 //
-// Extraction is text-driven: no YAML parser is available without adding a
-// dependency, and none is added. An extraction that finds nothing where the
-// manifest says something exists is itself a violation, so a workflow this
-// program can no longer read fails rather than passing vacuously.
+// Workflow structure comes from tools/github_workflow_structure.js, which the
+// dependency-lock gate reads through as well. An extraction that finds nothing
+// where the manifest says something exists is itself a violation, so a workflow
+// this program can no longer read fails rather than passing vacuously.
 
 const fs = require("fs");
 const path = require("path");
+
+const structure = require("./github_workflow_structure.js");
 
 const MANIFEST_RELATIVE_PATH = "release/manifest.json";
 const SUPPORTED_SCHEMA = 1;
@@ -116,106 +118,10 @@ function sweepLine(line, patternsToIgnore)
     return shapes;
 }
 
-// --- Workflow structure -----------------------------------------------------
-
-function indentOf(line)
-{
-    return line.length - line.replace(/^\s*/, "").length;
-}
-
-// A step block runs from its `- name:` line to the next non-blank line at or
-// left of the dash.
-function stepBlocks(lines)
-{
-    const blocks = [];
-    for (let index = 0; index < lines.length; ++index) {
-        const start = /^(\s*)- name:/.exec(lines[index]);
-        if (!start)
-            continue;
-
-        const indent = start[1].length;
-        let end = index + 1;
-        while (end < lines.length) {
-            const line = lines[end];
-            if (line.trim() !== "" && indentOf(line) <= indent)
-                break;
-            ++end;
-        }
-        blocks.push({ firstLine: index, lastLine: end, indent });
-    }
-    return blocks;
-}
-
-// The `with:` mapping of a step, as { key: { value, blockLines, line } }.
-function withMapping(lines, block)
-{
-    let withIndex = -1;
-    for (let index = block.firstLine; index < block.lastLine; ++index) {
-        if (/^\s*with:\s*$/.test(lines[index])) {
-            withIndex = index;
-            break;
-        }
-    }
-    if (withIndex < 0)
-        return null;
-
-    const withIndent = indentOf(lines[withIndex]);
-    let keyIndent = -1;
-    const mapping = {};
-    for (let index = withIndex + 1; index < block.lastLine; ++index) {
-        const line = lines[index];
-        if (line.trim() === "" || /^\s*#/.test(line))
-            continue;
-
-        const lineIndent = indentOf(line);
-        if (lineIndent <= withIndent)
-            break;
-        if (keyIndent < 0)
-            keyIndent = lineIndent;
-        if (lineIndent !== keyIndent)
-            continue;
-
-        const entry = /^\s*([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
-        if (!entry)
-            continue;
-
-        const blockLines = [];
-        if (entry[2] === "|" || entry[2] === ">") {
-            for (let scan = index + 1; scan < block.lastLine; ++scan) {
-                const scanned = lines[scan];
-                if (scanned.trim() === "")
-                    continue;
-                if (indentOf(scanned) <= keyIndent)
-                    break;
-                if (/^\s*#/.test(scanned))
-                    continue;
-                blockLines.push(scanned.trim());
-            }
-        }
-        mapping[entry[1]] = {
-            value: entry[2].replace(/^['"]|['"]$/g, "").trim(),
-            blockLines,
-            line: index + 1
-        };
-    }
-    return mapping;
-}
-
-function jobNameAt(lines, lineIndex)
-{
-    let jobName = null;
-    for (let index = 0; index <= lineIndex; ++index) {
-        const job = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(lines[index]);
-        if (job)
-            jobName = job[1];
-    }
-    return jobName;
-}
-
 function artifactSites(workflowPath, lines)
 {
     const sites = [];
-    for (const block of stepBlocks(lines)) {
+    for (const block of structure.stepBlocks(lines)) {
         let kind = null;
         for (let index = block.firstLine; index < block.lastLine; ++index) {
             const uses = /^\s*uses:\s*actions\/(upload|download)-artifact@/
@@ -228,7 +134,7 @@ function artifactSites(workflowPath, lines)
         if (!kind)
             continue;
 
-        const mapping = withMapping(lines, block) || {};
+        const mapping = structure.withMapping(lines, block) || {};
         if (!mapping.name) {
             violation(workflowPath + ":" + (block.firstLine + 1) +
                 " uses actions/" + kind + "-artifact but no name: was found in" +
@@ -246,7 +152,7 @@ function artifactSites(workflowPath, lines)
             workflow: workflowPath,
             stepLine: block.firstLine + 1,
             nameLine: mapping.name.line,
-            job: jobNameAt(lines, block.firstLine),
+            job: structure.jobNameAt(lines, block.firstLine),
             kind,
             name: mapping.name.value,
             paths
@@ -271,7 +177,7 @@ function releaseUploadSites(workflowPath, lines)
         sites.push({
             workflow: workflowPath,
             line: index + 1,
-            job: jobNameAt(lines, index),
+            job: structure.jobNameAt(lines, index),
             arguments: joined.trim().split(/\s+/)
         });
         index = last;
@@ -743,7 +649,7 @@ function checkReaderOwnsNoLiteral(root, reader, field, literal)
 function actionSites(lines, actionPattern)
 {
     const sites = [];
-    for (const block of stepBlocks(lines)) {
+    for (const block of structure.stepBlocks(lines)) {
         let matched = false;
         for (let index = block.firstLine; index < block.lastLine; ++index) {
             if (actionPattern.test(lines[index])) {
@@ -756,7 +662,7 @@ function actionSites(lines, actionPattern)
 
         sites.push({
             stepLine: block.firstLine + 1,
-            mapping: withMapping(lines, block) || {}
+            mapping: structure.withMapping(lines, block) || {}
         });
     }
     return sites;
