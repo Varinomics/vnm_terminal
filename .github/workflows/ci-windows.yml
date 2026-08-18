@@ -459,10 +459,11 @@ jobs:
           # The manifest is taken with -Force, so the upload has to carry the
           # same set or verification fails on a file that was never sent.
           include-hidden-files: true
-          # This artifact only exists to hand the payload to the next job in the
-          # same run, and it is the largest thing the run produces. Nothing reads
-          # it afterwards.
-          retention-days: 1
+          # Keep the repository's default retention here. The signing job may
+          # wait for environment approval, and a one-day expiry can delete its
+          # only input while that run is still legitimately pending. The separate
+          # retention workflow removes superseded artifacts after their owning
+          # runs have completed.
 
   # Everything with access to the signing credential lives here, and nothing
   # else does. Every action below is pinned to a full commit SHA because a
