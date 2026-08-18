@@ -7,8 +7,8 @@
 // report it by name.
 //
 // Every case is a defect that once passed. The gates used to skip a check whose
-// subject they could not find - an absent manifest field, a producer that does
-// not exist, a locked checkout missing from the workspace - which turns a
+// subject they could not find: an absent manifest field, a producer that does
+// not exist, a locked checkout missing from the workspace. Skipping turns a
 // deleted declaration into a silently narrower contract. A gate that cannot
 // find what it was told to check must fail, and these drills are how that stays
 // true.

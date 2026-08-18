@@ -597,9 +597,9 @@ function artifactNames(artifact)
 
 // An attachment job uploads by glob out of the directory its downloads land in,
 // so what it attaches is decided by which artifacts it downloads and not by the
-// upload arguments alone. Two artifacts can carry the same file name - the
-// unsigned portable archive and the archive rebuilt from the signed payload do
-// - and the second download overwrites the first, under the name the release
+// upload arguments alone. Two artifacts can carry the same file name, as the
+// unsigned portable archive and the archive rebuilt from the signed payload do,
+// and the second download overwrites the first under the name the release
 // publishes. The comparison is therefore on artifact identity: renaming a step
 // cannot disarm it, and the argument-set comparison below stays about shapes.
 function checkAttachmentSources(manifest, sitesByWorkflow)
