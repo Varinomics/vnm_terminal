@@ -535,7 +535,6 @@ function runResolve(root)
 
     for (const entry of entries)
         appendLine("GITHUB_OUTPUT", entry.output + "=" + resolved[entry.name]);
-    appendLine("GITHUB_OUTPUT", "resolved_from=" + resolveFrom);
 
     const report = "Resolved dependency commits from `" + resolveFrom + "`:\n\n" +
         "```\n" + resolutionTable(entries, resolved) + "\n```";

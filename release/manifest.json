@@ -127,7 +127,6 @@
   "asset_templates": {
     "windows_installer_template": {
       "template": "vnm_terminal_v{version}_windows_x64{variant}.exe",
-      "site": "tools/build_windows_ifw_installer.ps1",
       "variants": { "signed": "", "unsigned": "_unsigned" }
     }
   },

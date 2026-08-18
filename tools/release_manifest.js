@@ -401,6 +401,52 @@ function checkManifestSelfConsistency(root, manifest)
 // artifact names, the upload paths and the release attachments of such a file
 // are outside this contract entirely, which is the one outcome a contract that
 // exists to make names authoritative cannot allow.
+// A template exists because more than one release asset is rendered from it,
+// and the variants are what say which. Without this comparison the map is a
+// comment: each asset is checked against its producer through its own shape, so
+// a variant could name a suffix nothing produces and an asset could be a
+// variant of a template that never renders it.
+function checkAssetTemplates(manifest)
+{
+    for (const id of Object.keys(manifest.asset_templates)) {
+        const template = manifest.asset_templates[id];
+        checkIdentifier("asset template", id);
+
+        const variants = template.variants;
+        if (variants === null || typeof variants !== "object" ||
+                Object.keys(variants).length === 0) {
+            violation("asset_templates[\"" + id + "\"] declares no variants." +
+                " A shape with one rendering is a release asset, not a" +
+                " template.");
+            continue;
+        }
+
+        const rendered = new Map();
+        for (const variant of Object.keys(variants)) {
+            rendered.set(
+                template.template.split("{variant}").join(variants[variant]),
+                variant);
+        }
+
+        const assets = manifest.release_assets
+            .filter(asset => asset.variant_of === id);
+        for (const asset of assets) {
+            check(rendered.has(asset.template),
+                "release asset \"" + asset.id + "\" is a variant of \"" + id +
+                "\", but no variant of that template renders \"" +
+                asset.template + "\". The template renders " +
+                sortedList(Array.from(rendered.keys())) + ".");
+        }
+        for (const [shape, variant] of rendered) {
+            check(assets.some(asset => asset.template === shape),
+                "asset_templates[\"" + id + "\"].variants." + variant +
+                " renders \"" + shape + "\", which no release asset declares." +
+                " A variant nothing is rendered from is a suffix nobody" +
+                " produces.");
+        }
+    }
+}
+
 function checkWorkflowCoverage(root, manifest)
 {
     const declared = new Set(manifest.consumers);
@@ -1225,6 +1271,7 @@ function runCheck(root)
     }
 
     checkManifestSelfConsistency(root, manifest);
+    checkAssetTemplates(manifest);
     checkWorkflowCoverage(root, manifest);
     checkRetentionFamilies(manifest);
     checkArtifactNames(manifest, sitesByWorkflow);

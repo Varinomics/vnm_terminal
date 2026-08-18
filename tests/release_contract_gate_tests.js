@@ -357,6 +357,17 @@ const CASES = [
         expect: "must set RESOLVE_FROM"
     },
     {
+        name: "a template variant no release asset is rendered from",
+        tool: "release_manifest.js",
+        mutate: root => {
+            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
+            const template = manifest.asset_templates.windows_installer_template;
+            template.variants.unsigned = "_UNSIGNED";
+            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
+        },
+        expect: "which no release asset declares"
+    },
+    {
         name: "a workflow the manifest does not declare",
         tool: "release_manifest.js",
         mutate: addProbeWorkflow,

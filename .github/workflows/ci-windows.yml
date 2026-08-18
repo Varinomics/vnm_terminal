@@ -53,7 +53,6 @@ jobs:
       chrome: ${{ steps.resolve.outputs.chrome }}
       msdf_text: ${{ steps.resolve.outputs.msdf_text }}
       qt_dispatch: ${{ steps.resolve.outputs.qt_dispatch }}
-      resolved_from: ${{ steps.resolve.outputs.resolved_from }}
 
     steps:
       # A release or dispatched run must read the lock from the tagged commit
