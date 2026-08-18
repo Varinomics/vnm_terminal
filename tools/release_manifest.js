@@ -479,16 +479,23 @@ function checkArtifactNames(manifest, sitesByWorkflow)
         if (artifact.name) {
             const matching = sites.filter(site => site.name === artifact.name);
             if (matching.length === 0) {
-                const nearest = sites.length > 0
-                    ? " The nearest artifact site is " + artifact.workflow +
-                        ":" + sites[0].nameLine + ", which " + sites[0].kind +
-                        "s \"" + sites[0].name + "\"."
-                    : " The extractor found no artifact steps in that file at" +
-                        " all.";
+                // The sites that name something the manifest does not declare
+                // are the counterpart of this one, so they are what a reader
+                // has to reconcile.
+                const undeclared = sites.filter(site =>
+                    !site.name.startsWith("${{") &&
+                    declaredNames.indexOf(site.name) < 0);
+                const hint = undeclared.length > 0
+                    ? " The undeclared artifact names in that workflow are: " +
+                        sortedList(undeclared.map(site =>
+                            "\"" + site.name + "\" at " + site.workflow + ":" +
+                            site.nameLine)) + "."
+                    : " Every other artifact name in that workflow is" +
+                        " declared, so nothing there produces it.";
                 violation(MANIFEST_RELATIVE_PATH + " declares" +
                     " actions_artifacts[\"" + artifact.id + "\"] as \"" +
                     artifact.name + "\", but " + artifact.workflow +
-                    " has no artifact step by that name." + nearest);
+                    " has no artifact step by that name." + hint);
             }
 
             const producers = matching.filter(site => site.kind === "upload");
