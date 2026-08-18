@@ -47,13 +47,13 @@ jobs:
       # CMake and scripts from several repositories. Nothing here authenticates
       # to a remote - the only git use is local - so no checkout needs it.
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
           persist-credentials: false
 
       - name: Checkout surface
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
@@ -62,7 +62,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout chrome
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
@@ -70,7 +70,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4.3.1
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.11.1'
           arch: 'win64_msvc2022_64'
@@ -142,7 +142,7 @@ jobs:
           }
 
       - name: Upload source archive artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vnm-terminal-source
           path: vnm_terminal/dist/vnm_terminal_v*_source.zip
@@ -172,13 +172,13 @@ jobs:
               -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
           persist-credentials: false
 
       - name: Checkout surface
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
@@ -187,7 +187,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout chrome
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
@@ -223,7 +223,7 @@ jobs:
 
       - name: Restore verified Qt IFW archive
         id: ifw-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ env.IFW_ARCHIVE_PATH }}
           key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
@@ -244,7 +244,7 @@ jobs:
 
       - name: Save verified Qt IFW archive
         if: steps.ifw-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ env.IFW_ARCHIVE_PATH }}
           key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
@@ -262,7 +262,7 @@ jobs:
           }
 
       - name: Install Qt and MinGW
-        uses: jurplel/install-qt-action@v4.3.1
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.11.1'
           arch: 'win64_mingw'
@@ -377,7 +377,7 @@ jobs:
             Set-Content -LiteralPath "$provenance/payload.sha256" -Encoding ascii
 
       - name: Upload unsigned Windows package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vnm-terminal-windows-x64-unsigned
           path: |
@@ -388,7 +388,7 @@ jobs:
 
       - name: Upload the release signing payload
         if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vnm-terminal-windows-x64-signing-payload
           path: |
@@ -656,14 +656,14 @@ jobs:
 
     steps:
       - name: Checkout the release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
           persist-credentials: false
 
       - name: Download signed Windows package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: vnm-terminal-windows-x64-signed
           path: vnm_terminal/dist
@@ -698,7 +698,7 @@ jobs:
 
     steps:
       - name: Download source archive artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: vnm-terminal-source
           path: dist
@@ -727,13 +727,13 @@ jobs:
 
     steps:
       - name: Download unsigned Windows package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: vnm-terminal-windows-x64-unsigned
           path: dist
 
       - name: Download signed Windows package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: vnm-terminal-windows-x64-signed
           path: dist
