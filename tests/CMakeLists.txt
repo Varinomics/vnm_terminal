@@ -63,6 +63,16 @@ add_test(
         check "${PROJECT_SOURCE_DIR}"
 )
 
+# The dependency lock records what a release was built from, and the checkout
+# wiring that makes one workflow run build one source lives in all three CI
+# workflows, so this contract is unconditional for the same reason.
+add_test(
+    NAME vnm_terminal_dependency_lock_contract
+    COMMAND
+        node "${PROJECT_SOURCE_DIR}/tools/dependencies_lock.js"
+        check "${PROJECT_SOURCE_DIR}"
+)
+
 function(vnm_terminal_require_qt_plugin_file plugin_target purpose)
     if(NOT TARGET ${plugin_target})
         message(FATAL_ERROR

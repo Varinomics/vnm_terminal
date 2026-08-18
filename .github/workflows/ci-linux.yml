@@ -39,8 +39,45 @@ env:
     fontconfig fonts-dejavu-core fonts-liberation
 
 jobs:
+  # Every build, package and test job below checks out the dependency commits
+  # this job resolves, so one workflow run builds one source. Ordinary CI still
+  # resolves master fresh on every run: a surface break has to fail app CI on
+  # the next run, which is the reason app CI tracks master at all.
+  resolve-dependencies:
+    name: Resolve dependency commits
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      surface: ${{ steps.resolve.outputs.surface }}
+      chrome: ${{ steps.resolve.outputs.chrome }}
+      msdf_text: ${{ steps.resolve.outputs.msdf_text }}
+      resolved_from: ${{ steps.resolve.outputs.resolved_from }}
+
+    steps:
+      # A release or dispatched run must read the lock from the tagged commit
+      # rather than from the workflow ref, for the same reason the signing job
+      # checks the release source out by tag.
+      - name: Checkout app
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag || '' }}
+          persist-credentials: false
+
+      # Every dependency repository is public, so the run needs no credential
+      # beyond the workflow token and a fork pull request resolves exactly as
+      # a branch push does.
+      - name: Resolve dependency commits
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESOLVE_FROM: ${{ (github.event_name == 'release' || inputs.release_tag != '') && 'lock' || 'master' }}
+          STALE_LOCK_IS_FATAL: ${{ github.event_name == 'release' && '1' || '0' }}
+        run: node tools/dependencies_lock.js resolve .
+
   build-and-test:
     name: Qt Quick Terminal (Linux)
+    needs: resolve-dependencies
     runs-on: ubuntu-24.04
 
     steps:
@@ -60,7 +97,7 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.surface }}
           token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
           persist-credentials: false
 
@@ -69,8 +106,18 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
+
+      # The static contract cannot see a checkout it fails to parse, and a ref
+      # that resolves to the empty string silently takes a default branch, so
+      # the commits this job actually built from are compared with the ones the
+      # run resolved.
+      - name: Verify the checked-out dependency commits
+        env:
+          DEPENDENCY_COMMITS: ${{ toJSON(needs.resolve-dependencies.outputs) }}
+        run: |
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
       - name: Install dependencies
         run: |
@@ -105,6 +152,7 @@ jobs:
 
   transcript-build-and-test:
     name: Qt Quick Terminal Transcript (Linux)
+    needs: resolve-dependencies
     runs-on: ubuntu-24.04
 
     steps:
@@ -119,7 +167,7 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.surface }}
           token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
           persist-credentials: false
 
@@ -128,8 +176,18 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
+
+      # The static contract cannot see a checkout it fails to parse, and a ref
+      # that resolves to the empty string silently takes a default branch, so
+      # the commits this job actually built from are compared with the ones the
+      # run resolved.
+      - name: Verify the checked-out dependency commits
+        env:
+          DEPENDENCY_COMMITS: ${{ toJSON(needs.resolve-dependencies.outputs) }}
+        run: |
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
       - name: Install dependencies
         run: |
@@ -165,6 +223,7 @@ jobs:
 
   package:
     name: AppImage, DEB, and RPM (Linux x64)
+    needs: resolve-dependencies
     runs-on: ubuntu-24.04
 
     steps:
@@ -179,7 +238,7 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.surface }}
           token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
           persist-credentials: false
 
@@ -188,7 +247,7 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
 
       - name: Checkout MSDF text
@@ -196,8 +255,18 @@ jobs:
         with:
           repository: imakris/vnm_msdf_text
           path: vnm_msdf_text
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
           persist-credentials: false
+
+      # The static contract cannot see a checkout it fails to parse, and a ref
+      # that resolves to the empty string silently takes a default branch, so
+      # the commits this job actually built from are compared with the ones the
+      # run resolved.
+      - name: Verify the checked-out dependency commits
+        env:
+          DEPENDENCY_COMMITS: ${{ toJSON(needs.resolve-dependencies.outputs) }}
+        run: |
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
       # A dispatched run checks the application out at the workflow ref, which
       # is independent of the release_tag input, so without this a build from

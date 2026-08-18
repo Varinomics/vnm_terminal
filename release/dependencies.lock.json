@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+
+  "owned": {
+    "vnm_terminal_surface": {
+      "repository": "Varinomics/vnm_terminal_surface",
+      "branch": "master",
+      "checkout_path": "vnm_terminal_surface",
+      "output": "surface",
+      "commit": "4383ac88a62c97ded31da2f476dfb68570f72cf8"
+    },
+    "vnm_qml_chrome": {
+      "repository": "imakris/vnm_qml_chrome",
+      "branch": "master",
+      "checkout_path": "vnm_qml_chrome",
+      "output": "chrome",
+      "commit": "7c9f07d0f0f0d73ee04c2bb307b2fc8b3ba80ba9"
+    },
+    "vnm_msdf_text": {
+      "repository": "imakris/vnm_msdf_text",
+      "branch": "master",
+      "checkout_path": "vnm_msdf_text",
+      "output": "msdf_text",
+      "commit": "0deaec4fdaeb86af4ffd4e256b01782d4f9fb46e"
+    }
+  },
+
+  "third_party": {
+    "freetype": {
+      "repository_url": "https://gitlab.freedesktop.org/freetype/freetype.git",
+      "tag": "VER-2-13-3",
+      "clone_sites": [
+        ".github/workflows/ci-linux.yml",
+        ".github/workflows/ci-macos.yml",
+        "build_portable.bat"
+      ]
+    },
+    "msdfgen": {
+      "repository_url": "https://github.com/Chlumsky/msdfgen.git",
+      "tag": "v1.12.1",
+      "clone_sites": [
+        ".github/workflows/ci-linux.yml",
+        ".github/workflows/ci-macos.yml",
+        "build_portable.bat"
+      ]
+    }
+  }
+}
