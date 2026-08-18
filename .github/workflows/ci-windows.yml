@@ -489,7 +489,10 @@ jobs:
     if: >-
       github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-    needs: package
+    # A release must pass the complete Windows build/test/source-integrity gate,
+    # not only the packaging job that produced the payload. Otherwise a failing
+    # test run can coexist with a newly signed and published installer.
+    needs: [build-and-test, package]
     runs-on: windows-2022
     environment: release-signing
     permissions:
