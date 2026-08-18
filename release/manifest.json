@@ -173,6 +173,7 @@
     ],
     "publisher_pattern_readers": [
       "tools/build_windows_ifw_installer.ps1",
+      "tests/windows_ifw_contract_tests.ps1",
       "tests/windows_ifw_installation_tests.ps1"
     ],
     "payload_binaries": [

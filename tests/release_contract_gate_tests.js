@@ -219,6 +219,26 @@ const CASES = [
         expect: "selects every artifact in the repository"
     },
     {
+        name: "a publisher pattern that accepts any signer",
+        tool: "release_manifest.js",
+        mutate: root => {
+            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
+            manifest.signing.publisher_subject_pattern = ".*";
+            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
+        },
+        expect: "accepts the certificate subject \"CN=Unexpected Publisher\""
+    },
+    {
+        name: "a publisher pattern that refuses the publisher",
+        tool: "release_manifest.js",
+        mutate: root => {
+            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
+            manifest.signing.publisher_subject_pattern = "CN=Varinomics Limited";
+            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
+        },
+        expect: "refuses every release signature"
+    },
+    {
         name: "a workflow the manifest does not declare",
         tool: "release_manifest.js",
         mutate: addProbeWorkflow,

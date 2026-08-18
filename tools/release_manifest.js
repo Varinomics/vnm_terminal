@@ -923,6 +923,54 @@ function resolveChain(chains, variable)
     return { root: current, segments };
 }
 
+// The pattern decides whether a signature identifies the publisher, so a
+// pattern that admits anything is a signing check that refuses nothing. What is
+// asserted here is the two directions the release depends on rather than the
+// text of the expression: it must match the publisher, and it must refuse a
+// subject that only resembles it. tests/windows_ifw_contract_tests.ps1 drives
+// the same distinction through the real builder against certificate fixtures,
+// but it runs on Windows alone, and the manifest is edited from every host.
+function checkPublisherSubjectPattern(signing)
+{
+    let expression = null;
+    try {
+        expression = new RegExp(signing.publisher_subject_pattern);
+    }
+    catch (error) {
+        violation("signing.publisher_subject_pattern \"" +
+            signing.publisher_subject_pattern + "\" is not a valid regular" +
+            " expression: " + error.message);
+        return;
+    }
+
+    const accepted = [
+        "CN=" + signing.publisher,
+        "CN=" + signing.publisher + ", O=" + signing.publisher +
+            ", L=London, C=GB"
+    ];
+    for (const subject of accepted) {
+        check(expression.test(subject),
+            "signing.publisher_subject_pattern \"" +
+            signing.publisher_subject_pattern + "\" does not match the" +
+            " certificate subject \"" + subject + "\". A pattern that cannot" +
+            " match its own publisher refuses every release signature.");
+    }
+
+    const refused = [
+        "CN=Unexpected Publisher",
+        "CN=Not " + signing.publisher + " Either",
+        "CN=" + signing.publisher + " Holdings",
+        "O=" + signing.publisher + ", CN=Someone Else"
+    ];
+    for (const subject of refused) {
+        check(!expression.test(subject),
+            "signing.publisher_subject_pattern \"" +
+            signing.publisher_subject_pattern + "\" accepts the certificate" +
+            " subject \"" + subject + "\". Only a whole CN component naming " +
+            signing.publisher + " may be accepted.");
+    }
+}
+
 function checkSigning(root, manifest)
 {
     const signing = manifest.signing;
@@ -941,6 +989,8 @@ function checkSigning(root, manifest)
             signing.publisher + "\". The installer metadata and the signature" +
             " identity must name the same publisher.");
     }
+
+    checkPublisherSubjectPattern(signing);
 
     for (const reader of signing.publisher_pattern_readers) {
         if (!exists(root, reader)) {
