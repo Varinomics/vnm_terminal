@@ -78,7 +78,18 @@ jobs:
           GH_TOKEN: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
           RESOLVE_FROM: ${{ (github.event_name == 'release' || inputs.release_tag != '') && 'lock' || 'master' }}
           STALE_LOCK_IS_FATAL: ${{ github.event_name == 'release' && '1' || '0' }}
-        run: node tools/dependencies_lock.js resolve .
+        run: |
+          # A release or dispatched run resolves from the source it checked out
+          # by tag. A tag cut before this lock existed carries neither the lock
+          # nor the program that reads it, and node would report a missing
+          # module that names neither the tag nor the reason.
+          if [[ ! -f release/dependencies.lock.json ]]; then
+            echo "The checked-out release source carries no release/dependencies.lock.json." >&2
+            echo "A tag cut before the dependency lock existed cannot be rebuilt by this workflow:" >&2
+            echo "there is nothing at that tag recording which dependency commits it was built from." >&2
+            exit 1
+          fi
+          node tools/dependencies_lock.js resolve .
 
   build-and-test:
     name: Qt Quick Terminal (Linux)
