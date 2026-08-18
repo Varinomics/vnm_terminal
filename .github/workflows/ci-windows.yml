@@ -151,20 +151,13 @@ jobs:
   package:
     name: Portable ZIP and EXE (Windows x64)
     runs-on: windows-2022
-    # Release runs additionally produce the signed installer, which needs an
-    # OIDC token to reach Microsoft Artifact Signing. Nothing else in this job
-    # needs credentials, so pushes and pull requests keep validating packaging
-    # exactly as before.
-    #
-    # The environment carries no protection rules. It exists to give the OIDC
-    # token a stable subject: a release run's ref is refs/tags/<tag>, which
-    # changes every release, so a ref-scoped federated credential would need
-    # recreating each time. Scoping to the environment keeps the subject fixed
-    # at repo:Varinomics/vnm_terminal:environment:release-signing.
-    environment: release-signing
-    permissions:
-      contents: read
-      id-token: write
+    # No credentials of any kind. This job runs on every push and pull request
+    # and executes repository-controlled build scripts and third-party actions,
+    # so it must not be able to reach Microsoft Artifact Signing. GitHub grants
+    # OIDC per job, not per step: every step of a job with id-token: write can
+    # ask for a token, whatever `if:` guards the step that uses it. Signing
+    # therefore lives in sign-windows-package below, which runs only for a
+    # release.
 
     steps:
       - name: Initialize Qt IFW paths
@@ -354,36 +347,210 @@ jobs:
               exit $LASTEXITCODE
           }
 
-      # Signing repackages rather than post-signing the unsigned installer on
-      # purpose: build_windows_ifw_installer.ps1 signs vnm_terminal.exe, the
-      # maintenance tool and the installer base *before* binarycreator runs, so
-      # signing only the finished exe would ship a signed installer that
-      # installs unsigned binaries. The payload is already built, so this
-      # repackages rather than recompiles.
-      - name: Authenticate to Azure for signing
+      - name: Record the signing payload provenance
         if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
-        uses: azure/login@v2
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          $provenance = 'dist/signing_provenance'
+          New-Item -ItemType Directory -Path $provenance -Force | Out-Null
+          git rev-parse HEAD |
+            Set-Content -LiteralPath "$provenance/app_commit.txt" -Encoding ascii
+
+          # The payload reaches the signing job through an artifact, which is a
+          # zip round trip. Signing an installer built from a payload that lost
+          # or altered a file would produce a validly signed, quietly incomplete
+          # installer, so record every file and check the list on the far side.
+          # This proves the transfer, not the producer: the same job writes the
+          # payload and the manifest. It also cannot see a lost empty directory,
+          # which an artifact does not carry and a manifest of files cannot
+          # name; the IFW payload has none.
+          $payload = 'dist/portable_candidate'
+          Get-ChildItem -LiteralPath $payload -Recurse -File -Force |
+            ForEach-Object {
+                $relative = [System.IO.Path]::GetRelativePath(
+                    (Resolve-Path -LiteralPath $payload).Path, $_.FullName)
+                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
+                "$hash  $($relative -replace '\\', '/')"
+            } |
+            Sort-Object |
+            Set-Content -LiteralPath "$provenance/payload.sha256" -Encoding ascii
+
+      - name: Upload unsigned Windows package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vnm-terminal-windows-x64-unsigned
+          path: |
+            vnm_terminal/dist/vnm_terminal_v*_w64.zip
+            vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe
+            vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe.sha256
+          if-no-files-found: error
+
+      - name: Upload the release signing payload
+        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: vnm-terminal-windows-x64-signing-payload
+          path: |
+            vnm_terminal/dist/portable_candidate
+            vnm_terminal/dist/signing_provenance
+          if-no-files-found: error
+          # The manifest is taken with -Force, so the upload has to carry the
+          # same set or verification fails on a file that was never sent.
+          include-hidden-files: true
+          # This artifact only exists to hand the payload to the next job in the
+          # same run, and it is the largest thing the run produces. Nothing reads
+          # it afterwards.
+          retention-days: 1
+
+  # Everything with access to the signing credential lives here, and nothing
+  # else does. Every action below is pinned to a full commit SHA because a
+  # moving tag inside this job is a moving tag next to the only credential in
+  # the repository; the SHAs are the commits those tags named when the job was
+  # written and want re-auditing before each release. The job deliberately does
+  # not check out the surface or chrome repositories, install Qt, or run any
+  # build or test script: it repackages an already-built payload, so none of
+  # that code needs to be inside the credential boundary.
+  #
+  # The release-signing environment stays on this job. It carries no protection
+  # rules today and exists to give the OIDC token a stable subject - a release
+  # run's ref is refs/tags/<tag>, which changes every release, so a ref-scoped
+  # federated credential would need recreating each time, while the environment
+  # subject stays repo:Varinomics/vnm_terminal:environment:release-signing.
+  # Required reviewers and deployment-branch restrictions on that environment
+  # are still worth adding: they are the control that makes reaching this job
+  # deliberate rather than automatic.
+  sign-windows-package:
+    name: Sign Windows installer
+    if: >-
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    needs: package
+    runs-on: windows-2022
+    environment: release-signing
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Initialize Qt IFW paths
+        shell: pwsh
+        run: |
+          $ifwArchivePath = Join-Path $env:RUNNER_TEMP `
+              'vnm-ifw-cache\ifw-win-x64.7z'
+          $ifwRoot = Join-Path $env:RUNNER_TEMP 'vnm-ifw-4.11.0'
+          "IFW_ARCHIVE_PATH=$ifwArchivePath" | Out-File `
+              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "IFW_ROOT=$ifwRoot" | Out-File `
+              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Checkout the release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: vnm_terminal
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          persist-credentials: false
+
+      - name: Download the release signing payload
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: vnm-terminal-windows-x64-signing-payload
+          path: vnm_terminal/dist
+
+      - name: Verify the signing payload
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          # The build the payload came from has to be the commit this job just
+          # checked out, or a dispatched run could sign one branch's binaries
+          # against another branch's packaging assets.
+          $expected = (Get-Content -LiteralPath `
+              'dist/signing_provenance/app_commit.txt' -Raw).Trim()
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) {
+              throw "Signing payload was built from $expected, but the release checkout is $actual."
+          }
+
+          # And the payload has to be the one the manifest describes, file for
+          # file, so a lossy artifact round trip cannot reach binarycreator.
+          $payload = (Resolve-Path -LiteralPath 'dist/portable_candidate').Path
+          $manifest = @{}
+          foreach ($line in Get-Content -LiteralPath 'dist/signing_provenance/payload.sha256') {
+              if ($line -match '^([0-9A-Fa-f]{64})\s\s(.+)$') {
+                  $manifest[$Matches[2]] = $Matches[1].ToUpperInvariant()
+              }
+              else {
+                  throw "Malformed payload manifest line: $line"
+              }
+          }
+          if ($manifest.Count -eq 0) {
+              throw 'Payload manifest is empty.'
+          }
+
+          $seen = New-Object System.Collections.Generic.HashSet[string]
+          foreach ($file in Get-ChildItem -LiteralPath $payload -Recurse -File -Force) {
+              $relative = ([System.IO.Path]::GetRelativePath($payload, $file.FullName)) `
+                  -replace '\\', '/'
+              [void]$seen.Add($relative)
+              if (-not $manifest.ContainsKey($relative)) {
+                  throw "Payload contains $relative, which the manifest does not list."
+              }
+              $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+              if ($hash -ne $manifest[$relative]) {
+                  throw "Payload file $relative does not match its recorded hash."
+              }
+          }
+          foreach ($relative in $manifest.Keys) {
+              if (-not $seen.Contains($relative)) {
+                  throw "Payload is missing $relative, which the manifest lists."
+              }
+          }
+          Write-Host "Verified $($manifest.Count) payload files against the build manifest."
+
+      # No cache step here on purpose. The IFW archive is small, this job runs
+      # only for a release, and provision_windows_ifw.ps1 downloads it and
+      # checks it against the pinned SHA-256 when it is absent - so caching buys
+      # a minute and costs another third-party action inside the credential
+      # boundary. It would also add a second restore/save pair to the workflow,
+      # which tests/windows_ifw_contract_tests.ps1 reads as two competing caches.
+      - name: Provision Qt Installer Framework
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File tools/provision_windows_ifw.ps1 `
+            -ArchivePath "$env:IFW_ARCHIVE_PATH" `
+            -DestinationPath "$env:IFW_ROOT"
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Authenticate to Azure for signing
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
           client-id: ${{ vars.TRUSTED_SIGNING_CLIENT_ID }}
           tenant-id: ${{ vars.TRUSTED_SIGNING_TENANT_ID }}
           subscription-id: ${{ vars.TRUSTED_SIGNING_SUBSCRIPTION_ID }}
 
       - name: Acquire Microsoft Artifact Signing client
-        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
         shell: pwsh
         run: |
           $clientRoot = Join-Path $env:RUNNER_TEMP 'artifact-signing-client'
-          nuget install Microsoft.ArtifactSigning.Client `
-            -Version "$env:ARTIFACT_SIGNING_CLIENT_VERSION" `
-            -OutputDirectory $clientRoot `
-            -ExcludeVersion
+          New-Item -ItemType Directory -Path $clientRoot -Force | Out-Null
+          nuget.exe install Microsoft.Trusted.Signing.Client `
+              -Version $env:ARTIFACT_SIGNING_CLIENT_VERSION `
+              -OutputDirectory $clientRoot `
+              -ExcludeVersion `
+              -NonInteractive
           if ($LASTEXITCODE -ne 0) {
-              throw "Failed to acquire Microsoft.ArtifactSigning.Client $env:ARTIFACT_SIGNING_CLIENT_VERSION."
+              exit $LASTEXITCODE
           }
 
-          $dlib = Join-Path $clientRoot 'Microsoft.ArtifactSigning.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
-          if (-not (Test-Path $dlib)) {
-              throw "Signing client library not found at $dlib."
+          $dlib = Join-Path $clientRoot `
+              'Microsoft.Trusted.Signing.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
+          if (-not (Test-Path -LiteralPath $dlib)) {
+              throw "Artifact Signing dlib was not found at $dlib."
           }
 
           $signTool = Get-ChildItem `
@@ -402,12 +569,12 @@ jobs:
               Endpoint               = $env:TRUSTED_SIGNING_ENDPOINT
               CodeSigningAccountName = $env:TRUSTED_SIGNING_ACCOUNT
               CertificateProfileName = $env:TRUSTED_SIGNING_PROFILE
-              CorrelationId          = "vnm-terminal-$env:GITHUB_RUN_ID"
+              CorrelationId          = $env:GITHUB_RUN_ID
               ExcludeCredentials     = @(
+                  'ManagedIdentityCredential',
                   'SharedTokenCacheCredential',
-                  'VisualStudioCredential',
                   'VisualStudioCodeCredential',
-                  'AzureDeveloperCliCredential',
+                  'VisualStudioCredential',
                   'InteractiveBrowserCredential'
               )
           }
@@ -418,8 +585,13 @@ jobs:
           "SIGNING_DLIB_PATH=$dlib"             | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "SIGNING_METADATA_PATH=$metadataPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+      # Signing repackages rather than post-signing the unsigned installer on
+      # purpose: build_windows_ifw_installer.ps1 signs vnm_terminal.exe, the
+      # maintenance tool and the installer base *before* binarycreator runs, so
+      # signing only the finished exe would ship a signed installer that
+      # installs unsigned binaries. The payload is already built, so this
+      # repackages rather than recompiles.
       - name: Build signed Windows installer
-        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
         shell: pwsh
         working-directory: vnm_terminal
         run: |
@@ -435,7 +607,6 @@ jobs:
           }
 
       - name: Verify the installer is signed
-        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
         shell: pwsh
         run: |
           $installer = Get-ChildItem -Path vnm_terminal/dist `
@@ -457,17 +628,64 @@ jobs:
           Write-Host "Signed by: $($signature.SignerCertificate.Subject)"
           Write-Host "Timestamped by: $($signature.TimeStamperCertificate.Subject)"
 
-      - name: Upload Windows package artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload signed Windows package artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: vnm-terminal-windows-x64
+          name: vnm-terminal-windows-x64-signed
           path: |
-            vnm_terminal/dist/vnm_terminal_v*_w64.zip
-            vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe
-            vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe.sha256
             vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe
             vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe.sha256
           if-no-files-found: error
+
+  # The package job installs and uninstalls the unsigned installer, but signing
+  # rebuilds it, so the artifact that actually ships is not the one that was
+  # exercised. Run the same lifecycle against the signed installer here rather
+  # than in the signing job: this job has no credentials, so running the
+  # repository's own test script against the release build costs nothing that
+  # the signing job would have had to pay.
+  verify-signed-package:
+    name: Verify signed installer lifecycle
+    if: >-
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    needs: sign-windows-package
+    runs-on: windows-2022
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout the release source
+        uses: actions/checkout@v4
+        with:
+          path: vnm_terminal
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          persist-credentials: false
+
+      - name: Download signed Windows package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: vnm-terminal-windows-x64-signed
+          path: vnm_terminal/dist
+
+      - name: Exercise the signed Qt IFW installation lifecycle
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          $installer = Get-ChildItem -Path dist `
+              -Filter 'vnm_terminal_v*_windows_x64.exe' |
+              Where-Object { $_.Name -notlike '*_unsigned.exe' } |
+              Select-Object -First 1
+          if (-not $installer) {
+              throw 'Signed installer was not downloaded.'
+          }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File tests/windows_ifw_installation_tests.ps1 `
+            -InstallerPath $installer.FullName
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
 
   attach-source-archive:
     name: Attach source archive (release)
@@ -501,17 +719,23 @@ jobs:
     if: >-
       github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-    needs: package
+    needs: [package, sign-windows-package, verify-signed-package]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: write
 
     steps:
-      - name: Download Windows package artifacts
+      - name: Download unsigned Windows package artifacts
         uses: actions/download-artifact@v4
         with:
-          name: vnm-terminal-windows-x64
+          name: vnm-terminal-windows-x64-unsigned
+          path: dist
+
+      - name: Download signed Windows package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: vnm-terminal-windows-x64-signed
           path: dist
 
       - name: Attach Windows packages to GitHub release

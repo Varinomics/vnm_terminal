@@ -13,6 +13,7 @@
 #include <QWindow>
 #include <QtGlobal>
 
+#include <algorithm>
 #include <cmath>
 
 namespace vnm_terminal::terminal_app {
@@ -185,21 +186,21 @@ Command_line_setting_overrides command_line_setting_overrides(
         overrides.scrollback_limit = surface.scrollback_limit();
     }
 
-    // The window has no normalizing setter to read back, so the requested size
-    // is the snapshot. A window the platform sized differently never compares
-    // equal, which releases the field on the first save and stores the real
-    // geometry, exactly as an unforced run does.
+    // The window has no normalizing setter to read back, so unlike every other
+    // forced setting there is nothing to snapshot here. The requested size is
+    // the wrong thing to latch: the window system may normalize, clamp,
+    // decorate, or move the window before anything is saved, and the first save
+    // would then find a size that never equalled the request, release the latch,
+    // and store geometry the user never chose. Latch what the run was actually
+    // granted instead, at the first save that observes it.
     //
-    // An explicit size forces the maximized state too, because
-    // apply_persisted_terminal_window_state() drops the stored maximized
-    // restore for it: the run cannot honor a size and a maximized window at
-    // once. So that state is forced to false and needs the same protection as
-    // the rest, or the run's own non-maximized window writes a preference back
-    // over one the user never asked to change.
-    if (options.window_size_explicit) {
-        overrides.window_size = options.window_size;
-        overrides.maximized   = false;
-    }
+    // Position and maximized state ride along for the same run. An explicit size
+    // forces the maximized state, because apply_persisted_terminal_window_state()
+    // drops the stored maximized restore for it: the run cannot honor a size and
+    // a maximized window at once. Position is not forced, but a window resized
+    // to a size the desktop has to accommodate can be moved to fit, and that
+    // move is the window system's decision rather than the user's.
+    overrides.window_geometry_latch_pending = options.window_size_explicit;
 
     return overrides;
 }
@@ -218,6 +219,18 @@ void save_persisted_terminal_window_state(
         settings.setValue(QLatin1String(k_window_settings_font_size), *state.font_size);
     }
 
+    // The geometry the run was granted, taken the first time a save can see it.
+    // From here the geometry fields behave like every other latched setting: the
+    // save that finds one of them moved stores it and releases the latch for
+    // good, so a resize, a move, or a maximize the user performs still becomes
+    // their preference.
+    if (overrides.window_geometry_latch_pending && state.size.has_value()) {
+        overrides.window_size     = state.size;
+        overrides.window_position = state.position;
+        overrides.maximized       = state.maximized;
+        overrides.window_geometry_latch_pending = false;
+    }
+
     if (state.size.has_value() &&
         persisted_window_axis_is_valid(state.size->width()) &&
         persisted_window_axis_is_valid(state.size->height()) &&
@@ -227,7 +240,9 @@ void save_persisted_terminal_window_state(
         settings.setValue(QLatin1String(k_window_settings_height), state.size->height());
     }
 
-    if (state.position.has_value()) {
+    if (state.position.has_value() &&
+        !command_line_override_still_holds(overrides.window_position, *state.position))
+    {
         settings.setValue(QLatin1String(k_window_settings_x), state.position->x());
         settings.setValue(QLatin1String(k_window_settings_y), state.position->y());
     }
@@ -450,13 +465,23 @@ bool terminal_window_persistence_enabled()
         QGuiApplication::platformName() != QStringLiteral("offscreen");
 }
 
-bool window_geometry_intersects_available_screen(
+bool window_geometry_has_useful_visible_area(
     const QPoint& position,
     const QSize&  size)
 {
     const QRect window_rect(position, size);
+    // Measured per screen rather than across the whole desktop: a window split
+    // across a seam with a sliver on each side is no easier to grab than one
+    // with a single sliver, so one screen has to show enough of it on its own.
+    const int required_visible_width  =
+        std::min(size.width(),  k_min_restored_visible_width);
+    const int required_visible_height =
+        std::min(size.height(), k_min_restored_visible_height);
     for (const QScreen* screen : QGuiApplication::screens()) {
-        if (screen->availableGeometry().intersects(window_rect)) {
+        const QRect visible = screen->availableGeometry().intersected(window_rect);
+        if (visible.width()  >= required_visible_width &&
+            visible.height() >= required_visible_height)
+        {
             return true;
         }
     }
@@ -477,7 +502,7 @@ void apply_persisted_terminal_window_state(
     }
 
     if (state.position.has_value() &&
-        window_geometry_intersects_available_screen(
+        window_geometry_has_useful_visible_area(
             *state.position, options->window_size))
     {
         options->window_position = *state.position;

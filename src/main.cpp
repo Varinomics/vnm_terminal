@@ -159,7 +159,7 @@ using chrome::Terminal_shortcut_filter;
 using chrome::terminal_window_persistence_enabled;
 using chrome::visible_terminal_title;
 using chrome::Wheel_delivery_indicator_filter;
-using chrome::window_geometry_intersects_available_screen;
+using chrome::window_geometry_has_useful_visible_area;
 using chrome::write_metrics_json;
 #if VNM_TERMINAL_PROFILING_ENABLED
 using chrome::write_profile_text;

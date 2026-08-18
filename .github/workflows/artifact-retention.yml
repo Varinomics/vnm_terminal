@@ -83,9 +83,16 @@ jobs:
               done <<< "${rows}"
           }
 
+          # Windows packaging emits three families: the unsigned build every
+          # run produces, the signed build a release produces, and the payload
+          # the package job hands the signing job. Pruning by exact name, so a
+          # rename here without a rename in ci-windows.yml silently stops
+          # pruning rather than failing.
           for artifact_name in \
               vnm-terminal-source \
-              vnm-terminal-windows-x64 \
+              vnm-terminal-windows-x64-unsigned \
+              vnm-terminal-windows-x64-signed \
+              vnm-terminal-windows-x64-signing-payload \
               vnm-terminal-linux-x64
           do
               rows="$(

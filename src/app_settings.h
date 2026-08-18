@@ -83,6 +83,16 @@ struct Persisted_interaction_settings
 // a field somewhere other than its forced value clears that field for good,
 // which is what lets a user who moves a forced setting and moves it back store
 // that choice. Pass the same instance to every save of a run.
+//
+// The geometry fields are latched later than the rest. Every other forced
+// setting has a normalized value to read back from the surface at startup, but
+// a forced window size is given to the window system, which answers with the
+// geometry it is willing to grant - normalized, clamped, decorated, or moved to
+// fit. Latching the requested size would treat that answer as a user decision
+// and release the latch on the run's very first save; latching the granted
+// geometry instead keeps geometry on the same rule as everything else. Until
+// the first save observes it, `window_geometry_latch_pending` stands in for the
+// three geometry fields.
 struct Command_line_setting_overrides
 {
     std::optional<qreal>   font_size;
@@ -93,7 +103,9 @@ struct Command_line_setting_overrides
     std::optional<bool>    row_timestamp_tooltip;
     std::optional<int>     scrollback_limit;
     std::optional<QSize>   window_size;
+    std::optional<QPoint>  window_position;
     std::optional<bool>    maximized;
+    bool                   window_geometry_latch_pending = false;
 };
 
 // Snapshots the forced settings from the surface, so call this once the startup
@@ -150,7 +162,18 @@ void apply_persisted_interaction_settings(
 
 bool terminal_window_persistence_enabled();
 
-bool window_geometry_intersects_available_screen(
+// How much of a restored window has to land on an available screen for the
+// stored position to be worth honoring. A single intersecting pixel satisfies
+// the geometry but not the user: after a monitor is removed or the desktop is
+// rearranged, a window with a sliver on screen is not reachable by pointer.
+// These are enough to grab and drag - roughly a titlebar corner - and they are
+// fixed logical pixels rather than a titlebar measurement so the rule stays
+// deterministic across platforms and themes. A window smaller than the
+// threshold is held to its own size instead.
+constexpr int k_min_restored_visible_width  = 64;
+constexpr int k_min_restored_visible_height = 32;
+
+bool window_geometry_has_useful_visible_area(
     const QPoint& position,
     const QSize&  size);
 

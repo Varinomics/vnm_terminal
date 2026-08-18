@@ -6,6 +6,8 @@
 
 #include <QColor>
 #include <QGuiApplication>
+#include <QRect>
+#include <QScreen>
 #include <QSettings>
 #include <QTemporaryDir>
 
@@ -16,6 +18,8 @@
 namespace {
 
 using vnm_terminal::test_helpers::check;
+using vnm_terminal::terminal_app::k_min_restored_visible_height;
+using vnm_terminal::terminal_app::k_min_restored_visible_width;
 
 bool nearly_equal(qreal actual, qreal expected)
 {
@@ -105,6 +109,54 @@ bool test_rejected_deferred_startup_returns_start_failed()
     ok &= check(
         exit_status.has_value() && *exit_status == k_exit_start_failed,
         "rejected deferred startup returns the start-failed exit status");
+    return ok;
+}
+
+bool test_restored_window_requires_useful_visible_area()
+{
+    const QScreen* screen = QGuiApplication::primaryScreen();
+    bool ok = check(screen != nullptr, "persistence test has a primary screen");
+    if (screen == nullptr) {
+        return false;
+    }
+
+    const QRect  available = screen->availableGeometry();
+    const QSize  window_size(640, 480);
+    ok &= check(available.width()  > k_min_restored_visible_width &&
+            available.height() > k_min_restored_visible_height,
+        "the test screen is larger than the useful visible area");
+
+    // QRect::right()/bottom() are inclusive, so a window whose left edge sits on
+    // right() shows exactly one column.
+    ok &= check(!window_geometry_has_useful_visible_area(
+            QPoint(available.right(), available.top()),
+            window_size),
+        "one visible pixel does not restore an otherwise off-screen window");
+    ok &= check(!window_geometry_has_useful_visible_area(
+            QPoint(available.right() - (k_min_restored_visible_width - 2), available.top()),
+            window_size),
+        "less than the minimum useful width does not restore a window");
+    ok &= check(window_geometry_has_useful_visible_area(
+            QPoint(available.right() - (k_min_restored_visible_width - 1), available.top()),
+            window_size),
+        "the minimum useful visible width permits restoration");
+    ok &= check(!window_geometry_has_useful_visible_area(
+            QPoint(available.left(), available.bottom() - (k_min_restored_visible_height - 2)),
+            window_size),
+        "less than the minimum useful height does not restore a window");
+    ok &= check(window_geometry_has_useful_visible_area(
+            QPoint(available.left(), available.bottom() - (k_min_restored_visible_height - 1)),
+            window_size),
+        "the minimum useful visible height permits restoration");
+
+    // A window smaller than the threshold is held to its own size, so it can
+    // still be restored when all of it is on screen.
+    const QSize tiny(20, 12);
+    ok &= check(window_geometry_has_useful_visible_area(
+            QPoint(available.right() - (tiny.width() - 1), available.top()),
+            tiny),
+        "a window narrower than the threshold is measured against its own size");
+
     return ok;
 }
 
@@ -364,6 +416,101 @@ bool test_save_appearance_settings_from_surface()
     ok &= check(
         surface.text_renderer_mode() == VNM_TerminalSurface::Text_renderer_mode::MSDF,
         "saving appearance leaves the forced MSDF runtime unchanged");
+    return ok;
+}
+
+bool test_platform_adjusted_command_line_geometry_does_not_replace_stored_geometry()
+{
+    QTemporaryDir dir;
+    bool ok = check(dir.isValid(), "temporary adjusted-geometry settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    const QString path = dir.filePath(QStringLiteral("settings.ini"));
+
+    // The window geometry the user arrived at on an earlier run.
+    QSettings stored(path, QSettings::IniFormat);
+    stored.beginGroup(QLatin1String(k_window_settings_group));
+    stored.setValue(QLatin1String(k_window_settings_width),  1024);
+    stored.setValue(QLatin1String(k_window_settings_height), 720);
+    stored.setValue(QLatin1String(k_window_settings_x),      120);
+    stored.setValue(QLatin1String(k_window_settings_y),      140);
+    stored.setValue(QLatin1String(k_window_settings_maximized), true);
+    stored.endGroup();
+    stored.sync();
+
+    App_options options;
+    options.window_size          = QSize(640, 480);
+    options.window_size_explicit = true;
+
+    VNM_TerminalSurface surface;
+    Command_line_setting_overrides overrides =
+        command_line_setting_overrides(options, surface);
+
+    // What the window system actually granted: not the requested size, and at a
+    // position it picked. None of this is a user decision.
+    Persisted_terminal_window_state granted;
+    granted.position  = QPoint(31, 47);
+    granted.size      = QSize(638, 461);
+    granted.maximized = false;
+
+    QSettings writer(path, QSettings::IniFormat);
+    save_persisted_terminal_window_state(writer, granted, overrides);
+
+    QSettings first_reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_grant =
+        load_persisted_terminal_window_state(first_reader);
+    ok &= check_optional_size(after_grant.size, QSize(1024, 720),
+        "platform-adjusted startup geometry leaves the stored size alone");
+    ok &= check_optional_position(after_grant.position, QPoint(120, 140),
+        "platform-adjusted startup geometry leaves the stored position alone");
+    ok &= check(after_grant.maximized,
+        "an explicit window size leaves the stored maximized state alone");
+
+    // A second save of the same granted geometry is still not a user decision.
+    save_persisted_terminal_window_state(writer, granted, overrides);
+    QSettings second_reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_settle =
+        load_persisted_terminal_window_state(second_reader);
+    ok &= check_optional_size(after_settle.size, QSize(1024, 720),
+        "a repeated save of the granted geometry stays ephemeral");
+    ok &= check_optional_position(after_settle.position, QPoint(120, 140),
+        "a repeated save of the granted position stays ephemeral");
+
+    // Moving and resizing the window during the run is, so it reaches the
+    // stored preferences exactly as it would in an unforced run.
+    Persisted_terminal_window_state moved;
+    moved.position  = QPoint(300, 320);
+    moved.size      = QSize(1280, 800);
+    moved.maximized = false;
+    save_persisted_terminal_window_state(writer, moved, overrides);
+
+    QSettings third_reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_move =
+        load_persisted_terminal_window_state(third_reader);
+    ok &= check_optional_size(after_move.size, QSize(1280, 800),
+        "a window size chosen during the run replaces the stored size");
+    ok &= check_optional_position(after_move.position, QPoint(300, 320),
+        "a window position chosen during the run replaces the stored position");
+    ok &= check(after_move.maximized,
+        "a maximized state the run never entered stays ephemeral");
+
+    // Maximizing releases the maximized latch, so unmaximizing afterwards is an
+    // ordinary choice and reaches the stored preference.
+    Persisted_terminal_window_state maximized = moved;
+    maximized.maximized = true;
+    save_persisted_terminal_window_state(writer, maximized, overrides);
+    Persisted_terminal_window_state unmaximized = moved;
+    unmaximized.maximized = false;
+    save_persisted_terminal_window_state(writer, unmaximized, overrides);
+
+    QSettings fourth_reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_unmaximize =
+        load_persisted_terminal_window_state(fourth_reader);
+    ok &= check(!after_unmaximize.maximized,
+        "unmaximizing after maximizing during the run replaces the stored state");
+
     return ok;
 }
 
@@ -668,11 +815,13 @@ int main(int argc, char** argv)
     bool ok = true;
     ok &= test_save_and_load_window_state();
     ok &= test_rejected_deferred_startup_returns_start_failed();
+    ok &= test_restored_window_requires_useful_visible_area();
     ok &= test_apply_persisted_window_state();
     ok &= test_invalid_persisted_values_are_ignored();
     ok &= test_appearance_settings_round_trip();
     ok &= test_stored_forced_msdf_preference_uses_auto();
     ok &= test_save_appearance_settings_from_surface();
+    ok &= test_platform_adjusted_command_line_geometry_does_not_replace_stored_geometry();
     ok &= test_command_line_overrides_do_not_replace_stored_settings();
     ok &= test_chrome_palette_settings();
     ok &= test_interaction_settings_round_trip();
