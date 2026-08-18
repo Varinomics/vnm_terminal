@@ -402,6 +402,16 @@ const CASES = [
         expect: "names the checksum algorithm \"sha512\""
     },
     {
+        name: "a third-party tag pinned to no commit",
+        tool: "dependencies_lock.js",
+        mutate: root => {
+            const lock = readJson(root, LOCK_RELATIVE_PATH);
+            delete lock.third_party.freetype.commit;
+            writeJson(root, LOCK_RELATIVE_PATH, lock);
+        },
+        expect: "third_party.freetype.commit"
+    },
+    {
         name: "a workflow the manifest does not declare",
         tool: "release_manifest.js",
         mutate: addProbeWorkflow,

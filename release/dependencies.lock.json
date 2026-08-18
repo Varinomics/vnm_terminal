@@ -36,6 +36,7 @@
     "freetype": {
       "repository_url": "https://gitlab.freedesktop.org/freetype/freetype.git",
       "tag": "VER-2-13-3",
+      "commit": "42608f77f20749dd6ddc9e0536788eaad70ea4b5",
       "clone_sites": [
         ".github/workflows/ci-linux.yml",
         ".github/workflows/ci-macos.yml",
@@ -45,6 +46,7 @@
     "msdfgen": {
       "repository_url": "https://github.com/Chlumsky/msdfgen.git",
       "tag": "v1.12.1",
+      "commit": "6574da1310df433c97ca0fddcab7e463c31e58f8",
       "clone_sites": [
         ".github/workflows/ci-linux.yml",
         ".github/workflows/ci-macos.yml",

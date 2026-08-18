@@ -328,6 +328,16 @@ function checkThirdPartyTags(root, lock)
 {
     for (const name of Object.keys(lock.third_party)) {
         const entry = lock.third_party[name];
+
+        // A tag is a mutable ref. The commit it named when the lock was
+        // refreshed is what the release was built from, and the signing job
+        // compares it with the commit the build actually cloned, so a tag moved
+        // upstream between two builds of one release is visible instead of
+        // silently changing the binary.
+        check(COMMIT_PATTERN.test(entry.commit),
+            LOCK_RELATIVE_PATH + " third_party." + name + ".commit \"" +
+            entry.commit + "\" is not a 40-character lowercase hex commit SHA.");
+
         const clonePattern = new RegExp("--branch\\s+(\\S+)[\\s\\S]{0,120}?" +
             escapeRegExp(entry.repository_url));
 
@@ -434,6 +444,37 @@ function resolveBranchHead(entry)
         throw new Error("Dependency lock violation: resolving " +
             entry.repository + "@" + entry.branch + " produced \"" + commit +
             "\", which is not a 40-character lowercase hex commit SHA.");
+    }
+    return commit;
+}
+
+// git rather than the GitHub API: one of these two lives on GitLab, and a tag
+// is a ref every git remote answers for. An annotated tag answers twice, and
+// the peeled entry is the commit the clone checks out.
+function resolveTagCommit(entry)
+{
+    const reference = "refs/tags/" + entry.tag;
+    const result = child_process.spawnSync("git", [
+        "ls-remote",
+        entry.repository_url,
+        reference,
+        reference + "^{}"
+    ], { encoding: "utf8" });
+
+    if (result.status !== 0) {
+        throw new Error("Dependency lock violation: could not resolve " +
+            entry.repository_url + " tag " + entry.tag + ": " +
+            String(result.stderr || result.error || "").trim());
+    }
+
+    const lines = result.stdout.split(/\r?\n/).filter(Boolean);
+    const peeled = lines.filter(line => line.trim().endsWith("^{}"));
+    const chosen = (peeled.length > 0 ? peeled : lines)[0];
+    const commit = chosen === undefined ? "" : chosen.split(/\s/)[0];
+    if (!COMMIT_PATTERN.test(commit)) {
+        throw new Error("Dependency lock violation: " + entry.repository_url +
+            " names no tag " + entry.tag + ", so the commit it pins cannot be" +
+            " recorded.");
     }
     return commit;
 }
@@ -621,7 +662,8 @@ function runVerifyCheckout(root, workspace)
 // select them.
 const OWNED_KEY_ORDER =
     ["repository", "branch", "checkout_path", "output", "commit"];
-const THIRD_PARTY_KEY_ORDER = ["repository_url", "tag", "clone_sites"];
+const THIRD_PARTY_KEY_ORDER =
+    ["repository_url", "tag", "commit", "clone_sites"];
 const TOP_LEVEL_SECTIONS = ["schema", "owned", "third_party"];
 
 function renderValue(value, indent)
@@ -673,10 +715,16 @@ function runRefresh(root)
     const lock = loadLock(root);
     for (const entry of ownedEntries(lock))
         lock.owned[entry.name].commit = resolveBranchHead(entry);
+    for (const name of Object.keys(lock.third_party)) {
+        lock.third_party[name].commit =
+            resolveTagCommit(lock.third_party[name]);
+    }
 
     fs.writeFileSync(path.join(root, LOCK_RELATIVE_PATH), renderLock(lock), "utf8");
 
-    const entries = ownedEntries(lock);
+    const entries = ownedEntries(lock).concat(
+        Object.keys(lock.third_party).map(
+            name => Object.assign({ name: name }, lock.third_party[name])));
     const commitByName = {};
     for (const entry of entries)
         commitByName[entry.name] = entry.commit;

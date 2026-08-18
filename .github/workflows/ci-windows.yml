@@ -519,11 +519,12 @@ jobs:
           # release/dependencies.lock.json records and this run resolved, so the
           # provenance record and the lock describe the same source by
           # construction. freetype and msdfgen stay build-tree clones: they are
-          # pinned tags, and the record keeps their observed commits. A change
-          # to build_portable.bat that moves or renames those two trees fails
-          # the release here rather than shipping a provenance record that omits
-          # them, and this step only runs for a release, so it is not covered by
-          # ordinary CI.
+          # pinned by tag, and the record keeps the commit each clone actually
+          # checked out, which the signing job compares with the commit the lock
+          # recorded for that tag. A change to build_portable.bat that moves or
+          # renames those two trees fails the release here rather than shipping
+          # a provenance record that omits them, and this step only runs for a
+          # release, so it is not covered by ordinary CI.
           $appCommit = Get-RepositoryCommit '.'
           $surfaceCommit = Get-RepositoryCommit '../vnm_terminal_surface'
           $chromeCommit = Get-RepositoryCommit '../vnm_qml_chrome'
@@ -743,20 +744,26 @@ jobs:
           # The provenance record says what was built; the lock at this tag says
           # what should have been. Comparing them here is what turns the record
           # into something a later rebuild can be checked against, and the lock
-          # comes from the release checkout this job already trusts.
+          # comes from the release checkout this job already trusts. The two
+          # third-party trees are pinned by tag, which is a mutable ref, so the
+          # commit each tag named when the lock was refreshed is compared too:
+          # otherwise the same release rebuilt after a tag moved would link
+          # different source and say nothing.
           $lock = Get-Content -LiteralPath 'release/dependencies.lock.json' -Raw |
               ConvertFrom-Json
           if ($lock.schema -ne 1) {
               throw "Unsupported dependency lock schema $($lock.schema)."
           }
           foreach ($locked in @(
-              @{ Field = 'surface_commit';     Name = 'vnm_terminal_surface' },
-              @{ Field = 'chrome_commit';      Name = 'vnm_qml_chrome' },
-              @{ Field = 'msdf_text_commit';   Name = 'vnm_msdf_text' },
-              @{ Field = 'qt_dispatch_commit'; Name = 'vnm_qt_dispatch' }))
+              @{ Section = 'owned';       Field = 'surface_commit';     Name = 'vnm_terminal_surface' },
+              @{ Section = 'owned';       Field = 'chrome_commit';      Name = 'vnm_qml_chrome' },
+              @{ Section = 'owned';       Field = 'msdf_text_commit';   Name = 'vnm_msdf_text' },
+              @{ Section = 'owned';       Field = 'qt_dispatch_commit'; Name = 'vnm_qt_dispatch' },
+              @{ Section = 'third_party'; Field = 'freetype_commit';    Name = 'freetype' },
+              @{ Section = 'third_party'; Field = 'msdfgen_commit';     Name = 'msdfgen' }))
           {
               $built = [string]$buildProvenance.($locked.Field)
-              $expected = [string]$lock.owned.($locked.Name).commit
+              $expected = [string]$lock.($locked.Section).($locked.Name).commit
               if ($built -ne $expected) {
                   throw ("Signing payload was built from $($locked.Name) $built, " +
                       "but release/dependencies.lock.json at this tag locks $expected.")
