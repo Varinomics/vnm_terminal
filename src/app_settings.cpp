@@ -205,6 +205,20 @@ Command_line_setting_overrides command_line_setting_overrides(
     return overrides;
 }
 
+void latch_command_line_window_geometry(
+    const Persisted_terminal_window_state& state,
+    Command_line_setting_overrides&        overrides)
+{
+    if (!overrides.window_geometry_latch_pending || !state.size.has_value()) {
+        return;
+    }
+
+    overrides.window_size     = state.size;
+    overrides.window_position = state.position;
+    overrides.maximized       = state.maximized;
+    overrides.window_geometry_latch_pending = false;
+}
+
 void save_persisted_terminal_window_state(
     QSettings&                             settings,
     const Persisted_terminal_window_state& state,
@@ -219,17 +233,12 @@ void save_persisted_terminal_window_state(
         settings.setValue(QLatin1String(k_window_settings_font_size), *state.font_size);
     }
 
-    // The geometry the run was granted, taken the first time a save can see it.
-    // From here the geometry fields behave like every other latched setting: the
-    // save that finds one of them moved stores it and releases the latch for
-    // good, so a resize, a move, or a maximize the user performs still becomes
-    // their preference.
-    if (overrides.window_geometry_latch_pending && state.size.has_value()) {
-        overrides.window_size     = state.size;
-        overrides.window_position = state.position;
-        overrides.maximized       = state.maximized;
-        overrides.window_geometry_latch_pending = false;
-    }
+    // A save before the window could report a geometry leaves the latch pending,
+    // so take it here as a fallback. From the latch on, the geometry fields
+    // behave like every other latched setting: the save that finds one of them
+    // moved stores it and releases the latch for good, so a resize, a move, or a
+    // maximize the user performs still becomes their preference.
+    latch_command_line_window_geometry(state, overrides);
 
     if (state.size.has_value() &&
         persisted_window_axis_is_valid(state.size->width()) &&
