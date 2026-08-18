@@ -73,6 +73,16 @@ add_test(
         check "${PROJECT_SOURCE_DIR}"
 )
 
+# Both gates above are only worth their contract if a broken tree fails them.
+# This drills each one against a throwaway copy of the source tree with a single
+# defect reintroduced, so a rule that quietly stops checking is itself caught.
+add_test(
+    NAME vnm_terminal_release_contract_drift_drills
+    COMMAND
+        node "${CMAKE_CURRENT_SOURCE_DIR}/release_contract_gate_tests.js"
+        "${PROJECT_SOURCE_DIR}"
+)
+
 function(vnm_terminal_require_qt_plugin_file plugin_target purpose)
     if(NOT TARGET ${plugin_target})
         message(FATAL_ERROR

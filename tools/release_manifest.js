@@ -25,6 +25,7 @@ const path = require("path");
 const structure = require("./github_workflow_structure.js");
 
 const MANIFEST_RELATIVE_PATH = "release/manifest.json";
+const WORKFLOW_DIRECTORY = ".github/workflows";
 const SUPPORTED_SCHEMA = 1;
 const VERSION_PROBE = "0.0.0";
 const CHECKSUM_EXTENSION_PATTERN = /\.(sha1|sha224|sha256|sha384|sha512|md5)$/;
@@ -35,6 +36,37 @@ const CHECKSUM_EXTENSION_PATTERN = /\.(sha1|sha224|sha256|sha384|sha512|md5)$/;
 const SUBSTITUTION = "\u0001";
 const SHAPE_PATTERN = new RegExp(
     "vnm[_-]terminal[_-]v[A-Za-z0-9_.@" + SUBSTITUTION + "-]*", "g");
+
+// Every fact the manifest owns on its own. A rule that compares a file against
+// an absent field compares it against nothing: JavaScript renders the missing
+// value as "undefined", no file contains that, and the rule reports success.
+// Absence is therefore a violation of the manifest rather than a reason to
+// skip, and it is reported before the rules that read these fields run.
+const REQUIRED_TEXT_FIELDS = [
+    "checksum.algorithm",
+    "checksum.suffix",
+    "qt.version",
+    "qt_ifw.version",
+    "qt_ifw.archive_url",
+    "qt_ifw.archive_sha256",
+    "qt_ifw.cache_key_template",
+    "signing.builder",
+    "signing.publisher",
+    "signing.publisher_subject_pattern",
+    "signing.final_artifact"
+];
+
+const REQUIRED_LISTS = [
+    "actions_artifacts",
+    "release_assets",
+    "release_attachments",
+    "consumers",
+    "qt_ifw.readers",
+    "signing.publisher_declared_in",
+    "signing.publisher_pattern_readers",
+    "signing.payload_binaries",
+    "signing.stage_binaries"
+];
 
 const violations = [];
 
@@ -61,7 +93,32 @@ function exists(root, relativePath)
 
 function isWorkflow(relativePath)
 {
-    return relativePath.startsWith(".github/workflows/");
+    return relativePath.startsWith(WORKFLOW_DIRECTORY + "/");
+}
+
+// The workflows as the directory holds them, not as the manifest remembers
+// them, so that a workflow added without a manifest entry is visible here.
+function workflowFiles(root)
+{
+    const directory = path.join(root, WORKFLOW_DIRECTORY);
+    if (!fs.existsSync(directory))
+        return [];
+
+    return fs.readdirSync(directory)
+        .filter(name => /\.ya?ml$/.test(name))
+        .map(name => WORKFLOW_DIRECTORY + "/" + name)
+        .sort();
+}
+
+function fieldValue(manifest, dottedPath)
+{
+    let value = manifest;
+    for (const key of dottedPath.split(".")) {
+        if (value === undefined || value === null)
+            return undefined;
+        value = value[key];
+    }
+    return value;
 }
 
 function sortedList(values)
@@ -240,6 +297,43 @@ function checkIdentifier(kind, id)
         kind + " id \"" + id + "\" is not snake_case. Windows PowerShell 5.1" +
         " ConvertFrom-Json exposes manifest keys as object properties, and the" +
         " release scripts read them as $releaseManifest.<section>.<key>.");
+}
+
+// This runs before every other rule and stops the run when it reports, because
+// the rules that follow read these fields directly: an absent one would raise a
+// stack trace instead of naming the manifest field that is missing.
+function checkRequiredDeclarations(manifest)
+{
+    for (const field of REQUIRED_TEXT_FIELDS) {
+        const value = fieldValue(manifest, field);
+        check(typeof value === "string" && value !== "",
+            MANIFEST_RELATIVE_PATH + " declares no " + field + ". A fact this" +
+            " contract compares files against must be present and non-empty:" +
+            " an absent one is compared as \"undefined\", which no file" +
+            " contains, so every copy of it would pass.");
+    }
+
+    for (const field of REQUIRED_LISTS) {
+        const value = fieldValue(manifest, field);
+        check(Array.isArray(value) && value.length > 0,
+            MANIFEST_RELATIVE_PATH + " declares no " + field + " entries. A" +
+            " list this contract iterates must not be absent or empty: an" +
+            " empty one is a rule that inspects nothing.");
+    }
+
+    check(manifest.asset_templates !== null &&
+            typeof manifest.asset_templates === "object",
+        MANIFEST_RELATIVE_PATH + " declares no asset_templates object.");
+
+    for (const artifact of manifest.actions_artifacts || []) {
+        const retention = artifact.retention;
+        check(retention !== undefined && retention !== null &&
+                (retention.mode === "exact" || retention.mode === "pattern"),
+            "actions_artifacts[\"" + artifact.id + "\"] declares no" +
+            " retention mode of \"exact\" or \"pattern\"." +
+            " artifact-retention.yml prunes by family, and an artifact in no" +
+            " family is an artifact nothing prunes.");
+    }
 }
 
 function checkManifestSelfConsistency(root, manifest)
@@ -572,7 +666,14 @@ function checkAssetShapes(root, manifest)
     }
 
     for (const asset of manifest.release_assets) {
-        if (!asset.template || !exists(root, asset.produced_by))
+        if (!exists(root, asset.produced_by)) {
+            violation("release asset \"" + asset.id + "\" names \"" +
+                asset.produced_by + "\" as its producer, but that file does" +
+                " not exist. A producer this contract cannot open is an asset" +
+                " whose name nothing is checked against.");
+            continue;
+        }
+        if (!asset.template)
             continue;
 
         const template = asset.variant_of
@@ -631,9 +732,6 @@ function checkRetentionWorkflow(root, manifest)
 // re-synchronise it.
 function checkReaderOwnsNoLiteral(root, reader, field, literal)
 {
-    if (!exists(root, reader))
-        return;
-
     readFile(root, reader).split(/\r?\n/).forEach((line, index) => {
         check(line.indexOf(literal) < 0,
             reader + ":" + (index + 1) + " contains the literal \"" + literal +
@@ -738,6 +836,13 @@ function checkQtIfw(root, manifest, workflowLines)
         ifw.archive_url + "\".");
 
     for (const reader of ifw.readers) {
+        if (!exists(root, reader)) {
+            violation(MANIFEST_RELATIVE_PATH + " names \"" + reader + "\" as" +
+                " a reader of qt_ifw, but it does not exist. A reader this" +
+                " contract cannot open is a file whose copies of the version," +
+                " the archive URL and the archive checksum nobody compares.");
+            continue;
+        }
         checkReaderOwnsNoLiteral(root, reader, "qt_ifw.version", ifw.version);
         checkReaderOwnsNoLiteral(
             root, reader, "qt_ifw.archive_sha256", ifw.archive_sha256);
@@ -830,10 +935,16 @@ function checkSigning(root, manifest)
     }
 
     for (const reader of signing.publisher_pattern_readers) {
+        if (!exists(root, reader)) {
+            violation(MANIFEST_RELATIVE_PATH + " names \"" + reader + "\" as" +
+                " a reader of signing.publisher_subject_pattern, but it does" +
+                " not exist. A reader this contract cannot open is a file" +
+                " whose copy of the pattern nobody compares.");
+            continue;
+        }
         checkReaderOwnsNoLiteral(root, reader, "signing.publisher_subject_pattern",
             signing.publisher_subject_pattern);
-        check(exists(root, reader) &&
-                /\$publisherSubjectPattern/.test(readFile(root, reader)),
+        check(/\$publisherSubjectPattern/.test(readFile(root, reader)),
             reader + " is declared as a reader of" +
             " signing.publisher_subject_pattern, but it never uses" +
             " $publisherSubjectPattern.");
@@ -944,9 +1055,20 @@ function loadManifest(root)
     return manifest;
 }
 
+function reportViolations()
+{
+    for (const message of violations)
+        process.stderr.write(message + "\n");
+    process.exit(1);
+}
+
 function runCheck(root)
 {
     const manifest = loadManifest(root);
+
+    checkRequiredDeclarations(manifest);
+    if (violations.length > 0)
+        reportViolations();
 
     const workflowLines = new Map();
     const sitesByWorkflow = new Map();
@@ -980,19 +1102,38 @@ function runCheck(root)
     checkQtIfw(root, manifest, workflowLines);
     checkSigning(root, manifest);
 
-    if (violations.length > 0) {
-        for (const message of violations)
-            process.stderr.write(message + "\n");
-        process.exit(1);
-    }
+    if (violations.length > 0)
+        reportViolations();
 
     process.stdout.write("Release manifest contract passed: " +
         path.join(root, MANIFEST_RELATIVE_PATH) + "\n");
 }
 
+// artifact-retention.yml holds actions: write and interpolates the value of
+// every row into a gh --jq expression, where an empty pattern matches every
+// artifact in the repository. The families are validated here rather than only
+// in check mode: this program must not be able to emit a row that selects more
+// than the family it names.
 function runRetentionFamilies(root)
 {
-    for (const family of retentionFamilies(loadManifest(root))) {
+    const manifest = loadManifest(root);
+
+    checkRequiredDeclarations(manifest);
+    if (violations.length > 0)
+        reportViolations();
+
+    checkRetentionFamilies(manifest);
+    const families = retentionFamilies(manifest);
+    for (const family of families) {
+        check(typeof family.value === "string" && family.value !== "",
+            "retention family \"" + family.id + "\" would be emitted with an" +
+            " empty " + family.mode + " value, which selects every artifact in" +
+            " the repository.");
+    }
+    if (violations.length > 0)
+        reportViolations();
+
+    for (const family of families) {
         process.stdout.write(
             [family.mode, family.id, family.value].join("\t") + "\n");
     }
