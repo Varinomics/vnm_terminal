@@ -367,6 +367,101 @@ bool test_save_appearance_settings_from_surface()
     return ok;
 }
 
+bool test_platform_adjusted_command_line_geometry_does_not_replace_stored_geometry()
+{
+    QTemporaryDir dir;
+    bool ok = check(dir.isValid(), "temporary adjusted-geometry settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    const QString path = dir.filePath(QStringLiteral("settings.ini"));
+
+    // The window geometry the user arrived at on an earlier run.
+    QSettings stored(path, QSettings::IniFormat);
+    stored.beginGroup(QLatin1String(k_window_settings_group));
+    stored.setValue(QLatin1String(k_window_settings_width),  1024);
+    stored.setValue(QLatin1String(k_window_settings_height), 720);
+    stored.setValue(QLatin1String(k_window_settings_x),      120);
+    stored.setValue(QLatin1String(k_window_settings_y),      140);
+    stored.setValue(QLatin1String(k_window_settings_maximized), true);
+    stored.endGroup();
+    stored.sync();
+
+    App_options options;
+    options.window_size          = QSize(640, 480);
+    options.window_size_explicit = true;
+
+    VNM_TerminalSurface surface;
+    Command_line_setting_overrides overrides =
+        command_line_setting_overrides(options, surface);
+
+    // What the window system actually granted: not the requested size, and at a
+    // position it picked. None of this is a user decision.
+    Persisted_terminal_window_state granted;
+    granted.position  = QPoint(31, 47);
+    granted.size      = QSize(638, 461);
+    granted.maximized = false;
+
+    QSettings writer(path, QSettings::IniFormat);
+    save_persisted_terminal_window_state(writer, granted, overrides);
+
+    QSettings first_reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_grant =
+        load_persisted_terminal_window_state(first_reader);
+    ok &= check_optional_size(after_grant.size, QSize(1024, 720),
+        "platform-adjusted startup geometry leaves the stored size alone");
+    ok &= check_optional_position(after_grant.position, QPoint(120, 140),
+        "platform-adjusted startup geometry leaves the stored position alone");
+    ok &= check(after_grant.maximized,
+        "an explicit window size leaves the stored maximized state alone");
+
+    // A second save of the same granted geometry is still not a user decision.
+    save_persisted_terminal_window_state(writer, granted, overrides);
+    QSettings second_reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_settle =
+        load_persisted_terminal_window_state(second_reader);
+    ok &= check_optional_size(after_settle.size, QSize(1024, 720),
+        "a repeated save of the granted geometry stays ephemeral");
+    ok &= check_optional_position(after_settle.position, QPoint(120, 140),
+        "a repeated save of the granted position stays ephemeral");
+
+    // Moving and resizing the window during the run is, so it reaches the
+    // stored preferences exactly as it would in an unforced run.
+    Persisted_terminal_window_state moved;
+    moved.position  = QPoint(300, 320);
+    moved.size      = QSize(1280, 800);
+    moved.maximized = false;
+    save_persisted_terminal_window_state(writer, moved, overrides);
+
+    QSettings third_reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_move =
+        load_persisted_terminal_window_state(third_reader);
+    ok &= check_optional_size(after_move.size, QSize(1280, 800),
+        "a window size chosen during the run replaces the stored size");
+    ok &= check_optional_position(after_move.position, QPoint(300, 320),
+        "a window position chosen during the run replaces the stored position");
+    ok &= check(after_move.maximized,
+        "a maximized state the run never entered stays ephemeral");
+
+    // Maximizing releases the maximized latch, so unmaximizing afterwards is an
+    // ordinary choice and reaches the stored preference.
+    Persisted_terminal_window_state maximized = moved;
+    maximized.maximized = true;
+    save_persisted_terminal_window_state(writer, maximized, overrides);
+    Persisted_terminal_window_state unmaximized = moved;
+    unmaximized.maximized = false;
+    save_persisted_terminal_window_state(writer, unmaximized, overrides);
+
+    QSettings fourth_reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_unmaximize =
+        load_persisted_terminal_window_state(fourth_reader);
+    ok &= check(!after_unmaximize.maximized,
+        "unmaximizing after maximizing during the run replaces the stored state");
+
+    return ok;
+}
+
 bool test_command_line_overrides_do_not_replace_stored_settings()
 {
     QTemporaryDir dir;
@@ -673,6 +768,7 @@ int main(int argc, char** argv)
     ok &= test_appearance_settings_round_trip();
     ok &= test_stored_forced_msdf_preference_uses_auto();
     ok &= test_save_appearance_settings_from_surface();
+    ok &= test_platform_adjusted_command_line_geometry_does_not_replace_stored_geometry();
     ok &= test_command_line_overrides_do_not_replace_stored_settings();
     ok &= test_chrome_palette_settings();
     ok &= test_interaction_settings_round_trip();
