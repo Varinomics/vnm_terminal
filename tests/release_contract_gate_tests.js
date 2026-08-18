@@ -335,6 +335,28 @@ const CASES = [
         expect: "checkout is missing from"
     },
     {
+        name: "a resolve job that no longer stops a release on a stale lock",
+        tool: "dependencies_lock.js",
+        mutate: root => {
+            const relativePath = WORKFLOW_DIRECTORY + "/ci-windows.yml";
+            const text = readText(root, relativePath);
+            writeText(root, relativePath, text.replace(
+                /^ +STALE_LOCK_IS_FATAL:.*\n/m, ""));
+        },
+        expect: "must set STALE_LOCK_IS_FATAL"
+    },
+    {
+        name: "a resolve job pinned to master for every trigger",
+        tool: "dependencies_lock.js",
+        mutate: root => {
+            const relativePath = WORKFLOW_DIRECTORY + "/ci-linux.yml";
+            const text = readText(root, relativePath);
+            writeText(root, relativePath, text.replace(
+                /^( +)RESOLVE_FROM:.*$/m, "$1RESOLVE_FROM: master"));
+        },
+        expect: "must set RESOLVE_FROM"
+    },
+    {
         name: "a workflow the manifest does not declare",
         tool: "release_manifest.js",
         mutate: addProbeWorkflow,

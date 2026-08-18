@@ -38,6 +38,18 @@ const SUPPORTED_SCHEMA = 1;
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/;
 const RESOLVE_JOB = "resolve-dependencies";
 
+// What the resolve job decides through its environment: whether a release is
+// built from the lock, and whether a lock master has moved past stops the
+// release. Nothing else in either contract can see these two lines, and a
+// release resolved from master would ship a lock that describes a different
+// source, so the wiring is compared here and the program refuses to guess it at
+// run time.
+const RESOLVE_FROM_PATTERN = new RegExp(
+    "^\\s+RESOLVE_FROM:\\s*\\$\\{\\{[^}]*github\\.event_name == 'release'" +
+    "[^}]*'lock'[^}]*'master'[^}]*\\}\\}\\s*$", "m");
+const STALE_LOCK_EXPRESSION =
+    "${{ github.event_name == 'release' && '1' || '0' }}";
+
 const violations = [];
 
 function violation(message)
@@ -195,6 +207,21 @@ function checkResolveJob(lock, workflowText, dependencyWorkflows)
             workflow + " " + RESOLVE_JOB + " must resolve through \"node" +
             " tools/dependencies_lock.js resolve\"; that invocation was not" +
             " found.");
+
+        check(RESOLVE_FROM_PATTERN.test(job[1]),
+            workflow + " " + RESOLVE_JOB + " must set RESOLVE_FROM to an" +
+            " expression that selects 'lock' when the run is a release and" +
+            " 'master' otherwise. Without it a release resolves whatever" +
+            " master holds at the moment it is cut, and " +
+            LOCK_RELATIVE_PATH + " then describes source the release does not" +
+            " contain.");
+
+        check(job[1].indexOf(
+                "STALE_LOCK_IS_FATAL: " + STALE_LOCK_EXPRESSION) >= 0,
+            workflow + " " + RESOLVE_JOB + " must set STALE_LOCK_IS_FATAL to" +
+            " \"" + STALE_LOCK_EXPRESSION + "\". That is what makes a release" +
+            " cut from a lock master has moved past fail at the moment it is" +
+            " cut, rather than ship a lock nobody refreshed.");
     }
 }
 
@@ -429,11 +456,44 @@ function resolutionTable(entries, commitByName)
         .join("\n");
 }
 
+// Both settings are read from the environment because a workflow expression is
+// the only thing that knows what triggered the run. Neither has a default: a
+// missing or misspelled RESOLVE_FROM used to mean "master", which turns a
+// release into an unpinned build, and the run that would notice is the one that
+// no longer happens.
+function resolveSource()
+{
+    const value = process.env.RESOLVE_FROM;
+    if (value === "lock" || value === "master")
+        return value;
+
+    throw new Error("Dependency lock violation: RESOLVE_FROM is \"" +
+        String(value) + "\". It must be \"lock\" for a release or a" +
+        " dispatched rebuild and \"master\" for ordinary CI. This program" +
+        " does not choose one for you: resolving a release from master would" +
+        " build source " + LOCK_RELATIVE_PATH + " does not describe.");
+}
+
+function staleLockIsFatal()
+{
+    const value = process.env.STALE_LOCK_IS_FATAL;
+    if (value === "0")
+        return false;
+    if (value === "1")
+        return true;
+
+    throw new Error("Dependency lock violation: STALE_LOCK_IS_FATAL is \"" +
+        String(value) + "\". It must be \"1\" for a release, so that a lock" +
+        " master has moved past stops it, and \"0\" for every other run, so" +
+        " that an old tag can still be rebuilt.");
+}
+
 function runResolve(root)
 {
     const lock = loadLock(root);
     const entries = ownedEntries(lock);
-    const resolveFrom = process.env.RESOLVE_FROM === "lock" ? "lock" : "master";
+    const resolveFrom = resolveSource();
+    const stopOnStaleLock = staleLockIsFatal();
 
     if (resolveFrom === "lock") {
         for (const entry of entries) {
@@ -457,7 +517,7 @@ function runResolve(root)
     // stale lock, so it resolves master as well and refuses to differ. A
     // dispatched recovery run deliberately skips this: rebuilding an old tag
     // has to keep working after master has moved on.
-    if (process.env.STALE_LOCK_IS_FATAL === "1") {
+    if (stopOnStaleLock) {
         const head = {};
         for (const entry of entries)
             head[entry.name] = resolveBranchHead(entry);
