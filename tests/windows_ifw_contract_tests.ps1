@@ -838,11 +838,17 @@ function Assert-IfwSignedValidationRuntime {
             "@echo off`r`nexit /b 0`r`n",
             [Text.Encoding]::ASCII)
 
+        # signtool is invoked with /tr, so a release signature always carries a
+        # timestamp countersignature. The fixture models one for the same reason
+        # it models the signer: the validation rejects a signature without it.
         $signatureFixture = [pscustomobject]@{
             Status = 'Valid'
             StatusMessage = 'Signature is valid.'
             SignerCertificate = [pscustomobject]@{
                 Subject = 'CN=Varinomics Ltd, O=Varinomics Ltd'
+            }
+            TimeStamperCertificate = [pscustomobject]@{
+                Subject = 'CN=Microsoft Public RSA Timestamping CA 2020'
             }
         }
         Invoke-TrustedSigning $artifactPath
@@ -853,6 +859,21 @@ function Assert-IfwSignedValidationRuntime {
 
         $signatureFixture.Status = 'Valid'
         $signatureFixture.SignerCertificate.Subject = 'CN=Unexpected Publisher'
+        Assert-SigningFixtureThrows 'does not identify Varinomics Ltd'
+
+        # A subject that merely contains the publisher somewhere is not the
+        # publisher: only a whole CN component is.
+        $signatureFixture.SignerCertificate.Subject = 'CN=Not Varinomics Ltd Either'
+        Assert-SigningFixtureThrows 'does not identify Varinomics Ltd'
+
+        $signatureFixture.SignerCertificate.Subject = 'CN=Varinomics Ltd, O=Varinomics Ltd'
+        $signatureFixture.TimeStamperCertificate = $null
+        Assert-SigningFixtureThrows 'is not timestamped'
+
+        $signatureFixture.TimeStamperCertificate = [pscustomobject]@{
+            Subject = 'CN=Microsoft Public RSA Timestamping CA 2020'
+        }
+        $signatureFixture.SignerCertificate = $null
         Assert-SigningFixtureThrows 'does not identify Varinomics Ltd'
     }
     finally {
