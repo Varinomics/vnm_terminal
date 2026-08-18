@@ -13,6 +13,7 @@
 #include <QWindow>
 #include <QtGlobal>
 
+#include <algorithm>
 #include <cmath>
 
 namespace vnm_terminal::terminal_app {
@@ -464,13 +465,23 @@ bool terminal_window_persistence_enabled()
         QGuiApplication::platformName() != QStringLiteral("offscreen");
 }
 
-bool window_geometry_intersects_available_screen(
+bool window_geometry_has_useful_visible_area(
     const QPoint& position,
     const QSize&  size)
 {
     const QRect window_rect(position, size);
+    // Measured per screen rather than across the whole desktop: a window split
+    // across a seam with a sliver on each side is no easier to grab than one
+    // with a single sliver, so one screen has to show enough of it on its own.
+    const int required_visible_width  =
+        std::min(size.width(),  k_min_restored_visible_width);
+    const int required_visible_height =
+        std::min(size.height(), k_min_restored_visible_height);
     for (const QScreen* screen : QGuiApplication::screens()) {
-        if (screen->availableGeometry().intersects(window_rect)) {
+        const QRect visible = screen->availableGeometry().intersected(window_rect);
+        if (visible.width()  >= required_visible_width &&
+            visible.height() >= required_visible_height)
+        {
             return true;
         }
     }
@@ -491,7 +502,7 @@ void apply_persisted_terminal_window_state(
     }
 
     if (state.position.has_value() &&
-        window_geometry_intersects_available_screen(
+        window_geometry_has_useful_visible_area(
             *state.position, options->window_size))
     {
         options->window_position = *state.position;

@@ -6,6 +6,8 @@
 
 #include <QColor>
 #include <QGuiApplication>
+#include <QRect>
+#include <QScreen>
 #include <QSettings>
 #include <QTemporaryDir>
 
@@ -16,6 +18,8 @@
 namespace {
 
 using vnm_terminal::test_helpers::check;
+using vnm_terminal::terminal_app::k_min_restored_visible_height;
+using vnm_terminal::terminal_app::k_min_restored_visible_width;
 
 bool nearly_equal(qreal actual, qreal expected)
 {
@@ -105,6 +109,54 @@ bool test_rejected_deferred_startup_returns_start_failed()
     ok &= check(
         exit_status.has_value() && *exit_status == k_exit_start_failed,
         "rejected deferred startup returns the start-failed exit status");
+    return ok;
+}
+
+bool test_restored_window_requires_useful_visible_area()
+{
+    const QScreen* screen = QGuiApplication::primaryScreen();
+    bool ok = check(screen != nullptr, "persistence test has a primary screen");
+    if (screen == nullptr) {
+        return false;
+    }
+
+    const QRect  available = screen->availableGeometry();
+    const QSize  window_size(640, 480);
+    ok &= check(available.width()  > k_min_restored_visible_width &&
+            available.height() > k_min_restored_visible_height,
+        "the test screen is larger than the useful visible area");
+
+    // QRect::right()/bottom() are inclusive, so a window whose left edge sits on
+    // right() shows exactly one column.
+    ok &= check(!window_geometry_has_useful_visible_area(
+            QPoint(available.right(), available.top()),
+            window_size),
+        "one visible pixel does not restore an otherwise off-screen window");
+    ok &= check(!window_geometry_has_useful_visible_area(
+            QPoint(available.right() - (k_min_restored_visible_width - 2), available.top()),
+            window_size),
+        "less than the minimum useful width does not restore a window");
+    ok &= check(window_geometry_has_useful_visible_area(
+            QPoint(available.right() - (k_min_restored_visible_width - 1), available.top()),
+            window_size),
+        "the minimum useful visible width permits restoration");
+    ok &= check(!window_geometry_has_useful_visible_area(
+            QPoint(available.left(), available.bottom() - (k_min_restored_visible_height - 2)),
+            window_size),
+        "less than the minimum useful height does not restore a window");
+    ok &= check(window_geometry_has_useful_visible_area(
+            QPoint(available.left(), available.bottom() - (k_min_restored_visible_height - 1)),
+            window_size),
+        "the minimum useful visible height permits restoration");
+
+    // A window smaller than the threshold is held to its own size, so it can
+    // still be restored when all of it is on screen.
+    const QSize tiny(20, 12);
+    ok &= check(window_geometry_has_useful_visible_area(
+            QPoint(available.right() - (tiny.width() - 1), available.top()),
+            tiny),
+        "a window narrower than the threshold is measured against its own size");
+
     return ok;
 }
 
@@ -763,6 +815,7 @@ int main(int argc, char** argv)
     bool ok = true;
     ok &= test_save_and_load_window_state();
     ok &= test_rejected_deferred_startup_returns_start_failed();
+    ok &= test_restored_window_requires_useful_visible_area();
     ok &= test_apply_persisted_window_state();
     ok &= test_invalid_persisted_values_are_ignored();
     ok &= test_appearance_settings_round_trip();
