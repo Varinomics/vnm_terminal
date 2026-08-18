@@ -1,0 +1,182 @@
+{
+  "schema": 1,
+
+  "checksum": {
+    "algorithm": "sha256",
+    "suffix": ".sha256"
+  },
+
+  "actions_artifacts": [
+    {
+      "id": "source",
+      "name": "vnm-terminal-source",
+      "workflow": ".github/workflows/ci-windows.yml",
+      "path_prefix": "vnm_terminal/dist/",
+      "contents": [
+        { "asset": "source_archive", "sidecar": false }
+      ],
+      "retention": { "mode": "exact" }
+    },
+    {
+      "id": "windows_unsigned",
+      "name": "vnm-terminal-windows-x64-unsigned",
+      "workflow": ".github/workflows/ci-windows.yml",
+      "path_prefix": "vnm_terminal/dist/",
+      "contents": [
+        { "asset": "windows_portable_zip", "sidecar": false },
+        { "asset": "windows_installer_unsigned", "sidecar": true }
+      ],
+      "retention": { "mode": "exact" }
+    },
+    {
+      "id": "windows_signing_payload",
+      "name": "vnm-terminal-windows-x64-signing-payload",
+      "workflow": ".github/workflows/ci-windows.yml",
+      "selection": "directory",
+      "selection_reason": "uploads dist/portable_candidate and dist/signing_provenance as whole trees, not as named assets",
+      "retention": { "mode": "exact" }
+    },
+    {
+      "id": "windows_signed",
+      "name": "vnm-terminal-windows-x64-signed",
+      "workflow": ".github/workflows/ci-windows.yml",
+      "path_prefix": "vnm_terminal/dist/",
+      "contents": [
+        { "asset": "windows_portable_zip", "sidecar": true },
+        { "asset": "windows_installer", "sidecar": true },
+        { "asset": "build_provenance", "sidecar": false }
+      ],
+      "retention": { "mode": "exact" }
+    },
+    {
+      "id": "linux",
+      "name": "vnm-terminal-linux-x64",
+      "workflow": ".github/workflows/ci-linux.yml",
+      "selection": "extension",
+      "selection_reason": "uploads dist/*.AppImage, *.deb, *.rpm, *.run and *.sha256 by extension, so no rename can desynchronise the list",
+      "retention": { "mode": "exact" }
+    },
+    {
+      "id": "macos",
+      "name_template": "vnm_terminal_v{version}_macos_x64_unnotarized",
+      "name_expressions": [
+        "${{ steps.package.outputs.artifact_name }}",
+        "${{ needs.build-and-test.outputs.artifact_name }}"
+      ],
+      "workflow": ".github/workflows/ci-macos.yml",
+      "path_prefix": "vnm_terminal/dist/",
+      "contents": [
+        {
+          "asset": "macos_bundle_zip",
+          "sidecar": false,
+          "path_expression": "${{ steps.package.outputs.zip_name }}"
+        }
+      ],
+      "retention": {
+        "mode": "pattern",
+        "pattern": "^vnm_terminal_v.*_macos_x64"
+      }
+    }
+  ],
+
+  "release_assets": [
+    {
+      "id": "source_archive",
+      "template": "vnm_terminal_v{version}_source.zip",
+      "produced_by": "tools/create_source_archive.ps1"
+    },
+    {
+      "id": "windows_portable_zip",
+      "template": "vnm_terminal_v{version}_w64.zip",
+      "produced_by": "build_portable.bat"
+    },
+    {
+      "id": "windows_installer",
+      "template": "vnm_terminal_v{version}_windows_x64.exe",
+      "produced_by": "tools/build_windows_ifw_installer.ps1",
+      "variant_of": "windows_installer_template"
+    },
+    {
+      "id": "windows_installer_unsigned",
+      "template": "vnm_terminal_v{version}_windows_x64_unsigned.exe",
+      "produced_by": "tools/build_windows_ifw_installer.ps1",
+      "variant_of": "windows_installer_template"
+    },
+    {
+      "id": "linux_installer",
+      "template": "vnm_terminal_v{version}_linux_x64.run",
+      "produced_by": "tools/build_linux_ifw_installer.sh"
+    },
+    {
+      "id": "linux_appimage",
+      "template": "vnm_terminal_v{version}_x86_64.AppImage",
+      "produced_by": ".github/workflows/ci-linux.yml"
+    },
+    {
+      "id": "macos_bundle_zip",
+      "template": "vnm_terminal_v{version}_macos_x64_unnotarized.zip",
+      "produced_by": ".github/workflows/ci-macos.yml"
+    },
+    {
+      "id": "build_provenance",
+      "path": "signing_provenance/build_provenance.json",
+      "produced_by": ".github/workflows/ci-windows.yml"
+    }
+  ],
+
+  "asset_templates": {
+    "windows_installer_template": {
+      "template": "vnm_terminal_v{version}_windows_x64{variant}.exe",
+      "site": "tools/build_windows_ifw_installer.ps1",
+      "variants": { "signed": "", "unsigned": "_unsigned" }
+    }
+  },
+
+  "release_attachments": [
+    {
+      "workflow": ".github/workflows/ci-windows.yml",
+      "job": "attach-release-packages",
+      "path_prefix": "dist/",
+      "assets": [
+        { "asset": "windows_portable_zip", "sidecar": true },
+        { "asset": "windows_installer", "sidecar": true },
+        { "asset": "build_provenance", "sidecar": false }
+      ]
+    },
+    {
+      "workflow": ".github/workflows/ci-windows.yml",
+      "job": "attach-source-archive",
+      "selection": "opaque",
+      "selection_reason": "uploads a shell variable resolved by find, so the argument list carries no asset shape"
+    },
+    {
+      "workflow": ".github/workflows/ci-linux.yml",
+      "job": "attach-release-packages",
+      "selection": "opaque",
+      "selection_reason": "uploads dist/* wholesale, so every artifact member is attached by construction"
+    },
+    {
+      "workflow": ".github/workflows/ci-macos.yml",
+      "job": "attach-release-asset",
+      "selection": "opaque",
+      "selection_reason": "uploads a job-output expression, so the argument list carries no asset shape"
+    }
+  ],
+
+  "consumers": [
+    ".github/workflows/artifact-retention.yml",
+    ".github/workflows/ci-linux.yml",
+    ".github/workflows/ci-macos.yml",
+    ".github/workflows/ci-windows.yml",
+    "build_config.bat.example",
+    "build_portable.bat",
+    "build_windows_packages.bat",
+    "README.md",
+    "tools/build_linux_ifw_installer.sh",
+    "tools/build_windows_ifw_installer.ps1",
+    "tools/create_source_archive.ps1",
+    "tools/provision_windows_ifw.ps1",
+    "tests/windows_ifw_contract_tests.ps1",
+    "tests/windows_ifw_installation_tests.ps1"
+  ]
+}

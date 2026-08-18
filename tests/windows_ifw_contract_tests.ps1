@@ -1697,16 +1697,16 @@ Assert-IfwContract `
         $installationTests -match `
             'Test-Path -LiteralPath \$startMenuRoot') `
     'hosted Windows CI must commit an all-users installation, verify its shortcut and registration, run it, purge it, and check residue'
+# The artifact name, the archive globs and the prohibition on attaching the
+# unsigned build were restated here as regexes. release/manifest.json now
+# declares them once and tools/release_manifest.js compares the workflow
+# against it in both directions, on every host, naming the drifted value. What
+# is left is the half nothing else covers: the release archive must be rebuilt
+# from the signed payload rather than copied from the unsigned build.
 Assert-IfwContract `
     ($windowsWorkflow -match `
-            '- name: Build signed portable archive[\s\S]*?Compress-Archive' -and
-        $windowsWorkflow -match `
-            'name: vnm-terminal-windows-x64-signed[\s\S]*?vnm_terminal_v\*_w64\.zip[\s\S]*?vnm_terminal_v\*_w64\.zip\.sha256' -and
-        $windowsWorkflow -notmatch `
-            '(?s)attach-release-packages:.*?Download unsigned Windows package artifacts' -and
-        $windowsWorkflow -match `
-            'dist/vnm_terminal_v\*_w64\.zip\.sha256') `
-    'release attachment must publish the portable ZIP rebuilt from the signed payload'
+        '- name: Build signed portable archive[\s\S]*?Compress-Archive') `
+    'the release portable archive must be rebuilt from the signed payload'
 Assert-IfwContract `
     ($windowsWorkflow -match `
             '-File tests/windows_ifw_installation_tests\.ps1[\s\S]*?-InstallerPath \$installer\.FullName[\s\S]*?-RequireSigned' -and
