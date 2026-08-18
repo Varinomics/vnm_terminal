@@ -22,6 +22,13 @@
       "checkout_path": "vnm_msdf_text",
       "output": "msdf_text",
       "commit": "0deaec4fdaeb86af4ffd4e256b01782d4f9fb46e"
+    },
+    "vnm_qt_dispatch": {
+      "repository": "Varinomics/vnm_qt_dispatch",
+      "branch": "master",
+      "checkout_path": "vnm_qt_dispatch",
+      "output": "qt_dispatch",
+      "commit": "a4ed685d140f4ed99abeb2fcf11864c87a8ced65"
     }
   },
 

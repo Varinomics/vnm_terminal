@@ -52,6 +52,7 @@ jobs:
       surface: ${{ steps.resolve.outputs.surface }}
       chrome: ${{ steps.resolve.outputs.chrome }}
       msdf_text: ${{ steps.resolve.outputs.msdf_text }}
+      qt_dispatch: ${{ steps.resolve.outputs.qt_dispatch }}
       resolved_from: ${{ steps.resolve.outputs.resolved_from }}
 
     steps:
@@ -109,6 +110,22 @@ jobs:
           ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
 
+      - name: Checkout MSDF text
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: imakris/vnm_msdf_text
+          path: vnm_msdf_text
+          ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
+          persist-credentials: false
+
+      - name: Checkout Qt dispatch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_qt_dispatch
+          path: vnm_qt_dispatch
+          ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
+          persist-credentials: false
+
       # The static contract cannot see a checkout it fails to parse, and a ref
       # that resolves to the empty string silently takes a default branch, so
       # the commits this job actually built from are compared with the ones the
@@ -135,6 +152,8 @@ jobs:
             -A x64 \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
+            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
+            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DBUILD_TESTING=ON
 
@@ -174,12 +193,16 @@ jobs:
           $sourceRoot = $roots[0].FullName
           $surfaceDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_terminal_surface'
           $chromeDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_qml_chrome'
+          $msdfTextDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_msdf_text'
+          $qtDispatchDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_qt_dispatch'
 
           cmake -B $buildDir -S $sourceRoot `
             -G "Visual Studio 17 2022" `
             -A x64 `
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="$surfaceDir" `
             -DVNM_QML_CHROME_SOURCE_DIR="$chromeDir" `
+            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="$msdfTextDir" `
+            -DVNM_QT_DISPATCH_SOURCE_DIR="$qtDispatchDir" `
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF `
             -DBUILD_TESTING=ON
           if ($LASTEXITCODE -ne 0) {
@@ -246,6 +269,22 @@ jobs:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
           ref: ${{ needs.resolve-dependencies.outputs.chrome }}
+          persist-credentials: false
+
+      - name: Checkout MSDF text
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: imakris/vnm_msdf_text
+          path: vnm_msdf_text
+          ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
+          persist-credentials: false
+
+      - name: Checkout Qt dispatch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_qt_dispatch
+          path: vnm_qt_dispatch
+          ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
           persist-credentials: false
 
       # The static contract cannot see a checkout it fails to parse, and a ref
@@ -346,6 +385,8 @@ jobs:
               "set NINJA=$((Get-Command ninja.exe).Source)",
               "set VNM_TERMINAL_SURFACE_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_terminal_surface",
               "set VNM_QML_CHROME_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qml_chrome",
+              "set VNM_MSDF_TEXT_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_msdf_text",
+              "set VNM_QT_DISPATCH_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qt_dispatch",
               "set IFW_ROOT=$env:IFW_ROOT"
           )
           [System.IO.File]::WriteAllLines(
@@ -460,32 +501,20 @@ jobs:
               return $commit
           }
 
-          # $matches is a PowerShell automatic variable that -match rewrites, so
-          # this deliberately does not reuse the name for the search result.
-          function Get-SingleDependencyDirectory([string] $pattern) {
-              $found = @(Get-ChildItem -LiteralPath 'build_portable/_deps' `
-                  -Directory -Filter $pattern)
-              if ($found.Count -ne 1) {
-                  throw "Expected one build dependency matching $pattern, found $($found.Count)."
-              }
-              return $found[0].FullName
-          }
-
-          # The first three are this workflow's own checkouts. The rest are
-          # clones build_portable.bat makes under the build tree, and they exist
-          # at these paths only because the build configuration written above
-          # leaves VNM_MSDF_TEXT_SOURCE_DIR unset, which is what sends
-          # build_portable.bat down its fallback-clone path. A change to either
-          # script that moves or names those trees differently fails the release
-          # here rather than shipping a provenance record that omits them, and
-          # this step only runs for a release, so it is not covered by ordinary
-          # CI.
+          # The four owned dependencies are sibling checkouts at the commits
+          # release/dependencies.lock.json records and this run resolved, so the
+          # provenance record and the lock describe the same source by
+          # construction. freetype and msdfgen stay build-tree clones: they are
+          # pinned tags, and the record keeps their observed commits. A change
+          # to build_portable.bat that moves or renames those two trees fails
+          # the release here rather than shipping a provenance record that omits
+          # them, and this step only runs for a release, so it is not covered by
+          # ordinary CI.
           $appCommit = Get-RepositoryCommit '.'
           $surfaceCommit = Get-RepositoryCommit '../vnm_terminal_surface'
           $chromeCommit = Get-RepositoryCommit '../vnm_qml_chrome'
-          $msdfTextCommit = Get-RepositoryCommit 'build_portable/_deps/vnm_msdf_text-src'
-          $qtDispatchCommit = Get-RepositoryCommit `
-              (Get-SingleDependencyDirectory '*qt_dispatch*-src')
+          $msdfTextCommit = Get-RepositoryCommit '../vnm_msdf_text'
+          $qtDispatchCommit = Get-RepositoryCommit '../vnm_qt_dispatch'
           $freetypeCommit = Get-RepositoryCommit 'build_portable/_deps/freetype-src'
           $msdfgenCommit = Get-RepositoryCommit 'build_portable/_deps/msdfgen-src'
           $sourceEpoch = (& git show -s --format=%ct HEAD | Out-String).Trim()
