@@ -389,6 +389,19 @@ const CASES = [
         expect: "names the directory \"vnm-ifw-4.10.0\""
     },
     {
+        name: "a Linux sidecar written with another algorithm",
+        tool: "release_manifest.js",
+        mutate: root => {
+            const relativePath = WORKFLOW_DIRECTORY + "/ci-linux.yml";
+            const text = readText(root, relativePath);
+            if (text.indexOf("sha256sum") < 0)
+                throw new Error("ci-linux.yml no longer writes a sidecar");
+            writeText(root, relativePath,
+                text.replace("sha256sum", "sha512sum"));
+        },
+        expect: "names the checksum algorithm \"sha512\""
+    },
+    {
         name: "a workflow the manifest does not declare",
         tool: "release_manifest.js",
         mutate: addProbeWorkflow,

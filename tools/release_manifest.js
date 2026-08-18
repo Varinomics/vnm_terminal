@@ -820,6 +820,38 @@ function checkAssetShapes(root, manifest)
     }
 }
 
+// checksum.algorithm decides what a release publishes beside every asset, and
+// the sidecar rule below can only see a producer that spells an asset name out.
+// Every Linux sidecar is written from a shell variable and the packaged
+// artifact test names its algorithm directly, so the declared algorithm was
+// enforced by nothing except its own agreement with the declared suffix. The
+// name of an algorithm is a short, distinctive token, so the copies can simply
+// be found. A name that is part of a longer identifier, as in the Qt IFW
+// archive checksum field, is a different fact and is left alone.
+const CHECKSUM_ALGORITHM_PATTERN =
+    /(?<![A-Za-z0-9_])(sha1|sha224|sha256|sha384|sha512|md5)(?![0-9])/gi;
+
+function checkChecksumAlgorithm(root, manifest)
+{
+    const algorithm = manifest.checksum.algorithm;
+    for (const consumer of manifest.consumers) {
+        if (!exists(root, consumer))
+            continue;
+
+        readFile(root, consumer).split(/\r?\n/).forEach((line, index) => {
+            CHECKSUM_ALGORITHM_PATTERN.lastIndex = 0;
+            let match;
+            while ((match = CHECKSUM_ALGORITHM_PATTERN.exec(line)) !== null) {
+                check(match[1].toLowerCase() === algorithm,
+                    consumer + ":" + (index + 1) + " names the checksum" +
+                    " algorithm \"" + match[1] + "\", but " +
+                    MANIFEST_RELATIVE_PATH + " checksum.algorithm is \"" +
+                    algorithm + "\". One checksum convention, declared once.");
+            }
+        });
+    }
+}
+
 function checkRetentionWorkflow(root, manifest)
 {
     const relativePath = ".github/workflows/artifact-retention.yml";
@@ -1315,6 +1347,7 @@ function runCheck(root)
     checkAttachmentSources(manifest, sitesByWorkflow);
     checkReleaseAttachments(manifest, uploadsByWorkflow);
     checkAssetShapes(root, manifest);
+    checkChecksumAlgorithm(root, manifest);
     checkRetentionWorkflow(root, manifest);
     checkQtVersion(root, manifest, workflowLines);
     checkQtIfw(root, manifest, workflowLines);
