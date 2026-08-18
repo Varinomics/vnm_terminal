@@ -11,6 +11,27 @@
 // silently empty extraction is the one result this reader must never be
 // allowed to produce.
 
+const fs = require("fs");
+const path = require("path");
+
+const WORKFLOW_DIRECTORY = ".github/workflows";
+
+// Both gates enumerate the directory rather than a list of their own, so that a
+// workflow added without a manifest or lock entry is a workflow they can see.
+// A list carried in a gate can only describe the workflows that existed when it
+// was written, and a new one would then be outside both contracts entirely.
+function workflowFiles(root)
+{
+    const directory = path.join(root, WORKFLOW_DIRECTORY);
+    if (!fs.existsSync(directory))
+        return [];
+
+    return fs.readdirSync(directory)
+        .filter(name => /\.ya?ml$/.test(name))
+        .map(name => WORKFLOW_DIRECTORY + "/" + name)
+        .sort();
+}
+
 function indentOf(line)
 {
     return line.length - line.replace(/^\s*/, "").length;
@@ -164,6 +185,8 @@ function jobNeeds(lines)
 }
 
 module.exports = {
+    WORKFLOW_DIRECTORY,
+    workflowFiles,
     stepBlocks,
     withMapping,
     jobNameAt,

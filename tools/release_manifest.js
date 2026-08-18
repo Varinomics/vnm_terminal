@@ -25,7 +25,7 @@ const path = require("path");
 const structure = require("./github_workflow_structure.js");
 
 const MANIFEST_RELATIVE_PATH = "release/manifest.json";
-const WORKFLOW_DIRECTORY = ".github/workflows";
+const WORKFLOW_DIRECTORY = structure.WORKFLOW_DIRECTORY;
 const SUPPORTED_SCHEMA = 1;
 const VERSION_PROBE = "0.0.0";
 const CHECKSUM_EXTENSION_PATTERN = /\.(sha1|sha224|sha256|sha384|sha512|md5)$/;
@@ -94,20 +94,6 @@ function exists(root, relativePath)
 function isWorkflow(relativePath)
 {
     return relativePath.startsWith(WORKFLOW_DIRECTORY + "/");
-}
-
-// The workflows as the directory holds them, not as the manifest remembers
-// them, so that a workflow added without a manifest entry is visible here.
-function workflowFiles(root)
-{
-    const directory = path.join(root, WORKFLOW_DIRECTORY);
-    if (!fs.existsSync(directory))
-        return [];
-
-    return fs.readdirSync(directory)
-        .filter(name => /\.ya?ml$/.test(name))
-        .map(name => WORKFLOW_DIRECTORY + "/" + name)
-        .sort();
 }
 
 function fieldValue(manifest, dottedPath)
@@ -394,6 +380,28 @@ function checkManifestSelfConsistency(root, manifest)
             MANIFEST_RELATIVE_PATH + " lists consumer \"" + consumer +
             "\", which does not exist. A renamed consumer silently narrows the" +
             " checks that guard the release surface.");
+    }
+}
+
+// A workflow the manifest does not list is a workflow no rule below reads. The
+// artifact names, the upload paths and the release attachments of such a file
+// are outside this contract entirely, which is the one outcome a contract that
+// exists to make names authoritative cannot allow.
+function checkWorkflowCoverage(root, manifest)
+{
+    const declared = new Set(manifest.consumers);
+    const workflows = structure.workflowFiles(root);
+
+    check(workflows.length > 0,
+        "found no workflow under " + WORKFLOW_DIRECTORY + "/, which " +
+        MANIFEST_RELATIVE_PATH + " says produces every release artifact.");
+
+    for (const workflow of workflows) {
+        check(declared.has(workflow),
+            workflow + " is not listed in " + MANIFEST_RELATIVE_PATH +
+            " consumers, so no rule in this contract reads it. A workflow" +
+            " outside the contract can upload an artifact no retention family" +
+            " prunes and attach an asset no release declares.");
     }
 }
 
@@ -1092,6 +1100,7 @@ function runCheck(root)
     }
 
     checkManifestSelfConsistency(root, manifest);
+    checkWorkflowCoverage(root, manifest);
     checkRetentionFamilies(manifest);
     checkArtifactNames(manifest, sitesByWorkflow);
     checkArtifactUploadPaths(manifest, sitesByWorkflow);

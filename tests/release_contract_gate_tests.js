@@ -138,6 +138,38 @@ function runGate(root, tool, argumentList, environment)
         });
 }
 
+// A workflow neither gate reads. It resolves a dependency branch on its own and
+// uploads an artifact under a name nothing prunes.
+const PROBE_WORKFLOW = [
+    "name: Probe",
+    "",
+    "on:",
+    "  workflow_dispatch:",
+    "",
+    "jobs:",
+    "  probe:",
+    "    runs-on: ubuntu-24.04",
+    "    steps:",
+    "      - name: Checkout surface",
+    "        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4",
+    "        with:",
+    "          repository: Varinomics/vnm_terminal_surface",
+    "          path: vnm_terminal_surface",
+    "          ref: master",
+    "",
+    "      - name: Upload probe artifact",
+    "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4",
+    "        with:",
+    "          name: vnm-terminal-probe-artifact",
+    "          path: dist/probe.txt",
+    ""
+].join("\n");
+
+function addProbeWorkflow(root)
+{
+    writeText(root, WORKFLOW_DIRECTORY + "/zz-probe.yml", PROBE_WORKFLOW);
+}
+
 // --- Cases ------------------------------------------------------------------
 
 const CASES = [
@@ -185,6 +217,18 @@ const CASES = [
             return { arguments: ["retention-families", root] };
         },
         expect: "selects every artifact in the repository"
+    },
+    {
+        name: "a workflow the manifest does not declare",
+        tool: "release_manifest.js",
+        mutate: addProbeWorkflow,
+        expect: "is not listed in release/manifest.json consumers"
+    },
+    {
+        name: "a workflow that resolves a dependency branch of its own",
+        tool: "dependencies_lock.js",
+        mutate: addProbeWorkflow,
+        expect: "declares no resolve-dependencies job"
     }
 ];
 

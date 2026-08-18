@@ -36,11 +36,6 @@ const structure = require("./github_workflow_structure.js");
 const LOCK_RELATIVE_PATH = "release/dependencies.lock.json";
 const SUPPORTED_SCHEMA = 1;
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/;
-const WORKFLOWS = [
-    ".github/workflows/ci-windows.yml",
-    ".github/workflows/ci-linux.yml",
-    ".github/workflows/ci-macos.yml"
-];
 const RESOLVE_JOB = "resolve-dependencies";
 
 const violations = [];
@@ -174,9 +169,15 @@ function checkLockSelfConsistency(lock)
     }
 }
 
-function checkResolveJob(lock, workflowText)
+// Only a workflow that checks out an owned dependency needs the resolve job.
+// The rule is keyed on that rather than on a list of workflow names, so a new
+// workflow that grows a dependency checkout inherits the obligation.
+function checkResolveJob(lock, workflowText, dependencyWorkflows)
 {
     for (const [workflow, text] of workflowText) {
+        if (!dependencyWorkflows.has(workflow))
+            continue;
+
         const job = new RegExp("(?:^|\\n)  " + RESOLVE_JOB +
             ":\\n([\\s\\S]*?)(?=\\n  [A-Za-z0-9_-]+:\\n|$)").exec(text);
         if (!job) {
@@ -200,7 +201,7 @@ function checkResolveJob(lock, workflowText)
     }
 }
 
-function checkCheckoutRefs(lock, workflowLines)
+function checkCheckoutRefs(lock, workflowLines, sitesByWorkflow)
 {
     const byRepository = new Map();
     for (const entry of ownedEntries(lock))
@@ -211,7 +212,7 @@ function checkCheckoutRefs(lock, workflowLines)
         const needs = structure.jobNeeds(lines);
         const regions = structure.jobRegions(lines);
         const jobsWithDependencies = new Set();
-        for (const site of checkoutSites(lines)) {
+        for (const site of sitesByWorkflow.get(workflow)) {
             const entry = byRepository.get(site.repository);
             if (!entry) {
                 violation(workflow + ":" + site.stepLine + " checks out " +
@@ -327,20 +328,26 @@ function runCheck(root)
 
     const workflowText = new Map();
     const workflowLines = new Map();
-    for (const workflow of WORKFLOWS) {
-        if (!exists(root, workflow)) {
-            violation("workflow " + workflow + " does not exist, so this" +
-                " contract cannot see how it resolves its dependencies.");
-            continue;
-        }
+    const sitesByWorkflow = new Map();
+    const dependencyWorkflows = new Set();
+    for (const workflow of structure.workflowFiles(root)) {
         const text = readFile(root, workflow);
+        const lines = text.split(/\r?\n/);
+        const sites = checkoutSites(lines);
         workflowText.set(workflow, text);
-        workflowLines.set(workflow, text.split(/\r?\n/));
+        workflowLines.set(workflow, lines);
+        sitesByWorkflow.set(workflow, sites);
+        if (sites.length > 0)
+            dependencyWorkflows.add(workflow);
     }
 
+    check(workflowText.size > 0,
+        "found no workflow under " + structure.WORKFLOW_DIRECTORY + "/, so" +
+        " this contract cannot see how any dependency is resolved.");
+
     checkLockSelfConsistency(lock);
-    checkResolveJob(lock, workflowText);
-    checkCheckoutRefs(lock, workflowLines);
+    checkResolveJob(lock, workflowText, dependencyWorkflows);
+    checkCheckoutRefs(lock, workflowLines, sitesByWorkflow);
     checkThirdPartyTags(root, lock);
 
     if (violations.length > 0) {
