@@ -469,18 +469,27 @@ bool window_geometry_has_useful_visible_area(
     const QPoint& position,
     const QSize&  size)
 {
-    const QRect window_rect(position, size);
-    // Measured per screen rather than across the whole desktop: a window split
+    if (size.width() <= 0 || size.height() <= 0) {
+        return false;
+    }
+
+    // It is the top of the window that has to be reachable. Measuring the whole
+    // rectangle lets a window almost entirely above the desktop pass merely
+    // because a strip of its bottom edge remains visible, even though no
+    // titlebar or drag surface can be reached. Restrict the proof to a logical
+    // titlebar-sized strip at the top instead.
+    const int grab_height = std::min(size.height(), k_min_restored_visible_height);
+    const QRect grab_strip(position, QSize(size.width(), grab_height));
+
+    // Measured per screen rather than across the whole desktop: a strip split
     // across a seam with a sliver on each side is no easier to grab than one
     // with a single sliver, so one screen has to show enough of it on its own.
-    const int required_visible_width  =
-        std::min(size.width(),  k_min_restored_visible_width);
-    const int required_visible_height =
-        std::min(size.height(), k_min_restored_visible_height);
+    const int required_visible_width =
+        std::min(size.width(), k_min_restored_visible_width);
     for (const QScreen* screen : QGuiApplication::screens()) {
-        const QRect visible = screen->availableGeometry().intersected(window_rect);
+        const QRect visible = screen->availableGeometry().intersected(grab_strip);
         if (visible.width()  >= required_visible_width &&
-            visible.height() >= required_visible_height)
+            visible.height() >= grab_height)
         {
             return true;
         }

@@ -149,6 +149,24 @@ bool test_restored_window_requires_useful_visible_area()
             window_size),
         "the minimum useful visible height permits restoration");
 
+    // Visibility elsewhere in the rectangle is not enough. This window leaves
+    // exactly the required number of pixels of its bottom edge on screen while
+    // its top grab strip remains above the desktop.
+    ok &= check(!window_geometry_has_useful_visible_area(
+            QPoint(
+                available.left(),
+                available.top() - (window_size.height() - k_min_restored_visible_height)),
+            window_size),
+        "a visible bottom strip does not restore an unreachable titlebar");
+    ok &= check(!window_geometry_has_useful_visible_area(
+            available.topLeft(),
+            QSize(0, window_size.height())),
+        "a zero-width restored window is invalid");
+    ok &= check(!window_geometry_has_useful_visible_area(
+            available.topLeft(),
+            QSize(window_size.width(), -1)),
+        "a negative-height restored window is invalid");
+
     // A window smaller than the threshold is held to its own size, so it can
     // still be restored when all of it is on screen.
     const QSize tiny(20, 12);

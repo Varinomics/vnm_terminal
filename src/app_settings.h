@@ -162,14 +162,14 @@ void apply_persisted_interaction_settings(
 
 bool terminal_window_persistence_enabled();
 
-// How much of a restored window has to land on an available screen for the
-// stored position to be worth honoring. A single intersecting pixel satisfies
-// the geometry but not the user: after a monitor is removed or the desktop is
-// rearranged, a window with a sliver on screen is not reachable by pointer.
-// These are enough to grab and drag - roughly a titlebar corner - and they are
-// fixed logical pixels rather than a titlebar measurement so the rule stays
-// deterministic across platforms and themes. A window smaller than the
-// threshold is held to its own size instead.
+// How much of the top edge of a restored window has to land on one available
+// screen for the stored position to be worth honoring. A single intersecting
+// pixel - or a visible strip of the bottom edge - satisfies rectangle geometry
+// but not the user: after a monitor is removed or the desktop is rearranged, a
+// window whose titlebar is unreachable cannot be moved back. These dimensions
+// are enough to grab and drag roughly a titlebar corner, and are fixed logical
+// pixels rather than a titlebar measurement so the rule stays deterministic
+// across platforms and themes. A smaller window is held to its own size.
 constexpr int k_min_restored_visible_width  = 64;
 constexpr int k_min_restored_visible_height = 32;
 
