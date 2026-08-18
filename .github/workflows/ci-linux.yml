@@ -14,9 +14,12 @@ on:
   release:
     types: [ published ]
 
+# A release event and a manually dispatched recovery run can target the same
+# release tag while carrying different refs. Serialize by the asset target, not
+# the triggering ref, so two valid runs cannot upload --clobber over one another.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' && inputs.release_tag == '' }}
 
 permissions:
   contents: read
@@ -47,13 +50,13 @@ jobs:
       # CMake and scripts from several repositories. Nothing here authenticates
       # to a remote - the only git use is local - so no checkout needs it.
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
           persist-credentials: false
 
       - name: Checkout surface
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
@@ -62,7 +65,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout chrome
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
@@ -75,7 +78,7 @@ jobs:
           sudo apt-get install -y ${LINUX_SYSTEM_DEPS}
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4.3.1
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.11.1'
           arch: 'linux_gcc_64'
@@ -106,13 +109,13 @@ jobs:
 
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
           persist-credentials: false
 
       - name: Checkout surface
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
@@ -121,7 +124,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout chrome
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
@@ -134,7 +137,7 @@ jobs:
           sudo apt-get install -y ${LINUX_SYSTEM_DEPS}
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4.3.1
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.11.1'
           arch: 'linux_gcc_64'
@@ -166,13 +169,13 @@ jobs:
 
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
           persist-credentials: false
 
       - name: Checkout surface
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
@@ -181,7 +184,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout chrome
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
@@ -189,7 +192,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout MSDF text
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: imakris/vnm_msdf_text
           path: vnm_msdf_text
@@ -231,7 +234,7 @@ jobs:
             appstream desktop-file-utils dpkg-dev rpm
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4.3.1
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.11.1'
           arch: 'linux_gcc_64'
@@ -414,7 +417,7 @@ jobs:
             /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
 
       - name: Upload Linux package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vnm-terminal-linux-x64
           path: |
@@ -438,7 +441,7 @@ jobs:
 
     steps:
       - name: Download Linux package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: vnm-terminal-linux-x64
           path: dist

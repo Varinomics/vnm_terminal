@@ -2,7 +2,9 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$InstallerPath
+    [string]$InstallerPath,
+
+    [switch]$RequireSigned
 )
 
 $ErrorActionPreference = 'Stop'
@@ -120,15 +122,27 @@ function Assert-ProductSignature {
     )
 
     $signature = Get-AuthenticodeSignature -FilePath $Path
-    Assert-InstallationContract `
-        ($signature.Status -in @('Valid', 'NotSigned')) `
+    $acceptedStatuses = if ($RequireSigned) { @('Valid') } else { @('Valid', 'NotSigned') }
+    $statusMessage = if ($RequireSigned) {
+        "$Path must carry a valid release signature"
+    }
+    else {
         "$Path must be either validly signed or explicitly unsigned"
+    }
+    Assert-InstallationContract `
+        ($signature.Status -in $acceptedStatuses) `
+        $statusMessage
     if ($signature.Status -eq 'Valid') {
         Assert-InstallationContract `
             ($null -ne $signature.SignerCertificate -and
                 $signature.SignerCertificate.Subject -match
                     '(?:^|,\s*)CN=Varinomics Ltd(?:,|$)') `
             "$Path must be signed by Varinomics Ltd"
+        if ($RequireSigned) {
+            Assert-InstallationContract `
+                ($null -ne $signature.TimeStamperCertificate) `
+                "$Path must carry a timestamped release signature"
+        }
     }
 }
 
@@ -263,11 +277,7 @@ try {
         ($registrations.Count -eq 1 -and $registrations[0].IsMachine) `
         'the committed all-users installation must have one machine registration'
 
-    $installerSignature = Get-AuthenticodeSignature `
-        -FilePath $resolvedInstallerPath
-    Assert-InstallationContract `
-        ($installerSignature.Status -in @('Valid', 'NotSigned')) `
-        'the generated installer must be either validly signed or explicitly unsigned'
+    Assert-ProductSignature $resolvedInstallerPath
     foreach ($productExecutable in @(
         $launcherPath,
         $runtimePath,

@@ -14,9 +14,12 @@ on:
   release:
     types: [ published ]
 
+# Release-event and manual recovery runs can target the same release tag while
+# carrying different refs. Serialize by the asset target, not by the triggering
+# ref, so two valid runs cannot upload --clobber over one another concurrently.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' && inputs.release_tag == '' }}
 
 permissions:
   contents: read
@@ -47,13 +50,13 @@ jobs:
       # CMake and scripts from several repositories. Nothing here authenticates
       # to a remote - the only git use is local - so no checkout needs it.
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
           persist-credentials: false
 
       - name: Checkout surface
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
@@ -62,7 +65,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout chrome
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
@@ -70,7 +73,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4.3.1
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.11.1'
           arch: 'win64_msvc2022_64'
@@ -142,7 +145,7 @@ jobs:
           }
 
       - name: Upload source archive artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vnm-terminal-source
           path: vnm_terminal/dist/vnm_terminal_v*_source.zip
@@ -151,9 +154,12 @@ jobs:
   package:
     name: Portable ZIP and EXE (Windows x64)
     runs-on: windows-2022
-    # No credentials of any kind. This job runs on every push and pull request
-    # and executes repository-controlled build scripts and third-party actions,
-    # so it must not be able to reach Microsoft Artifact Signing. GitHub grants
+    # No signing or repository-write credentials. GitHub still gives the job a
+    # read-only GITHUB_TOKEN, and the private surface checkout may receive the
+    # repository-read token, but neither identity can reach Microsoft Artifact
+    # Signing or alter release assets. This job runs on every push and pull
+    # request and executes repository-controlled build scripts and third-party
+    # actions, so it must not receive the signing identity. GitHub grants
     # OIDC per job, not per step: every step of a job with id-token: write can
     # ask for a token, whatever `if:` guards the step that uses it. Signing
     # therefore lives in sign-windows-package below, which runs only for a
@@ -172,13 +178,13 @@ jobs:
               -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
           persist-credentials: false
 
       - name: Checkout surface
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
@@ -187,7 +193,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout chrome
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
@@ -223,7 +229,7 @@ jobs:
 
       - name: Restore verified Qt IFW archive
         id: ifw-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ env.IFW_ARCHIVE_PATH }}
           key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
@@ -244,7 +250,7 @@ jobs:
 
       - name: Save verified Qt IFW archive
         if: steps.ifw-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ env.IFW_ARCHIVE_PATH }}
           key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
@@ -262,7 +268,7 @@ jobs:
           }
 
       - name: Install Qt and MinGW
-        uses: jurplel/install-qt-action@v4.3.1
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.11.1'
           arch: 'win64_mingw'
@@ -351,11 +357,68 @@ jobs:
         if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
         shell: pwsh
         working-directory: vnm_terminal
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
           $provenance = 'dist/signing_provenance'
           New-Item -ItemType Directory -Path $provenance -Force | Out-Null
-          git rev-parse HEAD |
+
+          function Get-RepositoryCommit([string] $path) {
+              $commit = (& git -C $path rev-parse HEAD | Out-String).Trim()
+              if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$') {
+                  throw "Could not read an exact commit from $path."
+              }
+              return $commit
+          }
+
+          # $matches is a PowerShell automatic variable that -match rewrites, so
+          # this deliberately does not reuse the name for the search result.
+          function Get-SingleDependencyDirectory([string] $pattern) {
+              $found = @(Get-ChildItem -LiteralPath 'build_portable/_deps' `
+                  -Directory -Filter $pattern)
+              if ($found.Count -ne 1) {
+                  throw "Expected one build dependency matching $pattern, found $($found.Count)."
+              }
+              return $found[0].FullName
+          }
+
+          $appCommit = Get-RepositoryCommit '.'
+          $surfaceCommit = Get-RepositoryCommit '../vnm_terminal_surface'
+          $chromeCommit = Get-RepositoryCommit '../vnm_qml_chrome'
+          $msdfTextCommit = Get-RepositoryCommit 'build_portable/_deps/vnm_msdf_text-src'
+          $qtDispatchCommit = Get-RepositoryCommit `
+              (Get-SingleDependencyDirectory '*qt_dispatch*-src')
+          $freetypeCommit = Get-RepositoryCommit 'build_portable/_deps/freetype-src'
+          $msdfgenCommit = Get-RepositoryCommit 'build_portable/_deps/msdfgen-src'
+          $sourceEpoch = (& git show -s --format=%ct HEAD | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0 -or $sourceEpoch -notmatch '^[0-9]+$') {
+              throw 'Could not read the application commit timestamp.'
+          }
+
+          # app_commit.txt remains for one-release compatibility with any manual
+          # tooling that already consumes it. build_provenance.json is the new
+          # complete record and is attached to the release beside the binaries.
+          $appCommit |
             Set-Content -LiteralPath "$provenance/app_commit.txt" -Encoding ascii
+          [ordered]@{
+              schema_version    = 1
+              release_tag       = $env:RELEASE_TAG
+              app_commit         = $appCommit
+              surface_commit     = $surfaceCommit
+              chrome_commit      = $chromeCommit
+              msdf_text_commit   = $msdfTextCommit
+              qt_dispatch_commit = $qtDispatchCommit
+              freetype_commit    = $freetypeCommit
+              msdfgen_commit     = $msdfgenCommit
+              source_date_epoch  = [long]$sourceEpoch
+              qt_version        = '6.11.1'
+              qt_ifw_version    = '4.11.0'
+              runner_image      = $env:ImageOS
+              runner_version    = $env:ImageVersion
+              workflow_run_id   = $env:GITHUB_RUN_ID
+              workflow_run_attempt = $env:GITHUB_RUN_ATTEMPT
+          } | ConvertTo-Json -Depth 3 |
+            Set-Content -LiteralPath "$provenance/build_provenance.json" -Encoding utf8
 
           # The payload reaches the signing job through an artifact, which is a
           # zip round trip. Signing an installer built from a payload that lost
@@ -377,7 +440,7 @@ jobs:
             Set-Content -LiteralPath "$provenance/payload.sha256" -Encoding ascii
 
       - name: Upload unsigned Windows package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vnm-terminal-windows-x64-unsigned
           path: |
@@ -388,7 +451,7 @@ jobs:
 
       - name: Upload the release signing payload
         if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: vnm-terminal-windows-x64-signing-payload
           path: |
@@ -398,19 +461,22 @@ jobs:
           # The manifest is taken with -Force, so the upload has to carry the
           # same set or verification fails on a file that was never sent.
           include-hidden-files: true
-          # This artifact only exists to hand the payload to the next job in the
-          # same run, and it is the largest thing the run produces. Nothing reads
-          # it afterwards.
-          retention-days: 1
+          # Keep the repository's default retention here. The signing job may
+          # wait for environment approval, and a one-day expiry can delete its
+          # only input while that run is still legitimately pending. The separate
+          # retention workflow removes superseded artifacts after their owning
+          # runs have completed.
 
   # Everything with access to the signing credential lives here, and nothing
   # else does. Every action below is pinned to a full commit SHA because a
   # moving tag inside this job is a moving tag next to the only credential in
   # the repository; the SHAs are the commits those tags named when the job was
   # written and want re-auditing before each release. The job deliberately does
-  # not check out the surface or chrome repositories, install Qt, or run any
-  # build or test script: it repackages an already-built payload, so none of
-  # that code needs to be inside the credential boundary.
+  # not check out the surface or chrome repositories, install Qt, compile the
+  # application, or run its test suite. It does check out the app release source
+  # and execute the audited IFW provisioning and packaging scripts needed to
+  # repackage the already-built payload, so those scripts remain inside the
+  # credential boundary and need the same review as the pinned actions.
   #
   # The release-signing environment stays on this job. It carries no protection
   # rules today and exists to give the OIDC token a stable subject - a release
@@ -425,7 +491,10 @@ jobs:
     if: >-
       github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-    needs: package
+    # A release must pass the complete Windows build/test/source-integrity gate,
+    # not only the packaging job that produced the payload. Otherwise a failing
+    # test run can coexist with a newly signed and published installer.
+    needs: [build-and-test, package]
     runs-on: windows-2022
     environment: release-signing
     permissions:
@@ -461,16 +530,54 @@ jobs:
       - name: Verify the signing payload
         shell: pwsh
         working-directory: vnm_terminal
+        env:
+          EXPECTED_RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
           # The build the payload came from has to be the commit this job just
           # checked out, or a dispatched run could sign one branch's binaries
           # against another branch's packaging assets.
-          $expected = (Get-Content -LiteralPath `
+          $legacyExpected = (Get-Content -LiteralPath `
               'dist/signing_provenance/app_commit.txt' -Raw).Trim()
-          $actual = (git rev-parse HEAD).Trim()
-          if ($actual -ne $expected) {
-              throw "Signing payload was built from $expected, but the release checkout is $actual."
+          $buildProvenance = Get-Content -LiteralPath `
+              'dist/signing_provenance/build_provenance.json' -Raw |
+              ConvertFrom-Json
+          if ($buildProvenance.schema_version -ne 1) {
+              throw "Unsupported build provenance schema $($buildProvenance.schema_version)."
           }
+          foreach ($field in @(
+              'app_commit',
+              'surface_commit',
+              'chrome_commit',
+              'msdf_text_commit',
+              'qt_dispatch_commit',
+              'freetype_commit',
+              'msdfgen_commit'))
+          {
+              $commit = [string]$buildProvenance.$field
+              if ($commit -notmatch '^[0-9a-f]{40}$') {
+                  throw "Build provenance field $field is not a full commit SHA."
+              }
+          }
+          if ($legacyExpected -ne [string]$buildProvenance.app_commit) {
+              throw 'Legacy and structured app provenance disagree.'
+          }
+          if ([string]$buildProvenance.release_tag -ne $env:EXPECTED_RELEASE_TAG) {
+              throw "Signing payload targets '$($buildProvenance.release_tag)', but this job targets '$env:EXPECTED_RELEASE_TAG'."
+          }
+
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne [string]$buildProvenance.app_commit) {
+              throw "Signing payload was built from $($buildProvenance.app_commit), but the release checkout is $actual."
+          }
+          Write-Host ("Signing app={0} surface={1} chrome={2} msdf_text={3} " +
+              "qt_dispatch={4} freetype={5} msdfgen={6}" -f
+              $buildProvenance.app_commit,
+              $buildProvenance.surface_commit,
+              $buildProvenance.chrome_commit,
+              $buildProvenance.msdf_text_commit,
+              $buildProvenance.qt_dispatch_commit,
+              $buildProvenance.freetype_commit,
+              $buildProvenance.msdfgen_commit)
 
           # And the payload has to be the one the manifest describes, file for
           # file, so a lossy artifact round trip cannot reach binarycreator.
@@ -526,29 +633,28 @@ jobs:
               exit $LASTEXITCODE
           }
 
-      - name: Authenticate to Azure for signing
-        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
-        with:
-          client-id: ${{ vars.TRUSTED_SIGNING_CLIENT_ID }}
-          tenant-id: ${{ vars.TRUSTED_SIGNING_TENANT_ID }}
-          subscription-id: ${{ vars.TRUSTED_SIGNING_SUBSCRIPTION_ID }}
-
+      # Acquire and locate the client before establishing an Azure session. This
+      # does not remove the job-level OIDC capability - only a separate job can
+      # do that - but it avoids exposing an already-authenticated Azure CLI cache
+      # to package retrieval and extraction.
       - name: Acquire Microsoft Artifact Signing client
         shell: pwsh
         run: |
           $clientRoot = Join-Path $env:RUNNER_TEMP 'artifact-signing-client'
           New-Item -ItemType Directory -Path $clientRoot -Force | Out-Null
-          nuget.exe install Microsoft.Trusted.Signing.Client `
+          nuget.exe install Microsoft.ArtifactSigning.Client `
               -Version $env:ARTIFACT_SIGNING_CLIENT_VERSION `
+              -Source https://api.nuget.org/v3/index.json `
               -OutputDirectory $clientRoot `
               -ExcludeVersion `
+              -NoCache `
               -NonInteractive
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
 
           $dlib = Join-Path $clientRoot `
-              'Microsoft.Trusted.Signing.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
+              'Microsoft.ArtifactSigning.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
           if (-not (Test-Path -LiteralPath $dlib)) {
               throw "Artifact Signing dlib was not found at $dlib."
           }
@@ -564,17 +670,25 @@ jobs:
           }
 
           # No secrets here: endpoint, account and profile are public identifiers.
-          # The credential is the OIDC token azure/login already established.
+          # The following azure/login step establishes the OIDC-backed credential
+          # before this metadata is consumed by signtool.
           $metadata = [ordered]@{
               Endpoint               = $env:TRUSTED_SIGNING_ENDPOINT
               CodeSigningAccountName = $env:TRUSTED_SIGNING_ACCOUNT
               CertificateProfileName = $env:TRUSTED_SIGNING_PROFILE
               CorrelationId          = $env:GITHUB_RUN_ID
+              # azure/login establishes the Azure CLI session used below.
+              # Fail closed instead of allowing DefaultAzureCredential to probe
+              # runner-local or future credential sources unexpectedly.
               ExcludeCredentials     = @(
+                  'EnvironmentCredential',
                   'ManagedIdentityCredential',
+                  'WorkloadIdentityCredential',
                   'SharedTokenCacheCredential',
-                  'VisualStudioCodeCredential',
                   'VisualStudioCredential',
+                  'VisualStudioCodeCredential',
+                  'AzurePowerShellCredential',
+                  'AzureDeveloperCliCredential',
                   'InteractiveBrowserCredential'
               )
           }
@@ -584,6 +698,13 @@ jobs:
           "SIGNTOOL_PATH=$($signTool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "SIGNING_DLIB_PATH=$dlib"             | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "SIGNING_METADATA_PATH=$metadataPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Authenticate to Azure for signing
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          client-id: ${{ vars.TRUSTED_SIGNING_CLIENT_ID }}
+          tenant-id: ${{ vars.TRUSTED_SIGNING_TENANT_ID }}
+          subscription-id: ${{ vars.TRUSTED_SIGNING_SUBSCRIPTION_ID }}
 
       # Signing repackages rather than post-signing the unsigned installer on
       # purpose: build_windows_ifw_installer.ps1 signs vnm_terminal.exe, the
@@ -605,6 +726,38 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
+
+      - name: Build signed portable archive
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          $payload = (Resolve-Path -LiteralPath 'dist/portable_candidate').Path
+          $buildInfo = Join-Path $payload `
+              'vnm_terminal_runtime\vnm_terminal_build_info.txt'
+          $versionLine = Get-Content -LiteralPath $buildInfo |
+              Where-Object { $_ -match '^Version:\s*(?<version>[0-9]+(?:\.[0-9]+)+)\s*$' } |
+              Select-Object -First 1
+          if (-not $versionLine) {
+              throw "Could not derive the portable archive version from $buildInfo."
+          }
+          [void]($versionLine -match `
+              '^Version:\s*(?<version>[0-9]+(?:\.[0-9]+)+)\s*$')
+
+          $archiveName = "vnm_terminal_v$($Matches.version)_w64.zip"
+          $archivePath = Join-Path (Resolve-Path -LiteralPath 'dist').Path `
+              $archiveName
+          Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath "$archivePath.sha256" -Force `
+              -ErrorAction SilentlyContinue
+          Compress-Archive -Path (Join-Path $payload '*') `
+              -DestinationPath $archivePath -Force
+
+          $hash = (Get-FileHash -LiteralPath $archivePath `
+              -Algorithm SHA256).Hash.ToLowerInvariant()
+          [System.IO.File]::WriteAllText(
+              "$archivePath.sha256",
+              "$hash  $archiveName`n",
+              [System.Text.ASCIIEncoding]::new())
 
       - name: Verify the installer is signed
         shell: pwsh
@@ -633,8 +786,11 @@ jobs:
         with:
           name: vnm-terminal-windows-x64-signed
           path: |
+            vnm_terminal/dist/vnm_terminal_v*_w64.zip
+            vnm_terminal/dist/vnm_terminal_v*_w64.zip.sha256
             vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe
             vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe.sha256
+            vnm_terminal/dist/signing_provenance/build_provenance.json
           if-no-files-found: error
 
   # The package job installs and uninstalls the unsigned installer, but signing
@@ -656,14 +812,14 @@ jobs:
 
     steps:
       - name: Checkout the release source
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
           persist-credentials: false
 
       - name: Download signed Windows package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: vnm-terminal-windows-x64-signed
           path: vnm_terminal/dist
@@ -682,7 +838,8 @@ jobs:
 
           powershell.exe -NoProfile -ExecutionPolicy Bypass `
             -File tests/windows_ifw_installation_tests.ps1 `
-            -InstallerPath $installer.FullName
+            -InstallerPath $installer.FullName `
+            -RequireSigned
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
@@ -698,7 +855,7 @@ jobs:
 
     steps:
       - name: Download source archive artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: vnm-terminal-source
           path: dist
@@ -719,21 +876,15 @@ jobs:
     if: >-
       github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-    needs: [package, sign-windows-package, verify-signed-package]
+    needs: [sign-windows-package, verify-signed-package]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: write
 
     steps:
-      - name: Download unsigned Windows package artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: vnm-terminal-windows-x64-unsigned
-          path: dist
-
       - name: Download signed Windows package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: vnm-terminal-windows-x64-signed
           path: dist
@@ -747,6 +898,8 @@ jobs:
         run: |
           gh release upload "${RELEASE_TAG}" \
             dist/vnm_terminal_v*_w64.zip \
+            dist/vnm_terminal_v*_w64.zip.sha256 \
             dist/vnm_terminal_v*_windows_x64.exe \
             dist/vnm_terminal_v*_windows_x64.exe.sha256 \
+            dist/signing_provenance/build_provenance.json \
             --repo "${GITHUB_REPOSITORY}" --clobber

@@ -125,6 +125,7 @@ using chrome::k_window_settings_maximized;
 using chrome::k_window_settings_width;
 using chrome::k_window_settings_x;
 using chrome::k_window_settings_y;
+using chrome::latch_command_line_window_geometry;
 using chrome::load_persisted_appearance_settings;
 using chrome::load_persisted_interaction_settings;
 using chrome::load_persisted_terminal_window_state;
@@ -1008,6 +1009,28 @@ int main(int argc, char** argv)
         *scrollbar,
         titlebar_ptr,
         custom_titlebar_enabled);
+
+    // The window system has now answered a forced --window-size: the window is
+    // shown, any maximized restore has been requested, and the startup layout
+    // has been applied. Record that answer here rather than at the first save.
+    // The saves are driven by the settle timer, by a window-state change, by a
+    // screen change and by shutdown, and a user can reach any of those before
+    // the first one runs - a move or a resize inside the settle window restarts
+    // the timer and would then be latched as the platform's answer and dropped,
+    // and an immediate save before the platform settles would latch the wrong
+    // baseline and write the platform's own adjustment back as if the user had
+    // chosen it. Nothing the user does can precede this point, so it is the one
+    // place the answer is unambiguous.
+    if (const std::optional<Persisted_terminal_window_state> granted =
+            restorable_terminal_window_state(window, *surface);
+        granted.has_value())
+    {
+        Persisted_terminal_window_state granted_state = *granted;
+        granted_state.maximized = window.windowStates().testFlag(Qt::WindowMaximized);
+        latch_command_line_window_geometry(granted_state, *command_line_overrides);
+        latest_restorable_window_state = *granted;
+    }
+
     surface->forceActiveFocus();
 
     const auto start_result =

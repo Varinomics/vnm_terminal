@@ -205,6 +205,20 @@ Command_line_setting_overrides command_line_setting_overrides(
     return overrides;
 }
 
+void latch_command_line_window_geometry(
+    const Persisted_terminal_window_state& state,
+    Command_line_setting_overrides&        overrides)
+{
+    if (!overrides.window_geometry_latch_pending || !state.size.has_value()) {
+        return;
+    }
+
+    overrides.window_size     = state.size;
+    overrides.window_position = state.position;
+    overrides.maximized       = state.maximized;
+    overrides.window_geometry_latch_pending = false;
+}
+
 void save_persisted_terminal_window_state(
     QSettings&                             settings,
     const Persisted_terminal_window_state& state,
@@ -219,17 +233,12 @@ void save_persisted_terminal_window_state(
         settings.setValue(QLatin1String(k_window_settings_font_size), *state.font_size);
     }
 
-    // The geometry the run was granted, taken the first time a save can see it.
-    // From here the geometry fields behave like every other latched setting: the
-    // save that finds one of them moved stores it and releases the latch for
-    // good, so a resize, a move, or a maximize the user performs still becomes
-    // their preference.
-    if (overrides.window_geometry_latch_pending && state.size.has_value()) {
-        overrides.window_size     = state.size;
-        overrides.window_position = state.position;
-        overrides.maximized       = state.maximized;
-        overrides.window_geometry_latch_pending = false;
-    }
+    // A save before the window could report a geometry leaves the latch pending,
+    // so take it here as a fallback. From the latch on, the geometry fields
+    // behave like every other latched setting: the save that finds one of them
+    // moved stores it and releases the latch for good, so a resize, a move, or a
+    // maximize the user performs still becomes their preference.
+    latch_command_line_window_geometry(state, overrides);
 
     if (state.size.has_value() &&
         persisted_window_axis_is_valid(state.size->width()) &&
@@ -469,18 +478,27 @@ bool window_geometry_has_useful_visible_area(
     const QPoint& position,
     const QSize&  size)
 {
-    const QRect window_rect(position, size);
-    // Measured per screen rather than across the whole desktop: a window split
+    if (size.width() <= 0 || size.height() <= 0) {
+        return false;
+    }
+
+    // It is the top of the window that has to be reachable. Measuring the whole
+    // rectangle lets a window almost entirely above the desktop pass merely
+    // because a strip of its bottom edge remains visible, even though no
+    // titlebar or drag surface can be reached. Restrict the proof to a logical
+    // titlebar-sized strip at the top instead.
+    const int grab_height = std::min(size.height(), k_min_restored_visible_height);
+    const QRect grab_strip(position, QSize(size.width(), grab_height));
+
+    // Measured per screen rather than across the whole desktop: a strip split
     // across a seam with a sliver on each side is no easier to grab than one
     // with a single sliver, so one screen has to show enough of it on its own.
-    const int required_visible_width  =
-        std::min(size.width(),  k_min_restored_visible_width);
-    const int required_visible_height =
-        std::min(size.height(), k_min_restored_visible_height);
+    const int required_visible_width =
+        std::min(size.width(), k_min_restored_visible_width);
     for (const QScreen* screen : QGuiApplication::screens()) {
-        const QRect visible = screen->availableGeometry().intersected(window_rect);
+        const QRect visible = screen->availableGeometry().intersected(grab_strip);
         if (visible.width()  >= required_visible_width &&
-            visible.height() >= required_visible_height)
+            visible.height() >= grab_height)
         {
             return true;
         }

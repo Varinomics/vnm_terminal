@@ -149,6 +149,24 @@ bool test_restored_window_requires_useful_visible_area()
             window_size),
         "the minimum useful visible height permits restoration");
 
+    // Visibility elsewhere in the rectangle is not enough. This window leaves
+    // exactly the required number of pixels of its bottom edge on screen while
+    // its top grab strip remains above the desktop.
+    ok &= check(!window_geometry_has_useful_visible_area(
+            QPoint(
+                available.left(),
+                available.top() - (window_size.height() - k_min_restored_visible_height)),
+            window_size),
+        "a visible bottom strip does not restore an unreachable titlebar");
+    ok &= check(!window_geometry_has_useful_visible_area(
+            available.topLeft(),
+            QSize(0, window_size.height())),
+        "a zero-width restored window is invalid");
+    ok &= check(!window_geometry_has_useful_visible_area(
+            available.topLeft(),
+            QSize(window_size.width(), -1)),
+        "a negative-height restored window is invalid");
+
     // A window smaller than the threshold is held to its own size, so it can
     // still be restored when all of it is on screen.
     const QSize tiny(20, 12);
@@ -449,11 +467,13 @@ bool test_platform_adjusted_command_line_geometry_does_not_replace_stored_geomet
         command_line_setting_overrides(options, surface);
 
     // What the window system actually granted: not the requested size, and at a
-    // position it picked. None of this is a user decision.
+    // position it picked. None of this is a user decision, and main() latches it
+    // as soon as the window has been shown rather than at the first save.
     Persisted_terminal_window_state granted;
     granted.position  = QPoint(31, 47);
     granted.size      = QSize(638, 461);
     granted.maximized = false;
+    latch_command_line_window_geometry(granted, overrides);
 
     QSettings writer(path, QSettings::IniFormat);
     save_persisted_terminal_window_state(writer, granted, overrides);
@@ -510,6 +530,88 @@ bool test_platform_adjusted_command_line_geometry_does_not_replace_stored_geomet
         load_persisted_terminal_window_state(fourth_reader);
     ok &= check(!after_unmaximize.maximized,
         "unmaximizing after maximizing during the run replaces the stored state");
+
+    return ok;
+}
+
+// The startup latch is what separates the platform's answer from the user's
+// first geometry action. Before it existed the latch was taken by whichever save
+// ran first, and a move, a resize or a maximize inside the 400 ms settle window
+// restarts that timer, so the user's own geometry became the baseline and was
+// then suppressed as if the platform had chosen it.
+bool test_user_geometry_before_the_first_save_still_persists()
+{
+    QTemporaryDir dir;
+    bool ok = check(dir.isValid(), "temporary early-move settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    const QString path = dir.filePath(QStringLiteral("settings.ini"));
+
+    QSettings stored(path, QSettings::IniFormat);
+    stored.beginGroup(QLatin1String(k_window_settings_group));
+    stored.setValue(QLatin1String(k_window_settings_width),  1024);
+    stored.setValue(QLatin1String(k_window_settings_height), 720);
+    stored.setValue(QLatin1String(k_window_settings_x),      120);
+    stored.setValue(QLatin1String(k_window_settings_y),      140);
+    stored.setValue(QLatin1String(k_window_settings_maximized), false);
+    stored.endGroup();
+    stored.sync();
+
+    App_options options;
+    options.window_size          = QSize(640, 480);
+    options.window_size_explicit = true;
+
+    VNM_TerminalSurface surface;
+    Command_line_setting_overrides overrides =
+        command_line_setting_overrides(options, surface);
+
+    Persisted_terminal_window_state granted;
+    granted.position  = QPoint(31, 47);
+    granted.size      = QSize(638, 461);
+    granted.maximized = false;
+    latch_command_line_window_geometry(granted, overrides);
+
+    // The user grabs the window before the settle timer ever expires, so the
+    // run's first save carries their geometry rather than the platform's.
+    Persisted_terminal_window_state moved_early;
+    moved_early.position  = QPoint(300, 320);
+    moved_early.size      = QSize(1280, 800);
+    moved_early.maximized = false;
+
+    QSettings writer(path, QSettings::IniFormat);
+    save_persisted_terminal_window_state(writer, moved_early, overrides);
+
+    QSettings reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_move =
+        load_persisted_terminal_window_state(reader);
+    ok &= check_optional_size(after_move.size, QSize(1280, 800),
+        "a resize before the first save replaces the stored size");
+    ok &= check_optional_position(after_move.position, QPoint(300, 320),
+        "a move before the first save replaces the stored position");
+
+    // The same holds for a maximize, which saves immediately instead of waiting
+    // for the settle timer and so is the likeliest save to arrive first.
+    Command_line_setting_overrides maximize_overrides =
+        command_line_setting_overrides(options, surface);
+    latch_command_line_window_geometry(granted, maximize_overrides);
+
+    Persisted_terminal_window_state maximized_early = granted;
+    maximized_early.maximized = true;
+    save_persisted_terminal_window_state(writer, maximized_early, maximize_overrides);
+
+    QSettings maximized_reader(path, QSettings::IniFormat);
+    ok &= check(load_persisted_terminal_window_state(maximized_reader).maximized,
+        "a maximize before the first save replaces the stored window state");
+
+    // A run whose window never reported a geometry has nothing to latch, so the
+    // first save still takes the baseline and the forced run stays ephemeral.
+    Command_line_setting_overrides unlatched_overrides =
+        command_line_setting_overrides(options, surface);
+    latch_command_line_window_geometry(Persisted_terminal_window_state{}, unlatched_overrides);
+    ok &= check(unlatched_overrides.window_geometry_latch_pending,
+        "a state without a size leaves the latch pending");
 
     return ok;
 }
@@ -822,6 +924,7 @@ int main(int argc, char** argv)
     ok &= test_stored_forced_msdf_preference_uses_auto();
     ok &= test_save_appearance_settings_from_surface();
     ok &= test_platform_adjusted_command_line_geometry_does_not_replace_stored_geometry();
+    ok &= test_user_geometry_before_the_first_save_still_persists();
     ok &= test_command_line_overrides_do_not_replace_stored_settings();
     ok &= test_chrome_palette_settings();
     ok &= test_interaction_settings_round_trip();

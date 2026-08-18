@@ -91,8 +91,8 @@ struct Persisted_interaction_settings
 // fit. Latching the requested size would treat that answer as a user decision
 // and release the latch on the run's very first save; latching the granted
 // geometry instead keeps geometry on the same rule as everything else. Until
-// the first save observes it, `window_geometry_latch_pending` stands in for the
-// three geometry fields.
+// latch_command_line_window_geometry() takes that answer,
+// `window_geometry_latch_pending` stands in for the three geometry fields.
 struct Command_line_setting_overrides
 {
     std::optional<qreal>   font_size;
@@ -129,6 +129,20 @@ std::optional<QPoint> settings_window_position(QSettings& settings);
 Persisted_terminal_window_state load_persisted_terminal_window_state(
     QSettings& settings);
 
+// Records the geometry the window system granted a run started with an explicit
+// --window-size, so a later save can tell that answer from a user decision.
+// Call it once, as soon as the window has been shown and the startup geometry
+// has been applied: that point is the platform's answer, and nothing the user
+// does can have reached the event loop before it. Deferring the latch to
+// whichever save happens to run first cannot distinguish the two, because a
+// move, a resize, a maximize or shutdown can all beat the settle timer and be
+// latched as the platform's answer instead. Calling this without an explicit
+// --window-size, more than once, or with a state that carries no size, does
+// nothing.
+void latch_command_line_window_geometry(
+    const Persisted_terminal_window_state& state,
+    Command_line_setting_overrides&        overrides);
+
 void save_persisted_terminal_window_state(
     QSettings&                             settings,
     const Persisted_terminal_window_state& state,
@@ -162,14 +176,14 @@ void apply_persisted_interaction_settings(
 
 bool terminal_window_persistence_enabled();
 
-// How much of a restored window has to land on an available screen for the
-// stored position to be worth honoring. A single intersecting pixel satisfies
-// the geometry but not the user: after a monitor is removed or the desktop is
-// rearranged, a window with a sliver on screen is not reachable by pointer.
-// These are enough to grab and drag - roughly a titlebar corner - and they are
-// fixed logical pixels rather than a titlebar measurement so the rule stays
-// deterministic across platforms and themes. A window smaller than the
-// threshold is held to its own size instead.
+// How much of the top edge of a restored window has to land on one available
+// screen for the stored position to be worth honoring. A single intersecting
+// pixel - or a visible strip of the bottom edge - satisfies rectangle geometry
+// but not the user: after a monitor is removed or the desktop is rearranged, a
+// window whose titlebar is unreachable cannot be moved back. These dimensions
+// are enough to grab and drag roughly a titlebar corner, and are fixed logical
+// pixels rather than a titlebar measurement so the rule stays deterministic
+// across platforms and themes. A smaller window is held to its own size.
 constexpr int k_min_restored_visible_width  = 64;
 constexpr int k_min_restored_visible_height = 32;
 

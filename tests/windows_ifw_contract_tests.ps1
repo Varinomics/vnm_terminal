@@ -838,11 +838,17 @@ function Assert-IfwSignedValidationRuntime {
             "@echo off`r`nexit /b 0`r`n",
             [Text.Encoding]::ASCII)
 
+        # signtool is invoked with /tr, so a release signature always carries a
+        # timestamp countersignature. The fixture models one for the same reason
+        # it models the signer: the validation rejects a signature without it.
         $signatureFixture = [pscustomobject]@{
             Status = 'Valid'
             StatusMessage = 'Signature is valid.'
             SignerCertificate = [pscustomobject]@{
                 Subject = 'CN=Varinomics Ltd, O=Varinomics Ltd'
+            }
+            TimeStamperCertificate = [pscustomobject]@{
+                Subject = 'CN=Microsoft Public RSA Timestamping CA 2020'
             }
         }
         Invoke-TrustedSigning $artifactPath
@@ -853,6 +859,21 @@ function Assert-IfwSignedValidationRuntime {
 
         $signatureFixture.Status = 'Valid'
         $signatureFixture.SignerCertificate.Subject = 'CN=Unexpected Publisher'
+        Assert-SigningFixtureThrows 'does not identify Varinomics Ltd'
+
+        # A subject that merely contains the publisher somewhere is not the
+        # publisher: only a whole CN component is.
+        $signatureFixture.SignerCertificate.Subject = 'CN=Not Varinomics Ltd Either'
+        Assert-SigningFixtureThrows 'does not identify Varinomics Ltd'
+
+        $signatureFixture.SignerCertificate.Subject = 'CN=Varinomics Ltd, O=Varinomics Ltd'
+        $signatureFixture.TimeStamperCertificate = $null
+        Assert-SigningFixtureThrows 'is not timestamped'
+
+        $signatureFixture.TimeStamperCertificate = [pscustomobject]@{
+            Subject = 'CN=Microsoft Public RSA Timestamping CA 2020'
+        }
+        $signatureFixture.SignerCertificate = $null
         Assert-SigningFixtureThrows 'does not identify Varinomics Ltd'
     }
     finally {
@@ -1588,8 +1609,10 @@ Assert-IfwContract `
         [regex]::Matches($buildScript, 'Get-AuthenticodeSignature').Count -eq 1 -and
         $buildScript -match '\$signature\.Status\s+-ne\s+''Valid''' -and
         $buildScript -match `
-            '\$signature\.SignerCertificate\.Subject\s+-notlike\s+"\*\$expectedPublisher\*"') `
-    'unsigned validation must inspect the PE certificate table while signed validation remains strict'
+            '\$signature\.SignerCertificate\.Subject\s+-notmatch' -and
+        $buildScript -match 'CN=Varinomics Ltd' -and
+        $buildScript -match '\$signature\.TimeStamperCertificate') `
+    'unsigned validation must inspect the PE certificate table while signed validation remains strict and timestamped'
 Assert-IfwContract `
     ($windowsPackages -match 'if\s+"%IFW_ROOT%"==""' -and
         $windowsPackages -match '-IfwRoot\s+"%IFW_ROOT%"') `
@@ -1624,11 +1647,30 @@ Assert-IfwContract `
             'path:\s*\$\{\{\s*env\.IFW_ARCHIVE_PATH\s*\}\}').Count -eq 2) `
     'Windows CI restore and save steps must share the exact archive path and cache key'
 Assert-IfwContract `
-    ($windowsWorkflow -match 'actions/cache/restore@v4' -and
-        $windowsWorkflow -match 'actions/cache/save@v4' -and
+    ($windowsWorkflow -match 'actions/cache/restore@[0-9a-f]{40}' -and
+        $windowsWorkflow -match 'actions/cache/save@[0-9a-f]{40}' -and
         $windowsWorkflow -match 'tools/provision_windows_ifw\.ps1' -and
         $windowsWorkflow -match 'set IFW_ROOT=\$env:IFW_ROOT') `
     'Windows CI must cache only the verified archive, reprovision IFW, and pass IFW_ROOT to packaging'
+Assert-IfwContract `
+    ($windowsWorkflow -match `
+            'nuget\.exe install Microsoft\.ArtifactSigning\.Client' -and
+        $windowsWorkflow -match `
+            '-Version \$env:ARTIFACT_SIGNING_CLIENT_VERSION' -and
+        $windowsWorkflow -match `
+            '-Source https://api\.nuget\.org/v3/index\.json' -and
+        $windowsWorkflow -match '-NoCache' -and
+        $windowsWorkflow -match `
+            'Microsoft\.ArtifactSigning\.Client\\bin\\x64\\Azure\.CodeSigning\.Dlib\.dll' -and
+        $windowsWorkflow -notmatch 'Microsoft\.Trusted\.Signing\.Client') `
+    'release signing must acquire the pinned current Artifact Signing client from nuget.org'
+Assert-IfwContract `
+    ($windowsWorkflow -match "'EnvironmentCredential'" -and
+        $windowsWorkflow -match "'WorkloadIdentityCredential'" -and
+        $windowsWorkflow -match "'AzurePowerShellCredential'" -and
+        $windowsWorkflow -match "'AzureDeveloperCliCredential'" -and
+        $windowsWorkflow -notmatch "'AzureCliCredential'") `
+    'the signing dlib must be restricted to the Azure CLI credential established by azure/login'
 Assert-IfwContract `
     ($windowsWorkflow -match `
         '-File tests/windows_ifw_installation_tests\.ps1[\s\S]*?-InstallerPath \$installer\.FullName' -and
@@ -1656,6 +1698,23 @@ Assert-IfwContract `
             'Test-Path -LiteralPath \$startMenuRoot') `
     'hosted Windows CI must commit an all-users installation, verify its shortcut and registration, run it, purge it, and check residue'
 Assert-IfwContract `
+    ($windowsWorkflow -match `
+            '- name: Build signed portable archive[\s\S]*?Compress-Archive' -and
+        $windowsWorkflow -match `
+            'name: vnm-terminal-windows-x64-signed[\s\S]*?vnm_terminal_v\*_w64\.zip[\s\S]*?vnm_terminal_v\*_w64\.zip\.sha256' -and
+        $windowsWorkflow -notmatch `
+            '(?s)attach-release-packages:.*?Download unsigned Windows package artifacts' -and
+        $windowsWorkflow -match `
+            'dist/vnm_terminal_v\*_w64\.zip\.sha256') `
+    'release attachment must publish the portable ZIP rebuilt from the signed payload'
+Assert-IfwContract `
+    ($windowsWorkflow -match `
+            '-File tests/windows_ifw_installation_tests\.ps1[\s\S]*?-InstallerPath \$installer\.FullName[\s\S]*?-RequireSigned' -and
+        $installationTests -match '\[switch\]\$RequireSigned' -and
+        $installationTests -match `
+            '\$acceptedStatuses\s*=\s*if \(\$RequireSigned\)\s*\{\s*@\(''Valid''\)') `
+    'the release lifecycle must reject unsigned installed executables'
+Assert-IfwContract `
     ($installationTests -match 'Assert-PeGuiSubsystem \$resolvedInstallerPath' -and
         $installationTests -match 'Assert-PeGuiSubsystem \$maintenancePath') `
     'the lifecycle gate must prove that neither delivered binary makes Windows allocate a console'
@@ -1666,7 +1725,9 @@ Assert-IfwContract `
     'unsigned artifacts must be distinguished in their filename'
 
 $payloadSigningIndex = $buildScript.IndexOf(
-    "Invoke-TrustedSigning (Join-Path `$packageDataRoot 'vnm_terminal.exe')")
+    "Invoke-TrustedSigning (Join-Path `$PayloadPath 'vnm_terminal.exe')")
+$payloadCopyIndex = $buildScript.IndexOf(
+    "Copy-Item -Path (Join-Path `$PayloadPath '*')")
 $installerBaseSigningIndex = $buildScript.IndexOf(
     'Invoke-TrustedSigning $privateInstallerBasePath')
 $configRenderIndex = $buildScript.IndexOf(
@@ -1678,8 +1739,10 @@ $bannerHighDpiCopyIndex = $buildScript.IndexOf(
 $binaryCreatorIndex = $buildScript.IndexOf('& $binaryCreatorPath --offline-only')
 $finalSigningIndex = $buildScript.LastIndexOf('Invoke-TrustedSigning $artifactPath')
 Assert-IfwContract ($payloadSigningIndex -ge 0) `
-    'the Varinomics launcher must be signed when release signing is enabled'
-Assert-IfwContract ($installerBaseSigningIndex -gt $payloadSigningIndex) `
+    'the public portable payload must be signed when release signing is enabled'
+Assert-IfwContract ($payloadCopyIndex -gt $payloadSigningIndex) `
+    'the signed portable payload must be the source copied into the installer'
+Assert-IfwContract ($installerBaseSigningIndex -gt $payloadCopyIndex) `
     'the private installerbase must be signed after the payload'
 Assert-IfwContract ($binaryCreatorIndex -gt $installerBaseSigningIndex) `
     'binarycreator must run after the packaged maintenance-tool base is signed'
