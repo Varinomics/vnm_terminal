@@ -14,9 +14,12 @@ on:
   release:
     types: [ published ]
 
+# A release event and a manually dispatched recovery run can target the same
+# release tag while carrying different refs. Serialize by the asset target, not
+# the triggering ref, so two valid runs cannot upload --clobber over one another.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' && inputs.release_tag == '' }}
 
 permissions:
   contents: read
