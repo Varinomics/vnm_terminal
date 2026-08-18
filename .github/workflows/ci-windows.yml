@@ -725,6 +725,29 @@ jobs:
           if ($actual -ne [string]$buildProvenance.app_commit) {
               throw "Signing payload was built from $($buildProvenance.app_commit), but the release checkout is $actual."
           }
+
+          # The provenance record says what was built; the lock at this tag says
+          # what should have been. Comparing them here is what turns the record
+          # into something a later rebuild can be checked against, and the lock
+          # comes from the release checkout this job already trusts.
+          $lock = Get-Content -LiteralPath 'release/dependencies.lock.json' -Raw |
+              ConvertFrom-Json
+          if ($lock.schema -ne 1) {
+              throw "Unsupported dependency lock schema $($lock.schema)."
+          }
+          foreach ($locked in @(
+              @{ Field = 'surface_commit';     Name = 'vnm_terminal_surface' },
+              @{ Field = 'chrome_commit';      Name = 'vnm_qml_chrome' },
+              @{ Field = 'msdf_text_commit';   Name = 'vnm_msdf_text' },
+              @{ Field = 'qt_dispatch_commit'; Name = 'vnm_qt_dispatch' }))
+          {
+              $built = [string]$buildProvenance.($locked.Field)
+              $expected = [string]$lock.owned.($locked.Name).commit
+              if ($built -ne $expected) {
+                  throw ("Signing payload was built from $($locked.Name) $built, " +
+                      "but release/dependencies.lock.json at this tag locks $expected.")
+              }
+          }
           Write-Host ("Signing app={0} surface={1} chrome={2} msdf_text={3} " +
               "qt_dispatch={4} freetype={5} msdfgen={6}" -f
               $buildProvenance.app_commit,
