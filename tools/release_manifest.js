@@ -57,6 +57,7 @@ const REQUIRED_TEXT_FIELDS = [
 ];
 
 const REQUIRED_LISTS = [
+    "checksum.readers",
     "actions_artifacts",
     "release_assets",
     "release_attachments",
@@ -835,6 +836,16 @@ const CHECKSUM_ALGORITHM_PATTERN =
 function checkChecksumAlgorithm(root, manifest)
 {
     const algorithm = manifest.checksum.algorithm;
+    for (const reader of manifest.checksum.readers) {
+        if (!exists(root, reader)) {
+            violation(MANIFEST_RELATIVE_PATH + " names \"" + reader + "\" as" +
+                " a reader of the checksum convention, but it does not exist.");
+            continue;
+        }
+        checkReaderOwnsNoLiteral(
+            root, reader, "checksum.suffix", manifest.checksum.suffix);
+    }
+
     for (const consumer of manifest.consumers) {
         if (!exists(root, consumer))
             continue;

@@ -3,7 +3,10 @@
 
   "checksum": {
     "algorithm": "sha256",
-    "suffix": ".sha256"
+    "suffix": ".sha256",
+    "readers": [
+      "tools/build_windows_ifw_installer.ps1"
+    ]
   },
 
   "actions_artifacts": [

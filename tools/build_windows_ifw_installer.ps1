@@ -28,6 +28,7 @@ if ($releaseManifest.schema -ne 1) {
 $ifwVersion = [string]$releaseManifest.qt_ifw.version
 $expectedPublisher = [string]$releaseManifest.signing.publisher
 $publisherSubjectPattern = [string]$releaseManifest.signing.publisher_subject_pattern
+$checksumSuffix = [string]$releaseManifest.checksum.suffix
 $timestampUrl = 'http://timestamp.acs.microsoft.com'
 
 function Assert-FileExists {
@@ -509,7 +510,7 @@ New-Item -ItemType Directory -Force -Path $distRoot | Out-Null
 $artifactSuffix = if ($signingEnabled) { '' } else { '_unsigned' }
 $artifactName = "vnm_terminal_v${packageVersion}_windows_x64${artifactSuffix}.exe"
 $artifactPath = Join-Path $distRoot $artifactName
-$checksumPath = "$artifactPath.sha256"
+$checksumPath = "$artifactPath$checksumSuffix"
 if (Test-Path -LiteralPath $artifactPath) {
     Remove-Item -LiteralPath $artifactPath -Force
 }

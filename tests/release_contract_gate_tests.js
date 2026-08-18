@@ -424,6 +424,17 @@ const CASES = [
         expect: "but it never reads that field"
     },
     {
+        name: "a sidecar suffix spelled out by the builder that reads it",
+        tool: "release_manifest.js",
+        mutate: root => {
+            const relativePath = "tools/build_windows_ifw_installer.ps1";
+            const text = readText(root, relativePath);
+            writeText(root, relativePath, text.replace(
+                "\"$artifactPath$checksumSuffix\"", "\"$artifactPath.sha256\""));
+        },
+        expect: "contains the literal \".sha256\""
+    },
+    {
         name: "a workflow the manifest does not declare",
         tool: "release_manifest.js",
         mutate: addProbeWorkflow,
