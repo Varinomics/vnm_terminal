@@ -30,6 +30,15 @@ add_test(
         -P "${CMAKE_CURRENT_SOURCE_DIR}/qml_chrome_dependency_contract_tests.cmake"
 )
 
+add_test(
+    NAME vnm_terminal_dependency_origin_contract
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DVNM_TERMINAL_TEST_ROOT=${PROJECT_BINARY_DIR}/tests/dependency_origin_contract"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/dependency_origin_contract_tests.cmake"
+)
+
 if(WIN32)
     # CTest can inherit PowerShell 7 module paths from a pwsh parent. Let
     # Windows PowerShell reconstruct its native module path before the test.
