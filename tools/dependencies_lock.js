@@ -84,16 +84,15 @@ function escapeRegExp(text)
 }
 
 // Every actions/checkout step that names another repository, with the ref it
-// asks for. The application's own checkout takes no `repository:` and is not a
-// dependency, so it is not reported.
+// asks for and the directory it lands in. The application's own checkout takes
+// no `repository:` and is not a dependency, so it is not reported.
 function checkoutSites(lines)
 {
     const sites = [];
     for (const block of structure.stepBlocks(lines)) {
         let isCheckout = false;
-        let repository = null;
-        let ref = null;
-        let refLine = 0;
+        const values = {};
+        const valueLines = {};
         for (let index = block.firstLine; index < block.lastLine; ++index) {
             const line = lines[index];
             if (/^\s*uses:\s*actions\/checkout@/.test(line)) {
@@ -101,25 +100,23 @@ function checkoutSites(lines)
                 continue;
             }
 
-            const entry = /^\s*(repository|ref):\s*(.+?)\s*$/.exec(line);
+            const entry = /^\s*(repository|ref|path):\s*(.+?)\s*$/.exec(line);
             if (!entry)
                 continue;
-            if (entry[1] === "repository")
-                repository = entry[2].replace(/^['"]|['"]$/g, "");
-            else {
-                ref = entry[2].replace(/^['"]|['"]$/g, "");
-                refLine = index + 1;
-            }
+            values[entry[1]] = entry[2].replace(/^['"]|['"]$/g, "");
+            valueLines[entry[1]] = index + 1;
         }
-        if (!isCheckout || repository === null)
+        if (!isCheckout || values.repository === undefined)
             continue;
 
         sites.push({
             stepLine: block.firstLine + 1,
             job: structure.jobNameAt(lines, block.firstLine),
-            repository: repository,
-            ref: ref,
-            refLine: refLine || block.firstLine + 1
+            repository: values.repository,
+            ref: values.ref === undefined ? null : values.ref,
+            refLine: valueLines.ref || block.firstLine + 1,
+            path: values.path === undefined ? null : values.path,
+            pathLine: valueLines.path || block.firstLine + 1
         });
     }
     return sites;
@@ -212,6 +209,7 @@ function checkCheckoutRefs(lock, workflowLines, sitesByWorkflow)
         const needs = structure.jobNeeds(lines);
         const regions = structure.jobRegions(lines);
         const jobsWithDependencies = new Set();
+        const namesByJob = new Map();
         for (const site of sitesByWorkflow.get(workflow)) {
             const entry = byRepository.get(site.repository);
             if (!entry) {
@@ -223,6 +221,20 @@ function checkCheckoutRefs(lock, workflowLines, sitesByWorkflow)
             }
             seen.add(entry.name);
             jobsWithDependencies.add(site.job);
+            if (!namesByJob.has(site.job))
+                namesByJob.set(site.job, new Set());
+            namesByJob.get(site.job).add(entry.name);
+
+            // The lock names the directory because the build flags, the
+            // provenance record and the run-time checkout verification all
+            // address the dependency by it. A checkout that lands somewhere
+            // else leaves the verification looking at an empty path.
+            check(site.path === entry.checkout_path,
+                workflow + ":" + site.pathLine + " checks " +
+                site.repository + " out at path \"" + site.path + "\", but " +
+                LOCK_RELATIVE_PATH + " owned." + entry.name +
+                ".checkout_path is \"" + entry.checkout_path + "\". One" +
+                " dependency, one directory, named once.");
 
             const expected = resolveOutputExpression(entry.output);
             if (site.ref !== expected) {
@@ -261,6 +273,19 @@ function checkCheckoutRefs(lock, workflowLines, sitesByWorkflow)
                 " but never runs \"dependencies_lock.js verify-checkout\"." +
                 " A checkout this contract fails to parse would otherwise" +
                 " build from an unresolved commit without any signal.");
+
+            // Partial is the dangerous shape: the dependencies the job omits
+            // are resolved by whatever the build falls back to, which is the
+            // provider's own default branch, while the run-time verification
+            // reports on the ones that are present.
+            const names = namesByJob.get(job);
+            for (const entry of ownedEntries(lock)) {
+                check(names.has(entry.name),
+                    workflow + " job " + job + " checks out a locked" +
+                    " dependency but not " + entry.name + ". A job that takes" +
+                    " some of the resolved commits and lets the build find the" +
+                    " rest builds source no release can reproduce.");
+            }
         }
     }
 
@@ -480,12 +505,17 @@ function runVerifyCheckout(root, workspace)
             " repository's default branch.");
     }
 
-    let verified = 0;
     for (const entry of ownedEntries(lock)) {
         const checkoutPath = path.join(workspace, entry.checkout_path);
-        if (!fs.existsSync(checkoutPath))
+        if (!fs.existsSync(checkoutPath)) {
+            violation("the " + entry.name + " checkout is missing from " +
+                checkoutPath + ". " + LOCK_RELATIVE_PATH + " declares it, and" +
+                " a job that builds without it builds whatever its provider" +
+                " resolves on its own. A verification that skips what it" +
+                " cannot find is a verification that can pass without looking" +
+                " at anything.");
             continue;
-        ++verified;
+        }
 
         const expected = resolved[entry.output];
         check(COMMIT_PATTERN.test(expected),
@@ -509,13 +539,6 @@ function runVerifyCheckout(root, workspace)
             entry.name + " checked out " + actual + ", but this run resolved " +
             expected + ".");
     }
-
-    // Nothing to compare means the workspace argument is wrong, not that the
-    // job is clean. A verification that can pass without looking at anything
-    // is the failure this step exists to prevent.
-    check(verified > 0,
-        "no locked dependency checkout was found under " + workspace + "," +
-        " so this job verified nothing.");
 
     if (violations.length > 0) {
         for (const message of violations)

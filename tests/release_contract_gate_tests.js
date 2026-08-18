@@ -102,7 +102,15 @@ function copyTree(sourceRoot, files)
 
 function removeTree(root)
 {
-    fs.rmSync(root, { recursive: true, force: true });
+    try {
+        // git leaves its object files read-only, which Windows reports as a
+        // permission error on the first attempt to unlink them.
+        fs.rmSync(root, { recursive: true, force: true, maxRetries: 3 });
+    }
+    catch (error) {
+        process.stdout.write("Could not remove the drill copy at " + root +
+            ": " + error.message + "\n");
+    }
 }
 
 function git(argumentList)
@@ -278,6 +286,53 @@ const CASES = [
             writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
         },
         expect: "but that job downloads no artifact named"
+    },
+    {
+        name: "a dependency checked out beside the directory the lock names",
+        tool: "dependencies_lock.js",
+        mutate: root => {
+            const relativePath = WORKFLOW_DIRECTORY + "/ci-windows.yml";
+            const text = readText(root, relativePath);
+            writeText(root, relativePath,
+                text.replace("          path: vnm_msdf_text\n",
+                    "          path: deps/vnm_msdf_text\n"));
+        },
+        expect: "checkout_path is \"vnm_msdf_text\""
+    },
+    {
+        name: "a job that checks out only some of the locked dependencies",
+        tool: "dependencies_lock.js",
+        mutate: root => {
+            const relativePath = WORKFLOW_DIRECTORY + "/ci-windows.yml";
+            const text = readText(root, relativePath);
+            const step = text.slice(text.indexOf("      - name: Checkout Qt dispatch"));
+            writeText(root, relativePath,
+                text.replace(step.slice(0, step.indexOf("\n\n") + 2), ""));
+        },
+        expect: "checks out a locked dependency but not vnm_qt_dispatch"
+    },
+    {
+        name: "a locked dependency absent from the verified workspace",
+        tool: "dependencies_lock.js",
+        mutate: root => {
+            const lock = readJson(root, LOCK_RELATIVE_PATH);
+            const entries = Object.keys(lock.owned).map(
+                name => Object.assign({ name }, lock.owned[name]));
+            const workspace = path.join(root, "workspace");
+            const commits = {};
+            for (const entry of entries.slice(0, entries.length - 1)) {
+                commits[entry.output] = initializeRepository(
+                    path.join(workspace, entry.checkout_path));
+            }
+            // Resolved by the run, so the only thing wrong is that no job
+            // checked it out.
+            commits[entries[entries.length - 1].output] = "0".repeat(40);
+            return {
+                arguments: ["verify-checkout", root, workspace],
+                environment: { DEPENDENCY_COMMITS: JSON.stringify(commits) }
+            };
+        },
+        expect: "checkout is missing from"
     },
     {
         name: "a workflow the manifest does not declare",
