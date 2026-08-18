@@ -183,6 +183,9 @@
       "vnm_terminal.exe",
       "vnm_terminal_runtime/vnm_terminal.exe"
     ],
+    "payload_binary_readers": [
+      "tests/windows_ifw_installation_tests.ps1"
+    ],
     "stage_binaries": [
       "packages/com.varinomics.vnm_terminal.maintenance/data/installerbase.exe"
     ],

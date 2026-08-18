@@ -291,13 +291,16 @@ try {
         'the committed all-users installation must have one machine registration'
 
     Assert-ProductSignature $resolvedInstallerPath
-    foreach ($productExecutable in @(
-        $launcherPath,
-        $runtimePath,
-        $maintenancePath
-    )) {
-        Assert-ProductSignature $productExecutable
+    # The binaries signed inside the payload are declared once, in the manifest
+    # the builder signs them from, so a payload binary added there is verified
+    # here instead of in a second list somebody has to remember. The maintenance
+    # tool is written by the installer from the signed installer base and is not
+    # part of the payload.
+    foreach ($payloadBinary in $releaseManifest.signing.payload_binaries) {
+        Assert-ProductSignature (
+            Join-Path $installRoot ($payloadBinary -replace '/', '\'))
     }
+    Assert-ProductSignature $maintenancePath
 
     # A console-subsystem installer makes Windows create, show and destroy an
     # empty terminal window before its wizard appears, and the maintenance tool

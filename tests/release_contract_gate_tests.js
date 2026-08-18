@@ -412,6 +412,18 @@ const CASES = [
         expect: "third_party.freetype.commit"
     },
     {
+        name: "a signature verification with its own list of payload binaries",
+        tool: "release_manifest.js",
+        mutate: root => {
+            const relativePath = "tests/windows_ifw_installation_tests.ps1";
+            const text = readText(root, relativePath);
+            writeText(root, relativePath, text.replace(
+                "$releaseManifest.signing.payload_binaries",
+                "@('vnm_terminal.exe')"));
+        },
+        expect: "but it never reads that field"
+    },
+    {
         name: "a workflow the manifest does not declare",
         tool: "release_manifest.js",
         mutate: addProbeWorkflow,

@@ -66,6 +66,7 @@ const REQUIRED_LISTS = [
     "signing.publisher_declared_in",
     "signing.publisher_pattern_readers",
     "signing.payload_binaries",
+    "signing.payload_binary_readers",
     "signing.stage_binaries"
 ];
 
@@ -1195,6 +1196,26 @@ function checkSigning(root, manifest)
             reader + " is declared as a reader of" +
             " signing.publisher_subject_pattern, but it never uses" +
             " $publisherSubjectPattern.");
+    }
+
+    // The installed binaries are signature-verified after the lifecycle test
+    // installs them, which is the only check that the signature survived
+    // packaging and installation. That list has to be the builder's list.
+    for (const reader of signing.payload_binary_readers) {
+        if (!exists(root, reader)) {
+            violation(MANIFEST_RELATIVE_PATH + " names \"" + reader + "\" as" +
+                " a reader of signing.payload_binaries, but it does not" +
+                " exist.");
+            continue;
+        }
+        const text = readFile(root, reader);
+        check(/release[\\/]manifest\.json/.test(text),
+            reader + " is declared as a reader of signing.payload_binaries," +
+            " but it never opens " + MANIFEST_RELATIVE_PATH + ".");
+        check(/payload_binaries/.test(text),
+            reader + " is declared as a reader of signing.payload_binaries," +
+            " but it never reads that field, so its own list of binaries to" +
+            " verify can drift from the list the builder signs.");
     }
 
     if (!exists(root, signing.builder)) {
