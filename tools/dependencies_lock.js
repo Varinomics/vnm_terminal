@@ -614,36 +614,59 @@ function runVerifyCheckout(root, workspace)
 // JSON.stringify would collapse the blank lines that separate the sections, so
 // the lock is rendered rather than dumped. This is a file people read and
 // review, and the only writer of it must not reformat everything it touches.
+//
+// Rendering is not rewriting. Every key is carried through in the order it was
+// found, including keys this program has no rule for, because a writer that
+// silently drops what it does not recognise turns a reviewed file into a file
+// only it may edit. The known keys are listed to fix their order, not to
+// select them.
+const OWNED_KEY_ORDER =
+    ["repository", "branch", "checkout_path", "output", "commit"];
+const THIRD_PARTY_KEY_ORDER = ["repository_url", "tag", "clone_sites"];
+const TOP_LEVEL_SECTIONS = ["schema", "owned", "third_party"];
+
+function renderValue(value, indent)
+{
+    return JSON.stringify(value, null, 2)
+        .split("\n")
+        .map((line, index) => index === 0 ? line : indent + line)
+        .join("\n");
+}
+
+function renderMembers(entry, indent, order)
+{
+    const keys = order
+        .filter(key => entry[key] !== undefined)
+        .concat(Object.keys(entry).filter(key => order.indexOf(key) < 0));
+    return keys
+        .map(key => indent + JSON.stringify(key) + ": " +
+            renderValue(entry[key], indent))
+        .join(",\n");
+}
+
+function renderSection(name, group, order)
+{
+    const entries = Object.keys(group).map(key =>
+        "    " + JSON.stringify(key) + ": {\n" +
+        renderMembers(group[key], "      ", order) + "\n    }");
+    return "  " + JSON.stringify(name) + ": {\n" + entries.join(",\n") +
+        "\n  }";
+}
+
 function renderLock(lock)
 {
-    const owned = ownedEntries(lock).map(entry =>
-        "    \"" + entry.name + "\": {\n" +
-        "      \"repository\": " + JSON.stringify(entry.repository) + ",\n" +
-        "      \"branch\": " + JSON.stringify(entry.branch) + ",\n" +
-        "      \"checkout_path\": " + JSON.stringify(entry.checkout_path) + ",\n" +
-        "      \"output\": " + JSON.stringify(entry.output) + ",\n" +
-        "      \"commit\": " + JSON.stringify(entry.commit) + "\n" +
-        "    }");
+    const sections = [
+        "  \"schema\": " + JSON.stringify(lock.schema),
+        renderSection("owned", lock.owned, OWNED_KEY_ORDER),
+        renderSection("third_party", lock.third_party, THIRD_PARTY_KEY_ORDER)
+    ];
+    for (const key of Object.keys(lock)) {
+        if (TOP_LEVEL_SECTIONS.indexOf(key) < 0)
+            sections.push("  " + JSON.stringify(key) + ": " +
+                renderValue(lock[key], "  "));
+    }
 
-    const thirdParty = Object.keys(lock.third_party).map(name => {
-        const entry = lock.third_party[name];
-        return "    \"" + name + "\": {\n" +
-            "      \"repository_url\": " +
-                JSON.stringify(entry.repository_url) + ",\n" +
-            "      \"tag\": " + JSON.stringify(entry.tag) + ",\n" +
-            "      \"clone_sites\": [\n" +
-            entry.clone_sites
-                .map(site => "        " + JSON.stringify(site))
-                .join(",\n") + "\n" +
-            "      ]\n" +
-            "    }";
-    });
-
-    return "{\n" +
-        "  \"schema\": " + lock.schema + ",\n\n" +
-        "  \"owned\": {\n" + owned.join(",\n") + "\n  },\n\n" +
-        "  \"third_party\": {\n" + thirdParty.join(",\n") + "\n  }\n" +
-        "}\n";
+    return "{\n" + sections.join(",\n\n") + "\n}\n";
 }
 
 function runRefresh(root)
