@@ -353,6 +353,20 @@ function checkManifestSelfConsistency(root, manifest)
     }
 
     for (const attachment of manifest.release_attachments) {
+        check(Array.isArray(attachment.source_artifacts) &&
+                attachment.source_artifacts.length > 0,
+            "release_attachments for job \"" + attachment.job + "\" in " +
+            attachment.workflow + " declares no source_artifacts. The job" +
+            " uploads whatever its download directory holds, so which" +
+            " artifacts it may download is part of what a release is.");
+
+        for (const id of attachment.source_artifacts || []) {
+            check(manifest.actions_artifacts.some(entry => entry.id === id),
+                "release_attachments for job \"" + attachment.job +
+                "\" names source artifact \"" + id + "\", which" +
+                " actions_artifacts does not declare.");
+        }
+
         for (const entry of attachment.assets || []) {
             check(assetShape(manifest, entry.asset) !== null,
                 "release_attachments for job \"" + attachment.job +
@@ -526,6 +540,57 @@ function checkArtifactNames(manifest, sitesByWorkflow)
     }
 }
 
+function artifactNames(artifact)
+{
+    return (artifact.name ? [artifact.name] : [])
+        .concat(artifact.name_expressions || []);
+}
+
+// An attachment job uploads by glob out of the directory its downloads land in,
+// so what it attaches is decided by which artifacts it downloads and not by the
+// upload arguments alone. Two artifacts can carry the same file name - the
+// unsigned portable archive and the archive rebuilt from the signed payload do
+// - and the second download overwrites the first, under the name the release
+// publishes. The comparison is therefore on artifact identity: renaming a step
+// cannot disarm it, and the argument-set comparison below stays about shapes.
+function checkAttachmentSources(manifest, sitesByWorkflow)
+{
+    for (const declaration of manifest.release_attachments) {
+        const sites = (sitesByWorkflow.get(declaration.workflow) || [])
+            .filter(site => site.kind === "download" &&
+                site.job === declaration.job);
+        const sources = (declaration.source_artifacts || [])
+            .map(id => manifest.actions_artifacts.find(
+                entry => entry.id === id))
+            .filter(Boolean);
+        const permitted = new Set();
+        for (const artifact of sources) {
+            for (const name of artifactNames(artifact))
+                permitted.add(name);
+        }
+
+        for (const site of sites) {
+            check(permitted.has(site.name),
+                site.workflow + ":" + site.nameLine + " downloads artifact \"" +
+                site.name + "\" into job " + declaration.job + ", which " +
+                MANIFEST_RELATIVE_PATH + " does not declare among its" +
+                " source_artifacts (" + sortedList(Array.from(permitted)) +
+                "). Every downloaded file lands in the directory this job" +
+                " attaches from, so an artifact it may not consume can" +
+                " overwrite one it must.");
+        }
+
+        for (const artifact of sources) {
+            const names = artifactNames(artifact);
+            check(sites.some(site => names.indexOf(site.name) >= 0),
+                MANIFEST_RELATIVE_PATH + " declares that job " +
+                declaration.job + " in " + declaration.workflow + " attaches" +
+                " artifact \"" + artifact.id + "\", but that job downloads" +
+                " no artifact named " + sortedList(names) + ".");
+        }
+    }
+}
+
 function checkArtifactUploadPaths(manifest, sitesByWorkflow)
 {
     const sidecar = manifest.checksum.suffix;
@@ -577,6 +642,16 @@ function checkArtifactUploadPaths(manifest, sitesByWorkflow)
 function checkReleaseAttachments(manifest, uploadsByWorkflow)
 {
     const sidecar = manifest.checksum.suffix;
+    for (const declaration of manifest.release_attachments) {
+        const sites = (uploadsByWorkflow.get(declaration.workflow) || [])
+            .filter(site => site.job === declaration.job);
+        check(sites.length > 0,
+            MANIFEST_RELATIVE_PATH + " declares a release_attachments entry" +
+            " for job \"" + declaration.job + "\" in " +
+            declaration.workflow + ", but that job runs no gh release upload." +
+            " A declaration nothing produces is a rule that inspects nothing.");
+    }
+
     for (const [workflow, sites] of uploadsByWorkflow) {
         for (const site of sites) {
             const declaration = manifest.release_attachments.find(entry =>
@@ -1154,6 +1229,7 @@ function runCheck(root)
     checkRetentionFamilies(manifest);
     checkArtifactNames(manifest, sitesByWorkflow);
     checkArtifactUploadPaths(manifest, sitesByWorkflow);
+    checkAttachmentSources(manifest, sitesByWorkflow);
     checkReleaseAttachments(manifest, uploadsByWorkflow);
     checkAssetShapes(root, manifest);
     checkRetentionWorkflow(root, manifest);

@@ -136,6 +136,7 @@
     {
       "workflow": ".github/workflows/ci-windows.yml",
       "job": "attach-release-packages",
+      "source_artifacts": [ "windows_signed" ],
       "path_prefix": "dist/",
       "assets": [
         { "asset": "windows_portable_zip", "sidecar": true },
@@ -146,18 +147,21 @@
     {
       "workflow": ".github/workflows/ci-windows.yml",
       "job": "attach-source-archive",
+      "source_artifacts": [ "source" ],
       "selection": "opaque",
       "selection_reason": "uploads a shell variable resolved by find, so the argument list carries no asset shape"
     },
     {
       "workflow": ".github/workflows/ci-linux.yml",
       "job": "attach-release-packages",
+      "source_artifacts": [ "linux" ],
       "selection": "opaque",
       "selection_reason": "uploads dist/* wholesale, so every artifact member is attached by construction"
     },
     {
       "workflow": ".github/workflows/ci-macos.yml",
       "job": "attach-release-asset",
+      "source_artifacts": [ "macos" ],
       "selection": "opaque",
       "selection_reason": "uploads a job-output expression, so the argument list carries no asset shape"
     }

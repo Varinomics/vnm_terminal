@@ -170,6 +170,28 @@ function addProbeWorkflow(root)
     writeText(root, WORKFLOW_DIRECTORY + "/zz-probe.yml", PROBE_WORKFLOW);
 }
 
+// The unsigned portable archive carries the same file name as the archive
+// rebuilt from the signed payload, so a second download into the same directory
+// replaces the signed one and the release publishes it under the signed name.
+const UNSIGNED_DOWNLOAD = [
+    "      - name: Download unsigned Windows package artifacts",
+    "        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4",
+    "        with:",
+    "          name: vnm-terminal-windows-x64-unsigned",
+    "          path: dist",
+    ""
+].join("\n");
+
+function addUnsignedAttachmentDownload(root)
+{
+    const relativePath = WORKFLOW_DIRECTORY + "/ci-windows.yml";
+    const anchor = "      - name: Attach Windows packages to GitHub release\n";
+    const text = readText(root, relativePath);
+    if (text.indexOf(anchor) < 0)
+        throw new Error("ci-windows.yml no longer attaches Windows packages");
+    writeText(root, relativePath, text.replace(anchor, UNSIGNED_DOWNLOAD + anchor));
+}
+
 // --- Cases ------------------------------------------------------------------
 
 const CASES = [
@@ -237,6 +259,25 @@ const CASES = [
             writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
         },
         expect: "refuses every release signature"
+    },
+    {
+        name: "an unsigned artifact downloaded into the attaching job",
+        tool: "release_manifest.js",
+        mutate: addUnsignedAttachmentDownload,
+        expect: "downloads artifact \"vnm-terminal-windows-x64-unsigned\"" +
+            " into job attach-release-packages"
+    },
+    {
+        name: "an attachment job that downloads none of its source artifacts",
+        tool: "release_manifest.js",
+        mutate: root => {
+            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
+            const declaration = manifest.release_attachments.find(
+                entry => entry.job === "attach-source-archive");
+            declaration.source_artifacts = ["windows_signed"];
+            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
+        },
+        expect: "but that job downloads no artifact named"
     },
     {
         name: "a workflow the manifest does not declare",

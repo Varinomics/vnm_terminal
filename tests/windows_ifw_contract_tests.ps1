@@ -1705,12 +1705,13 @@ Assert-IfwContract `
         $installationTests -match `
             'Test-Path -LiteralPath \$startMenuRoot') `
     'hosted Windows CI must commit an all-users installation, verify its shortcut and registration, run it, purge it, and check residue'
-# The artifact name, the archive globs and the prohibition on attaching the
-# unsigned build were restated here as regexes. release/manifest.json now
-# declares them once and tools/release_manifest.js compares the workflow
-# against it in both directions, on every host, naming the drifted value. What
-# is left is the half nothing else covers: the release archive must be rebuilt
-# from the signed payload rather than copied from the unsigned build.
+# The artifact name and the archive globs were restated here as regexes.
+# release/manifest.json declares them once and tools/release_manifest.js
+# compares the workflow against it in both directions, on every host, naming the
+# drifted value; release_attachments.source_artifacts declares which artifact
+# the attaching job may download, which is what keeps the unsigned build out of
+# the release. What is left is the half neither covers: the release archive must
+# be rebuilt from the signed payload rather than copied from the unsigned build.
 Assert-IfwContract `
     ($windowsWorkflow -match `
         '- name: Build signed portable archive[\s\S]*?Compress-Archive') `
