@@ -458,7 +458,20 @@ function runResolve(root)
 function runVerifyCheckout(root, workspace)
 {
     const lock = loadLock(root);
+
+    // DEPENDENCY_COMMITS carries toJSON(needs.resolve-dependencies.outputs),
+    // which is the literal null when the job forgot the needs: edge. That is
+    // the same hazard the static rule catches, and this step exists precisely
+    // for the case where the static reader could not see the job, so it names
+    // the cause rather than failing on a missing property.
     const resolved = JSON.parse(process.env.DEPENDENCY_COMMITS || "{}");
+    if (resolved === null || typeof resolved !== "object") {
+        throw new Error("Dependency lock violation: this job received no " +
+            RESOLVE_JOB + " outputs. Add \"needs: " + RESOLVE_JOB + "\" to it:" +
+            " without that edge the ref expressions on its checkouts evaluate" +
+            " to the empty string and actions/checkout silently takes each" +
+            " repository's default branch.");
+    }
 
     let verified = 0;
     for (const entry of ownedEntries(lock)) {
