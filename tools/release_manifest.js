@@ -400,10 +400,6 @@ function checkManifestSelfConsistency(root, manifest)
     }
 }
 
-// A workflow the manifest does not list is a workflow no rule below reads. The
-// artifact names, the upload paths and the release attachments of such a file
-// are outside this contract entirely, which is the one outcome a contract that
-// exists to make names authoritative cannot allow.
 // A template exists because more than one release asset is rendered from it,
 // and the variants are what say which. Without this comparison the map is a
 // comment: each asset is checked against its producer through its own shape, so
@@ -450,6 +446,10 @@ function checkAssetTemplates(manifest)
     }
 }
 
+// A workflow the manifest does not list is a workflow no rule below reads. The
+// artifact names, the upload paths and the release attachments of such a file
+// are outside this contract entirely, which is the one outcome a contract that
+// exists to make names authoritative cannot allow.
 function checkWorkflowCoverage(root, manifest)
 {
     const declared = new Set(manifest.consumers);
