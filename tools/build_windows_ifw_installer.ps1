@@ -349,8 +349,14 @@ function Invoke-TrustedSigning {
     if ($signature.Status -ne 'Valid') {
         throw "The signature on $Path is not valid: $($signature.StatusMessage)"
     }
-    if ($signature.SignerCertificate.Subject -notlike "*$expectedPublisher*") {
+    if ($null -eq $signature.SignerCertificate -or
+        $signature.SignerCertificate.Subject -notmatch
+            '(?:^|,\s*)CN=Varinomics Ltd(?:,|$)')
+    {
         throw "The signature on $Path does not identify $expectedPublisher"
+    }
+    if ($null -eq $signature.TimeStamperCertificate) {
+        throw "The signature on $Path is not timestamped"
     }
 }
 
@@ -401,6 +407,16 @@ New-Item -ItemType Directory -Force -Path `
     $maintenanceDataRoot, `
     $maintenanceMetaRoot |
         Out-Null
+
+# Sign the portable payload itself before it is copied into the installer.
+# The release publishes this same directory as the portable ZIP, so signing only
+# the IFW staging copy would leave one of the two public Windows distributions
+# carrying unsigned executables.
+if ($signingEnabled) {
+    Invoke-TrustedSigning (Join-Path $PayloadPath 'vnm_terminal.exe')
+    Invoke-TrustedSigning `
+        (Join-Path $PayloadPath 'vnm_terminal_runtime\vnm_terminal.exe')
+}
 
 Copy-Item -Path (Join-Path $PayloadPath '*') -Destination $packageDataRoot -Recurse -Force
 Assert-DirectoryCopy $PayloadPath $packageDataRoot
@@ -474,9 +490,6 @@ Copy-Item -LiteralPath $installerBaseSourcePath -Destination $privateInstallerBa
 Set-PeGuiSubsystem $privateInstallerBasePath
 
 if ($signingEnabled) {
-    Invoke-TrustedSigning (Join-Path $packageDataRoot 'vnm_terminal.exe')
-    Invoke-TrustedSigning `
-        (Join-Path $packageDataRoot 'vnm_terminal_runtime\vnm_terminal.exe')
     Invoke-TrustedSigning $privateInstallerBasePath
 }
 

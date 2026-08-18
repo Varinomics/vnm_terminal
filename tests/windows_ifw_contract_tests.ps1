@@ -1588,8 +1588,10 @@ Assert-IfwContract `
         [regex]::Matches($buildScript, 'Get-AuthenticodeSignature').Count -eq 1 -and
         $buildScript -match '\$signature\.Status\s+-ne\s+''Valid''' -and
         $buildScript -match `
-            '\$signature\.SignerCertificate\.Subject\s+-notlike\s+"\*\$expectedPublisher\*"') `
-    'unsigned validation must inspect the PE certificate table while signed validation remains strict'
+            '\$signature\.SignerCertificate\.Subject\s+-notmatch' -and
+        $buildScript -match 'CN=Varinomics Ltd' -and
+        $buildScript -match '\$signature\.TimeStamperCertificate') `
+    'unsigned validation must inspect the PE certificate table while signed validation remains strict and timestamped'
 Assert-IfwContract `
     ($windowsPackages -match 'if\s+"%IFW_ROOT%"==""' -and
         $windowsPackages -match '-IfwRoot\s+"%IFW_ROOT%"') `
@@ -1675,6 +1677,23 @@ Assert-IfwContract `
             'Test-Path -LiteralPath \$startMenuRoot') `
     'hosted Windows CI must commit an all-users installation, verify its shortcut and registration, run it, purge it, and check residue'
 Assert-IfwContract `
+    ($windowsWorkflow -match `
+            '- name: Build signed portable archive[\s\S]*?Compress-Archive' -and
+        $windowsWorkflow -match `
+            'name: vnm-terminal-windows-x64-signed[\s\S]*?vnm_terminal_v\*_w64\.zip[\s\S]*?vnm_terminal_v\*_w64\.zip\.sha256' -and
+        $windowsWorkflow -notmatch `
+            '(?s)attach-release-packages:.*?Download unsigned Windows package artifacts' -and
+        $windowsWorkflow -match `
+            'dist/vnm_terminal_v\*_w64\.zip\.sha256') `
+    'release attachment must publish the portable ZIP rebuilt from the signed payload'
+Assert-IfwContract `
+    ($windowsWorkflow -match `
+            '-File tests/windows_ifw_installation_tests\.ps1[\s\S]*?-InstallerPath \$installer\.FullName[\s\S]*?-RequireSigned' -and
+        $installationTests -match '\[switch\]\$RequireSigned' -and
+        $installationTests -match `
+            '\$acceptedStatuses\s*=\s*if \(\$RequireSigned\)\s*\{\s*@\(''Valid''\)') `
+    'the release lifecycle must reject unsigned installed executables'
+Assert-IfwContract `
     ($installationTests -match 'Assert-PeGuiSubsystem \$resolvedInstallerPath' -and
         $installationTests -match 'Assert-PeGuiSubsystem \$maintenancePath') `
     'the lifecycle gate must prove that neither delivered binary makes Windows allocate a console'
@@ -1685,7 +1704,9 @@ Assert-IfwContract `
     'unsigned artifacts must be distinguished in their filename'
 
 $payloadSigningIndex = $buildScript.IndexOf(
-    "Invoke-TrustedSigning (Join-Path `$packageDataRoot 'vnm_terminal.exe')")
+    "Invoke-TrustedSigning (Join-Path `$PayloadPath 'vnm_terminal.exe')")
+$payloadCopyIndex = $buildScript.IndexOf(
+    "Copy-Item -Path (Join-Path `$PayloadPath '*')")
 $installerBaseSigningIndex = $buildScript.IndexOf(
     'Invoke-TrustedSigning $privateInstallerBasePath')
 $configRenderIndex = $buildScript.IndexOf(
@@ -1697,8 +1718,10 @@ $bannerHighDpiCopyIndex = $buildScript.IndexOf(
 $binaryCreatorIndex = $buildScript.IndexOf('& $binaryCreatorPath --offline-only')
 $finalSigningIndex = $buildScript.LastIndexOf('Invoke-TrustedSigning $artifactPath')
 Assert-IfwContract ($payloadSigningIndex -ge 0) `
-    'the Varinomics launcher must be signed when release signing is enabled'
-Assert-IfwContract ($installerBaseSigningIndex -gt $payloadSigningIndex) `
+    'the public portable payload must be signed when release signing is enabled'
+Assert-IfwContract ($payloadCopyIndex -gt $payloadSigningIndex) `
+    'the signed portable payload must be the source copied into the installer'
+Assert-IfwContract ($installerBaseSigningIndex -gt $payloadCopyIndex) `
     'the private installerbase must be signed after the payload'
 Assert-IfwContract ($binaryCreatorIndex -gt $installerBaseSigningIndex) `
     'binarycreator must run after the packaged maintenance-tool base is signed'

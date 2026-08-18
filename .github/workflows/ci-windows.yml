@@ -725,6 +725,38 @@ jobs:
               exit $LASTEXITCODE
           }
 
+      - name: Build signed portable archive
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          $payload = (Resolve-Path -LiteralPath 'dist/portable_candidate').Path
+          $buildInfo = Join-Path $payload `
+              'vnm_terminal_runtime\vnm_terminal_build_info.txt'
+          $versionLine = Get-Content -LiteralPath $buildInfo |
+              Where-Object { $_ -match '^Version:\s*(?<version>[0-9]+(?:\.[0-9]+)+)\s*$' } |
+              Select-Object -First 1
+          if (-not $versionLine) {
+              throw "Could not derive the portable archive version from $buildInfo."
+          }
+          [void]($versionLine -match `
+              '^Version:\s*(?<version>[0-9]+(?:\.[0-9]+)+)\s*$')
+
+          $archiveName = "vnm_terminal_v$($Matches.version)_w64.zip"
+          $archivePath = Join-Path (Resolve-Path -LiteralPath 'dist').Path `
+              $archiveName
+          Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath "$archivePath.sha256" -Force `
+              -ErrorAction SilentlyContinue
+          Compress-Archive -Path (Join-Path $payload '*') `
+              -DestinationPath $archivePath -Force
+
+          $hash = (Get-FileHash -LiteralPath $archivePath `
+              -Algorithm SHA256).Hash.ToLowerInvariant()
+          [System.IO.File]::WriteAllText(
+              "$archivePath.sha256",
+              "$hash  $archiveName`n",
+              [System.Text.ASCIIEncoding]::new())
+
       - name: Verify the installer is signed
         shell: pwsh
         run: |
@@ -752,6 +784,8 @@ jobs:
         with:
           name: vnm-terminal-windows-x64-signed
           path: |
+            vnm_terminal/dist/vnm_terminal_v*_w64.zip
+            vnm_terminal/dist/vnm_terminal_v*_w64.zip.sha256
             vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe
             vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe.sha256
             vnm_terminal/dist/signing_provenance/build_provenance.json
@@ -802,7 +836,8 @@ jobs:
 
           powershell.exe -NoProfile -ExecutionPolicy Bypass `
             -File tests/windows_ifw_installation_tests.ps1 `
-            -InstallerPath $installer.FullName
+            -InstallerPath $installer.FullName `
+            -RequireSigned
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
@@ -839,19 +874,13 @@ jobs:
     if: >-
       github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-    needs: [package, sign-windows-package, verify-signed-package]
+    needs: [sign-windows-package, verify-signed-package]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: write
 
     steps:
-      - name: Download unsigned Windows package artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: vnm-terminal-windows-x64-unsigned
-          path: dist
-
       - name: Download signed Windows package artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -867,6 +896,7 @@ jobs:
         run: |
           gh release upload "${RELEASE_TAG}" \
             dist/vnm_terminal_v*_w64.zip \
+            dist/vnm_terminal_v*_w64.zip.sha256 \
             dist/vnm_terminal_v*_windows_x64.exe \
             dist/vnm_terminal_v*_windows_x64.exe.sha256 \
             dist/signing_provenance/build_provenance.json \
