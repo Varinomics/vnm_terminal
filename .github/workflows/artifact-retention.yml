@@ -53,25 +53,76 @@ jobs:
               return 1
           }
 
+          # A completed workflow can overlap an older release that is waiting for
+          # environment approval or still signing. Its artifacts are visible in
+          # the repository-wide listing even though the workflow still needs
+          # them. Cache run status lookups and never prune an artifact until its
+          # owning workflow is complete.
+          declare -A workflow_run_status_cache=()
+          workflow_run_status_result=''
+
+          workflow_run_status()
+          {
+              local run_id="$1"
+              local status
+
+              if [[ -n "${workflow_run_status_cache[${run_id}]+present}" ]]; then
+                  workflow_run_status_result="${workflow_run_status_cache[${run_id}]}"
+                  return
+              fi
+
+              status="$(
+                  gh api \
+                      --method GET \
+                      "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" \
+                      --jq '.status'
+              )"
+              if [[ -z "${status}" ]]; then
+                  echo "Could not determine the status of workflow run ${run_id}." >&2
+                  return 1
+              fi
+
+              workflow_run_status_cache["${run_id}"]="${status}"
+              workflow_run_status_result="${status}"
+          }
+
           prune_rows()
           {
               local family="$1"
               local rows="$2"
+              local completed_rows=''
               local latest_artifact_id
+              local run_id artifact_id artifact_name
 
               if [[ -z "${rows}" ]]; then
                   return
               fi
 
+              while IFS=$'\t' read -r run_id artifact_id artifact_name; do
+                  workflow_run_status "${run_id}"
+                  if [[ "${workflow_run_status_result}" != 'completed' ]]; then
+                      echo "Keeping ${family} artifact ${artifact_name} from active run ${run_id}."
+                      continue
+                  fi
+
+                  completed_rows+="${run_id}"$'\t'"${artifact_id}"$'\t'"${artifact_name}"$'\n'
+              done <<< "${rows}"
+
+              if [[ -z "${completed_rows}" ]]; then
+                  return
+              fi
+
               latest_artifact_id="$(
-                  printf '%s\n' "${rows}" |
+                  printf '%s' "${completed_rows}" |
                       sort -n -k1,1 -k2,2 |
                       tail -n 1 |
                       cut -f2
               )"
 
               while IFS=$'\t' read -r run_id artifact_id artifact_name; do
-                  if [[ "${artifact_id}" == "${latest_artifact_id}" ]]; then
+                  if [[ -z "${artifact_id}" ||
+                        "${artifact_id}" == "${latest_artifact_id}" ]]
+                  then
                       continue
                   fi
 
@@ -80,7 +131,7 @@ jobs:
                       "${run_id}" \
                       "${artifact_id}" \
                       "${artifact_name}"
-              done <<< "${rows}"
+              done <<< "${completed_rows}"
           }
 
           # Windows packaging emits three families: the unsigned build every
