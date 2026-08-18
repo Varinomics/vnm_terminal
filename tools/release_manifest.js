@@ -706,6 +706,311 @@ function checkRetentionWorkflow(root, manifest)
     }
 }
 
+// A file that reads a fact out of the manifest must not also spell it out. The
+// message names the manifest field so the fix is to delete the copy, not to
+// re-synchronise it.
+function checkReaderOwnsNoLiteral(root, reader, field, literal)
+{
+    if (!exists(root, reader))
+        return;
+
+    readFile(root, reader).split(/\r?\n/).forEach((line, index) => {
+        check(line.indexOf(literal) < 0,
+            reader + ":" + (index + 1) + " contains the literal \"" + literal +
+            "\". " + field + " in " + MANIFEST_RELATIVE_PATH + " is the only" +
+            " copy, and this file already reads it.");
+    });
+
+    check(/release[\\/]manifest\.json/.test(readFile(root, reader)),
+        reader + " is declared as a reader of " + field + " in " +
+        MANIFEST_RELATIVE_PATH + ", but it never opens release/manifest.json.");
+}
+
+function actionSites(lines, actionPattern)
+{
+    const sites = [];
+    for (const block of stepBlocks(lines)) {
+        let matched = false;
+        for (let index = block.firstLine; index < block.lastLine; ++index) {
+            if (actionPattern.test(lines[index])) {
+                matched = true;
+                break;
+            }
+        }
+        if (!matched)
+            continue;
+
+        sites.push({
+            stepLine: block.firstLine + 1,
+            mapping: withMapping(lines, block) || {}
+        });
+    }
+    return sites;
+}
+
+function checkQtVersion(root, manifest, workflowLines)
+{
+    const version = manifest.qt.version;
+    for (const [workflow, lines] of workflowLines) {
+        const sites = actionSites(lines, /uses:\s*\S*install-qt-action@/);
+        for (const site of sites) {
+            const declared = site.mapping.version;
+            if (!declared) {
+                violation(workflow + ":" + site.stepLine + " installs Qt but" +
+                    " declares no version:. A Qt version this contract cannot" +
+                    " see is a Qt version it cannot keep in sync.");
+                continue;
+            }
+            check(declared.value === version,
+                workflow + ":" + declared.line + " installs Qt " +
+                declared.value + ", but " + MANIFEST_RELATIVE_PATH +
+                " qt.version is " + version + ".");
+        }
+
+        // Anything left after the install steps are accounted for is a copy
+        // nobody checks.
+        const residue = lines
+            .map(line => line.replace(
+                new RegExp("version:\\s*['\"]?" + escapeRegExp(version) +
+                    "['\"]?"), ""))
+            .map((line, index) => ({ line, index }))
+            .filter(entry => entry.line.indexOf(version) >= 0);
+        for (const entry of residue) {
+            violation(workflow + ":" + (entry.index + 1) + " restates the Qt" +
+                " version " + version + " outside an install-qt-action step." +
+                " qt.version in " + MANIFEST_RELATIVE_PATH + " is the only" +
+                " copy a consumer may read.");
+        }
+    }
+}
+
+function qtIfwCacheKey(manifest)
+{
+    return manifest.qt_ifw.cache_key_template
+        .split("{version}").join(manifest.qt_ifw.version)
+        .split("{archive_sha256}").join(manifest.qt_ifw.archive_sha256);
+}
+
+function escapeRegExp(text)
+{
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function checkQtIfw(root, manifest, workflowLines)
+{
+    const ifw = manifest.qt_ifw;
+    const cacheKey = qtIfwCacheKey(manifest);
+    const rootDirectory = ifw.root_directory_prefix + ifw.version;
+
+    // The provisioner used to own this URL and the packaging contract test
+    // asserted its exact shape. Both facts live here now, so the official
+    // repository path and the Windows x64 archive name are asserted here too:
+    // a URL that merely carries the right version could still point anywhere.
+    const officialPrefix =
+        "https://download.qt.io/online/qtsdkrepository/windows_x86/ifw/";
+    const archiveName = ifw.archive_url.split("/").pop();
+    check(ifw.archive_url.startsWith(officialPrefix) &&
+            archiveName.startsWith(ifw.version + "-") &&
+            archiveName.endsWith("ifw-win-x64.7z"),
+        "qt_ifw.archive_url must be an official Qt archive under " +
+        officialPrefix + " whose file name begins with qt_ifw.version " +
+        ifw.version + " and ends with ifw-win-x64.7z; got \"" +
+        ifw.archive_url + "\".");
+
+    for (const reader of ifw.readers) {
+        checkReaderOwnsNoLiteral(root, reader, "qt_ifw.version", ifw.version);
+        checkReaderOwnsNoLiteral(
+            root, reader, "qt_ifw.archive_sha256", ifw.archive_sha256);
+        checkReaderOwnsNoLiteral(
+            root, reader, "qt_ifw.archive_url", ifw.archive_url);
+    }
+
+    for (const [workflow, lines] of workflowLines) {
+        const sites = actionSites(lines, /uses:\s*actions\/cache\/(restore|save)@/);
+        for (const site of sites) {
+            const declared = site.mapping.key;
+            if (!declared) {
+                violation(workflow + ":" + site.stepLine + " caches an" +
+                    " artifact but declares no key:. A cache key this" +
+                    " contract cannot see can drift from the archive the" +
+                    " provisioner verifies.");
+                continue;
+            }
+            check(declared.value === cacheKey,
+                workflow + ":" + declared.line + " uses cache key \"" +
+                declared.value + "\". It must be exactly \"" + cacheKey +
+                "\", composed from qt_ifw.cache_key_template, so the key" +
+                " cannot drift from the archive the provisioner verifies.");
+        }
+
+        // Every remaining mention of the version or the archive hash in a
+        // workflow has to be one of the two literals GitHub Actions forces:
+        // the cache key and the runner-local IFW root directory.
+        lines.forEach((line, index) => {
+            const residue = line
+                .split(cacheKey).join("")
+                .split(rootDirectory).join("");
+            check(residue.indexOf(ifw.version) < 0,
+                workflow + ":" + (index + 1) + " restates the Qt IFW version " +
+                ifw.version + " outside the cache key and the \"" +
+                rootDirectory + "\" root directory. qt_ifw.version in " +
+                MANIFEST_RELATIVE_PATH + " is the only other copy.");
+            check(residue.indexOf(ifw.archive_sha256) < 0,
+                workflow + ":" + (index + 1) + " restates the Qt IFW archive" +
+                " checksum outside the cache key. qt_ifw.archive_sha256 in " +
+                MANIFEST_RELATIVE_PATH + " is the only other copy.");
+        });
+    }
+}
+
+// Resolve `$x = Join-Path $y '<literal>'` chains so that a declared staged
+// path can be compared with the path the builder actually signs.
+function joinPathChains(scriptText)
+{
+    const chains = new Map();
+    for (const line of scriptText.split(/\r?\n/)) {
+        const assignment =
+            /^\$([A-Za-z][A-Za-z0-9]*)\s*=\s*Join-Path\s+\$([A-Za-z][A-Za-z0-9]*)\s+'([^']+)'\s*$/
+                .exec(line);
+        if (assignment)
+            chains.set(assignment[1], { parent: assignment[2], leaf: assignment[3] });
+    }
+    return chains;
+}
+
+function resolveChain(chains, variable)
+{
+    const segments = [];
+    let current = variable;
+    while (chains.has(current)) {
+        const link = chains.get(current);
+        segments.unshift(link.leaf);
+        current = link.parent;
+    }
+    return { root: current, segments };
+}
+
+function checkSigning(root, manifest)
+{
+    const signing = manifest.signing;
+    for (const declaration of signing.publisher_declared_in) {
+        if (!exists(root, declaration)) {
+            violation(MANIFEST_RELATIVE_PATH + " names \"" + declaration +
+                "\" as a publisher declaration, but it does not exist.");
+            continue;
+        }
+        const declared =
+            /<Publisher>([^<]*)<\/Publisher>/.exec(readFile(root, declaration));
+        check(declared !== null && declared[1] === signing.publisher,
+            declaration + " declares <Publisher>" +
+            (declared === null ? "" : declared[1]) + "</Publisher>, but " +
+            MANIFEST_RELATIVE_PATH + " signing.publisher is \"" +
+            signing.publisher + "\". The installer metadata and the signature" +
+            " identity must name the same publisher.");
+    }
+
+    for (const reader of signing.publisher_pattern_readers) {
+        checkReaderOwnsNoLiteral(root, reader, "signing.publisher_subject_pattern",
+            signing.publisher_subject_pattern);
+        check(exists(root, reader) &&
+                /\$publisherSubjectPattern/.test(readFile(root, reader)),
+            reader + " is declared as a reader of" +
+            " signing.publisher_subject_pattern, but it never uses" +
+            " $publisherSubjectPattern.");
+    }
+
+    if (!exists(root, signing.builder)) {
+        violation(MANIFEST_RELATIVE_PATH + " names \"" + signing.builder +
+            "\" as the signing builder, but it does not exist.");
+        return;
+    }
+
+    // Backtick continuations first, so a wrapped call reads as one statement.
+    const builder = readFile(root, signing.builder)
+        .replace(/`\r?\n\s*/g, "");
+    const chains = joinPathChains(builder);
+    const stageRoot = resolveChain(chains, "stageRoot");
+
+    const payloadSigned = [];
+    const stageSigned = [];
+    let finalSigned = 0;
+    const callPattern =
+        /Invoke-TrustedSigning\s+(\(Join-Path\s+\$PayloadPath\s+'([^']+)'\)|\$([A-Za-z][A-Za-z0-9]*))/g;
+    let match;
+    let calls = 0;
+    while ((match = callPattern.exec(builder)) !== null) {
+        ++calls;
+        if (match[2] !== undefined) {
+            payloadSigned.push(match[2].replace(/\\/g, "/"));
+            continue;
+        }
+        if (match[3] === "artifactPath") {
+            ++finalSigned;
+            continue;
+        }
+
+        const resolved = resolveChain(chains, match[3]);
+        const underStage = resolved.root === stageRoot.root &&
+            stageRoot.segments.every(
+                (segment, index) => resolved.segments[index] === segment);
+        if (!underStage) {
+            violation(signing.builder + " signs $" + match[3] + ", which this" +
+                " contract cannot resolve to a declared signing target. Every" +
+                " signed binary must be declared in signing.payload_binaries," +
+                " signing.stage_binaries or signing.final_artifact.");
+            continue;
+        }
+        stageSigned.push(resolved.segments
+            .slice(stageRoot.segments.length)
+            .join("/")
+            .replace(/\\/g, "/"));
+    }
+
+    const totalDeclared = signing.payload_binaries.length +
+        signing.stage_binaries.length + 1;
+    check(calls === totalDeclared,
+        signing.builder + " makes " + calls + " Invoke-TrustedSigning calls," +
+        " but " + MANIFEST_RELATIVE_PATH + " declares " +
+        signing.payload_binaries.length + " payload binaries plus " +
+        signing.stage_binaries.length + " stage binaries plus the final" +
+        " artifact, which is " + totalDeclared + ". A signing target that is" +
+        " not declared is a target nobody reviews.");
+
+    check(finalSigned === 1,
+        signing.builder + " signs the finished installer " + finalSigned +
+        " times; signing.final_artifact declares exactly one.");
+
+    for (const target of signing.payload_binaries) {
+        check(payloadSigned.indexOf(target) >= 0,
+            signing.builder + " never signs \"" + target + "\", which " +
+            MANIFEST_RELATIVE_PATH + " signing.payload_binaries declares." +
+            " Expected the call: Invoke-TrustedSigning (Join-Path" +
+            " $PayloadPath '" + target.replace(/\//g, "\\") + "').");
+    }
+    for (const target of payloadSigned) {
+        check(signing.payload_binaries.indexOf(target) >= 0,
+            signing.builder + " signs payload binary \"" + target + "\", which" +
+            " " + MANIFEST_RELATIVE_PATH + " signing.payload_binaries does" +
+            " not declare.");
+    }
+    for (const target of signing.stage_binaries) {
+        check(stageSigned.indexOf(target) >= 0,
+            signing.builder + " never signs staged binary \"" + target +
+            "\", which " + MANIFEST_RELATIVE_PATH + " signing.stage_binaries" +
+            " declares.");
+    }
+    for (const target of stageSigned) {
+        check(signing.stage_binaries.indexOf(target) >= 0,
+            signing.builder + " signs staged binary \"" + target + "\", which" +
+            " " + MANIFEST_RELATIVE_PATH + " signing.stage_binaries does not" +
+            " declare.");
+    }
+
+    check(assetShape(manifest, signing.final_artifact) !== null,
+        "signing.final_artifact \"" + signing.final_artifact + "\" is not a" +
+        " declared release asset.");
+}
+
 // --- Entry point ------------------------------------------------------------
 
 function loadManifest(root)
@@ -723,12 +1028,14 @@ function runCheck(root)
 {
     const manifest = loadManifest(root);
 
+    const workflowLines = new Map();
     const sitesByWorkflow = new Map();
     const uploadsByWorkflow = new Map();
     for (const consumer of manifest.consumers) {
         if (!isWorkflow(consumer) || !exists(root, consumer))
             continue;
         const lines = readFile(root, consumer).split(/\r?\n/);
+        workflowLines.set(consumer, lines);
         sitesByWorkflow.set(consumer, artifactSites(consumer, lines));
         uploadsByWorkflow.set(consumer, releaseUploadSites(consumer, lines));
     }
@@ -749,6 +1056,9 @@ function runCheck(root)
     checkReleaseAttachments(manifest, uploadsByWorkflow);
     checkAssetShapes(root, manifest);
     checkRetentionWorkflow(root, manifest);
+    checkQtVersion(root, manifest, workflowLines);
+    checkQtIfw(root, manifest, workflowLines);
+    checkSigning(root, manifest);
 
     if (violations.length > 0) {
         for (const message of violations)

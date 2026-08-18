@@ -353,6 +353,28 @@ jobs:
               exit $LASTEXITCODE
           }
 
+      # The contract test's artifact-level assertions need a built installer, so
+      # they cannot run in the source-only pass above. Without this step the
+      # checksum sidecar convention is declared and never exercised.
+      - name: Validate the packaged artifact checksum contract
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          $installer = Get-ChildItem -Path dist `
+              -Filter 'vnm_terminal_v*_windows_x64_unsigned.exe' |
+              Select-Object -First 1
+          if (-not $installer) {
+              throw 'Qt IFW installer was not created.'
+          }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File tests/windows_ifw_contract_tests.ps1 `
+            -SourceRoot . `
+            -ArtifactPath $installer.FullName
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
       - name: Record the signing payload provenance
         if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
         shell: pwsh
@@ -360,6 +382,15 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
+          # The Qt and Qt IFW identity recorded below is release metadata the
+          # provisioner and the packaging contract test already read, so the
+          # record is rendered from the same declaration rather than restated.
+          $releaseManifest = Get-Content -LiteralPath 'release/manifest.json' -Raw |
+              ConvertFrom-Json
+          if ($releaseManifest.schema -ne 1) {
+              throw "Unsupported release manifest schema $($releaseManifest.schema)."
+          }
+
           $provenance = 'dist/signing_provenance'
           New-Item -ItemType Directory -Path $provenance -Force | Out-Null
 
@@ -420,8 +451,8 @@ jobs:
               freetype_commit    = $freetypeCommit
               msdfgen_commit     = $msdfgenCommit
               source_date_epoch  = [long]$sourceEpoch
-              qt_version        = '6.11.1'
-              qt_ifw_version    = '4.11.0'
+              qt_version        = [string]$releaseManifest.qt.version
+              qt_ifw_version    = [string]$releaseManifest.qt_ifw.version
               runner_image      = $env:ImageOS
               runner_version    = $env:ImageVersion
               workflow_run_id   = $env:GITHUB_RUN_ID

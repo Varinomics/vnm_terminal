@@ -163,6 +163,45 @@
     }
   ],
 
+  "signing": {
+    "builder": "tools/build_windows_ifw_installer.ps1",
+    "publisher": "Varinomics Ltd",
+    "publisher_subject_pattern": "(?:^|,\\s*)CN=Varinomics Ltd(?:,|$)",
+    "publisher_declared_in": [
+      "packaging/windows/ifw/config.xml.in",
+      "packaging/linux/ifw/config.xml.in"
+    ],
+    "publisher_pattern_readers": [
+      "tools/build_windows_ifw_installer.ps1",
+      "tests/windows_ifw_installation_tests.ps1"
+    ],
+    "payload_binaries": [
+      "vnm_terminal.exe",
+      "vnm_terminal_runtime/vnm_terminal.exe"
+    ],
+    "stage_binaries": [
+      "packages/com.varinomics.vnm_terminal.maintenance/data/installerbase.exe"
+    ],
+    "final_artifact": "windows_installer"
+  },
+
+  "qt": {
+    "version": "6.11.1"
+  },
+
+  "qt_ifw": {
+    "version": "4.11.0",
+    "archive_url": "https://download.qt.io/online/qtsdkrepository/windows_x86/ifw/tools_ifw_411/qt.tools.ifw.411/4.11.0-0-202603231357ifw-win-x64.7z",
+    "archive_sha256": "c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1",
+    "cache_key_template": "${{ runner.os }}-qt-ifw-{version}-{archive_sha256}",
+    "root_directory_prefix": "vnm-ifw-",
+    "readers": [
+      "tools/provision_windows_ifw.ps1",
+      "tools/build_windows_ifw_installer.ps1",
+      "tests/windows_ifw_contract_tests.ps1"
+    ]
+  },
+
   "consumers": [
     ".github/workflows/artifact-retention.yml",
     ".github/workflows/ci-linux.yml",

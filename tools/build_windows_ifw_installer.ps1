@@ -13,9 +13,22 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$ifwVersion = '4.11.0'
+# Qt IFW identity and the publisher the signature must carry are release
+# metadata shared with the provisioner, the packaging contract test and the
+# installation lifecycle test, so they are read rather than restated. The
+# timestamp service is this script's own operational choice and has no second
+# home to drift from.
+$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$releaseManifest =
+    Get-Content -LiteralPath (Join-Path $repositoryRoot 'release\manifest.json') -Raw |
+        ConvertFrom-Json
+if ($releaseManifest.schema -ne 1) {
+    throw "Unsupported release manifest schema $($releaseManifest.schema)."
+}
+$ifwVersion = [string]$releaseManifest.qt_ifw.version
+$expectedPublisher = [string]$releaseManifest.signing.publisher
+$publisherSubjectPattern = [string]$releaseManifest.signing.publisher_subject_pattern
 $timestampUrl = 'http://timestamp.acs.microsoft.com'
-$expectedPublisher = 'Varinomics Ltd'
 
 function Assert-FileExists {
     param(
@@ -350,8 +363,7 @@ function Invoke-TrustedSigning {
         throw "The signature on $Path is not valid: $($signature.StatusMessage)"
     }
     if ($null -eq $signature.SignerCertificate -or
-        $signature.SignerCertificate.Subject -notmatch
-            '(?:^|,\s*)CN=Varinomics Ltd(?:,|$)')
+        $signature.SignerCertificate.Subject -notmatch $publisherSubjectPattern)
     {
         throw "The signature on $Path does not identify $expectedPublisher"
     }
@@ -360,7 +372,6 @@ function Invoke-TrustedSigning {
     }
 }
 
-$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $PayloadPath) {
     $PayloadPath = Join-Path $repositoryRoot 'dist\portable_candidate'
 }

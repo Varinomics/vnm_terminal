@@ -9,6 +9,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# The publisher the installed binaries must be signed by is the same fact the
+# builder enforces at signing time, so both read it from the release manifest
+# instead of carrying byte-identical copies of the subject pattern.
+$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$releaseManifest =
+    Get-Content -LiteralPath (Join-Path $repositoryRoot 'release\manifest.json') -Raw |
+        ConvertFrom-Json
+if ($releaseManifest.schema -ne 1) {
+    throw "Unsupported release manifest schema $($releaseManifest.schema)."
+}
+$expectedPublisher = [string]$releaseManifest.signing.publisher
+$publisherSubjectPattern = [string]$releaseManifest.signing.publisher_subject_pattern
+
 function Assert-InstallationContract {
     param(
         [Parameter(Mandatory = $true)]
@@ -136,8 +149,8 @@ function Assert-ProductSignature {
         Assert-InstallationContract `
             ($null -ne $signature.SignerCertificate -and
                 $signature.SignerCertificate.Subject -match
-                    '(?:^|,\s*)CN=Varinomics Ltd(?:,|$)') `
-            "$Path must be signed by Varinomics Ltd"
+                    $publisherSubjectPattern) `
+            "$Path must be signed by $expectedPublisher"
         if ($RequireSigned) {
             Assert-InstallationContract `
                 ($null -ne $signature.TimeStamperCertificate) `

@@ -6,13 +6,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$ifwVersion = '4.11.0'
-$ifwArchiveUrl =
-    'https://download.qt.io/online/qtsdkrepository/windows_x86/ifw/' +
-    'tools_ifw_411/qt.tools.ifw.411/' +
-    '4.11.0-0-202603231357ifw-win-x64.7z'
-$ifwArchiveSha256 =
-    'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1'
+# The Qt IFW identity is release metadata: the Windows CI cache key and the
+# packaging contract test have to agree with the archive this script verifies,
+# so all of them read release/manifest.json instead of restating it.
+$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$releaseManifest =
+    Get-Content -LiteralPath (Join-Path $repositoryRoot 'release\manifest.json') -Raw |
+        ConvertFrom-Json
+if ($releaseManifest.schema -ne 1) {
+    throw "Unsupported release manifest schema $($releaseManifest.schema)."
+}
+$ifwVersion = [string]$releaseManifest.qt_ifw.version
+$ifwArchiveUrl = [string]$releaseManifest.qt_ifw.archive_url
+$ifwArchiveSha256 = [string]$releaseManifest.qt_ifw.archive_sha256
 
 function Get-Sha256FileHash {
     param(
@@ -111,12 +117,11 @@ function Assert-IfwRoot {
     }
 }
 
-$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $ArchivePath) {
-    $ArchivePath = Join-Path $repositoryRoot 'build_ifw\qt-ifw-4.11.0\ifw-win-x64.7z'
+    $ArchivePath = Join-Path $repositoryRoot "build_ifw\qt-ifw-$ifwVersion\ifw-win-x64.7z"
 }
 if (-not $DestinationPath) {
-    $DestinationPath = Join-Path $repositoryRoot 'build_ifw\qt-ifw-4.11.0\root'
+    $DestinationPath = Join-Path $repositoryRoot "build_ifw\qt-ifw-$ifwVersion\root"
 }
 $ArchivePath = [System.IO.Path]::GetFullPath($ArchivePath)
 $DestinationPath = [System.IO.Path]::GetFullPath($DestinationPath)
