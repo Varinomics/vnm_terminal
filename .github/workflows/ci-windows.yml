@@ -382,6 +382,15 @@ jobs:
               return $found[0].FullName
           }
 
+          # The first three are this workflow's own checkouts. The rest are
+          # clones build_portable.bat makes under the build tree, and they exist
+          # at these paths only because the build configuration written above
+          # leaves VNM_MSDF_TEXT_SOURCE_DIR unset, which is what sends
+          # build_portable.bat down its fallback-clone path. A change to either
+          # script that moves or names those trees differently fails the release
+          # here rather than shipping a provenance record that omits them, and
+          # this step only runs for a release, so it is not covered by ordinary
+          # CI.
           $appCommit = Get-RepositoryCommit '.'
           $surfaceCommit = Get-RepositoryCommit '../vnm_terminal_surface'
           $chromeCommit = Get-RepositoryCommit '../vnm_qml_chrome'
