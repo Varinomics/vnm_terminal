@@ -604,6 +604,15 @@ function checkReleaseAttachments(manifest, uploadsByWorkflow)
             if (missing.length === 0 && unexpected.length === 0)
                 continue;
 
+            // The unsigned installer is the one asset whose presence here is a
+            // release defect rather than a bookkeeping error, so it is named
+            // when it is what drifted in and not otherwise.
+            const undeclaredAssets = manifest.release_assets
+                .filter(asset => asset.template &&
+                    !declaration.assets.some(entry => entry.asset === asset.id))
+                .filter(asset => unexpected.indexOf(
+                    prefix + normalizeShape(asset.template)) >= 0);
+
             violation(workflow + ":" + site.line + " job " + site.job +
                 " attaches [" + displayShapes(Array.from(observed)) + "]; " +
                 MANIFEST_RELATIVE_PATH + " declares [" +
@@ -612,8 +621,13 @@ function checkReleaseAttachments(manifest, uploadsByWorkflow)
                     ? " Missing: " + displayShapes(missing) + "."
                     : "") +
                 (unexpected.length > 0
-                    ? " Unexpected: " + displayShapes(unexpected) +
-                        ". A release must never attach the unsigned build."
+                    ? " Unexpected: " + displayShapes(unexpected) + "."
+                    : "") +
+                (undeclaredAssets.length > 0
+                    ? " A release must attach only the assets declared for" +
+                        " this job; " + sortedList(undeclaredAssets
+                            .map(asset => "\"" + asset.id + "\"")) +
+                        " is not one of them."
                     : ""));
         }
     }
@@ -1086,7 +1100,13 @@ if (!root || (mode !== "check" && mode !== "retention-families")) {
     process.exit(1);
 }
 
-if (mode === "check")
-    runCheck(root);
-else
-    runRetentionFamilies(root);
+try {
+    if (mode === "check")
+        runCheck(root);
+    else
+        runRetentionFamilies(root);
+}
+catch (error) {
+    process.stderr.write(error.message + "\n");
+    process.exit(1);
+}
