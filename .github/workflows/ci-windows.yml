@@ -371,9 +371,23 @@ jobs:
               return $commit
           }
 
+          function Get-SingleDependencyDirectory([string] $pattern) {
+              $matches = @(Get-ChildItem -LiteralPath 'build_portable/_deps' `
+                  -Directory -Filter $pattern)
+              if ($matches.Count -ne 1) {
+                  throw "Expected one build dependency matching $pattern, found $($matches.Count)."
+              }
+              return $matches[0].FullName
+          }
+
           $appCommit = Get-RepositoryCommit '.'
           $surfaceCommit = Get-RepositoryCommit '../vnm_terminal_surface'
           $chromeCommit = Get-RepositoryCommit '../vnm_qml_chrome'
+          $msdfTextCommit = Get-RepositoryCommit 'build_portable/_deps/vnm_msdf_text-src'
+          $qtDispatchCommit = Get-RepositoryCommit `
+              (Get-SingleDependencyDirectory '*qt_dispatch*-src')
+          $freetypeCommit = Get-RepositoryCommit 'build_portable/_deps/freetype-src'
+          $msdfgenCommit = Get-RepositoryCommit 'build_portable/_deps/msdfgen-src'
           $sourceEpoch = (& git show -s --format=%ct HEAD | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $sourceEpoch -notmatch '^[0-9]+$') {
               throw 'Could not read the application commit timestamp.'
@@ -387,10 +401,14 @@ jobs:
           [ordered]@{
               schema_version    = 1
               release_tag       = $env:RELEASE_TAG
-              app_commit        = $appCommit
-              surface_commit    = $surfaceCommit
-              chrome_commit     = $chromeCommit
-              source_date_epoch = [long]$sourceEpoch
+              app_commit         = $appCommit
+              surface_commit     = $surfaceCommit
+              chrome_commit      = $chromeCommit
+              msdf_text_commit   = $msdfTextCommit
+              qt_dispatch_commit = $qtDispatchCommit
+              freetype_commit    = $freetypeCommit
+              msdfgen_commit     = $msdfgenCommit
+              source_date_epoch  = [long]$sourceEpoch
               qt_version        = '6.11.1'
               qt_ifw_version    = '4.11.0'
               runner_image      = $env:ImageOS
@@ -520,7 +538,15 @@ jobs:
           if ($buildProvenance.schema_version -ne 1) {
               throw "Unsupported build provenance schema $($buildProvenance.schema_version)."
           }
-          foreach ($field in @('app_commit', 'surface_commit', 'chrome_commit')) {
+          foreach ($field in @(
+              'app_commit',
+              'surface_commit',
+              'chrome_commit',
+              'msdf_text_commit',
+              'qt_dispatch_commit',
+              'freetype_commit',
+              'msdfgen_commit'))
+          {
               $commit = [string]$buildProvenance.$field
               if ($commit -notmatch '^[0-9a-f]{40}$') {
                   throw "Build provenance field $field is not a full commit SHA."
@@ -537,7 +563,15 @@ jobs:
           if ($actual -ne [string]$buildProvenance.app_commit) {
               throw "Signing payload was built from $($buildProvenance.app_commit), but the release checkout is $actual."
           }
-          Write-Host "Signing app=$($buildProvenance.app_commit) surface=$($buildProvenance.surface_commit) chrome=$($buildProvenance.chrome_commit)"
+          Write-Host ("Signing app={0} surface={1} chrome={2} msdf_text={3} " +
+              "qt_dispatch={4} freetype={5} msdfgen={6}" -f
+              $buildProvenance.app_commit,
+              $buildProvenance.surface_commit,
+              $buildProvenance.chrome_commit,
+              $buildProvenance.msdf_text_commit,
+              $buildProvenance.qt_dispatch_commit,
+              $buildProvenance.freetype_commit,
+              $buildProvenance.msdfgen_commit)
 
           # And the payload has to be the one the manifest describes, file for
           # file, so a lossy artifact round trip cannot reach binarycreator.
