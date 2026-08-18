@@ -371,13 +371,15 @@ jobs:
               return $commit
           }
 
+          # $matches is a PowerShell automatic variable that -match rewrites, so
+          # this deliberately does not reuse the name for the search result.
           function Get-SingleDependencyDirectory([string] $pattern) {
-              $matches = @(Get-ChildItem -LiteralPath 'build_portable/_deps' `
+              $found = @(Get-ChildItem -LiteralPath 'build_portable/_deps' `
                   -Directory -Filter $pattern)
-              if ($matches.Count -ne 1) {
-                  throw "Expected one build dependency matching $pattern, found $($matches.Count)."
+              if ($found.Count -ne 1) {
+                  throw "Expected one build dependency matching $pattern, found $($found.Count)."
               }
-              return $matches[0].FullName
+              return $found[0].FullName
           }
 
           $appCommit = Get-RepositoryCommit '.'
