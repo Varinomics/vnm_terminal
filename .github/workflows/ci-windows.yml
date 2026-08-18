@@ -14,9 +14,12 @@ on:
   release:
     types: [ published ]
 
+# Release-event and manual recovery runs can target the same release tag while
+# carrying different refs. Serialize by the asset target, not by the triggering
+# ref, so two valid runs cannot upload --clobber over one another concurrently.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' && inputs.release_tag == '' }}
 
 permissions:
   contents: read
@@ -151,9 +154,12 @@ jobs:
   package:
     name: Portable ZIP and EXE (Windows x64)
     runs-on: windows-2022
-    # No credentials of any kind. This job runs on every push and pull request
-    # and executes repository-controlled build scripts and third-party actions,
-    # so it must not be able to reach Microsoft Artifact Signing. GitHub grants
+    # No signing or repository-write credentials. GitHub still gives the job a
+    # read-only GITHUB_TOKEN, and the private surface checkout may receive the
+    # repository-read token, but neither identity can reach Microsoft Artifact
+    # Signing or alter release assets. This job runs on every push and pull
+    # request and executes repository-controlled build scripts and third-party
+    # actions, so it must not receive the signing identity. GitHub grants
     # OIDC per job, not per step: every step of a job with id-token: write can
     # ask for a token, whatever `if:` guards the step that uses it. Signing
     # therefore lives in sign-windows-package below, which runs only for a
@@ -408,9 +414,11 @@ jobs:
   # moving tag inside this job is a moving tag next to the only credential in
   # the repository; the SHAs are the commits those tags named when the job was
   # written and want re-auditing before each release. The job deliberately does
-  # not check out the surface or chrome repositories, install Qt, or run any
-  # build or test script: it repackages an already-built payload, so none of
-  # that code needs to be inside the credential boundary.
+  # not check out the surface or chrome repositories, install Qt, compile the
+  # application, or run its test suite. It does check out the app release source
+  # and execute the audited IFW provisioning and packaging scripts needed to
+  # repackage the already-built payload, so those scripts remain inside the
+  # credential boundary and need the same review as the pinned actions.
   #
   # The release-signing environment stays on this job. It carries no protection
   # rules today and exists to give the OIDC token a stable subject - a release
@@ -526,13 +534,10 @@ jobs:
               exit $LASTEXITCODE
           }
 
-      - name: Authenticate to Azure for signing
-        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
-        with:
-          client-id: ${{ vars.TRUSTED_SIGNING_CLIENT_ID }}
-          tenant-id: ${{ vars.TRUSTED_SIGNING_TENANT_ID }}
-          subscription-id: ${{ vars.TRUSTED_SIGNING_SUBSCRIPTION_ID }}
-
+      # Acquire and locate the client before establishing an Azure session. This
+      # does not remove the job-level OIDC capability - only a separate job can
+      # do that - but it avoids exposing an already-authenticated Azure CLI cache
+      # to package retrieval and extraction.
       - name: Acquire Microsoft Artifact Signing client
         shell: pwsh
         run: |
@@ -564,7 +569,8 @@ jobs:
           }
 
           # No secrets here: endpoint, account and profile are public identifiers.
-          # The credential is the OIDC token azure/login already established.
+          # The following azure/login step establishes the OIDC-backed credential
+          # before this metadata is consumed by signtool.
           $metadata = [ordered]@{
               Endpoint               = $env:TRUSTED_SIGNING_ENDPOINT
               CodeSigningAccountName = $env:TRUSTED_SIGNING_ACCOUNT
@@ -584,6 +590,13 @@ jobs:
           "SIGNTOOL_PATH=$($signTool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "SIGNING_DLIB_PATH=$dlib"             | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "SIGNING_METADATA_PATH=$metadataPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Authenticate to Azure for signing
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          client-id: ${{ vars.TRUSTED_SIGNING_CLIENT_ID }}
+          tenant-id: ${{ vars.TRUSTED_SIGNING_TENANT_ID }}
+          subscription-id: ${{ vars.TRUSTED_SIGNING_SUBSCRIPTION_ID }}
 
       # Signing repackages rather than post-signing the unsigned installer on
       # purpose: build_windows_ifw_installer.ps1 signs vnm_terminal.exe, the
