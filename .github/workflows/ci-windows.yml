@@ -508,13 +508,12 @@ jobs:
           }
           Write-Host "Verified $($manifest.Count) payload files against the build manifest."
 
-      - name: Restore verified Qt IFW archive
-        id: ifw-cache-signing
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ${{ env.IFW_ARCHIVE_PATH }}
-          key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
-
+      # No cache step here on purpose. The IFW archive is small, this job runs
+      # only for a release, and provision_windows_ifw.ps1 downloads it and
+      # checks it against the pinned SHA-256 when it is absent - so caching buys
+      # a minute and costs another third-party action inside the credential
+      # boundary. It would also add a second restore/save pair to the workflow,
+      # which tests/windows_ifw_contract_tests.ps1 reads as two competing caches.
       - name: Provision Qt Installer Framework
         shell: pwsh
         working-directory: vnm_terminal
