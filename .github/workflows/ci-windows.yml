@@ -487,14 +487,43 @@ jobs:
   # repackage the already-built payload, so those scripts remain inside the
   # credential boundary and need the same review as the pinned actions.
   #
-  # The release-signing environment stays on this job. It carries no protection
-  # rules today and exists to give the OIDC token a stable subject - a release
-  # run's ref is refs/tags/<tag>, which changes every release, so a ref-scoped
-  # federated credential would need recreating each time, while the environment
-  # subject stays repo:Varinomics/vnm_terminal:environment:release-signing.
-  # Required reviewers and deployment-branch restrictions on that environment
-  # are still worth adding: they are the control that makes reaching this job
-  # deliberate rather than automatic.
+  # The release-signing environment stays on this job. It exists to give the
+  # OIDC token a stable subject: a release run's ref is refs/tags/<tag>, which
+  # changes every release, so a ref-scoped federated credential would need
+  # recreating each time, while the environment subject stays
+  # repo:Varinomics/vnm_terminal:environment:release-signing.
+  #
+  # That environment deliberately carries no protection rules. This is a
+  # decision, not an omission, and it is recorded here because it reads like a
+  # gap and is repeatedly reported as one.
+  #
+  # Required reviewers would be self-approval. The repository has one
+  # collaborator and one organization member, and they are the same admin who
+  # publishes the release, so the gate would ask the person who triggered the
+  # run to approve it seconds later. That is friction on every release in
+  # exchange for refusing nothing.
+  #
+  # A deployment branch and tag restriction cannot be added without removing
+  # the recovery path. Those rules match github.ref. A release event runs at
+  # refs/tags/<tag>, while the workflow_dispatch recovery this job also serves
+  # runs at refs/heads/master, so a tag pattern that admits the release blocks
+  # the dispatch. Admitting master back defeats the rule, because a wrong edit
+  # to this workflow lands on master, which is the case the restriction was
+  # meant to cover. Tag-only protection and manual recovery are mutually
+  # exclusive, and the recovery path is what re-signs a release whose signing
+  # job failed without burning a version number.
+  #
+  # What the boundary rests on instead is the if: condition below, which keeps
+  # this job off pushes and pull requests, and GitHub refusing environment
+  # access and id-token: write to a pull request from a fork, so outside code
+  # cannot mint this token however this file is written. Do not add
+  # pull_request_target here: it runs forked code in this repository's own
+  # context, where that last protection no longer applies.
+  #
+  # Revisit the decision when any of these change: a second identity gains
+  # write access, the workflow_dispatch signing path is retired, or the
+  # packaging scripts named above stop being reviewed as credential-boundary
+  # code.
   sign-windows-package:
     name: Sign Windows installer
     if: >-
