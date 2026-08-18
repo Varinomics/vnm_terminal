@@ -636,17 +636,19 @@ jobs:
         run: |
           $clientRoot = Join-Path $env:RUNNER_TEMP 'artifact-signing-client'
           New-Item -ItemType Directory -Path $clientRoot -Force | Out-Null
-          nuget.exe install Microsoft.Trusted.Signing.Client `
+          nuget.exe install Microsoft.ArtifactSigning.Client `
               -Version $env:ARTIFACT_SIGNING_CLIENT_VERSION `
+              -Source https://api.nuget.org/v3/index.json `
               -OutputDirectory $clientRoot `
               -ExcludeVersion `
+              -NoCache `
               -NonInteractive
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
 
           $dlib = Join-Path $clientRoot `
-              'Microsoft.Trusted.Signing.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
+              'Microsoft.ArtifactSigning.Client\bin\x64\Azure.CodeSigning.Dlib.dll'
           if (-not (Test-Path -LiteralPath $dlib)) {
               throw "Artifact Signing dlib was not found at $dlib."
           }
@@ -669,11 +671,18 @@ jobs:
               CodeSigningAccountName = $env:TRUSTED_SIGNING_ACCOUNT
               CertificateProfileName = $env:TRUSTED_SIGNING_PROFILE
               CorrelationId          = $env:GITHUB_RUN_ID
+              # azure/login establishes the Azure CLI session used below.
+              # Fail closed instead of allowing DefaultAzureCredential to probe
+              # runner-local or future credential sources unexpectedly.
               ExcludeCredentials     = @(
+                  'EnvironmentCredential',
                   'ManagedIdentityCredential',
+                  'WorkloadIdentityCredential',
                   'SharedTokenCacheCredential',
-                  'VisualStudioCodeCredential',
                   'VisualStudioCredential',
+                  'VisualStudioCodeCredential',
+                  'AzurePowerShellCredential',
+                  'AzureDeveloperCliCredential',
                   'InteractiveBrowserCredential'
               )
           }

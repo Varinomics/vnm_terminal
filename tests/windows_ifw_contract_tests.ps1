@@ -1624,11 +1624,30 @@ Assert-IfwContract `
             'path:\s*\$\{\{\s*env\.IFW_ARCHIVE_PATH\s*\}\}').Count -eq 2) `
     'Windows CI restore and save steps must share the exact archive path and cache key'
 Assert-IfwContract `
-    ($windowsWorkflow -match 'actions/cache/restore@v4' -and
-        $windowsWorkflow -match 'actions/cache/save@v4' -and
+    ($windowsWorkflow -match 'actions/cache/restore@[0-9a-f]{40}' -and
+        $windowsWorkflow -match 'actions/cache/save@[0-9a-f]{40}' -and
         $windowsWorkflow -match 'tools/provision_windows_ifw\.ps1' -and
         $windowsWorkflow -match 'set IFW_ROOT=\$env:IFW_ROOT') `
     'Windows CI must cache only the verified archive, reprovision IFW, and pass IFW_ROOT to packaging'
+Assert-IfwContract `
+    ($windowsWorkflow -match `
+            'nuget\.exe install Microsoft\.ArtifactSigning\.Client' -and
+        $windowsWorkflow -match `
+            '-Version \$env:ARTIFACT_SIGNING_CLIENT_VERSION' -and
+        $windowsWorkflow -match `
+            '-Source https://api\.nuget\.org/v3/index\.json' -and
+        $windowsWorkflow -match '-NoCache' -and
+        $windowsWorkflow -match `
+            'Microsoft\.ArtifactSigning\.Client\\bin\\x64\\Azure\.CodeSigning\.Dlib\.dll' -and
+        $windowsWorkflow -notmatch 'Microsoft\.Trusted\.Signing\.Client') `
+    'release signing must acquire the pinned current Artifact Signing client from nuget.org'
+Assert-IfwContract `
+    ($windowsWorkflow -match "'EnvironmentCredential'" -and
+        $windowsWorkflow -match "'WorkloadIdentityCredential'" -and
+        $windowsWorkflow -match "'AzurePowerShellCredential'" -and
+        $windowsWorkflow -match "'AzureDeveloperCliCredential'" -and
+        $windowsWorkflow -notmatch "'AzureCliCredential'") `
+    'the signing dlib must be restricted to the Azure CLI credential established by azure/login'
 Assert-IfwContract `
     ($windowsWorkflow -match `
         '-File tests/windows_ifw_installation_tests\.ps1[\s\S]*?-InstallerPath \$installer\.FullName' -and
