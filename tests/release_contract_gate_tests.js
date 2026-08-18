@@ -368,6 +368,27 @@ const CASES = [
         expect: "which no release asset declares"
     },
     {
+        name: "a documented Qt IFW root left on the previous version",
+        tool: "release_manifest.js",
+        mutate: root => {
+            const text = readText(root, "build_config.bat.example");
+            writeText(root, "build_config.bat.example",
+                text.replace("qt-ifw-4.11.0", "qt-ifw-4.10.0"));
+        },
+        expect: "names the directory \"qt-ifw-4.10.0\""
+    },
+    {
+        name: "a runner IFW root left on the previous version",
+        tool: "release_manifest.js",
+        mutate: root => {
+            const relativePath = WORKFLOW_DIRECTORY + "/ci-windows.yml";
+            const text = readText(root, relativePath);
+            writeText(root, relativePath,
+                text.split("vnm-ifw-4.11.0").join("vnm-ifw-4.10.0"));
+        },
+        expect: "names the directory \"vnm-ifw-4.10.0\""
+    },
+    {
         name: "a workflow the manifest does not declare",
         tool: "release_manifest.js",
         mutate: addProbeWorkflow,

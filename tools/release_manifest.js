@@ -61,6 +61,7 @@ const REQUIRED_LISTS = [
     "release_assets",
     "release_attachments",
     "consumers",
+    "qt_ifw.directory_prefixes",
     "qt_ifw.readers",
     "signing.publisher_declared_in",
     "signing.publisher_pattern_readers",
@@ -943,11 +944,45 @@ function escapeRegExp(text)
     return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// A directory whose name embeds the Qt IFW version is a copy of that version
+// that no reader derives, because the files holding these two are a workflow
+// step and a build configuration example, and neither can read a JSON file. The
+// residue rule below cannot see them once the version moves: it strips the
+// version the manifest declares now, so a directory still naming the previous
+// one is invisible to it. This rule reads the version out of the name instead,
+// which is what a stale copy actually looks like.
+function checkQtIfwDirectoryNames(root, manifest)
+{
+    const ifw = manifest.qt_ifw;
+    for (const consumer of manifest.consumers) {
+        if (!exists(root, consumer))
+            continue;
+
+        readFile(root, consumer).split(/\r?\n/).forEach((line, index) => {
+            for (const prefix of ifw.directory_prefixes) {
+                const pattern = new RegExp(
+                    escapeRegExp(prefix) + "([0-9]+(?:\\.[0-9]+)+)", "g");
+                let match;
+                while ((match = pattern.exec(line)) !== null) {
+                    check(match[1] === ifw.version,
+                        consumer + ":" + (index + 1) + " names the directory \"" +
+                        match[0] + "\", but " + MANIFEST_RELATIVE_PATH +
+                        " qt_ifw.version is " + ifw.version + ". The" +
+                        " provisioner derives that directory from the" +
+                        " manifest, so this copy names a directory nothing" +
+                        " creates.");
+                }
+            }
+        });
+    }
+}
+
 function checkQtIfw(root, manifest, workflowLines)
 {
     const ifw = manifest.qt_ifw;
     const cacheKey = qtIfwCacheKey(manifest);
-    const rootDirectory = ifw.root_directory_prefix + ifw.version;
+    const rootDirectories = ifw.directory_prefixes
+        .map(prefix => prefix + ifw.version);
 
     // The provisioner used to own this URL and the packaging contract test
     // asserted its exact shape. Both facts live here now, so the official
@@ -1001,14 +1036,15 @@ function checkQtIfw(root, manifest, workflowLines)
         // workflow has to be one of the two literals GitHub Actions forces:
         // the cache key and the runner-local IFW root directory.
         lines.forEach((line, index) => {
-            const residue = line
-                .split(cacheKey).join("")
-                .split(rootDirectory).join("");
+            let residue = line.split(cacheKey).join("");
+            for (const directory of rootDirectories)
+                residue = residue.split(directory).join("");
             check(residue.indexOf(ifw.version) < 0,
                 workflow + ":" + (index + 1) + " restates the Qt IFW version " +
-                ifw.version + " outside the cache key and the \"" +
-                rootDirectory + "\" root directory. qt_ifw.version in " +
-                MANIFEST_RELATIVE_PATH + " is the only other copy.");
+                ifw.version + " outside the cache key and the " +
+                sortedList(rootDirectories) + " directory names." +
+                " qt_ifw.version in " + MANIFEST_RELATIVE_PATH +
+                " is the only other copy.");
             check(residue.indexOf(ifw.archive_sha256) < 0,
                 workflow + ":" + (index + 1) + " restates the Qt IFW archive" +
                 " checksum outside the cache key. qt_ifw.archive_sha256 in " +
@@ -1282,6 +1318,7 @@ function runCheck(root)
     checkRetentionWorkflow(root, manifest);
     checkQtVersion(root, manifest, workflowLines);
     checkQtIfw(root, manifest, workflowLines);
+    checkQtIfwDirectoryNames(root, manifest);
     checkSigning(root, manifest);
 
     if (violations.length > 0)
