@@ -49,13 +49,17 @@ jobs:
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
           persist-credentials: false
 
-      # Every dependency repository is public, so the run needs no credential
-      # beyond the workflow token and a fork pull request resolves exactly as
-      # a branch push does.
+      # The dependency checkouts below carry the repository-read token where one
+      # exists and fall back to the workflow token, so this resolution takes the
+      # same credential: a repository that becomes private again must not stop
+      # every job of all three workflows at the first one while the checkouts
+      # still hold a credential that would work. A fork pull request sees no
+      # secret and resolves with the workflow token, exactly as a branch push
+      # does while every dependency repository is public.
       - name: Resolve dependency commits
         id: resolve
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
           RESOLVE_FROM: ${{ github.event_name == 'release' && 'lock' || 'master' }}
           STALE_LOCK_IS_FATAL: ${{ github.event_name == 'release' && '1' || '0' }}
         run: node tools/dependencies_lock.js resolve .
