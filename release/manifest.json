@@ -220,6 +220,7 @@
     "build_config.bat.example",
     "build_portable.bat",
     "build_windows_packages.bat",
+    "docs/releasing.md",
     "README.md",
     "tools/build_linux_ifw_installer.sh",
     "tools/build_windows_ifw_installer.ps1",
