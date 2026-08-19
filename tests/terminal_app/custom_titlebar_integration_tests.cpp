@@ -875,8 +875,10 @@ bool test_custom_titlebar_geometry()
             titlebar.titlebar_item(),
             QStringLiteral("vnm_animated_mark"));
         if (mark != nullptr && mark->parentItem() != nullptr) {
-            ok &= check(mark->parentItem()->z() > titlebar_frame_top->z(),
-                "titlebar top window frame is below the titlebar content layer");
+            // The frame edge paints above the content layer so full-height
+            // hover/pressed button backgrounds cannot cover it.
+            ok &= check(titlebar_frame_top->z() > mark->parentItem()->z(),
+                "titlebar top window frame is above the titlebar content layer");
         }
     }
 

@@ -228,6 +228,9 @@ if(WIN32)
         QICOPlugin
         QWindowsIntegrationPlugin
     )
+    find_package(Qt6Svg 6.11 REQUIRED COMPONENTS
+        QSvgPlugin
+    )
     find_package(Qt6 6.11 REQUIRED COMPONENTS
         QuickControls2Basic
         QuickControls2BasicStyleImpl
@@ -239,6 +242,8 @@ if(WIN32)
 
     vnm_terminal_copy_qt_plugin(Qt6::QWindowsIntegrationPlugin platforms)
     vnm_terminal_copy_qt_plugin(Qt6::QICOPlugin imageformats)
+    vnm_terminal_copy_qt_plugin(Qt6::QSvgPlugin imageformats)
+    vnm_terminal_copy_qt_runtime_library(Qt6::Svg)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Basic)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2BasicStyleImpl)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Fusion)
