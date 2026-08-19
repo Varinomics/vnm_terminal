@@ -802,12 +802,7 @@ function Assert-IfwSignedValidationRuntime {
     $TrustedSigningDlibPath = 'unused-dlib'
     $TrustedSigningMetadataPath = 'unused-metadata'
     $timestampUrl = 'https://timestamp.example.test'
-    # The extracted helper reads both of these from its own script scope,
-    # which this harness replaces. The publisher pattern comes from the real
-    # manifest so the fixtures below exercise the pattern that ships.
-    $expectedPublisher = [string]$releaseManifest.signing.publisher
-    $publisherSubjectPattern =
-        [string]$releaseManifest.signing.publisher_subject_pattern
+    $expectedPublisher = 'Varinomics Ltd'
     $signatureFixture = $null
     function Get-AuthenticodeSignature {
         param([string]$LiteralPath)
@@ -955,12 +950,10 @@ function Assert-IfwProvisionerRuntime {
         Assert-IfwContract (Test-Path -LiteralPath $markerPath -PathType Leaf) `
             'fresh provisioning must atomically publish its verification marker with the root'
         $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
+        Assert-IfwContract ($marker.version -eq '4.11.0') `
+            'the provisioned root marker must identify IFW 4.11.0'
         Assert-IfwContract `
-            ($marker.version -eq [string]$releaseManifest.qt_ifw.version) `
-            'the provisioned root marker must identify the declared IFW version'
-        Assert-IfwContract `
-            ($marker.archive_sha256 -eq
-                [string]$releaseManifest.qt_ifw.archive_sha256) `
+            ($marker.archive_sha256 -eq 'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1') `
             'the provisioned root marker must record the verified official archive hash'
 
         $staleSentinelPath = Join-Path $destinationPath 'must-not-survive-reprovision.txt'
@@ -1026,7 +1019,6 @@ $windowsPackagesPath = Join-Path $resolvedSourceRoot 'build_windows_packages.bat
 $buildConfigExamplePath = Join-Path $resolvedSourceRoot 'build_config.bat.example'
 $brandRendererPath = Join-Path $resolvedSourceRoot 'tools\render_windows_ifw_brand_assets.py'
 $noticesPath = Join-Path $resolvedSourceRoot 'THIRD_PARTY_NOTICES.md'
-$releaseManifestPath = Join-Path $resolvedSourceRoot 'release\manifest.json'
 
 [xml]$config = Get-Content -Raw -LiteralPath $configPath
 $styleSheet = Get-Content -Raw -LiteralPath $styleSheetPath
@@ -1052,13 +1044,6 @@ $buildConfigExample = Get-Content -Raw -LiteralPath $buildConfigExamplePath
 $brandRenderer = Get-Content -Raw -LiteralPath $brandRendererPath
 $notices = Get-Content -Raw -LiteralPath $noticesPath
 $installationTests = Get-Content -Raw -LiteralPath $installationTestsPath
-# The Qt IFW identity and the publisher identity are declared once in the
-# release manifest, so the assertions below compare the packaging surface
-# with that declaration instead of carrying their own copies of it.
-$releaseManifest = Get-Content -Raw -LiteralPath $releaseManifestPath |
-    ConvertFrom-Json
-Assert-IfwContract ($releaseManifest.schema -eq 1) `
-    'the release manifest must declare schema 1'
 
 Assert-IfwReadyPageRuntime $controllerScriptPath
 Assert-IfwExistingInstallationRuntime $controllerScriptPath
@@ -1079,9 +1064,8 @@ Assert-IfwContract ($config.Installer.Name -eq 'vnm_terminal') `
     'the product name must match the application'
 Assert-IfwContract ($config.Installer.Title -eq 'vnm_terminal') `
     'the window title must stay the bare product name because IFW appends its own wizard wording'
-Assert-IfwContract `
-    ($config.Installer.Publisher -eq [string]$releaseManifest.signing.publisher) `
-    'the installer metadata must name the declared release publisher'
+Assert-IfwContract ($config.Installer.Publisher -eq 'Varinomics Ltd') `
+    'the publisher must be Varinomics Ltd'
 Assert-IfwContract `
     ($config.Installer.TargetDir -eq '@ApplicationsDirX64@/vnm_terminal') `
     'the target must be 64-bit Program Files'
@@ -1271,8 +1255,7 @@ Assert-IfwContract `
 
 if ($ArtifactPath) {
     $resolvedArtifactPath = (Resolve-Path -LiteralPath $ArtifactPath).Path
-    $artifactChecksumPath =
-        "$resolvedArtifactPath$([string]$releaseManifest.checksum.suffix)"
+    $artifactChecksumPath = "$resolvedArtifactPath.sha256"
     Assert-IfwContract (Test-Path -LiteralPath $artifactChecksumPath -PathType Leaf) `
         'the final executable must have a checksum written after final signing'
     $actualArtifactHash =
@@ -1591,6 +1574,15 @@ Assert-IfwContract `
     ($maintenanceInstallScript -match '@TargetDir@/installerbase\.exe') `
     'the maintenance component must select its packaged installerbase'
 
+Assert-IfwContract ($provisionScript -match '\$ifwVersion\s*=\s*''4\.11\.0''') `
+    'the IFW tool version must be pinned to 4.11.0'
+Assert-IfwContract `
+    ($provisionScript -match 'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1') `
+    'the official IFW archive checksum must remain pinned'
+Assert-IfwContract `
+    ($provisionScript -match 'https://download\.qt\.io/online/qtsdkrepository/windows_x86/ifw/' -and
+        $provisionScript -match '4\.11\.0-0-202603231357ifw-win-x64\.7z') `
+    'the provisioner must own the exact official IFW 4.11.0 archive URL'
 Assert-IfwContract `
     ($provisionScript -match 'Get-Sha256FileHash\s+\$ArchivePath' -and
         $provisionScript -match '--fail' -and
@@ -1617,7 +1609,8 @@ Assert-IfwContract `
         [regex]::Matches($buildScript, 'Get-AuthenticodeSignature').Count -eq 1 -and
         $buildScript -match '\$signature\.Status\s+-ne\s+''Valid''' -and
         $buildScript -match `
-            '\$signature\.SignerCertificate\.Subject\s+-notmatch \$publisherSubjectPattern' -and
+            '\$signature\.SignerCertificate\.Subject\s+-notmatch' -and
+        $buildScript -match 'CN=Varinomics Ltd' -and
         $buildScript -match '\$signature\.TimeStamperCertificate') `
     'unsigned validation must inspect the PE certificate table while signed validation remains strict and timestamped'
 Assert-IfwContract `
@@ -1644,10 +1637,9 @@ Assert-IfwContract `
         $windowsWorkflow -match '"IFW_ARCHIVE_PATH=\$ifwArchivePath"[\s\S]*?\$env:GITHUB_ENV' -and
         $windowsWorkflow -match '"IFW_ROOT=\$ifwRoot"[\s\S]*?\$env:GITHUB_ENV') `
     'Windows CI must derive IFW paths on the runner before the cache step and export them'
-$ifwCacheKey = ([string]$releaseManifest.qt_ifw.cache_key_template).Replace(
-    '{version}', [string]$releaseManifest.qt_ifw.version).Replace(
-    '{archive_sha256}', [string]$releaseManifest.qt_ifw.archive_sha256)
-$ifwCacheKeyPattern = [regex]::Escape($ifwCacheKey)
+$ifwCacheKeyPattern =
+    '\$\{\{ runner\.os \}\}-qt-ifw-4\.11\.0-' +
+    'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1'
 Assert-IfwContract `
     ([regex]::Matches($windowsWorkflow, $ifwCacheKeyPattern).Count -eq 2 -and
         [regex]::Matches(
@@ -1705,17 +1697,16 @@ Assert-IfwContract `
         $installationTests -match `
             'Test-Path -LiteralPath \$startMenuRoot') `
     'hosted Windows CI must commit an all-users installation, verify its shortcut and registration, run it, purge it, and check residue'
-# The artifact name and the archive globs were restated here as regexes.
-# release/manifest.json declares them once and tools/release_manifest.js
-# compares the workflow against it in both directions, on every host, naming the
-# drifted value; release_attachments.source_artifacts declares which artifact
-# the attaching job may download, which is what keeps the unsigned build out of
-# the release. What is left is the half neither covers: the release archive must
-# be rebuilt from the signed payload rather than copied from the unsigned build.
 Assert-IfwContract `
     ($windowsWorkflow -match `
-        '- name: Build signed portable archive[\s\S]*?Compress-Archive') `
-    'the release portable archive must be rebuilt from the signed payload'
+            '- name: Build signed portable archive[\s\S]*?Compress-Archive' -and
+        $windowsWorkflow -match `
+            'name: vnm-terminal-windows-x64-signed[\s\S]*?vnm_terminal_v\*_w64\.zip[\s\S]*?vnm_terminal_v\*_w64\.zip\.sha256' -and
+        $windowsWorkflow -notmatch `
+            '(?s)attach-release-packages:.*?Download unsigned Windows package artifacts' -and
+        $windowsWorkflow -match `
+            'dist/vnm_terminal_v\*_w64\.zip\.sha256') `
+    'release attachment must publish the portable ZIP rebuilt from the signed payload'
 Assert-IfwContract `
     ($windowsWorkflow -match `
             '-File tests/windows_ifw_installation_tests\.ps1[\s\S]*?-InstallerPath \$installer\.FullName[\s\S]*?-RequireSigned' -and

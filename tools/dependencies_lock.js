@@ -1,8 +1,8 @@
 // Dependency identity gate. release/dependencies.lock.json is the single
 // declaration of what a release was built from: the owned repositories, the
 // branch each tracks, the commit a release was cut from, and the job output
-// each is carried by. release/manifest.json answers what the release *is*;
-// this file answers what it was built *from*, and the two never overlap.
+// each is carried by. It answers what a release was built *from*; nothing else
+// in the tree records that, and nothing else needs to.
 //
 // Ordinary CI still tracks master. What changes is that a workflow run
 // resolves each branch once, in a small unprivileged job, and every build,

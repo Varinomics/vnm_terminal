@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "artifacts": [
+    {
+      "id": "source",
+      "name": "vnm-terminal-source"
+    },
+    {
+      "id": "windows_unsigned",
+      "name": "vnm-terminal-windows-x64-unsigned"
+    },
+    {
+      "id": "windows_signing_payload",
+      "name": "vnm-terminal-windows-x64-signing-payload"
+    },
+    {
+      "id": "windows_signed",
+      "name": "vnm-terminal-windows-x64-signed"
+    },
+    {
+      "id": "linux",
+      "name": "vnm-terminal-linux-x64"
+    },
+    {
+      "id": "macos",
+      "name_template": "vnm_terminal_v{version}_macos_x64_unnotarized",
+      "name_expressions": [
+        "${{ steps.package.outputs.artifact_name }}",
+        "${{ needs.build-and-test.outputs.artifact_name }}"
+      ],
+      "prune_pattern": "^vnm_terminal_v.*_macos_x64"
+    }
+  ]
+}

@@ -495,15 +495,6 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
-          # The Qt and Qt IFW identity recorded below is release metadata the
-          # provisioner and the packaging contract test already read, so the
-          # record is rendered from the same declaration rather than restated.
-          $releaseManifest = Get-Content -LiteralPath 'release/manifest.json' -Raw |
-              ConvertFrom-Json
-          if ($releaseManifest.schema -ne 1) {
-              throw "Unsupported release manifest schema $($releaseManifest.schema)."
-          }
-
           $provenance = 'dist/signing_provenance'
           New-Item -ItemType Directory -Path $provenance -Force | Out-Null
 
@@ -553,8 +544,8 @@ jobs:
               freetype_commit    = $freetypeCommit
               msdfgen_commit     = $msdfgenCommit
               source_date_epoch  = [long]$sourceEpoch
-              qt_version        = [string]$releaseManifest.qt.version
-              qt_ifw_version    = [string]$releaseManifest.qt_ifw.version
+              qt_version        = '6.11.1'
+              qt_ifw_version    = '4.11.0'
               runner_image      = $env:ImageOS
               runner_version    = $env:ImageVersion
               workflow_run_id   = $env:GITHUB_RUN_ID

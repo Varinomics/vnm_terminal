@@ -9,19 +9,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-# The publisher the installed binaries must be signed by is the same fact the
-# builder enforces at signing time, so both read it from the release manifest
-# instead of carrying byte-identical copies of the subject pattern.
-$repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$releaseManifest =
-    Get-Content -LiteralPath (Join-Path $repositoryRoot 'release\manifest.json') -Raw |
-        ConvertFrom-Json
-if ($releaseManifest.schema -ne 1) {
-    throw "Unsupported release manifest schema $($releaseManifest.schema)."
-}
-$expectedPublisher = [string]$releaseManifest.signing.publisher
-$publisherSubjectPattern = [string]$releaseManifest.signing.publisher_subject_pattern
-
 function Assert-InstallationContract {
     param(
         [Parameter(Mandatory = $true)]
@@ -149,8 +136,8 @@ function Assert-ProductSignature {
         Assert-InstallationContract `
             ($null -ne $signature.SignerCertificate -and
                 $signature.SignerCertificate.Subject -match
-                    $publisherSubjectPattern) `
-            "$Path must be signed by $expectedPublisher"
+                    '(?:^|,\s*)CN=Varinomics Ltd(?:,|$)') `
+            "$Path must be signed by Varinomics Ltd"
         if ($RequireSigned) {
             Assert-InstallationContract `
                 ($null -ne $signature.TimeStamperCertificate) `
@@ -291,16 +278,13 @@ try {
         'the committed all-users installation must have one machine registration'
 
     Assert-ProductSignature $resolvedInstallerPath
-    # The binaries signed inside the payload are declared once, in the manifest
-    # the builder signs them from, so a payload binary added there is verified
-    # here instead of in a second list somebody has to remember. The maintenance
-    # tool is written by the installer from the signed installer base and is not
-    # part of the payload.
-    foreach ($payloadBinary in $releaseManifest.signing.payload_binaries) {
-        Assert-ProductSignature (
-            Join-Path $installRoot ($payloadBinary -replace '/', '\'))
+    foreach ($productExecutable in @(
+        $launcherPath,
+        $runtimePath,
+        $maintenancePath
+    )) {
+        Assert-ProductSignature $productExecutable
     }
-    Assert-ProductSignature $maintenancePath
 
     # A console-subsystem installer makes Windows create, show and destroy an
     # empty terminal window before its wizard appears, and the maintenance tool

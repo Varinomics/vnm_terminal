@@ -1,29 +1,27 @@
-// Drift drills for the two release gates. release/manifest.json and
-// release/dependencies.lock.json declare the release surface once, and
-// tools/release_manifest.js and tools/dependencies_lock.js are what make that
-// declaration authoritative. Those programs are only worth their contract if a
-// broken tree actually fails them, so each case here reintroduces one concrete
-// defect into a throwaway copy of the source tree and requires the gate to
-// report it by name.
+// Drift drills for the two release gates. release/artifacts.json declares the
+// artifact families a release produces and release/dependencies.lock.json
+// declares what it was built from; tools/release_artifacts.js and
+// tools/dependencies_lock.js are what make those declarations authoritative.
+// Those programs are only worth their contract if a broken tree actually fails
+// them, so each case here reintroduces one concrete defect into a throwaway
+// copy of the source tree and requires the gate to report it by name.
 //
-// Every case is a defect that once passed. The gates used to skip a check whose
-// subject they could not find: an absent manifest field, a producer that does
-// not exist, a locked checkout missing from the workspace. Skipping turns a
-// deleted declaration into a silently narrower contract. A gate that cannot
-// find what it was told to check must fail, and these drills are how that stays
-// true.
+// The gates used to skip a check whose subject they could not find: an absent
+// declaration field, a locked checkout missing from the workspace. Skipping
+// turns a deleted declaration into a silently narrower contract. A gate that
+// cannot find what it was told to check must fail, and these drills are how
+// that stays true.
 //
-// The copy is assembled from the declarations themselves rather than from a
-// hardcoded file list, so a file that becomes a consumer, a reader or a
-// producer is drilled without editing this program. git is required: the
-// checkout verification compares real commits.
+// The copy is assembled from the declarations and the directories the gates
+// enumerate rather than from a hardcoded file list, so a file that becomes a
+// clone site or a workflow is drilled without editing this program. git is
+// required: the checkout verification compares real commits.
 
 const child_process = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const MANIFEST_RELATIVE_PATH = "release/manifest.json";
 const LOCK_RELATIVE_PATH = "release/dependencies.lock.json";
 const WORKFLOW_DIRECTORY = ".github/workflows";
 
@@ -66,21 +64,14 @@ function directoryEntries(root, relativePath)
         .map(name => relativePath + "/" + name);
 }
 
-// Everything either gate opens, derived from the two declarations so that the
-// copy cannot silently lose a file a rule depends on.
+// Everything either gate opens: the declarations and the programs themselves,
+// the workflow directory both enumerate, and the clone sites the lock names.
 function contractFiles(sourceRoot)
 {
-    const manifest = readJson(sourceRoot, MANIFEST_RELATIVE_PATH);
     const lock = readJson(sourceRoot, LOCK_RELATIVE_PATH);
-    const files = [MANIFEST_RELATIVE_PATH, LOCK_RELATIVE_PATH]
+    const files = directoryEntries(sourceRoot, "release")
         .concat(directoryEntries(sourceRoot, "tools"))
-        .concat(directoryEntries(sourceRoot, WORKFLOW_DIRECTORY))
-        .concat(manifest.consumers)
-        .concat(manifest.release_assets.map(asset => asset.produced_by))
-        .concat(manifest.signing.publisher_declared_in)
-        .concat(manifest.signing.publisher_pattern_readers)
-        .concat(manifest.qt_ifw.readers)
-        .concat([manifest.signing.builder]);
+        .concat(directoryEntries(sourceRoot, WORKFLOW_DIRECTORY));
 
     for (const name of Object.keys(lock.third_party))
         files.push(...lock.third_party[name].clone_sites);
@@ -178,114 +169,42 @@ function addProbeWorkflow(root)
     writeText(root, WORKFLOW_DIRECTORY + "/zz-probe.yml", PROBE_WORKFLOW);
 }
 
-// The unsigned portable archive carries the same file name as the archive
-// rebuilt from the signed payload, so a second download into the same directory
-// replaces the signed one and the release publishes it under the signed name.
-const UNSIGNED_DOWNLOAD = [
-    "      - name: Download unsigned Windows package artifacts",
-    "        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4",
-    "        with:",
-    "          name: vnm-terminal-windows-x64-unsigned",
-    "          path: dist",
-    ""
-].join("\n");
-
-function addUnsignedAttachmentDownload(root)
-{
-    const relativePath = WORKFLOW_DIRECTORY + "/ci-windows.yml";
-    const anchor = "      - name: Attach Windows packages to GitHub release\n";
-    const text = readText(root, relativePath);
-    if (text.indexOf(anchor) < 0)
-        throw new Error("ci-windows.yml no longer attaches Windows packages");
-    writeText(root, relativePath, text.replace(anchor, UNSIGNED_DOWNLOAD + anchor));
-}
-
 // --- Cases ------------------------------------------------------------------
 
 const CASES = [
     {
-        name: "a deleted signing.publisher_subject_pattern",
-        tool: "release_manifest.js",
+        name: "an artifact renamed in a workflow but not in the declaration",
+        tool: "release_artifacts.js",
         mutate: root => {
-            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
-            delete manifest.signing.publisher_subject_pattern;
-            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
+            const relativePath = WORKFLOW_DIRECTORY + "/ci-linux.yml";
+            const text = readText(root, relativePath);
+            if (text.indexOf("name: vnm-terminal-linux-x64\n") < 0)
+                throw new Error("ci-linux.yml no longer names that artifact");
+            writeText(root, relativePath, text.split("name: vnm-terminal-linux-x64\n")
+                .join("name: vnm-terminal-linux-x64-v2\n"));
         },
-        expect: "declares no signing.publisher_subject_pattern"
+        expect: "\"vnm-terminal-linux-x64-v2\", which release/artifacts.json" +
+            " does not declare"
     },
     {
-        name: "a release asset whose producer does not exist",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
-            const asset = manifest.release_assets.find(
-                entry => entry.id === "windows_portable_zip");
-            asset.produced_by = "build_portable.sh";
-            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
-        },
-        expect: "as its producer, but that file does not exist"
-    },
-    {
-        name: "a declared Qt IFW reader that does not exist",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
-            manifest.qt_ifw.readers.push("tools/provision_windows_ifw.sh");
-            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
-        },
-        expect: "as a reader of qt_ifw, but it does not exist"
+        name: "a workflow that uploads an artifact no family declares",
+        tool: "release_artifacts.js",
+        mutate: addProbeWorkflow,
+        expect: "\"vnm-terminal-probe-artifact\", which release/artifacts.json" +
+            " does not declare"
     },
     {
         name: "a retention family whose pattern would match every artifact",
-        tool: "release_manifest.js",
+        tool: "release_artifacts.js",
         mutate: root => {
-            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
-            const artifact = manifest.actions_artifacts.find(
-                entry => entry.retention.mode === "pattern");
-            artifact.retention.pattern = "";
-            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
+            const declaration = readJson(root, "release/artifacts.json");
+            const artifact = declaration.artifacts.find(
+                entry => entry.prune_pattern !== undefined);
+            artifact.prune_pattern = "";
+            writeJson(root, "release/artifacts.json", declaration);
             return { arguments: ["retention-families", root] };
         },
         expect: "selects every artifact in the repository"
-    },
-    {
-        name: "a publisher pattern that accepts any signer",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
-            manifest.signing.publisher_subject_pattern = ".*";
-            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
-        },
-        expect: "accepts the certificate subject \"CN=Unexpected Publisher\""
-    },
-    {
-        name: "a publisher pattern that refuses the publisher",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
-            manifest.signing.publisher_subject_pattern = "CN=Varinomics Limited";
-            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
-        },
-        expect: "refuses every release signature"
-    },
-    {
-        name: "an unsigned artifact downloaded into the attaching job",
-        tool: "release_manifest.js",
-        mutate: addUnsignedAttachmentDownload,
-        expect: "downloads artifact \"vnm-terminal-windows-x64-unsigned\"" +
-            " into job attach-release-packages"
-    },
-    {
-        name: "an attachment job that downloads none of its source artifacts",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
-            const declaration = manifest.release_attachments.find(
-                entry => entry.job === "attach-source-archive");
-            declaration.source_artifacts = ["windows_signed"];
-            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
-        },
-        expect: "but that job downloads no artifact named"
     },
     {
         name: "a dependency checked out beside the directory the lock names",
@@ -357,51 +276,6 @@ const CASES = [
         expect: "must set RESOLVE_FROM"
     },
     {
-        name: "a template variant no release asset is rendered from",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const manifest = readJson(root, MANIFEST_RELATIVE_PATH);
-            const template = manifest.asset_templates.windows_installer_template;
-            template.variants.unsigned = "_UNSIGNED";
-            writeJson(root, MANIFEST_RELATIVE_PATH, manifest);
-        },
-        expect: "which no release asset declares"
-    },
-    {
-        name: "a documented Qt IFW root left on the previous version",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const text = readText(root, "build_config.bat.example");
-            writeText(root, "build_config.bat.example",
-                text.replace("qt-ifw-4.11.0", "qt-ifw-4.10.0"));
-        },
-        expect: "names the directory \"qt-ifw-4.10.0\""
-    },
-    {
-        name: "a runner IFW root left on the previous version",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const relativePath = WORKFLOW_DIRECTORY + "/ci-windows.yml";
-            const text = readText(root, relativePath);
-            writeText(root, relativePath,
-                text.split("vnm-ifw-4.11.0").join("vnm-ifw-4.10.0"));
-        },
-        expect: "names the directory \"vnm-ifw-4.10.0\""
-    },
-    {
-        name: "a Linux sidecar written with another algorithm",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const relativePath = WORKFLOW_DIRECTORY + "/ci-linux.yml";
-            const text = readText(root, relativePath);
-            if (text.indexOf("sha256sum") < 0)
-                throw new Error("ci-linux.yml no longer writes a sidecar");
-            writeText(root, relativePath,
-                text.replace("sha256sum", "sha512sum"));
-        },
-        expect: "names the checksum algorithm \"sha512\""
-    },
-    {
         name: "a third-party tag pinned to no commit",
         tool: "dependencies_lock.js",
         mutate: root => {
@@ -410,35 +284,6 @@ const CASES = [
             writeJson(root, LOCK_RELATIVE_PATH, lock);
         },
         expect: "third_party.freetype.commit"
-    },
-    {
-        name: "a signature verification with its own list of payload binaries",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const relativePath = "tests/windows_ifw_installation_tests.ps1";
-            const text = readText(root, relativePath);
-            writeText(root, relativePath, text.replace(
-                "$releaseManifest.signing.payload_binaries",
-                "@('vnm_terminal.exe')"));
-        },
-        expect: "but it never reads that field"
-    },
-    {
-        name: "a sidecar suffix spelled out by the builder that reads it",
-        tool: "release_manifest.js",
-        mutate: root => {
-            const relativePath = "tools/build_windows_ifw_installer.ps1";
-            const text = readText(root, relativePath);
-            writeText(root, relativePath, text.replace(
-                "\"$artifactPath$checksumSuffix\"", "\"$artifactPath.sha256\""));
-        },
-        expect: "contains the literal \".sha256\""
-    },
-    {
-        name: "a workflow the manifest does not declare",
-        tool: "release_manifest.js",
-        mutate: addProbeWorkflow,
-        expect: "is not listed in release/manifest.json consumers"
     },
     {
         name: "a workflow that resolves a dependency branch of its own",
@@ -454,7 +299,7 @@ function runBaseline(sourceRoot, files)
 {
     const root = copyTree(sourceRoot, files);
     try {
-        for (const tool of ["release_manifest.js", "dependencies_lock.js"]) {
+        for (const tool of ["release_artifacts.js", "dependencies_lock.js"]) {
             const result = runGate(root, tool, ["check", root]);
             if (result.status !== 0) {
                 fail("baseline", tool + " does not pass on an unmodified copy" +

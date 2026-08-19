@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      # The prune families come from release/manifest.json, so this job needs
+      # The prune families come from release/artifacts.json, so this job needs
       # the repository. A workflow_run event resolves GITHUB_SHA to the default
       # branch, so the checkout is repository code, never a fork's. It stays
       # unauthenticated after the checkout because nothing here talks to a
@@ -144,14 +144,14 @@ jobs:
               done <<< "${completed_rows}"
           }
 
-          # One row per prune family, emitted from release/manifest.json:
+          # One row per prune family, emitted from release/artifacts.json:
           # "exact" families are filtered server-side by name, and a family
           # whose artifact name embeds the version carries a regular expression
           # instead. Reading them means a rename in a CI workflow cannot
-          # silently stop pruning: the manifest gate fails first.
-          families="$(node tools/release_manifest.js retention-families .)"
+          # silently stop pruning: the artifact gate fails first.
+          families="$(node tools/release_artifacts.js retention-families .)"
           if [[ -z "${families}" ]]; then
-              echo "release/manifest.json declared no prune families." >&2
+              echo "release/artifacts.json declared no prune families." >&2
               exit 1
           fi
 

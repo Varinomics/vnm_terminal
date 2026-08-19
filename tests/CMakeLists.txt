@@ -61,14 +61,14 @@ add_test(
         "${PROJECT_SOURCE_DIR}"
 )
 
-# The release manifest describes artifacts produced by all three CI workflows,
-# so this contract cannot live behind the if(WIN32) guard above: the Windows
-# contract test reads only ci-windows.yml and never runs on the hosts that
-# build the Linux and macOS artifacts.
+# The artifact declaration describes artifacts produced by all three CI
+# workflows, so this contract cannot live behind the if(WIN32) guard above: the
+# Windows contract test reads only ci-windows.yml and never runs on the hosts
+# that build the Linux and macOS artifacts.
 add_test(
-    NAME vnm_terminal_release_manifest_contract
+    NAME vnm_terminal_release_artifacts_contract
     COMMAND
-        node "${PROJECT_SOURCE_DIR}/tools/release_manifest.js"
+        node "${PROJECT_SOURCE_DIR}/tools/release_artifacts.js"
         check "${PROJECT_SOURCE_DIR}"
 )
 
