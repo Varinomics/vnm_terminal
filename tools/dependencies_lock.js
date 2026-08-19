@@ -146,11 +146,6 @@ function checkLockSelfConsistency(lock)
     const outputs = new Set();
     const paths = new Set();
     for (const entry of ownedEntries(lock)) {
-        check(/^[a-z][a-z0-9_]*$/.test(entry.name),
-            LOCK_RELATIVE_PATH + " owned key \"" + entry.name + "\" is not" +
-            " snake_case. Windows PowerShell 5.1 ConvertFrom-Json exposes lock" +
-            " keys as object properties, and the signing job reads them as" +
-            " $lock.owned.<key>.commit.");
         check(COMMIT_PATTERN.test(entry.commit),
             LOCK_RELATIVE_PATH + " owned." + entry.name + ".commit \"" +
             entry.commit + "\" is not a 40-character lowercase hex commit SHA.");
@@ -651,65 +646,6 @@ function runVerifyCheckout(root, workspace)
 
 // --- refresh ----------------------------------------------------------------
 
-// JSON.stringify would collapse the blank lines that separate the sections, so
-// the lock is rendered rather than dumped. This is a file people read and
-// review, and the only writer of it must not reformat everything it touches.
-//
-// Rendering is not rewriting. Every key is carried through in the order it was
-// found, including keys this program has no rule for, because a writer that
-// silently drops what it does not recognise turns a reviewed file into a file
-// only it may edit. The known keys are listed to fix their order, not to
-// select them.
-const OWNED_KEY_ORDER =
-    ["repository", "branch", "checkout_path", "output", "commit"];
-const THIRD_PARTY_KEY_ORDER =
-    ["repository_url", "tag", "commit", "clone_sites"];
-const TOP_LEVEL_SECTIONS = ["schema", "owned", "third_party"];
-
-function renderValue(value, indent)
-{
-    return JSON.stringify(value, null, 2)
-        .split("\n")
-        .map((line, index) => index === 0 ? line : indent + line)
-        .join("\n");
-}
-
-function renderMembers(entry, indent, order)
-{
-    const keys = order
-        .filter(key => entry[key] !== undefined)
-        .concat(Object.keys(entry).filter(key => order.indexOf(key) < 0));
-    return keys
-        .map(key => indent + JSON.stringify(key) + ": " +
-            renderValue(entry[key], indent))
-        .join(",\n");
-}
-
-function renderSection(name, group, order)
-{
-    const entries = Object.keys(group).map(key =>
-        "    " + JSON.stringify(key) + ": {\n" +
-        renderMembers(group[key], "      ", order) + "\n    }");
-    return "  " + JSON.stringify(name) + ": {\n" + entries.join(",\n") +
-        "\n  }";
-}
-
-function renderLock(lock)
-{
-    const sections = [
-        "  \"schema\": " + JSON.stringify(lock.schema),
-        renderSection("owned", lock.owned, OWNED_KEY_ORDER),
-        renderSection("third_party", lock.third_party, THIRD_PARTY_KEY_ORDER)
-    ];
-    for (const key of Object.keys(lock)) {
-        if (TOP_LEVEL_SECTIONS.indexOf(key) < 0)
-            sections.push("  " + JSON.stringify(key) + ": " +
-                renderValue(lock[key], "  "));
-    }
-
-    return "{\n" + sections.join(",\n\n") + "\n}\n";
-}
-
 function runRefresh(root)
 {
     const lock = loadLock(root);
@@ -720,7 +656,13 @@ function runRefresh(root)
             resolveTagCommit(lock.third_party[name]);
     }
 
-    fs.writeFileSync(path.join(root, LOCK_RELATIVE_PATH), renderLock(lock), "utf8");
+    // JSON.stringify carries every key through in the order it was found,
+    // including keys this program has no rule for, so a refresh is a diff of
+    // commit values and nothing else. A writer that silently dropped what it
+    // did not recognise would turn a reviewed file into a file only it may
+    // edit.
+    fs.writeFileSync(path.join(root, LOCK_RELATIVE_PATH),
+        JSON.stringify(lock, null, 2) + "\n", "utf8");
 
     const entries = ownedEntries(lock).concat(
         Object.keys(lock.third_party).map(

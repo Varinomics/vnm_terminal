@@ -1,6 +1,5 @@
 {
   "schema": 1,
-
   "owned": {
     "vnm_terminal_surface": {
       "repository": "Varinomics/vnm_terminal_surface",
@@ -31,7 +30,6 @@
       "commit": "a4ed685d140f4ed99abeb2fcf11864c87a8ced65"
     }
   },
-
   "third_party": {
     "freetype": {
       "repository_url": "https://gitlab.freedesktop.org/freetype/freetype.git",
