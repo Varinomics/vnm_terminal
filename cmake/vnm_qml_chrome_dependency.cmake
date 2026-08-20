@@ -1,8 +1,9 @@
 set(VNM_QML_CHROME_SOURCE_DIR "" CACHE PATH
     "Path to a source checkout of vnm_qml_chrome.")
 
-# The titlebar relies on the default-enabled PID reveal contract from 1.7.
-set(VNM_QML_CHROME_MIN_VERSION "1.7")
+# The titlebar relies on the top-frame stacking contract from 1.8, as well as
+# the default-enabled PID reveal contract introduced in 1.7.
+set(VNM_QML_CHROME_MIN_VERSION "1.8")
 
 if(NOT VNM_QML_CHROME_SOURCE_DIR)
     # Both candidates are siblings of this repository: the checkout may sit

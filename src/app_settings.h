@@ -84,15 +84,14 @@ struct Persisted_interaction_settings
 // which is what lets a user who moves a forced setting and moves it back store
 // that choice. Pass the same instance to every save of a run.
 //
-// The geometry fields are latched later than the rest. Every other forced
+// The geometry fields settle later than the rest. Every other forced
 // setting has a normalized value to read back from the surface at startup, but
 // a forced window size is given to the window system, which answers with the
 // geometry it is willing to grant - normalized, clamped, decorated, or moved to
-// fit. Latching the requested size would treat that answer as a user decision
-// and release the latch on the run's very first save; latching the granted
-// geometry instead keeps geometry on the same rule as everything else. Until
-// latch_command_line_window_geometry() takes that answer,
-// `window_geometry_latch_pending` stands in for the three geometry fields.
+// fit. Recording the requested size would treat that answer as a user decision
+// and release the overrides on the run's very first save. Until the event loop
+// observes the platform-granted geometry, the pending settlement stands in for
+// all three geometry fields and suppresses their persistence together.
 struct Command_line_setting_overrides
 {
     std::optional<qreal>   font_size;
@@ -105,7 +104,7 @@ struct Command_line_setting_overrides
     std::optional<QSize>   window_size;
     std::optional<QPoint>  window_position;
     std::optional<bool>    maximized;
-    bool                   window_geometry_latch_pending = false;
+    bool                   window_geometry_settlement_pending = false;
 };
 
 // Snapshots the forced settings from the surface, so call this once the startup
@@ -129,17 +128,14 @@ std::optional<QPoint> settings_window_position(QSettings& settings);
 Persisted_terminal_window_state load_persisted_terminal_window_state(
     QSettings& settings);
 
-// Records the geometry the window system granted a run started with an explicit
-// --window-size, so a later save can tell that answer from a user decision.
-// Call it once, as soon as the window has been shown and the startup geometry
-// has been applied: that point is the platform's answer, and nothing the user
-// does can have reached the event loop before it. Deferring the latch to
-// whichever save happens to run first cannot distinguish the two, because a
-// move, a resize, a maximize or shutdown can all beat the settle timer and be
-// latched as the platform's answer instead. Calling this without an explicit
-// --window-size, more than once, or with a state that carries no size, does
-// nothing.
-void latch_command_line_window_geometry(
+// Records the platform-granted geometry after Qt has re-entered the event loop,
+// so later saves can tell that answer from a user decision. The normal path
+// calls this from the first rendered-window lifecycle callback. If user input
+// arrives first, call it before delivering that input so the pre-action
+// platform geometry remains the baseline. Calling this synchronously after
+// show(), without an explicit --window-size, more than once, or with a state
+// that carries no size does nothing. Returns whether settlement happened.
+bool settle_command_line_window_geometry(
     const Persisted_terminal_window_state& state,
     Command_line_setting_overrides&        overrides);
 

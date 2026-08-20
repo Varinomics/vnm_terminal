@@ -466,16 +466,29 @@ bool test_platform_adjusted_command_line_geometry_does_not_replace_stored_geomet
     Command_line_setting_overrides overrides =
         command_line_setting_overrides(options, surface);
 
+    // The requested geometry exists before the event loop has observed the
+    // platform's answer. A save in that interval must leave startup unsettled
+    // and preserve the geometry from the earlier run.
+    Persisted_terminal_window_state requested;
+    requested.position  = QPoint(120, 140);
+    requested.size      = QSize(640, 480);
+    requested.maximized = false;
+
+    QSettings writer(path, QSettings::IniFormat);
+    save_persisted_terminal_window_state(writer, requested, overrides);
+    ok &= check(overrides.window_geometry_settlement_pending,
+        "a save before platform geometry is observed leaves startup unsettled");
+
     // What the window system actually granted: not the requested size, and at a
-    // position it picked. None of this is a user decision, and main() latches it
-    // as soon as the window has been shown rather than at the first save.
+    // position it picked. None of this is a user decision. The first
+    // rendered-window lifecycle callback observes it through the event loop.
     Persisted_terminal_window_state granted;
     granted.position  = QPoint(31, 47);
     granted.size      = QSize(638, 461);
     granted.maximized = false;
-    latch_command_line_window_geometry(granted, overrides);
+    ok &= check(settle_command_line_window_geometry(granted, overrides),
+        "platform-granted geometry settles command-line startup");
 
-    QSettings writer(path, QSettings::IniFormat);
     save_persisted_terminal_window_state(writer, granted, overrides);
 
     QSettings first_reader(path, QSettings::IniFormat);
@@ -516,8 +529,8 @@ bool test_platform_adjusted_command_line_geometry_does_not_replace_stored_geomet
     ok &= check(after_move.maximized,
         "a maximized state the run never entered stays ephemeral");
 
-    // Maximizing releases the maximized latch, so unmaximizing afterwards is an
-    // ordinary choice and reaches the stored preference.
+    // Maximizing releases the maximized override, so unmaximizing afterwards is
+    // an ordinary choice and reaches the stored preference.
     Persisted_terminal_window_state maximized = moved;
     maximized.maximized = true;
     save_persisted_terminal_window_state(writer, maximized, overrides);
@@ -534,11 +547,9 @@ bool test_platform_adjusted_command_line_geometry_does_not_replace_stored_geomet
     return ok;
 }
 
-// The startup latch is what separates the platform's answer from the user's
-// first geometry action. Before it existed the latch was taken by whichever save
-// ran first, and a move, a resize or a maximize inside the 400 ms settle window
-// restarts that timer, so the user's own geometry became the baseline and was
-// then suppressed as if the platform had chosen it.
+// User input can precede the first rendered-window callback. The input filter
+// settles the platform geometry before delivering that action, so the action's
+// resulting geometry remains distinguishable and persistable.
 bool test_user_geometry_before_the_first_save_still_persists()
 {
     QTemporaryDir dir;
@@ -571,16 +582,26 @@ bool test_user_geometry_before_the_first_save_still_persists()
     granted.position  = QPoint(31, 47);
     granted.size      = QSize(638, 461);
     granted.maximized = false;
-    latch_command_line_window_geometry(granted, overrides);
+    ok &= check(settle_command_line_window_geometry(granted, overrides),
+        "early user input first preserves the platform geometry baseline");
 
-    // The user grabs the window before the settle timer ever expires, so the
-    // run's first save carries their geometry rather than the platform's.
+    QSettings writer(path, QSettings::IniFormat);
+    save_persisted_terminal_window_state(writer, granted, overrides);
+    QSettings baseline_reader(path, QSettings::IniFormat);
+    const Persisted_terminal_window_state after_baseline =
+        load_persisted_terminal_window_state(baseline_reader);
+    ok &= check_optional_size(after_baseline.size, QSize(1024, 720),
+        "the pre-action platform size remains ephemeral");
+    ok &= check_optional_position(after_baseline.position, QPoint(120, 140),
+        "the pre-action platform position remains ephemeral");
+
+    // The user grabs the window before the first frame settles startup, so the
+    // later save carries their geometry rather than the platform's.
     Persisted_terminal_window_state moved_early;
     moved_early.position  = QPoint(300, 320);
     moved_early.size      = QSize(1280, 800);
     moved_early.maximized = false;
 
-    QSettings writer(path, QSettings::IniFormat);
     save_persisted_terminal_window_state(writer, moved_early, overrides);
 
     QSettings reader(path, QSettings::IniFormat);
@@ -591,11 +612,12 @@ bool test_user_geometry_before_the_first_save_still_persists()
     ok &= check_optional_position(after_move.position, QPoint(300, 320),
         "a move before the first save replaces the stored position");
 
-    // The same holds for a maximize, which saves immediately instead of waiting
-    // for the settle timer and so is the likeliest save to arrive first.
+    // The same holds for a maximize, which saves immediately and can otherwise
+    // beat the first rendered-window callback.
     Command_line_setting_overrides maximize_overrides =
         command_line_setting_overrides(options, surface);
-    latch_command_line_window_geometry(granted, maximize_overrides);
+    ok &= check(settle_command_line_window_geometry(granted, maximize_overrides),
+        "early maximize first preserves the platform geometry baseline");
 
     Persisted_terminal_window_state maximized_early = granted;
     maximized_early.maximized = true;
@@ -605,13 +627,16 @@ bool test_user_geometry_before_the_first_save_still_persists()
     ok &= check(load_persisted_terminal_window_state(maximized_reader).maximized,
         "a maximize before the first save replaces the stored window state");
 
-    // A run whose window never reported a geometry has nothing to latch, so the
-    // first save still takes the baseline and the forced run stays ephemeral.
-    Command_line_setting_overrides unlatched_overrides =
+    // A run whose window never reported a geometry remains unsettled, so no
+    // normal save can turn the requested geometry into its baseline.
+    Command_line_setting_overrides unsettled_overrides =
         command_line_setting_overrides(options, surface);
-    latch_command_line_window_geometry(Persisted_terminal_window_state{}, unlatched_overrides);
-    ok &= check(unlatched_overrides.window_geometry_latch_pending,
-        "a state without a size leaves the latch pending");
+    ok &= check(!settle_command_line_window_geometry(
+            Persisted_terminal_window_state{},
+            unsettled_overrides),
+        "a state without a size cannot settle startup geometry");
+    ok &= check(unsettled_overrides.window_geometry_settlement_pending,
+        "a state without a size leaves geometry settlement pending");
 
     return ok;
 }
@@ -717,6 +742,9 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     // so the run's own unmaximized window must not write that back either.
     ok &= check(window.maximized,
         "an explicit window size leaves the stored maximized state alone");
+
+    ok &= check(settle_command_line_window_geometry(window_state, overrides),
+        "the accepted command-line geometry settles before user changes");
 
     // Moving a forced setting during the session is the user's own choice and
     // must reach their stored preferences.
