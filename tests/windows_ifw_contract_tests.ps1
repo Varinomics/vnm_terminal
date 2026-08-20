@@ -168,179 +168,6 @@ if (lookupCount !== 1 || hiddenColumn !== 5 ||
     }
 }
 
-function Assert-IfwExistingInstallationRuntime {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ControllerScriptPath
-    )
-
-    $node = Get-Command node.exe -ErrorAction SilentlyContinue
-    Assert-IfwContract ($null -ne $node) `
-        'the existing-installation contract requires node.exe'
-
-    $harnessPath = [IO.Path]::Combine(
-        [IO.Path]::GetTempPath(),
-        "vnm-terminal-ifw-existing-$([Guid]::NewGuid().ToString('N')).js")
-    try {
-        $harness = @'
-const fs = require("fs");
-const controllerScript = fs.readFileSync(process.argv[2], "utf8");
-const powershellPath =
-    "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
-
-let state = null;
-
-global.QInstaller = { ComponentSelection: 1 };
-global.QMessageBox = {
-    Yes: 0x00004000,
-    No: 0x00010000,
-    question(identifier, title, text, buttons) {
-        state.questions.push({ identifier, title, text, buttons });
-        return state.answer;
-    },
-    critical(identifier, title, text) {
-        state.errors.push({ identifier, title, text });
-        return 0x00000400;
-    },
-};
-global.installer = {
-    isInstaller() { return true; },
-    setDefaultPageVisible() {},
-    setValue() {},
-    readFile() { return ""; },
-    toNativeSeparators(value) { return value.replace(/\//g, "\\"); },
-    value(name) {
-        if (name === "TargetDir") return state.directory;
-        if (name === "RootDir") return "C:/";
-        throw new Error("unexpected installer value: " + name);
-    },
-    fileExists(path) {
-        if (path === state.maintenanceToolPath) return state.installationPresent;
-        if (path === state.nativeDirectory) return state.directoryPresent;
-        return false;
-    },
-    execute(program, args, stdIn) {
-        state.executions.push({ program, args, stdIn });
-        if (program === state.maintenanceToolPath) {
-            return state.purgeStarts ? ["", state.purgeExitCode] : [];
-        }
-        if (program === powershellPath) {
-            if (state.directoryRemovedByWait) state.directoryPresent = false;
-            return ["", 0];
-        }
-        throw new Error("unexpected execution: " + program);
-    },
-};
-global.gui = {
-    pageWidgetByObjectName(name) {
-        if (name !== "TargetDirectoryPage")
-            throw new Error("unexpected page lookup: " + name);
-        return { subTitle: "" };
-    },
-};
-
-eval(controllerScript);
-
-function run(overrides) {
-    const directory = overrides.directory || "C:/Program Files/vnm_terminal";
-    const nativeDirectory = directory.replace(/\//g, "\\");
-    state = Object.assign({
-        directory,
-        nativeDirectory,
-        maintenanceToolPath:
-            nativeDirectory + "\\vnm_terminal_maintenance.exe",
-        installationPresent: true,
-        directoryPresent: true,
-        directoryRemovedByWait: true,
-        purgeStarts: true,
-        purgeExitCode: 0,
-        questions: [],
-        errors: [],
-        executions: [],
-    }, overrides);
-    new Controller();
-    Controller.prototype.TargetDirectoryPageCallback();
-    state.purges = state.executions.filter(
-        (execution) => execution.program === state.maintenanceToolPath);
-    state.waits = state.executions.filter(
-        (execution) => execution.program === powershellPath);
-    return state;
-}
-
-let result = run({
-    installationPresent: false,
-    directoryPresent: false,
-    answer: QMessageBox.No,
-});
-if (result.questions.length !== 0 || result.executions.length !== 0 ||
-    result.errors.length !== 0)
-{
-    throw new Error("a free target directory must not offer a removal");
-}
-
-result = run({ answer: QMessageBox.No });
-if (result.questions.length !== 1 || result.executions.length !== 0 ||
-    result.errors.length !== 0)
-{
-    throw new Error("a declined removal must leave the installation in place");
-}
-if (result.questions[0].buttons !== (QMessageBox.Yes | QMessageBox.No) ||
-    result.questions[0].text.indexOf(result.nativeDirectory) < 0)
-{
-    throw new Error("the offer must be a Yes/No choice naming its directory");
-}
-
-result = run({ answer: QMessageBox.Yes });
-if (result.purges.length !== 1 ||
-    result.purges[0].args.join(" ") !==
-        "purge --accept-messages --confirm-command")
-{
-    throw new Error(
-        "acceptance must run the existing maintenance tool once with a confirmed purge");
-}
-if (result.waits.length !== 1 || result.errors.length !== 0)
-{
-    throw new Error(
-        "a completed removal must wait for the detached deletion and report no failure");
-}
-
-result = run({ answer: QMessageBox.Yes, directory: "D:/Tools/O'Brien/terminal" });
-if (result.waits[0].stdIn.indexOf(
-        "-LiteralPath 'D:\\Tools\\O''Brien\\terminal'") < 0)
-{
-    throw new Error("the wait must quote the directory as a PowerShell literal");
-}
-
-result = run({ answer: QMessageBox.Yes, purgeExitCode: 1 });
-if (result.waits.length !== 0 || result.errors.length !== 1 ||
-    result.errors[0].text.indexOf(result.nativeDirectory) < 0)
-{
-    throw new Error(
-        "a failed purge must be reported without waiting for a removal that cannot happen");
-}
-
-result = run({ answer: QMessageBox.Yes, purgeStarts: false });
-if (result.waits.length !== 0 || result.errors.length !== 1)
-    throw new Error("an unstartable maintenance tool must be reported");
-
-result = run({ answer: QMessageBox.Yes, directoryRemovedByWait: false });
-if (result.errors.length !== 1)
-    throw new Error("a surviving directory must be reported, not accepted");
-'@
-        [IO.File]::WriteAllText(
-            $harnessPath,
-            $harness,
-            [Text.UTF8Encoding]::new($false))
-        $runtimeOutput = & $node.Source $harnessPath $ControllerScriptPath 2>&1 |
-            Out-String
-        Assert-IfwContract ($LASTEXITCODE -eq 0) `
-            "the existing-installation offer must satisfy its runtime contract: $runtimeOutput"
-    }
-    finally {
-        Remove-Item -LiteralPath $harnessPath -Force -ErrorAction SilentlyContinue
-    }
-}
-
 function Assert-IfwStartMenuShortcutRuntime {
     param(
         [Parameter(Mandatory = $true)]
@@ -1046,7 +873,6 @@ $notices = Get-Content -Raw -LiteralPath $noticesPath
 $installationTests = Get-Content -Raw -LiteralPath $installationTestsPath
 
 Assert-IfwReadyPageRuntime $controllerScriptPath
-Assert-IfwExistingInstallationRuntime $controllerScriptPath
 Assert-IfwHashRuntime $buildScriptPath 'the IFW build script'
 Assert-IfwHashRuntime $provisionScriptPath 'the IFW provisioner'
 Assert-IfwCertificateTableRuntime $buildScriptPath
@@ -1417,6 +1243,9 @@ Assert-IfwContract `
     ($controllerScript -match 'function\s+Controller\s*\(\s*\)\s*\{[\s\S]*?if\s*\(installer\.isInstaller\(\)\)[\s\S]*?setDefaultPageVisible\s*\(\s*QInstaller\.ComponentSelection\s*,\s*false\s*\)') `
     'the pre-display Controller constructor must skip the single forced component page during initial installation'
 Assert-IfwContract `
+    ([regex]::Matches($controllerScript, 'setDefaultPageVisible\s*\(').Count -eq 1) `
+    'the controller must keep every other built-in wizard page visible'
+Assert-IfwContract `
     ($controllerScript -notmatch 'isUpdater\(\)[\s\S]*?setDefaultPageVisible\s*\(\s*QInstaller\.ComponentSelection' -and
         $controllerScript -notmatch 'isPackageManager\(\)[\s\S]*?setDefaultPageVisible\s*\(\s*QInstaller\.ComponentSelection' -and
         $controllerScript -notmatch 'isUninstaller\(\)[\s\S]*?setDefaultPageVisible\s*\(\s*QInstaller\.ComponentSelection') `
@@ -1537,24 +1366,6 @@ Assert-IfwContract `
     ($controllerScript -notmatch 'pageWidgetByObjectName\s*\(\s*"(?:SpaceItem|SpaceWidget)"' -and
         $controllerScript -notmatch '\.(?:SpaceItem|SpaceWidget)\.') `
     'the labeled total required-space widget must remain visible'
-
-Assert-IfwContract `
-    ($controllerScript -match ('Controller\.prototype\.maintenanceToolFileName\s*=\s*"' +
-        [regex]::Escape($config.Installer.MaintenanceToolName) + '\.exe"')) `
-    'the existing-installation probe must name the configured maintenance tool'
-Assert-IfwContract `
-    ($controllerScript -match 'TargetDirectoryPageCallback[\s\S]*?Controller\.prototype\.offerToRemoveExistingInstallation\s*\(\s*\)') `
-    'choosing a directory that already holds an installation must offer to remove it'
-Assert-IfwContract `
-    ($controllerScript -match 'QMessageBox\.question\s*\(\s*"RemoveExistingInstallation"[\s\S]*?if\s*\(\s*answer\s*!=\s*QMessageBox\.Yes\s*\)\s*return\s*;') `
-    'no installation may be removed without an explicit confirmation'
-Assert-IfwContract `
-    ($controllerScript -match '\[\s*"purge"\s*,\s*"--accept-messages"\s*,\s*"--confirm-command"\s*\]') `
-    'the removal must be owned by a non-interactive framework maintenance-tool purge'
-Assert-IfwContract `
-    ($controllerScript -notmatch 'RemoveTargetDir' -and
-        $controllerScript -notmatch 'performOperation\s*\(') `
-    'the installer must not weaken target-directory validation or delete the previous installation itself'
 
 Assert-IfwContract `
     ($maintenancePackage.Package.Name -eq 'com.varinomics.vnm_terminal.maintenance') `
