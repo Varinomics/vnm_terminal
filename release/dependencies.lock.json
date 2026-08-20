@@ -6,14 +6,14 @@
       "branch": "master",
       "checkout_path": "vnm_terminal_surface",
       "output": "surface",
-      "commit": "4383ac88a62c97ded31da2f476dfb68570f72cf8"
+      "commit": "46070e69be239ee3d7b3e511236ecf5c63d38d6f"
     },
     "vnm_qml_chrome": {
       "repository": "imakris/vnm_qml_chrome",
       "branch": "master",
       "checkout_path": "vnm_qml_chrome",
       "output": "chrome",
-      "commit": "de68cd3490c069ee7ab7fc5730fcfd0a3029d814"
+      "commit": "305d4212ac94fb1d087bcb77f762b87ef57d453f"
     },
     "vnm_msdf_text": {
       "repository": "imakris/vnm_msdf_text",
