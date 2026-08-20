@@ -6,7 +6,7 @@
       "branch": "master",
       "checkout_path": "vnm_terminal_surface",
       "output": "surface",
-      "commit": "46070e69be239ee3d7b3e511236ecf5c63d38d6f"
+      "commit": "0581a6319b96cd2a29ad4d55f67983814732ea47"
     },
     "vnm_qml_chrome": {
       "repository": "imakris/vnm_qml_chrome",
