@@ -39,8 +39,66 @@ env:
     fontconfig fonts-dejavu-core fonts-liberation
 
 jobs:
+  # Every build, package and test job below checks out the dependency commits
+  # this job resolves, so one workflow run builds one source. Ordinary CI still
+  # resolves master fresh on every run: a surface break has to fail app CI on
+  # the next run, which is the reason app CI tracks master at all.
+  resolve-dependencies:
+    name: Resolve dependency commits
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      application: ${{ steps.resolve.outputs.application }}
+      surface: ${{ steps.resolve.outputs.surface }}
+      chrome: ${{ steps.resolve.outputs.chrome }}
+      msdf_text: ${{ steps.resolve.outputs.msdf_text }}
+      qt_dispatch: ${{ steps.resolve.outputs.qt_dispatch }}
+      freetype: ${{ steps.resolve.outputs.freetype }}
+      msdfgen: ${{ steps.resolve.outputs.msdfgen }}
+      source_tuple: ${{ steps.resolve.outputs.source_tuple }}
+
+    steps:
+      # A release or dispatched run must read the lock from the tagged commit
+      # rather than from the workflow ref, for the same reason the signing job
+      # checks the release source out by tag.
+      - name: Checkout app
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: >-
+            ${{ github.event_name == 'release' &&
+                format('refs/tags/{0}', github.event.release.tag_name) ||
+                inputs.release_tag != '' &&
+                format('refs/tags/{0}', inputs.release_tag) || github.sha }}
+          persist-credentials: false
+
+      # The dependency checkouts below carry the repository-read token where one
+      # exists and fall back to the workflow token, so this resolution takes the
+      # same credential: a repository that becomes private again must not stop
+      # every job of all three workflows at the first one while the checkouts
+      # still hold a credential that would work. A fork pull request sees no
+      # secret and resolves with the workflow token, exactly as a branch push
+      # does while every dependency repository is public.
+      - name: Resolve dependency commits
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
+        run: |
+          # The resolver derives release state from GitHub's event payload. A
+          # tag cut before this lock existed carries neither the lock
+          # nor the program that reads it, and node would report a missing
+          # module that names neither the tag nor the reason.
+          if [[ ! -f release/dependencies.lock.json ]]; then
+            echo "The checked-out release source carries no release/dependencies.lock.json." >&2
+            echo "A tag cut before the dependency lock existed cannot be rebuilt by this workflow:" >&2
+            echo "there is nothing at that tag recording which dependency commits it was built from." >&2
+            exit 1
+          fi
+          node tools/dependencies_lock.js resolve .
+
   build-and-test:
     name: Qt Quick Terminal (Linux)
+    needs: resolve-dependencies
     runs-on: ubuntu-24.04
 
     steps:
@@ -53,6 +111,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
@@ -60,7 +119,7 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.surface }}
           token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
           persist-credentials: false
 
@@ -69,8 +128,34 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
+
+      - name: Checkout MSDF text
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: imakris/vnm_msdf_text
+          path: vnm_msdf_text
+          ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
+          persist-credentials: false
+
+      - name: Checkout Qt dispatch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_qt_dispatch
+          path: vnm_qt_dispatch
+          ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
+          persist-credentials: false
+
+      # The static contract cannot see a checkout it fails to parse, and a ref
+      # that resolves to the empty string silently takes a default branch, so
+      # the commits this job actually built from are compared with the ones the
+      # run resolved.
+      - name: Verify the checked-out dependency commits
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+        run: |
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
       - name: Install dependencies
         run: |
@@ -91,6 +176,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
+            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
+            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DBUILD_TESTING=ON
 
@@ -105,6 +192,7 @@ jobs:
 
   transcript-build-and-test:
     name: Qt Quick Terminal Transcript (Linux)
+    needs: resolve-dependencies
     runs-on: ubuntu-24.04
 
     steps:
@@ -112,6 +200,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
@@ -119,7 +208,7 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.surface }}
           token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
           persist-credentials: false
 
@@ -128,8 +217,34 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
+
+      - name: Checkout MSDF text
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: imakris/vnm_msdf_text
+          path: vnm_msdf_text
+          ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
+          persist-credentials: false
+
+      - name: Checkout Qt dispatch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_qt_dispatch
+          path: vnm_qt_dispatch
+          ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
+          persist-credentials: false
+
+      # The static contract cannot see a checkout it fails to parse, and a ref
+      # that resolves to the empty string silently takes a default branch, so
+      # the commits this job actually built from are compared with the ones the
+      # run resolved.
+      - name: Verify the checked-out dependency commits
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+        run: |
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
       - name: Install dependencies
         run: |
@@ -150,6 +265,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
+            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
+            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON \
             -DBUILD_TESTING=ON
@@ -165,6 +282,7 @@ jobs:
 
   package:
     name: AppImage, DEB, and RPM (Linux x64)
+    needs: resolve-dependencies
     runs-on: ubuntu-24.04
 
     steps:
@@ -172,6 +290,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
@@ -179,7 +298,7 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.surface }}
           token: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
           persist-credentials: false
 
@@ -188,7 +307,7 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
 
       - name: Checkout MSDF text
@@ -196,35 +315,26 @@ jobs:
         with:
           repository: imakris/vnm_msdf_text
           path: vnm_msdf_text
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
           persist-credentials: false
 
-      # A dispatched run checks the application out at the workflow ref, which
-      # is independent of the release_tag input, so without this a build from
-      # one branch can be signed and uploaded to a release cut from another.
-      # Resolve the tag and refuse the run unless it names the commit that was
-      # actually built. A release event needs no check: its checkout already is
-      # the tag's commit.
-      - name: Verify the dispatched release tag names this build
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
+      - name: Checkout Qt dispatch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_qt_dispatch
+          path: vnm_qt_dispatch
+          ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
+          persist-credentials: false
+
+      # The static contract cannot see a checkout it fails to parse, and a ref
+      # that resolves to the empty string silently takes a default branch, so
+      # the commits this job actually built from are compared with the ones the
+      # run resolved.
+      - name: Verify the checked-out dependency commits
         env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
         run: |
-          tag_ref="repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
-          tag_sha="$(gh api "${tag_ref}" --jq '.object.sha')"
-          # An annotated tag's ref names the tag object, not the commit.
-          if [[ "$(gh api "${tag_ref}" --jq '.object.type')" == "tag" ]]; then
-            tag_sha="$(gh api \
-              "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')"
-          fi
-          built_sha="$(git -C vnm_terminal rev-parse HEAD)"
-          if [[ "${tag_sha}" != "${built_sha}" ]]; then
-            echo "Release tag ${RELEASE_TAG} names ${tag_sha}," >&2
-            echo "but this run built ${built_sha}." >&2
-            exit 1
-          fi
-          echo "Release tag ${RELEASE_TAG} names the built commit ${built_sha}."
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
       - name: Install dependencies
         run: |
@@ -242,18 +352,28 @@ jobs:
           cache: 'true'
 
       - name: Prepare MSDF package dependency
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+          THIRD_PARTY_CHECKOUTS: '{"freetype":"_deps/freetype-src","msdfgen":"_deps/msdfgen-src"}'
         run: |
           msdf_package_prefix="${GITHUB_WORKSPACE}/msdf_package"
           msdf_package_build_dir="${GITHUB_WORKSPACE}/msdf_package_build"
           freetype_source_dir="${GITHUB_WORKSPACE}/_deps/freetype-src"
           msdfgen_source_dir="${GITHUB_WORKSPACE}/_deps/msdfgen-src"
 
-          git clone --depth 1 --branch VER-2-13-3 \
+          git clone --filter=blob:none --no-checkout \
             https://gitlab.freedesktop.org/freetype/freetype.git \
             "${freetype_source_dir}"
-          git clone --depth 1 --branch v1.12.1 \
+          git -C "${freetype_source_dir}" checkout --detach \
+            "${{ needs.resolve-dependencies.outputs.freetype }}"
+          git clone --filter=blob:none --no-checkout \
             https://github.com/Chlumsky/msdfgen.git \
             "${msdfgen_source_dir}"
+          git -C "${msdfgen_source_dir}" checkout --detach \
+            "${{ needs.resolve-dependencies.outputs.msdfgen }}"
+
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout \
+            vnm_terminal "${GITHUB_WORKSPACE}"
 
           cmake -S "${freetype_source_dir}" -B "${msdf_package_build_dir}/freetype" \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
@@ -298,6 +418,8 @@ jobs:
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR};${GITHUB_WORKSPACE}/msdf_package" \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
+            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
+            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DVNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER=ON \
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_USE_SYSTEM_LIBS=ON \
@@ -416,6 +538,19 @@ jobs:
           test ! -e \
             /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
 
+      - name: Record Linux package provenance
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+          THIRD_PARTY_CHECKOUTS: '{"freetype":"_deps/freetype-src","msdfgen":"_deps/msdfgen-src"}'
+          RELEASE_TAG: >-
+            ${{ github.event_name == 'release' &&
+                github.event.release.tag_name || inputs.release_tag || '' }}
+          QT_VERSION: '6.11.1'
+        run: |
+          node vnm_terminal/tools/dependencies_lock.js record-provenance \
+            vnm_terminal "${GITHUB_WORKSPACE}" \
+            vnm_terminal/dist/vnm_terminal_linux_x64_build_provenance.json
+
       - name: Upload Linux package artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -426,6 +561,7 @@ jobs:
             vnm_terminal/dist/*.rpm
             vnm_terminal/dist/*.run
             vnm_terminal/dist/*.sha256
+            vnm_terminal/dist/*_build_provenance.json
           if-no-files-found: error
 
   attach-release-packages:

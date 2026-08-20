@@ -72,6 +72,9 @@ tools/build_linux_ifw_installer.sh \
   --ifw-root /path/to/QtInstallerFramework/4.7
 ```
 
+Cutting a release starts with refreshing the dependency lock. The procedure is
+in [docs/releasing.md](docs/releasing.md).
+
 Windows CI produces an explicitly named
 `vnm_terminal_v<version>_windows_x64_unsigned.exe` verification artifact. It is
 not a release installer. A release EXE has the `_unsigned` suffix removed only

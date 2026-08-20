@@ -30,6 +30,15 @@ add_test(
         -P "${CMAKE_CURRENT_SOURCE_DIR}/qml_chrome_dependency_contract_tests.cmake"
 )
 
+add_test(
+    NAME vnm_terminal_dependency_origin_contract
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DVNM_TERMINAL_TEST_ROOT=${PROJECT_BINARY_DIR}/tests/dependency_origin_contract"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/dependency_origin_contract_tests.cmake"
+)
+
 if(WIN32)
     # CTest can inherit PowerShell 7 module paths from a pwsh parent. Let
     # Windows PowerShell reconstruct its native module path before the test.
@@ -49,6 +58,37 @@ add_test(
     NAME vnm_terminal_linux_ifw_contract
     COMMAND
         node "${CMAKE_CURRENT_SOURCE_DIR}/linux_ifw_contract_tests.js"
+        "${PROJECT_SOURCE_DIR}"
+)
+
+# The artifact declaration describes artifacts produced by all three CI
+# workflows, so this contract cannot live behind the if(WIN32) guard above: the
+# Windows contract test reads only ci-windows.yml and never runs on the hosts
+# that build the Linux and macOS artifacts.
+add_test(
+    NAME vnm_terminal_release_artifacts_contract
+    COMMAND
+        node "${PROJECT_SOURCE_DIR}/tools/release_artifacts.js"
+        check "${PROJECT_SOURCE_DIR}"
+)
+
+# The dependency lock records what a release was built from, and the checkout
+# wiring that makes one workflow run build one source lives in all three CI
+# workflows, so this contract is unconditional for the same reason.
+add_test(
+    NAME vnm_terminal_dependency_lock_contract
+    COMMAND
+        node "${PROJECT_SOURCE_DIR}/tools/dependencies_lock.js"
+        check "${PROJECT_SOURCE_DIR}"
+)
+
+# Both gates above are only worth their contract if a broken tree fails them.
+# This drills each one against a throwaway copy of the source tree with a single
+# defect reintroduced, so a rule that quietly stops checking is itself caught.
+add_test(
+    NAME vnm_terminal_release_contract_drift_drills
+    COMMAND
+        node "${CMAKE_CURRENT_SOURCE_DIR}/release_contract_gate_tests.js"
         "${PROJECT_SOURCE_DIR}"
 )
 

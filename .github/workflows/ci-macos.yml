@@ -23,8 +23,65 @@ env:
   CMAKE_BUILD_TYPE: Release
 
 jobs:
+  # Every build, package and test job below checks out the dependency commits
+  # this job resolves, so one workflow run builds one source. Ordinary CI still
+  # resolves master fresh on every run: a surface break has to fail app CI on
+  # the next run, which is the reason app CI tracks master at all.
+  resolve-dependencies:
+    name: Resolve dependency commits
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      application: ${{ steps.resolve.outputs.application }}
+      surface: ${{ steps.resolve.outputs.surface }}
+      chrome: ${{ steps.resolve.outputs.chrome }}
+      msdf_text: ${{ steps.resolve.outputs.msdf_text }}
+      qt_dispatch: ${{ steps.resolve.outputs.qt_dispatch }}
+      freetype: ${{ steps.resolve.outputs.freetype }}
+      msdfgen: ${{ steps.resolve.outputs.msdfgen }}
+      source_tuple: ${{ steps.resolve.outputs.source_tuple }}
+
+    steps:
+      # A release or dispatched run must read the lock from the tagged commit
+      # rather than from the workflow ref, for the same reason the signing job
+      # checks the release source out by tag.
+      - name: Checkout app
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: >-
+            ${{ github.event_name == 'release' &&
+                format('refs/tags/{0}', github.event.release.tag_name) ||
+                github.sha }}
+          persist-credentials: false
+
+      # The dependency checkouts below carry the repository-read token where one
+      # exists and fall back to the workflow token, so this resolution takes the
+      # same credential: a repository that becomes private again must not stop
+      # every job of all three workflows at the first one while the checkouts
+      # still hold a credential that would work. A fork pull request sees no
+      # secret and resolves with the workflow token, exactly as a branch push
+      # does while every dependency repository is public.
+      - name: Resolve dependency commits
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
+        run: |
+          # The resolver derives release state from GitHub's event payload. A
+          # tag cut before this lock existed carries neither the lock
+          # nor the program that reads it, and node would report a missing
+          # module that names neither the tag nor the reason.
+          if [[ ! -f release/dependencies.lock.json ]]; then
+            echo "The checked-out release source carries no release/dependencies.lock.json." >&2
+            echo "A tag cut before the dependency lock existed cannot be rebuilt by this workflow:" >&2
+            echo "there is nothing at that tag recording which dependency commits it was built from." >&2
+            exit 1
+          fi
+          node tools/dependencies_lock.js resolve .
+
   build-and-test:
     name: Qt Quick Terminal (macOS)
+    needs: resolve-dependencies
     runs-on: macos-15-intel
     outputs:
       artifact_name: ${{ steps.package.outputs.artifact_name }}
@@ -40,6 +97,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
@@ -47,7 +105,7 @@ jobs:
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.surface }}
           persist-credentials: false
 
       - name: Checkout chrome
@@ -55,7 +113,7 @@ jobs:
         with:
           repository: imakris/vnm_qml_chrome
           path: vnm_qml_chrome
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
 
       - name: Checkout MSDF text
@@ -63,8 +121,26 @@ jobs:
         with:
           repository: imakris/vnm_msdf_text
           path: vnm_msdf_text
-          ref: master
+          ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
           persist-credentials: false
+
+      - name: Checkout Qt dispatch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_qt_dispatch
+          path: vnm_qt_dispatch
+          ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
+          persist-credentials: false
+
+      # The static contract cannot see a checkout it fails to parse, and a ref
+      # that resolves to the empty string silently takes a default branch, so
+      # the commits this job actually built from are compared with the ones the
+      # run resolved.
+      - name: Verify the checked-out dependency commits
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+        run: |
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
       - name: Derive package names
         id: package
@@ -95,18 +171,28 @@ jobs:
           cache: 'true'
 
       - name: Prepare MSDF package dependency
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+          THIRD_PARTY_CHECKOUTS: '{"freetype":"_deps/freetype-src","msdfgen":"_deps/msdfgen-src"}'
         run: |
           msdf_package_prefix="${GITHUB_WORKSPACE}/msdf_package"
           msdf_package_build_dir="${GITHUB_WORKSPACE}/msdf_package_build"
           freetype_source_dir="${GITHUB_WORKSPACE}/_deps/freetype-src"
           msdfgen_source_dir="${GITHUB_WORKSPACE}/_deps/msdfgen-src"
 
-          git clone --depth 1 --branch VER-2-13-3 \
+          git clone --filter=blob:none --no-checkout \
             https://gitlab.freedesktop.org/freetype/freetype.git \
             "${freetype_source_dir}"
-          git clone --depth 1 --branch v1.12.1 \
+          git -C "${freetype_source_dir}" checkout --detach \
+            "${{ needs.resolve-dependencies.outputs.freetype }}"
+          git clone --filter=blob:none --no-checkout \
             https://github.com/Chlumsky/msdfgen.git \
             "${msdfgen_source_dir}"
+          git -C "${msdfgen_source_dir}" checkout --detach \
+            "${{ needs.resolve-dependencies.outputs.msdfgen }}"
+
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout \
+            vnm_terminal "${GITHUB_WORKSPACE}"
 
           cmake -S "${freetype_source_dir}" -B "${msdf_package_build_dir}/freetype" \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
@@ -152,6 +238,8 @@ jobs:
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR};${GITHUB_WORKSPACE}/msdf_package" \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
+            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
+            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DVNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER=ON \
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_USE_SYSTEM_LIBS=ON \
@@ -228,6 +316,17 @@ jobs:
             echo "Toolchain:       clang"
             echo "Qt:              ${QT_ROOT_DIR}"
           } > "${resources_dir}/vnm_terminal_build_info.txt"
+
+      - name: Record macOS package provenance
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+          THIRD_PARTY_CHECKOUTS: '{"freetype":"_deps/freetype-src","msdfgen":"_deps/msdfgen-src"}'
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
+          QT_VERSION: '6.11.1'
+        run: |
+          node vnm_terminal/tools/dependencies_lock.js record-provenance \
+            vnm_terminal "${GITHUB_WORKSPACE}" \
+            vnm_terminal/build/vnm_terminal.app/Contents/Resources/vnm_terminal_build_provenance.json
 
       - name: Sign and validate macOS app bundle
         run: |

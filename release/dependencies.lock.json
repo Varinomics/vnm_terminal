@@ -1,0 +1,57 @@
+{
+  "schema": 2,
+  "owned": {
+    "vnm_terminal_surface": {
+      "repository": "Varinomics/vnm_terminal_surface",
+      "branch": "master",
+      "checkout_path": "vnm_terminal_surface",
+      "output": "surface",
+      "commit": "4383ac88a62c97ded31da2f476dfb68570f72cf8"
+    },
+    "vnm_qml_chrome": {
+      "repository": "imakris/vnm_qml_chrome",
+      "branch": "master",
+      "checkout_path": "vnm_qml_chrome",
+      "output": "chrome",
+      "commit": "de68cd3490c069ee7ab7fc5730fcfd0a3029d814"
+    },
+    "vnm_msdf_text": {
+      "repository": "imakris/vnm_msdf_text",
+      "branch": "master",
+      "checkout_path": "vnm_msdf_text",
+      "output": "msdf_text",
+      "commit": "0deaec4fdaeb86af4ffd4e256b01782d4f9fb46e"
+    },
+    "vnm_qt_dispatch": {
+      "repository": "Varinomics/vnm_qt_dispatch",
+      "branch": "master",
+      "checkout_path": "vnm_qt_dispatch",
+      "output": "qt_dispatch",
+      "commit": "a4ed685d140f4ed99abeb2fcf11864c87a8ced65"
+    }
+  },
+  "third_party": {
+    "freetype": {
+      "repository_url": "https://gitlab.freedesktop.org/freetype/freetype.git",
+      "tag": "VER-2-13-3",
+      "output": "freetype",
+      "commit": "42608f77f20749dd6ddc9e0536788eaad70ea4b5",
+      "clone_sites": [
+        ".github/workflows/ci-linux.yml",
+        ".github/workflows/ci-macos.yml",
+        "build_portable.bat"
+      ]
+    },
+    "msdfgen": {
+      "repository_url": "https://github.com/Chlumsky/msdfgen.git",
+      "tag": "v1.12.1",
+      "output": "msdfgen",
+      "commit": "6574da1310df433c97ca0fddcab7e463c31e58f8",
+      "clone_sites": [
+        ".github/workflows/ci-linux.yml",
+        ".github/workflows/ci-macos.yml",
+        "build_portable.bat"
+      ]
+    }
+  }
+}

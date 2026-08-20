@@ -16,6 +16,16 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      # The prune families come from release/artifacts.json, so this job needs
+      # the repository. A workflow_run event resolves GITHUB_SHA to the default
+      # branch, so the checkout is repository code, never a fork's. It stays
+      # unauthenticated after the checkout because nothing here talks to a
+      # remote through git, and this job holds actions: write.
+      - name: Checkout app
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
       - name: Delete superseded artifacts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -134,37 +144,38 @@ jobs:
               done <<< "${completed_rows}"
           }
 
-          # Windows packaging emits three families: the unsigned build every
-          # run produces, the signed build a release produces, and the payload
-          # the package job hands the signing job. Pruning by exact name, so a
-          # rename here without a rename in ci-windows.yml silently stops
-          # pruning rather than failing.
-          for artifact_name in \
-              vnm-terminal-source \
-              vnm-terminal-windows-x64-unsigned \
-              vnm-terminal-windows-x64-signed \
-              vnm-terminal-windows-x64-signing-payload \
-              vnm-terminal-linux-x64
-          do
-              rows="$(
-                  gh api \
-                      --paginate \
-                      --method GET \
-                      "repos/${GITHUB_REPOSITORY}/actions/artifacts" \
-                      -f "name=${artifact_name}" \
-                      --jq '.artifacts[] | [.workflow_run.id, .id, .name] | @tsv'
-              )"
-              prune_rows "${artifact_name}" "${rows}"
-          done
+          # One row per prune family, emitted from release/artifacts.json:
+          # "exact" families are filtered server-side by name, and a family
+          # whose artifact name embeds the version carries a regular expression
+          # instead. Reading them means a rename in a CI workflow cannot
+          # silently stop pruning: the artifact gate fails first.
+          families="$(node tools/release_artifacts.js retention-families .)"
+          if [[ -z "${families}" ]]; then
+              echo "release/artifacts.json declared no prune families." >&2
+              exit 1
+          fi
 
-          macos_rows="$(
-              gh api \
-                  --paginate \
-                  --method GET \
-                  "repos/${GITHUB_REPOSITORY}/actions/artifacts" \
-                  --jq '.artifacts[] |
-                      select(.name | test("^vnm_terminal_v.*_macos_x64")) |
-                      [.workflow_run.id, .id, .name] |
-                      @tsv'
-          )"
-          prune_rows "macOS" "${macos_rows}"
+          while IFS=$'\t' read -r mode family value; do
+              if [[ "${mode}" == 'exact' ]]; then
+                  rows="$(
+                      gh api \
+                          --paginate \
+                          --method GET \
+                          "repos/${GITHUB_REPOSITORY}/actions/artifacts" \
+                          -f "name=${value}" \
+                          --jq '.artifacts[] | [.workflow_run.id, .id, .name] | @tsv'
+                  )"
+              else
+                  rows="$(
+                      gh api \
+                          --paginate \
+                          --method GET \
+                          "repos/${GITHUB_REPOSITORY}/actions/artifacts" \
+                          --jq ".artifacts[] |
+                              select(.name | test(\"${value}\")) |
+                              [.workflow_run.id, .id, .name] |
+                              @tsv"
+                  )"
+              fi
+              prune_rows "${family}" "${rows}"
+          done <<< "${families}"

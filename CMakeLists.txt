@@ -34,6 +34,7 @@ if(VNM_TERMINAL_BUILD_PACKAGES AND NOT VNM_TERMINAL_DISTRIBUTION_BUILD)
 endif()
 
 find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2)
+include(cmake/vnm_terminal_dependency_origin.cmake)
 include(cmake/vnm_terminal_surface_dependency.cmake)
 include(cmake/vnm_qml_chrome_dependency.cmake)
 
@@ -42,6 +43,16 @@ if(NOT TARGET vnm_qt_dispatch::vnm_qt_dispatch)
         "vnm_terminal_surface did not make "
         "vnm_qt_dispatch::vnm_qt_dispatch available.")
 endif()
+
+# These two cache variables are declared by vnm_terminal_surface, so this build
+# passes them without owning them. If the surface stops reading one, CMake
+# reports an unused variable and configures successfully while the surface
+# fetches that dependency from master instead, which is the one outcome the
+# dependency lock and the provenance record cannot detect.
+vnm_terminal_require_dependency_origin(
+    vnm_qt_dispatch::vnm_qt_dispatch VNM_QT_DISPATCH_SOURCE_DIR)
+vnm_terminal_require_dependency_origin(
+    vnm_msdf_text::vnm_msdf_text VNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR)
 
 set(vnm_terminal_build_info_header
     "${CMAKE_CURRENT_BINARY_DIR}/generated/vnm_terminal_build_info.h")
