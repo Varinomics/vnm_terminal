@@ -188,11 +188,11 @@ Command_line_setting_overrides command_line_setting_overrides(
 
     // The window has no normalizing setter to read back, so unlike every other
     // forced setting there is nothing to snapshot here. The requested size is
-    // the wrong thing to latch: the window system may normalize, clamp,
+    // the wrong thing to record: the window system may normalize, clamp,
     // decorate, or move the window before anything is saved, and the first save
-    // would then find a size that never equalled the request, release the latch,
-    // and store geometry the user never chose. Latch what the run was actually
-    // granted instead, at the first save that observes it.
+    // would then find a size that never equalled the request, release the field,
+    // and store geometry the user never chose. Settle on what the event loop
+    // observes the run was actually granted instead.
     //
     // Position and maximized state ride along for the same run. An explicit size
     // forces the maximized state, because apply_persisted_terminal_window_state()
@@ -200,23 +200,24 @@ Command_line_setting_overrides command_line_setting_overrides(
     // a maximized window at once. Position is not forced, but a window resized
     // to a size the desktop has to accommodate can be moved to fit, and that
     // move is the window system's decision rather than the user's.
-    overrides.window_geometry_latch_pending = options.window_size_explicit;
+    overrides.window_geometry_settlement_pending = options.window_size_explicit;
 
     return overrides;
 }
 
-void latch_command_line_window_geometry(
+bool settle_command_line_window_geometry(
     const Persisted_terminal_window_state& state,
     Command_line_setting_overrides&        overrides)
 {
-    if (!overrides.window_geometry_latch_pending || !state.size.has_value()) {
-        return;
+    if (!overrides.window_geometry_settlement_pending || !state.size.has_value()) {
+        return false;
     }
 
     overrides.window_size     = state.size;
     overrides.window_position = state.position;
     overrides.maximized       = state.maximized;
-    overrides.window_geometry_latch_pending = false;
+    overrides.window_geometry_settlement_pending = false;
+    return true;
 }
 
 void save_persisted_terminal_window_state(
@@ -233,31 +234,29 @@ void save_persisted_terminal_window_state(
         settings.setValue(QLatin1String(k_window_settings_font_size), *state.font_size);
     }
 
-    // A save before the window could report a geometry leaves the latch pending,
-    // so take it here as a fallback. From the latch on, the geometry fields
-    // behave like every other latched setting: the save that finds one of them
-    // moved stores it and releases the latch for good, so a resize, a move, or a
-    // maximize the user performs still becomes their preference.
-    latch_command_line_window_geometry(state, overrides);
+    // Saves do not choose the command-line geometry baseline. Until the window
+    // lifecycle settles it, all three geometry writes remain suppressed so a
+    // synchronous requested size cannot outrank the platform's later answer.
+    if (!overrides.window_geometry_settlement_pending) {
+        if (state.size.has_value() &&
+            persisted_window_axis_is_valid(state.size->width()) &&
+            persisted_window_axis_is_valid(state.size->height()) &&
+            !command_line_override_still_holds(overrides.window_size, *state.size))
+        {
+            settings.setValue(QLatin1String(k_window_settings_width),  state.size->width());
+            settings.setValue(QLatin1String(k_window_settings_height), state.size->height());
+        }
 
-    if (state.size.has_value() &&
-        persisted_window_axis_is_valid(state.size->width()) &&
-        persisted_window_axis_is_valid(state.size->height()) &&
-        !command_line_override_still_holds(overrides.window_size, *state.size))
-    {
-        settings.setValue(QLatin1String(k_window_settings_width),  state.size->width());
-        settings.setValue(QLatin1String(k_window_settings_height), state.size->height());
-    }
+        if (state.position.has_value() &&
+            !command_line_override_still_holds(overrides.window_position, *state.position))
+        {
+            settings.setValue(QLatin1String(k_window_settings_x), state.position->x());
+            settings.setValue(QLatin1String(k_window_settings_y), state.position->y());
+        }
 
-    if (state.position.has_value() &&
-        !command_line_override_still_holds(overrides.window_position, *state.position))
-    {
-        settings.setValue(QLatin1String(k_window_settings_x), state.position->x());
-        settings.setValue(QLatin1String(k_window_settings_y), state.position->y());
-    }
-
-    if (!command_line_override_still_holds(overrides.maximized, state.maximized)) {
-        settings.setValue(QLatin1String(k_window_settings_maximized), state.maximized);
+        if (!command_line_override_still_holds(overrides.maximized, state.maximized)) {
+            settings.setValue(QLatin1String(k_window_settings_maximized), state.maximized);
+        }
     }
 
     settings.endGroup();
