@@ -50,6 +50,15 @@ if(WIN32)
             -File "${CMAKE_CURRENT_SOURCE_DIR}/windows_ifw_contract_tests.ps1"
             -SourceRoot "${PROJECT_SOURCE_DIR}"
     )
+
+    add_test(
+        NAME vnm_terminal_portable_dependency_commit_contract
+        COMMAND
+            "${CMAKE_COMMAND}" -E env "--unset=PSModulePath"
+            powershell.exe -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/portable_dependency_commit_contract_tests.ps1"
+            -SourceRoot "${PROJECT_SOURCE_DIR}"
+    )
 endif()
 
 # The Linux installer sources are packaging inputs, so this contract holds on

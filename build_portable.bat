@@ -140,9 +140,8 @@ if not exist "%FREETYPE_SOURCE_DIR%\.git" (
 )
 git -C "%FREETYPE_SOURCE_DIR%" fetch --tags --force origin
 git -C "%FREETYPE_SOURCE_DIR%" checkout --detach "%FREETYPE_COMMIT%"
-git -C "%FREETYPE_SOURCE_DIR%" rev-parse HEAD | findstr /i /x "%FREETYPE_COMMIT%" >nul
+call "%~dp0tools\verify_git_checkout_commit.bat" "%FREETYPE_SOURCE_DIR%" "%FREETYPE_COMMIT%" "FreeType"
 if errorlevel 1 (
-    echo ERROR: FreeType did not resolve to locked commit %FREETYPE_COMMIT%.
     exit /b 1
 )
 for /f "delims=" %%I in ('git -C "%FREETYPE_SOURCE_DIR%" status --porcelain --untracked-files=all') do (
@@ -159,9 +158,8 @@ if not exist "%MSDFGEN_SOURCE_DIR%\.git" (
 )
 git -C "%MSDFGEN_SOURCE_DIR%" fetch --tags --force origin
 git -C "%MSDFGEN_SOURCE_DIR%" checkout --detach "%MSDFGEN_COMMIT%"
-git -C "%MSDFGEN_SOURCE_DIR%" rev-parse HEAD | findstr /i /x "%MSDFGEN_COMMIT%" >nul
+call "%~dp0tools\verify_git_checkout_commit.bat" "%MSDFGEN_SOURCE_DIR%" "%MSDFGEN_COMMIT%" "msdfgen"
 if errorlevel 1 (
-    echo ERROR: msdfgen did not resolve to locked commit %MSDFGEN_COMMIT%.
     exit /b 1
 )
 for /f "delims=" %%I in ('git -C "%MSDFGEN_SOURCE_DIR%" status --porcelain --untracked-files=all') do (
