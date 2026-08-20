@@ -1,25 +1,19 @@
-// Structural reader for the CI workflow files, shared by the release-manifest
-// gate and the dependency-lock gate. Both have to see the same jobs, steps and
-// step inputs, and a fork of this reader would mean a workflow one gate can no
-// longer parse is still parsed by the other, which is the quiet outcome both
-// gates exist to prevent.
+// Strict, dependency-free workflow reader shared by both release gates. It
+// turns the GitHub Actions YAML subset used by this repository into one
+// normalized intermediate representation (IR): jobs own normalized needs,
+// outputs and steps; steps own normalized name, uses, with, env and run data.
+// Callers never rediscover structure with regular expressions of their own.
 //
-// This is deliberately a text scanner and not a YAML parser: no YAML parser is
-// available to a node program in this repository without adding a dependency,
-// and none is added. The trade is stated where it matters: a caller that finds
-// nothing where it expected something must treat that as a failure, because a
-// silently empty extraction is the one result this reader must never be
-// allowed to produce.
+// This is not a general YAML parser. Unsupported YAML must fail closed at the
+// boundary: anchors, aliases, merge keys, and flow-style step items are
+// rejected rather than disappearing from the release contract. Quoted scalar
+// values and both named and unnamed block-mapping steps are supported.
 
 const fs = require("fs");
 const path = require("path");
 
 const WORKFLOW_DIRECTORY = ".github/workflows";
 
-// Both gates enumerate the directory rather than a list of their own, so that a
-// workflow added without a manifest or lock entry is a workflow they can see.
-// A list carried in a gate can only describe the workflows that existed when it
-// was written, and a new one would then be outside both contracts entirely.
 function workflowFiles(root)
 {
     const directory = path.join(root, WORKFLOW_DIRECTORY);
@@ -32,164 +26,559 @@ function workflowFiles(root)
         .sort();
 }
 
+function violation(workflowPath, line, detail)
+{
+    throw new Error("Workflow structure violation: " + workflowPath + ":" +
+        line + " " + detail);
+}
+
 function indentOf(line)
 {
-    return line.length - line.replace(/^\s*/, "").length;
+    const prefix = /^\s*/.exec(line)[0];
+    if (prefix.indexOf("\t") >= 0)
+        return -1;
+    return prefix.length;
 }
 
-// A step block runs from its `- name:` line to the next non-blank line at or
-// left of the dash.
-function stepBlocks(lines)
+function contentLine(line)
 {
-    const blocks = [];
-    for (let index = 0; index < lines.length; ++index) {
-        const start = /^(\s*)- name:/.exec(lines[index]);
-        if (!start)
+    return line.trim() !== "" && !/^\s*#/.test(line);
+}
+
+// YAML comments start at an unquoted # preceded by whitespace. GitHub
+// expressions frequently contain single-quoted strings, so quote state has to
+// be respected even though the surrounding scalar itself is plain.
+function withoutComment(value)
+{
+    let single = false;
+    let double = false;
+    for (let index = 0; index < value.length; ++index) {
+        const current = value[index];
+        if (current === "'" && !double) {
+            if (single && value[index + 1] === "'") {
+                ++index;
+                continue;
+            }
+            single = !single;
             continue;
-
-        const indent = start[1].length;
-        let end = index + 1;
-        while (end < lines.length) {
-            const line = lines[end];
-            if (line.trim() !== "" && indentOf(line) <= indent)
-                break;
-            ++end;
         }
-        blocks.push({ firstLine: index, lastLine: end, indent });
+        if (current === '"' && !single &&
+            (index === 0 || value[index - 1] !== "\\")) {
+            double = !double;
+            continue;
+        }
+        if (current === "#" && !single && !double &&
+            (index === 0 || /\s/.test(value[index - 1]))) {
+            return value.slice(0, index).trimEnd();
+        }
     }
-    return blocks;
+    return value.trimEnd();
 }
 
-// The `with:` mapping of a step, as { key: { value, blockLines, line } }.
-function withMapping(lines, block)
+function normalizedScalar(raw, workflowPath, line)
 {
-    let withIndex = -1;
-    for (let index = block.firstLine; index < block.lastLine; ++index) {
-        if (/^\s*with:\s*$/.test(lines[index])) {
-            withIndex = index;
-            break;
+    const value = withoutComment(raw).trim();
+    if (value === "")
+        return "";
+    if (/^[&*][A-Za-z0-9_-]+(?:\s|$)/.test(value)) {
+        violation(workflowPath, line,
+            "uses an anchor or alias, which the normalized workflow IR does" +
+            " not support.");
+    }
+    if (value[0] === "{" || value[0] === "[") {
+        violation(workflowPath, line,
+            "uses a flow value, which the normalized workflow IR does not" +
+            " support here.");
+    }
+
+    if (value[0] === "'") {
+        if (value.length < 2 || value[value.length - 1] !== "'")
+            violation(workflowPath, line, "contains an unterminated quoted scalar.");
+        return value.slice(1, -1).replace(/''/g, "'");
+    }
+    if (value[0] === '"') {
+        try {
+            return JSON.parse(value);
+        }
+        catch (error) {
+            violation(workflowPath, line,
+                "contains an invalid double-quoted scalar: " + error.message);
         }
     }
-    if (withIndex < 0)
+    return value;
+}
+
+function mappingEntry(line, indent)
+{
+    const expression = new RegExp("^ {" + indent +
+        "}([A-Za-z0-9_-]+):(?:\\s*(.*))?$");
+    return expression.exec(line);
+}
+
+function blockScalar(lines, start, end, parentIndent, header,
+    workflowPath)
+{
+    if (!/^[|>][+-]?$/.test(header))
         return null;
 
-    const withIndent = indentOf(lines[withIndex]);
-    let keyIndent = -1;
-    const mapping = {};
-    for (let index = withIndex + 1; index < block.lastLine; ++index) {
+    const body = [];
+    let bodyIndent = null;
+    let index = start;
+    for (; index < end; ++index) {
         const line = lines[index];
-        if (line.trim() === "" || /^\s*#/.test(line))
+        if (line.trim() === "") {
+            body.push("");
             continue;
-
-        const lineIndent = indentOf(line);
-        if (lineIndent <= withIndent)
+        }
+        const indent = indentOf(line);
+        if (indent < 0)
+            violation(workflowPath, index + 1, "uses a tab for indentation.");
+        if (indent <= parentIndent)
             break;
-        if (keyIndent < 0)
-            keyIndent = lineIndent;
-        if (lineIndent !== keyIndent)
-            continue;
+        if (bodyIndent === null)
+            bodyIndent = indent;
+        if (indent < bodyIndent) {
+            violation(workflowPath, index + 1,
+                "dedents inside a block scalar in a shape the workflow IR" +
+                " cannot normalize.");
+        }
+        body.push(line.slice(bodyIndent));
+    }
 
-        const entry = /^\s*([A-Za-z0-9_-]+):\s*(.*)$/.exec(line);
+    let value = body.join("\n");
+    if (header[0] === ">")
+        value = value.replace(/([^\n])\n(?=[^\n])/g, "$1 ");
+    if (header.endsWith("+") || (!header.endsWith("-") && body.length > 0))
+        value += "\n";
+    return { value, next: index };
+}
+
+function scalarRecord(lines, index, end, parentIndent, raw, workflowPath)
+{
+    const header = withoutComment(raw).trim();
+    const block = blockScalar(lines, index + 1, end, parentIndent, header,
+        workflowPath);
+    if (block)
+        return { value: block.value, line: index + 1, next: block.next };
+    return {
+        value: normalizedScalar(raw, workflowPath, index + 1),
+        line: index + 1,
+        next: index + 1
+    };
+}
+
+function childMapping(lines, start, end, indent, workflowPath, context)
+{
+    const result = {};
+    let index = start;
+    while (index < end) {
+        const line = lines[index];
+        if (!contentLine(line)) {
+            ++index;
+            continue;
+        }
+        const actualIndent = indentOf(line);
+        if (actualIndent < 0)
+            violation(workflowPath, index + 1, "uses a tab for indentation.");
+        if (actualIndent < indent)
+            break;
+        if (actualIndent > indent) {
+            violation(workflowPath, index + 1,
+                "has unexpected nesting inside " + context + ".");
+        }
+        if (/^\s*<<:/.test(line)) {
+            violation(workflowPath, index + 1,
+                "uses a YAML merge key, which the workflow IR does not support.");
+        }
+        const entry = mappingEntry(line, indent);
         if (!entry)
-            continue;
+            violation(workflowPath, index + 1,
+                "is not a block-mapping entry inside " + context + ".");
+        if (Object.prototype.hasOwnProperty.call(result, entry[1])) {
+            violation(workflowPath, index + 1,
+                "duplicates " + context + " key " + entry[1] + ".");
+        }
+        const record = scalarRecord(lines, index, end, indent,
+            entry[2] || "", workflowPath);
+        if (record.value === "") {
+            violation(workflowPath, index + 1,
+                context + " key " + entry[1] + " has no scalar value.");
+        }
+        result[entry[1]] = { value: record.value, line: record.line };
+        index = record.next;
+    }
+    return { values: result, next: index };
+}
 
-        const blockLines = [];
-        if (entry[2] === "|" || entry[2] === ">") {
-            for (let scan = index + 1; scan < block.lastLine; ++scan) {
-                const scanned = lines[scan];
-                if (scanned.trim() === "")
-                    continue;
-                if (indentOf(scanned) <= keyIndent)
-                    break;
-                if (/^\s*#/.test(scanned))
-                    continue;
-                blockLines.push(scanned.trim());
+function directStepEntry(text, workflowPath, line)
+{
+    if (text === "")
+        return null;
+    if (/^[{[&*]/.test(text)) {
+        violation(workflowPath, line,
+            "uses a flow-style, anchored, or aliased step item; steps must be" +
+            " block mappings.");
+    }
+    if (/^<<:/.test(text)) {
+        violation(workflowPath, line,
+            "uses a YAML merge key, which the workflow IR does not support.");
+    }
+    const entry = /^([A-Za-z0-9_-]+):(?:\s*(.*))?$/.exec(text);
+    if (!entry) {
+        violation(workflowPath, line,
+            "does not start a block-mapping step the workflow IR can inspect.");
+    }
+    return { key: entry[1], raw: entry[2] || "", line: line };
+}
+
+function parseStep(lines, start, end, workflowPath)
+{
+    const first = /^ {6}-\s*(.*)$/.exec(lines[start]);
+    if (!first)
+        violation(workflowPath, start + 1, "is not a six-space step item.");
+
+    const entries = [];
+    const inline = directStepEntry(first[1], workflowPath, start + 1);
+    let firstBodyLine = start + 1;
+    if (inline) {
+        if (inline.key === "with" || inline.key === "env") {
+            if (withoutComment(inline.raw).trim() !== "") {
+                violation(workflowPath, inline.line,
+                    inline.key + " must be a block mapping; flow mappings and" +
+                    " aliases are unsupported.");
+            }
+            const mapping = childMapping(lines, start + 1, end, 10,
+                workflowPath, "step " + inline.key);
+            entries.push({
+                key: inline.key,
+                mapping: mapping.values,
+                line: inline.line
+            });
+            firstBodyLine = mapping.next;
+        }
+        else {
+            const record = scalarRecord(lines, start, end, 6,
+                inline.raw, workflowPath);
+            if (record.value === "") {
+                violation(workflowPath, inline.line,
+                    "step key " + inline.key + " is empty.");
+            }
+            entries.push({ key: inline.key, record, line: inline.line });
+            firstBodyLine = record.next;
+        }
+    }
+
+    for (let index = firstBodyLine; index < end;) {
+        const line = lines[index];
+        if (!contentLine(line)) {
+            ++index;
+            continue;
+        }
+        const indent = indentOf(line);
+        if (indent < 0)
+            violation(workflowPath, index + 1, "uses a tab for indentation.");
+        if (indent !== 8) {
+            violation(workflowPath, index + 1,
+                "has nesting outside a recognized step field.");
+        }
+        if (/^\s*<<:/.test(line)) {
+            violation(workflowPath, index + 1,
+                "uses a YAML merge key, which the workflow IR does not support.");
+        }
+        const entry = mappingEntry(line, 8);
+        if (!entry)
+            violation(workflowPath, index + 1, "is not a step block-mapping entry.");
+
+        const key = entry[1];
+        const raw = entry[2] || "";
+        if (key === "with" || key === "env") {
+            if (withoutComment(raw).trim() !== "") {
+                violation(workflowPath, index + 1,
+                    key + " must be a block mapping; flow mappings and aliases" +
+                    " are unsupported.");
+            }
+            const mapping = childMapping(lines, index + 1, end, 10,
+                workflowPath, "step " + key);
+            entries.push({ key, mapping: mapping.values, line: index + 1 });
+            index = mapping.next;
+            continue;
+        }
+
+        const record = scalarRecord(lines, index, end, 8, raw, workflowPath);
+        if (record.value === "")
+            violation(workflowPath, index + 1, "step key " + key + " is empty.");
+        entries.push({ key, record, line: index + 1 });
+        index = record.next;
+    }
+
+    const step = {
+        line: start + 1,
+        name: null,
+        uses: null,
+        with: {},
+        env: {},
+        run: null,
+        if: null,
+        continueOnError: null,
+        timeoutMinutes: null,
+        shell: null,
+        workingDirectory: null
+    };
+    const seen = new Set();
+    for (const entry of entries) {
+        if (seen.has(entry.key))
+            violation(workflowPath, entry.line,
+                "duplicates step key " + entry.key + ".");
+        seen.add(entry.key);
+        if (entry.key === "with" || entry.key === "env") {
+            step[entry.key] = entry.mapping;
+            continue;
+        }
+        if (entry.key === "name" || entry.key === "uses" ||
+            entry.key === "run") {
+            step[entry.key] = {
+                value: entry.record.value,
+                line: entry.record.line
+            };
+            continue;
+        }
+        const executionFields = {
+            "if": "if",
+            "continue-on-error": "continueOnError",
+            "timeout-minutes": "timeoutMinutes",
+            "shell": "shell",
+            "working-directory": "workingDirectory"
+        };
+        if (Object.prototype.hasOwnProperty.call(executionFields, entry.key)) {
+            step[executionFields[entry.key]] = {
+                value: entry.record.value,
+                line: entry.record.line
+            };
+        }
+    }
+    if (step.uses === null && step.run === null) {
+        violation(workflowPath, step.line,
+            "has neither uses nor run, so it is not an executable Actions step.");
+    }
+    if (step.uses !== null && step.run !== null) {
+        violation(workflowPath, step.line,
+            "declares both uses and run, which GitHub Actions does not allow.");
+    }
+    return step;
+}
+
+function parseSteps(lines, start, end, workflowPath)
+{
+    const starts = [];
+    for (let index = start; index < end; ++index) {
+        if (!contentLine(lines[index]))
+            continue;
+        const indent = indentOf(lines[index]);
+        if (indent < 0)
+            violation(workflowPath, index + 1, "uses a tab for indentation.");
+        if (indent !== 6 || !/^ {6}-/.test(lines[index])) {
+            violation(workflowPath, index + 1,
+                "is not a block-mapping item directly under steps.");
+        }
+        starts.push(index);
+        for (++index; index < end; ++index) {
+            if (contentLine(lines[index]) && indentOf(lines[index]) === 6) {
+                --index;
+                break;
             }
         }
-        mapping[entry[1]] = {
-            value: entry[2].replace(/^['"]|['"]$/g, "").trim(),
-            blockLines,
-            line: index + 1
-        };
     }
-    return mapping;
+
+    const steps = [];
+    for (let index = 0; index < starts.length; ++index) {
+        steps.push(parseStep(lines, starts[index],
+            index + 1 < starts.length ? starts[index + 1] : end,
+            workflowPath));
+    }
+    return steps;
 }
 
-function jobNameAt(lines, lineIndex)
+function parseNeeds(lines, index, end, raw, workflowPath)
 {
-    let jobName = null;
-    for (let index = 0; index <= lineIndex; ++index) {
-        const job = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(lines[index]);
-        if (job)
-            jobName = job[1];
-    }
-    return jobName;
-}
-
-// The line span of every job, so that a rule can ask what one job contains
-// without re-deriving the job boundaries at each use.
-function jobRegions(lines)
-{
-    const regions = new Map();
-    let current = null;
-    for (let index = 0; index < lines.length; ++index) {
-        const header = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(lines[index]);
-        if (!header)
-            continue;
-        if (current !== null)
-            regions.get(current).lastLine = index;
-        current = header[1];
-        regions.set(current, { firstLine: index, lastLine: lines.length });
-    }
-    return regions;
-}
-
-// The `needs:` of every job, in either the flow-sequence or the block-sequence
-// form. Both appear in this tree.
-function jobNeeds(lines)
-{
-    const needs = new Map();
-    let job = null;
-    for (let index = 0; index < lines.length; ++index) {
-        const header = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(lines[index]);
-        if (header) {
-            job = header[1];
-            needs.set(job, []);
-            continue;
-        }
-        if (job === null)
-            continue;
-
-        const inline = /^ {4}needs:\s*(.+?)\s*$/.exec(lines[index]);
-        if (inline) {
-            needs.set(job, inline[1]
-                .replace(/^\[|\]$/g, "")
-                .split(",")
-                .map(entry => entry.trim().replace(/^['"]|['"]$/g, ""))
-                .filter(Boolean));
-            continue;
-        }
-        if (!/^ {4}needs:\s*$/.test(lines[index]))
-            continue;
-
-        const listed = [];
-        for (let scan = index + 1; scan < lines.length; ++scan) {
+    const scalar = withoutComment(raw).trim();
+    if (scalar === "") {
+        const needs = [];
+        for (let scan = index + 1; scan < end; ++scan) {
+            if (!contentLine(lines[scan]))
+                continue;
             const item = /^ {6}-\s*(.+?)\s*$/.exec(lines[scan]);
             if (!item)
                 break;
-            listed.push(item[1].replace(/^['"]|['"]$/g, ""));
+            needs.push(normalizedScalar(item[1], workflowPath, scan + 1));
         }
-        needs.set(job, listed);
+        return needs;
     }
-    return needs;
+    if (scalar[0] !== "[")
+        return [normalizedScalar(scalar, workflowPath, index + 1)];
+    if (scalar[scalar.length - 1] !== "]")
+        violation(workflowPath, index + 1, "contains an unterminated needs list.");
+    return scalar.slice(1, -1).split(",")
+        .map(value => normalizedScalar(value, workflowPath, index + 1))
+        .filter(Boolean);
+}
+
+function parseJob(lines, start, end, id, workflowPath)
+{
+    const job = {
+        id,
+        line: start + 1,
+        needs: [],
+        outputs: {},
+        steps: []
+    };
+    for (let index = start + 1; index < end;) {
+        const line = lines[index];
+        if (!contentLine(line)) {
+            ++index;
+            continue;
+        }
+        const indent = indentOf(line);
+        if (indent < 0)
+            violation(workflowPath, index + 1, "uses a tab for indentation.");
+        if (indent !== 4) {
+            ++index;
+            continue;
+        }
+        if (/^\s*<<:/.test(line)) {
+            violation(workflowPath, index + 1,
+                "uses a YAML merge key, which the workflow IR does not support.");
+        }
+        const entry = mappingEntry(line, 4);
+        if (!entry) {
+            violation(workflowPath, index + 1,
+                "is not a job block-mapping entry.");
+        }
+        const key = entry[1];
+        const raw = entry[2] || "";
+        if (key === "needs") {
+            job.needs = parseNeeds(lines, index, end, raw, workflowPath);
+            ++index;
+            continue;
+        }
+        if (key === "outputs") {
+            if (withoutComment(raw).trim() !== "") {
+                violation(workflowPath, index + 1,
+                    "job outputs must be a block mapping.");
+            }
+            const mapping = childMapping(lines, index + 1, end, 6,
+                workflowPath, "job outputs");
+            job.outputs = mapping.values;
+            index = mapping.next;
+            continue;
+        }
+        if (key === "steps") {
+            if (withoutComment(raw).trim() !== "") {
+                violation(workflowPath, index + 1,
+                    "steps must be a block sequence; flow steps and aliases" +
+                    " are unsupported.");
+            }
+            let sectionEnd = index + 1;
+            while (sectionEnd < end) {
+                if (contentLine(lines[sectionEnd]) &&
+                    indentOf(lines[sectionEnd]) <= 4) {
+                    break;
+                }
+                ++sectionEnd;
+            }
+            job.steps = parseSteps(lines, index + 1, sectionEnd, workflowPath);
+            index = sectionEnd;
+            continue;
+        }
+        const rawValue = withoutComment(raw).trim();
+        if (/^[&*][A-Za-z0-9_-]+(?:\s|$)/.test(rawValue)) {
+            violation(workflowPath, index + 1,
+                "uses an anchor or alias in a job field.");
+        }
+        ++index;
+    }
+    return job;
+}
+
+function readWorkflow(root, relativePath)
+{
+    const text = fs.readFileSync(path.join(root, relativePath), "utf8");
+    const lines = text.split(/\r?\n/);
+    const jobsLine = lines.findIndex(line => /^jobs:\s*(?:#.*)?$/.test(line));
+    if (jobsLine < 0)
+        violation(relativePath, 1, "declares no block-mapping jobs section.");
+
+    const starts = [];
+    for (let index = jobsLine + 1; index < lines.length; ++index) {
+        if (!contentLine(lines[index]))
+            continue;
+        const indent = indentOf(lines[index]);
+        if (indent < 0)
+            violation(relativePath, index + 1, "uses a tab for indentation.");
+        if (indent === 0)
+            break;
+        if (indent !== 2)
+            continue;
+        if (/^\s*<<:/.test(lines[index])) {
+            violation(relativePath, index + 1,
+                "uses a YAML merge key in jobs.");
+        }
+        const header = /^ {2}([A-Za-z0-9_-]+):\s*(?:#.*)?$/.exec(lines[index]);
+        if (!header) {
+            violation(relativePath, index + 1,
+                "does not declare a block-mapping job.");
+        }
+        starts.push({ index, id: header[1] });
+    }
+    if (starts.length === 0)
+        violation(relativePath, jobsLine + 1, "declares no jobs.");
+
+    const jobs = new Map();
+    for (let index = 0; index < starts.length; ++index) {
+        const start = starts[index];
+        if (jobs.has(start.id))
+            violation(relativePath, start.index + 1, "duplicates job " + start.id + ".");
+        jobs.set(start.id, parseJob(lines, start.index,
+            index + 1 < starts.length ? starts[index + 1].index : lines.length,
+            start.id, relativePath));
+    }
+    return { path: relativePath, jobs };
+}
+
+function readWorkflows(root)
+{
+    const workflows = new Map();
+    for (const relativePath of workflowFiles(root))
+        workflows.set(relativePath, readWorkflow(root, relativePath));
+    return workflows;
+}
+
+function stepScalars(step)
+{
+    const scalars = [];
+    for (const field of [
+        step.name,
+        step.uses,
+        step.run,
+        step.if,
+        step.continueOnError,
+        step.timeoutMinutes,
+        step.shell,
+        step.workingDirectory
+    ]) {
+        if (field)
+            scalars.push(field.value);
+    }
+    for (const mapping of [step.with, step.env]) {
+        for (const entry of Object.values(mapping))
+            scalars.push(entry.value);
+    }
+    return scalars;
 }
 
 module.exports = {
     WORKFLOW_DIRECTORY,
     workflowFiles,
-    stepBlocks,
-    withMapping,
-    jobNameAt,
-    jobRegions,
-    jobNeeds
+    readWorkflow,
+    readWorkflows,
+    stepScalars
 };

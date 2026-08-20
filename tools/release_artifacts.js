@@ -102,35 +102,30 @@ function retentionFamilies(declaration)
 // Every upload-artifact and download-artifact step, with the name it carries.
 // A step that names no artifact is reported rather than skipped: an artifact
 // this program cannot see is an artifact it cannot keep in sync.
-function artifactSites(workflowPath, lines)
+function artifactSites(workflow)
 {
     const sites = [];
-    for (const block of structure.stepBlocks(lines)) {
-        let kind = null;
-        for (let index = block.firstLine; index < block.lastLine; ++index) {
-            const uses = /^\s*uses:\s*actions\/(upload|download)-artifact@/
-                .exec(lines[index]);
-            if (uses) {
-                kind = uses[1];
-                break;
-            }
-        }
-        if (!kind)
-            continue;
+    for (const job of workflow.jobs.values()) {
+        for (const step of job.steps) {
+            const uses = step.uses &&
+                /^actions\/(upload|download)-artifact@/.exec(step.uses.value);
+            if (!uses)
+                continue;
 
-        const mapping = structure.withMapping(lines, block) || {};
-        if (!mapping.name) {
-            violation(workflowPath + ":" + (block.firstLine + 1) +
-                " uses actions/" + kind + "-artifact but no name: was found" +
-                " in its with: block.");
-            continue;
+            const kind = uses[1];
+            if (!step.with.name) {
+                violation(workflow.path + ":" + step.line +
+                    " uses actions/" + kind + "-artifact but no name: was" +
+                    " found in its with: block.");
+                continue;
+            }
+            sites.push({
+                workflow: workflow.path,
+                nameLine: step.with.name.line,
+                kind,
+                name: step.with.name.value
+            });
         }
-        sites.push({
-            workflow: workflowPath,
-            nameLine: mapping.name.line,
-            kind,
-            name: mapping.name.value
-        });
     }
     return sites;
 }
@@ -236,7 +231,7 @@ function checkPrunePattern(declaration)
 // be compared as a literal. Its fixed halves can be: they are what a rename of
 // the artifact changes, and finding them is what keeps the prune pattern
 // pointed at an artifact that is still produced under that name.
-function checkNameTemplate(declaration, workflowLines)
+function checkNameTemplate(declaration, workflows)
 {
     for (const artifact of declaration.artifacts) {
         if (!artifact.name_template)
@@ -244,16 +239,21 @@ function checkNameTemplate(declaration, workflowLines)
 
         const halves = artifact.name_template.split("{version}");
         let found = false;
-        for (const lines of workflowLines.values()) {
-            if (lines.some(line => containsInOrder(line, halves))) {
-                found = true;
-                break;
+        for (const workflow of workflows.values()) {
+            for (const job of workflow.jobs.values()) {
+                if (job.steps.some(step => structure.stepScalars(step)
+                    .some(value => containsInOrder(value, halves)))) {
+                    found = true;
+                    break;
+                }
             }
+            if (found)
+                break;
         }
         check(found,
             DECLARATION_RELATIVE_PATH + " declares artifact \"" + artifact.id +
-            "\" as \"" + artifact.name_template + "\", but no workflow line" +
-            " builds a name out of " +
+            "\" as \"" + artifact.name_template + "\", but no normalized" +
+            " workflow step builds a name out of " +
             halves.map(half => "\"" + half + "\"").join(" followed by ") + ".");
     }
 }
@@ -309,22 +309,32 @@ function checkArtifactNames(declaration, sitesByWorkflow)
     }
 }
 
-function checkRetentionWorkflow(root, declaration)
+function checkRetentionWorkflow(workflows, declaration)
 {
-    const text = readFile(root, RETENTION_RELATIVE_PATH);
+    const workflow = workflows.get(RETENTION_RELATIVE_PATH);
+    if (!workflow) {
+        violation(RETENTION_RELATIVE_PATH + " was not found in the normalized" +
+            " workflow IR.");
+        return;
+    }
     const families = retentionFamilies(declaration);
+    const steps = [];
+    for (const job of workflow.jobs.values())
+        steps.push(...job.steps);
 
-    text.split(/\r?\n/).forEach((line, index) => {
+    for (const step of steps) {
+        const values = structure.stepScalars(step);
         for (const family of families) {
-            check(line.indexOf(family.value) < 0,
-                RETENTION_RELATIVE_PATH + ":" + (index + 1) + " names" +
+            check(!values.some(value => value.indexOf(family.value) >= 0),
+                RETENTION_RELATIVE_PATH + ":" + step.line + " names" +
                 " artifact family \"" + family.value + "\" literally. The" +
                 " families come from " + DECLARATION_RELATIVE_PATH + " so" +
                 " that a rename can never silently stop pruning.");
         }
-    });
+    }
 
-    check(/node tools\/release_artifacts\.js retention-families/.test(text),
+    check(steps.some(step => step.run && step.run.value.indexOf(
+        "node tools/release_artifacts.js retention-families") >= 0),
         RETENTION_RELATIVE_PATH + " must obtain its prune families by running" +
         " \"node tools/release_artifacts.js retention-families\"; that" +
         " invocation was not found.");
@@ -338,24 +348,20 @@ function runCheck(root)
     if (violations.length > 0)
         reportViolations();
 
-    const workflows = structure.workflowFiles(root);
-    check(workflows.length > 0,
+    const workflows = structure.readWorkflows(root);
+    check(workflows.size > 0,
         "found no workflow under " + structure.WORKFLOW_DIRECTORY + "/, which" +
         " is where every artifact this declaration names is produced.");
 
-    const workflowLines = new Map();
     const sitesByWorkflow = new Map();
-    for (const workflow of workflows) {
-        const lines = readFile(root, workflow).split(/\r?\n/);
-        workflowLines.set(workflow, lines);
-        sitesByWorkflow.set(workflow, artifactSites(workflow, lines));
-    }
+    for (const [workflowPath, workflow] of workflows)
+        sitesByWorkflow.set(workflowPath, artifactSites(workflow));
 
     checkFamilyValues(declaration);
     checkPrunePattern(declaration);
-    checkNameTemplate(declaration, workflowLines);
+    checkNameTemplate(declaration, workflows);
     checkArtifactNames(declaration, sitesByWorkflow);
-    checkRetentionWorkflow(root, declaration);
+    checkRetentionWorkflow(workflows, declaration);
 
     if (violations.length > 0)
         reportViolations();

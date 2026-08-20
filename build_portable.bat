@@ -59,6 +59,8 @@ set MSDF_PACKAGE_BUILD_DIR=%BUILD_DIR%\msdf_text_package_build
 set VNM_MSDF_TEXT_PACKAGE_BUILD_TREE=%MSDF_PACKAGE_BUILD_DIR%\vnm_msdf_text
 set FREETYPE_SOURCE_DIR=%BUILD_DIR%\_deps\freetype-src
 set MSDFGEN_SOURCE_DIR=%BUILD_DIR%\_deps\msdfgen-src
+if "%FREETYPE_COMMIT%"=="" set FREETYPE_COMMIT=42608f77f20749dd6ddc9e0536788eaad70ea4b5
+if "%MSDFGEN_COMMIT%"=="" set MSDFGEN_COMMIT=6574da1310df433c97ca0fddcab7e463c31e58f8
 set VNM_MSDF_TEXT_FALLBACK_SOURCE_DIR=%BUILD_DIR%\_deps\vnm_msdf_text-src
 set VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK=0
 set REAL_EXE=%BUILD_DIR%\vnm_terminal.exe
@@ -127,19 +129,44 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if not exist "%FREETYPE_SOURCE_DIR%\CMakeLists.txt" (
-    git clone --depth 1 --branch VER-2-13-3 https://gitlab.freedesktop.org/freetype/freetype.git "%FREETYPE_SOURCE_DIR%"
+if not exist "%FREETYPE_SOURCE_DIR%\.git" (
+    git clone --filter=blob:none --no-checkout ^
+        https://gitlab.freedesktop.org/freetype/freetype.git ^
+        "%FREETYPE_SOURCE_DIR%"
     if errorlevel 1 (
         echo ERROR: Failed to fetch FreeType.
         exit /b 1
     )
 )
-if not exist "%MSDFGEN_SOURCE_DIR%\CMakeLists.txt" (
-    git clone --depth 1 --branch v1.12.1 https://github.com/Chlumsky/msdfgen.git "%MSDFGEN_SOURCE_DIR%"
+git -C "%FREETYPE_SOURCE_DIR%" fetch --tags --force origin
+git -C "%FREETYPE_SOURCE_DIR%" checkout --detach "%FREETYPE_COMMIT%"
+git -C "%FREETYPE_SOURCE_DIR%" rev-parse HEAD | findstr /i /x "%FREETYPE_COMMIT%" >nul
+if errorlevel 1 (
+    echo ERROR: FreeType did not resolve to locked commit %FREETYPE_COMMIT%.
+    exit /b 1
+)
+for /f "delims=" %%I in ('git -C "%FREETYPE_SOURCE_DIR%" status --porcelain --untracked-files=all') do (
+    echo ERROR: FreeType checkout contains uncommitted source: %%I
+    exit /b 1
+)
+
+if not exist "%MSDFGEN_SOURCE_DIR%\.git" (
+    git clone --filter=blob:none --no-checkout https://github.com/Chlumsky/msdfgen.git "%MSDFGEN_SOURCE_DIR%"
     if errorlevel 1 (
         echo ERROR: Failed to fetch msdfgen.
         exit /b 1
     )
+)
+git -C "%MSDFGEN_SOURCE_DIR%" fetch --tags --force origin
+git -C "%MSDFGEN_SOURCE_DIR%" checkout --detach "%MSDFGEN_COMMIT%"
+git -C "%MSDFGEN_SOURCE_DIR%" rev-parse HEAD | findstr /i /x "%MSDFGEN_COMMIT%" >nul
+if errorlevel 1 (
+    echo ERROR: msdfgen did not resolve to locked commit %MSDFGEN_COMMIT%.
+    exit /b 1
+)
+for /f "delims=" %%I in ('git -C "%MSDFGEN_SOURCE_DIR%" status --porcelain --untracked-files=all') do (
+    echo ERROR: msdfgen checkout contains uncommitted source: %%I
+    exit /b 1
 )
 if "%VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK%"=="1" (
     if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (

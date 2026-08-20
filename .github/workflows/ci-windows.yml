@@ -49,10 +49,14 @@ jobs:
     permissions:
       contents: read
     outputs:
+      application: ${{ steps.resolve.outputs.application }}
       surface: ${{ steps.resolve.outputs.surface }}
       chrome: ${{ steps.resolve.outputs.chrome }}
       msdf_text: ${{ steps.resolve.outputs.msdf_text }}
       qt_dispatch: ${{ steps.resolve.outputs.qt_dispatch }}
+      freetype: ${{ steps.resolve.outputs.freetype }}
+      msdfgen: ${{ steps.resolve.outputs.msdfgen }}
+      source_tuple: ${{ steps.resolve.outputs.source_tuple }}
 
     steps:
       # A release or dispatched run must read the lock from the tagged commit
@@ -61,7 +65,11 @@ jobs:
       - name: Checkout app
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag || '' }}
+          ref: >-
+            ${{ github.event_name == 'release' &&
+                format('refs/tags/{0}', github.event.release.tag_name) ||
+                inputs.release_tag != '' &&
+                format('refs/tags/{0}', inputs.release_tag) || github.sha }}
           persist-credentials: false
 
       # The dependency checkouts below carry the repository-read token where one
@@ -75,11 +83,9 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
-          RESOLVE_FROM: ${{ (github.event_name == 'release' || inputs.release_tag != '') && 'lock' || 'master' }}
-          STALE_LOCK_IS_FATAL: ${{ github.event_name == 'release' && '1' || '0' }}
         run: |
-          # A release or dispatched run resolves from the source it checked out
-          # by tag. A tag cut before this lock existed carries neither the lock
+          # The resolver derives release state from GitHub's event payload. A
+          # tag cut before this lock existed carries neither the lock
           # nor the program that reads it, and node would report a missing
           # module that names neither the tag nor the reason.
           if [[ ! -f release/dependencies.lock.json ]]; then
@@ -105,6 +111,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
@@ -146,7 +153,7 @@ jobs:
       # run resolved.
       - name: Verify the checked-out dependency commits
         env:
-          DEPENDENCY_COMMITS: ${{ toJSON(needs.resolve-dependencies.outputs) }}
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
@@ -266,6 +273,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
@@ -307,36 +315,9 @@ jobs:
       # run resolved.
       - name: Verify the checked-out dependency commits
         env:
-          DEPENDENCY_COMMITS: ${{ toJSON(needs.resolve-dependencies.outputs) }}
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
-
-      # A dispatched run checks the application out at the workflow ref, which
-      # is independent of the release_tag input, so without this a build from
-      # one branch can be signed and uploaded to a release cut from another.
-      # Resolve the tag and refuse the run unless it names the commit that was
-      # actually built. A release event needs no check: its checkout already is
-      # the tag's commit.
-      - name: Verify the dispatched release tag names this build
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: |
-          tag_ref="repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
-          tag_sha="$(gh api "${tag_ref}" --jq '.object.sha')"
-          # An annotated tag's ref names the tag object, not the commit.
-          if [[ "$(gh api "${tag_ref}" --jq '.object.type')" == "tag" ]]; then
-            tag_sha="$(gh api \
-              "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')"
-          fi
-          built_sha="$(git -C vnm_terminal rev-parse HEAD)"
-          if [[ "${tag_sha}" != "${built_sha}" ]]; then
-            echo "Release tag ${RELEASE_TAG} names ${tag_sha}," >&2
-            echo "but this run built ${built_sha}." >&2
-            exit 1
-          fi
-          echo "Release tag ${RELEASE_TAG} names the built commit ${built_sha}."
 
       - name: Restore verified Qt IFW archive
         id: ifw-cache
@@ -401,6 +382,8 @@ jobs:
               "set VNM_QML_CHROME_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qml_chrome",
               "set VNM_MSDF_TEXT_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_msdf_text",
               "set VNM_QT_DISPATCH_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qt_dispatch",
+              "set FREETYPE_COMMIT=${{ needs.resolve-dependencies.outputs.freetype }}",
+              "set MSDFGEN_COMMIT=${{ needs.resolve-dependencies.outputs.msdfgen }}",
               "set IFW_ROOT=$env:IFW_ROOT"
           )
           [System.IO.File]::WriteAllLines(
@@ -488,89 +471,24 @@ jobs:
               exit $LASTEXITCODE
           }
 
-      - name: Record the signing payload provenance
-        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
+      - name: Record Windows package provenance
         shell: pwsh
         working-directory: vnm_terminal
         env:
-          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+          THIRD_PARTY_CHECKOUTS: >-
+            {"freetype":"vnm_terminal/build_portable/_deps/freetype-src",
+            "msdfgen":"vnm_terminal/build_portable/_deps/msdfgen-src"}
+          RELEASE_TAG: >-
+            ${{ github.event_name == 'release' &&
+                github.event.release.tag_name || inputs.release_tag || '' }}
+          QT_VERSION: '6.11.1'
+          QT_IFW_VERSION: '4.11.0'
         run: |
-          $provenance = 'dist/signing_provenance'
-          New-Item -ItemType Directory -Path $provenance -Force | Out-Null
-
-          function Get-RepositoryCommit([string] $path) {
-              $commit = (& git -C $path rev-parse HEAD | Out-String).Trim()
-              if ($LASTEXITCODE -ne 0 -or $commit -notmatch '^[0-9a-f]{40}$') {
-                  throw "Could not read an exact commit from $path."
-              }
-              return $commit
-          }
-
-          # The four owned dependencies are sibling checkouts at the commits
-          # release/dependencies.lock.json records and this run resolved, so the
-          # provenance record and the lock describe the same source by
-          # construction. freetype and msdfgen stay build-tree clones: they are
-          # pinned by tag, and the record keeps the commit each clone actually
-          # checked out, which the signing job compares with the commit the lock
-          # recorded for that tag. A change to build_portable.bat that moves or
-          # renames those two trees fails the release here rather than shipping
-          # a provenance record that omits them, and this step only runs for a
-          # release, so it is not covered by ordinary CI.
-          $appCommit = Get-RepositoryCommit '.'
-          $surfaceCommit = Get-RepositoryCommit '../vnm_terminal_surface'
-          $chromeCommit = Get-RepositoryCommit '../vnm_qml_chrome'
-          $msdfTextCommit = Get-RepositoryCommit '../vnm_msdf_text'
-          $qtDispatchCommit = Get-RepositoryCommit '../vnm_qt_dispatch'
-          $freetypeCommit = Get-RepositoryCommit 'build_portable/_deps/freetype-src'
-          $msdfgenCommit = Get-RepositoryCommit 'build_portable/_deps/msdfgen-src'
-          $sourceEpoch = (& git show -s --format=%ct HEAD | Out-String).Trim()
-          if ($LASTEXITCODE -ne 0 -or $sourceEpoch -notmatch '^[0-9]+$') {
-              throw 'Could not read the application commit timestamp.'
-          }
-
-          # app_commit.txt remains for one-release compatibility with any manual
-          # tooling that already consumes it. build_provenance.json is the new
-          # complete record and is attached to the release beside the binaries.
-          $appCommit |
-            Set-Content -LiteralPath "$provenance/app_commit.txt" -Encoding ascii
-          [ordered]@{
-              schema_version    = 1
-              release_tag       = $env:RELEASE_TAG
-              app_commit         = $appCommit
-              surface_commit     = $surfaceCommit
-              chrome_commit      = $chromeCommit
-              msdf_text_commit   = $msdfTextCommit
-              qt_dispatch_commit = $qtDispatchCommit
-              freetype_commit    = $freetypeCommit
-              msdfgen_commit     = $msdfgenCommit
-              source_date_epoch  = [long]$sourceEpoch
-              qt_version        = '6.11.1'
-              qt_ifw_version    = '4.11.0'
-              runner_image      = $env:ImageOS
-              runner_version    = $env:ImageVersion
-              workflow_run_id   = $env:GITHUB_RUN_ID
-              workflow_run_attempt = $env:GITHUB_RUN_ATTEMPT
-          } | ConvertTo-Json -Depth 3 |
-            Set-Content -LiteralPath "$provenance/build_provenance.json" -Encoding utf8
-
-          # The payload reaches the signing job through an artifact, which is a
-          # zip round trip. Signing an installer built from a payload that lost
-          # or altered a file would produce a validly signed, quietly incomplete
-          # installer, so record every file and check the list on the far side.
-          # This proves the transfer, not the producer: the same job writes the
-          # payload and the manifest. It also cannot see a lost empty directory,
-          # which an artifact does not carry and a manifest of files cannot
-          # name; the IFW payload has none.
-          $payload = 'dist/portable_candidate'
-          Get-ChildItem -LiteralPath $payload -Recurse -File -Force |
-            ForEach-Object {
-                $relative = [System.IO.Path]::GetRelativePath(
-                    (Resolve-Path -LiteralPath $payload).Path, $_.FullName)
-                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
-                "$hash  $($relative -replace '\\', '/')"
-            } |
-            Sort-Object |
-            Set-Content -LiteralPath "$provenance/payload.sha256" -Encoding ascii
+          node tools/dependencies_lock.js record-provenance `
+            . "$env:GITHUB_WORKSPACE" `
+            dist/vnm_terminal_windows_x64_build_provenance.json `
+            dist/portable_candidate
 
       - name: Upload unsigned Windows package artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -580,6 +498,7 @@ jobs:
             vnm_terminal/dist/vnm_terminal_v*_w64.zip
             vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe
             vnm_terminal/dist/vnm_terminal_v*_windows_x64_unsigned.exe.sha256
+            vnm_terminal/dist/vnm_terminal_windows_x64_build_provenance.json
           if-no-files-found: error
 
       - name: Upload the release signing payload
@@ -589,7 +508,8 @@ jobs:
           name: vnm-terminal-windows-x64-signing-payload
           path: |
             vnm_terminal/dist/portable_candidate
-            vnm_terminal/dist/signing_provenance
+            vnm_terminal/dist/payload.sha256
+            vnm_terminal/dist/vnm_terminal_windows_x64_build_provenance.json
           if-no-files-found: error
           # The manifest is taken with -Force, so the upload has to carry the
           # same set or verification fails on a file that was never sent.
@@ -656,7 +576,7 @@ jobs:
     # A release must pass the complete Windows build/test/source-integrity gate,
     # not only the packaging job that produced the payload. Otherwise a failing
     # test run can coexist with a newly signed and published installer.
-    needs: [build-and-test, package]
+    needs: [resolve-dependencies, build-and-test, package]
     runs-on: windows-2022
     environment: release-signing
     permissions:
@@ -680,7 +600,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Download the release signing payload
@@ -693,118 +613,11 @@ jobs:
         shell: pwsh
         working-directory: vnm_terminal
         env:
-          EXPECTED_RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
         run: |
-          # The build the payload came from has to be the commit this job just
-          # checked out, or a dispatched run could sign one branch's binaries
-          # against another branch's packaging assets.
-          $legacyExpected = (Get-Content -LiteralPath `
-              'dist/signing_provenance/app_commit.txt' -Raw).Trim()
-          $buildProvenance = Get-Content -LiteralPath `
-              'dist/signing_provenance/build_provenance.json' -Raw |
-              ConvertFrom-Json
-          if ($buildProvenance.schema_version -ne 1) {
-              throw "Unsupported build provenance schema $($buildProvenance.schema_version)."
-          }
-          foreach ($field in @(
-              'app_commit',
-              'surface_commit',
-              'chrome_commit',
-              'msdf_text_commit',
-              'qt_dispatch_commit',
-              'freetype_commit',
-              'msdfgen_commit'))
-          {
-              $commit = [string]$buildProvenance.$field
-              if ($commit -notmatch '^[0-9a-f]{40}$') {
-                  throw "Build provenance field $field is not a full commit SHA."
-              }
-          }
-          if ($legacyExpected -ne [string]$buildProvenance.app_commit) {
-              throw 'Legacy and structured app provenance disagree.'
-          }
-          if ([string]$buildProvenance.release_tag -ne $env:EXPECTED_RELEASE_TAG) {
-              throw "Signing payload targets '$($buildProvenance.release_tag)', but this job targets '$env:EXPECTED_RELEASE_TAG'."
-          }
-
-          $actual = (git rev-parse HEAD).Trim()
-          if ($actual -ne [string]$buildProvenance.app_commit) {
-              throw "Signing payload was built from $($buildProvenance.app_commit), but the release checkout is $actual."
-          }
-
-          # The provenance record says what was built; the lock at this tag says
-          # what should have been. Comparing them here is what turns the record
-          # into something a later rebuild can be checked against, and the lock
-          # comes from the release checkout this job already trusts. The two
-          # third-party trees are pinned by tag, which is a mutable ref, so the
-          # commit each tag named when the lock was refreshed is compared too:
-          # otherwise the same release rebuilt after a tag moved would link
-          # different source and say nothing.
-          $lock = Get-Content -LiteralPath 'release/dependencies.lock.json' -Raw |
-              ConvertFrom-Json
-          if ($lock.schema -ne 1) {
-              throw "Unsupported dependency lock schema $($lock.schema)."
-          }
-          foreach ($locked in @(
-              @{ Section = 'owned';       Field = 'surface_commit';     Name = 'vnm_terminal_surface' },
-              @{ Section = 'owned';       Field = 'chrome_commit';      Name = 'vnm_qml_chrome' },
-              @{ Section = 'owned';       Field = 'msdf_text_commit';   Name = 'vnm_msdf_text' },
-              @{ Section = 'owned';       Field = 'qt_dispatch_commit'; Name = 'vnm_qt_dispatch' },
-              @{ Section = 'third_party'; Field = 'freetype_commit';    Name = 'freetype' },
-              @{ Section = 'third_party'; Field = 'msdfgen_commit';     Name = 'msdfgen' }))
-          {
-              $built = [string]$buildProvenance.($locked.Field)
-              $expected = [string]$lock.($locked.Section).($locked.Name).commit
-              if ($built -ne $expected) {
-                  throw ("Signing payload was built from $($locked.Name) $built, " +
-                      "but release/dependencies.lock.json at this tag locks $expected.")
-              }
-          }
-          Write-Host ("Signing app={0} surface={1} chrome={2} msdf_text={3} " +
-              "qt_dispatch={4} freetype={5} msdfgen={6}" -f
-              $buildProvenance.app_commit,
-              $buildProvenance.surface_commit,
-              $buildProvenance.chrome_commit,
-              $buildProvenance.msdf_text_commit,
-              $buildProvenance.qt_dispatch_commit,
-              $buildProvenance.freetype_commit,
-              $buildProvenance.msdfgen_commit)
-
-          # And the payload has to be the one the manifest describes, file for
-          # file, so a lossy artifact round trip cannot reach binarycreator.
-          $payload = (Resolve-Path -LiteralPath 'dist/portable_candidate').Path
-          $manifest = @{}
-          foreach ($line in Get-Content -LiteralPath 'dist/signing_provenance/payload.sha256') {
-              if ($line -match '^([0-9A-Fa-f]{64})\s\s(.+)$') {
-                  $manifest[$Matches[2]] = $Matches[1].ToUpperInvariant()
-              }
-              else {
-                  throw "Malformed payload manifest line: $line"
-              }
-          }
-          if ($manifest.Count -eq 0) {
-              throw 'Payload manifest is empty.'
-          }
-
-          $seen = New-Object System.Collections.Generic.HashSet[string]
-          foreach ($file in Get-ChildItem -LiteralPath $payload -Recurse -File -Force) {
-              $relative = ([System.IO.Path]::GetRelativePath($payload, $file.FullName)) `
-                  -replace '\\', '/'
-              [void]$seen.Add($relative)
-              if (-not $manifest.ContainsKey($relative)) {
-                  throw "Payload contains $relative, which the manifest does not list."
-              }
-              $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
-              if ($hash -ne $manifest[$relative]) {
-                  throw "Payload file $relative does not match its recorded hash."
-              }
-          }
-          foreach ($relative in $manifest.Keys) {
-              if (-not $seen.Contains($relative)) {
-                  throw "Payload is missing $relative, which the manifest lists."
-              }
-          }
-          Write-Host "Verified $($manifest.Count) payload files against the build manifest."
+          node tools/dependencies_lock.js verify-signing-input `
+            . dist/vnm_terminal_windows_x64_build_provenance.json `
+            dist/portable_candidate
 
       # No cache step here on purpose. The IFW archive is small, this job runs
       # only for a release, and provision_windows_ifw.ps1 downloads it and
@@ -981,7 +794,7 @@ jobs:
             vnm_terminal/dist/vnm_terminal_v*_w64.zip.sha256
             vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe
             vnm_terminal/dist/vnm_terminal_v*_windows_x64.exe.sha256
-            vnm_terminal/dist/signing_provenance/build_provenance.json
+            vnm_terminal/dist/vnm_terminal_windows_x64_build_provenance.json
           if-no-files-found: error
 
   # The package job installs and uninstalls the unsigned installer, but signing
@@ -995,7 +808,7 @@ jobs:
     if: >-
       github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-    needs: sign-windows-package
+    needs: [resolve-dependencies, sign-windows-package]
     runs-on: windows-2022
     permissions:
       actions: read
@@ -1006,7 +819,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Download signed Windows package artifacts
@@ -1014,6 +827,14 @@ jobs:
         with:
           name: vnm-terminal-windows-x64-signed
           path: vnm_terminal/dist
+
+      - name: Verify the signed package source provenance
+        working-directory: vnm_terminal
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+        run: |
+          node tools/dependencies_lock.js verify-provenance \
+            . dist/vnm_terminal_windows_x64_build_provenance.json
 
       - name: Exercise the signed Qt IFW installation lifecycle
         shell: pwsh
@@ -1092,5 +913,5 @@ jobs:
             dist/vnm_terminal_v*_w64.zip.sha256 \
             dist/vnm_terminal_v*_windows_x64.exe \
             dist/vnm_terminal_v*_windows_x64.exe.sha256 \
-            dist/signing_provenance/build_provenance.json \
+            dist/vnm_terminal_windows_x64_build_provenance.json \
             --repo "${GITHUB_REPOSITORY}" --clobber

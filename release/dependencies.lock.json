@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "owned": {
     "vnm_terminal_surface": {
       "repository": "Varinomics/vnm_terminal_surface",
@@ -13,7 +13,7 @@
       "branch": "master",
       "checkout_path": "vnm_qml_chrome",
       "output": "chrome",
-      "commit": "7c9f07d0f0f0d73ee04c2bb307b2fc8b3ba80ba9"
+      "commit": "de68cd3490c069ee7ab7fc5730fcfd0a3029d814"
     },
     "vnm_msdf_text": {
       "repository": "imakris/vnm_msdf_text",
@@ -34,6 +34,7 @@
     "freetype": {
       "repository_url": "https://gitlab.freedesktop.org/freetype/freetype.git",
       "tag": "VER-2-13-3",
+      "output": "freetype",
       "commit": "42608f77f20749dd6ddc9e0536788eaad70ea4b5",
       "clone_sites": [
         ".github/workflows/ci-linux.yml",
@@ -44,6 +45,7 @@
     "msdfgen": {
       "repository_url": "https://github.com/Chlumsky/msdfgen.git",
       "tag": "v1.12.1",
+      "output": "msdfgen",
       "commit": "6574da1310df433c97ca0fddcab7e463c31e58f8",
       "clone_sites": [
         ".github/workflows/ci-linux.yml",

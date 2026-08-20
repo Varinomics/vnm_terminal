@@ -49,10 +49,14 @@ jobs:
     permissions:
       contents: read
     outputs:
+      application: ${{ steps.resolve.outputs.application }}
       surface: ${{ steps.resolve.outputs.surface }}
       chrome: ${{ steps.resolve.outputs.chrome }}
       msdf_text: ${{ steps.resolve.outputs.msdf_text }}
       qt_dispatch: ${{ steps.resolve.outputs.qt_dispatch }}
+      freetype: ${{ steps.resolve.outputs.freetype }}
+      msdfgen: ${{ steps.resolve.outputs.msdfgen }}
+      source_tuple: ${{ steps.resolve.outputs.source_tuple }}
 
     steps:
       # A release or dispatched run must read the lock from the tagged commit
@@ -61,7 +65,11 @@ jobs:
       - name: Checkout app
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag || '' }}
+          ref: >-
+            ${{ github.event_name == 'release' &&
+                format('refs/tags/{0}', github.event.release.tag_name) ||
+                inputs.release_tag != '' &&
+                format('refs/tags/{0}', inputs.release_tag) || github.sha }}
           persist-credentials: false
 
       # The dependency checkouts below carry the repository-read token where one
@@ -75,11 +83,9 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
-          RESOLVE_FROM: ${{ (github.event_name == 'release' || inputs.release_tag != '') && 'lock' || 'master' }}
-          STALE_LOCK_IS_FATAL: ${{ github.event_name == 'release' && '1' || '0' }}
         run: |
-          # A release or dispatched run resolves from the source it checked out
-          # by tag. A tag cut before this lock existed carries neither the lock
+          # The resolver derives release state from GitHub's event payload. A
+          # tag cut before this lock existed carries neither the lock
           # nor the program that reads it, and node would report a missing
           # module that names neither the tag nor the reason.
           if [[ ! -f release/dependencies.lock.json ]]; then
@@ -105,6 +111,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
@@ -146,7 +153,7 @@ jobs:
       # run resolved.
       - name: Verify the checked-out dependency commits
         env:
-          DEPENDENCY_COMMITS: ${{ toJSON(needs.resolve-dependencies.outputs) }}
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
@@ -193,6 +200,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
@@ -234,7 +242,7 @@ jobs:
       # run resolved.
       - name: Verify the checked-out dependency commits
         env:
-          DEPENDENCY_COMMITS: ${{ toJSON(needs.resolve-dependencies.outputs) }}
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
@@ -282,6 +290,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: vnm_terminal
+          ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
@@ -323,36 +332,9 @@ jobs:
       # run resolved.
       - name: Verify the checked-out dependency commits
         env:
-          DEPENDENCY_COMMITS: ${{ toJSON(needs.resolve-dependencies.outputs) }}
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
-
-      # A dispatched run checks the application out at the workflow ref, which
-      # is independent of the release_tag input, so without this a build from
-      # one branch can be signed and uploaded to a release cut from another.
-      # Resolve the tag and refuse the run unless it names the commit that was
-      # actually built. A release event needs no check: its checkout already is
-      # the tag's commit.
-      - name: Verify the dispatched release tag names this build
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag != '' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-        run: |
-          tag_ref="repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}"
-          tag_sha="$(gh api "${tag_ref}" --jq '.object.sha')"
-          # An annotated tag's ref names the tag object, not the commit.
-          if [[ "$(gh api "${tag_ref}" --jq '.object.type')" == "tag" ]]; then
-            tag_sha="$(gh api \
-              "repos/${GITHUB_REPOSITORY}/git/tags/${tag_sha}" --jq '.object.sha')"
-          fi
-          built_sha="$(git -C vnm_terminal rev-parse HEAD)"
-          if [[ "${tag_sha}" != "${built_sha}" ]]; then
-            echo "Release tag ${RELEASE_TAG} names ${tag_sha}," >&2
-            echo "but this run built ${built_sha}." >&2
-            exit 1
-          fi
-          echo "Release tag ${RELEASE_TAG} names the built commit ${built_sha}."
 
       - name: Install dependencies
         run: |
@@ -370,18 +352,28 @@ jobs:
           cache: 'true'
 
       - name: Prepare MSDF package dependency
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+          THIRD_PARTY_CHECKOUTS: '{"freetype":"_deps/freetype-src","msdfgen":"_deps/msdfgen-src"}'
         run: |
           msdf_package_prefix="${GITHUB_WORKSPACE}/msdf_package"
           msdf_package_build_dir="${GITHUB_WORKSPACE}/msdf_package_build"
           freetype_source_dir="${GITHUB_WORKSPACE}/_deps/freetype-src"
           msdfgen_source_dir="${GITHUB_WORKSPACE}/_deps/msdfgen-src"
 
-          git clone --depth 1 --branch VER-2-13-3 \
+          git clone --filter=blob:none --no-checkout \
             https://gitlab.freedesktop.org/freetype/freetype.git \
             "${freetype_source_dir}"
-          git clone --depth 1 --branch v1.12.1 \
+          git -C "${freetype_source_dir}" checkout --detach \
+            "${{ needs.resolve-dependencies.outputs.freetype }}"
+          git clone --filter=blob:none --no-checkout \
             https://github.com/Chlumsky/msdfgen.git \
             "${msdfgen_source_dir}"
+          git -C "${msdfgen_source_dir}" checkout --detach \
+            "${{ needs.resolve-dependencies.outputs.msdfgen }}"
+
+          node vnm_terminal/tools/dependencies_lock.js verify-checkout \
+            vnm_terminal "${GITHUB_WORKSPACE}"
 
           cmake -S "${freetype_source_dir}" -B "${msdf_package_build_dir}/freetype" \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
@@ -546,6 +538,19 @@ jobs:
           test ! -e \
             /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
 
+      - name: Record Linux package provenance
+        env:
+          SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
+          THIRD_PARTY_CHECKOUTS: '{"freetype":"_deps/freetype-src","msdfgen":"_deps/msdfgen-src"}'
+          RELEASE_TAG: >-
+            ${{ github.event_name == 'release' &&
+                github.event.release.tag_name || inputs.release_tag || '' }}
+          QT_VERSION: '6.11.1'
+        run: |
+          node vnm_terminal/tools/dependencies_lock.js record-provenance \
+            vnm_terminal "${GITHUB_WORKSPACE}" \
+            vnm_terminal/dist/vnm_terminal_linux_x64_build_provenance.json
+
       - name: Upload Linux package artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -556,6 +561,7 @@ jobs:
             vnm_terminal/dist/*.rpm
             vnm_terminal/dist/*.run
             vnm_terminal/dist/*.sha256
+            vnm_terminal/dist/*_build_provenance.json
           if-no-files-found: error
 
   attach-release-packages:
