@@ -1,4 +1,4 @@
-#include "terminal_settings_controller.h"
+#include "vnm_terminal/app_support/terminal_settings_controller.h"
 
 #if defined(VNM_TERMINAL_BUILD_PROVENANCE_HEADER)
 #include VNM_TERMINAL_BUILD_PROVENANCE_HEADER

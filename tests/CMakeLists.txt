@@ -9,6 +9,7 @@ else()
         "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:Qt6::Core>:$ENV{LD_LIBRARY_PATH}")
 endif()
 
+find_package(Qt6 6.11 REQUIRED COMPONENTS Test)
 find_package(Qt6Gui 6.11 REQUIRED COMPONENTS QOffscreenIntegrationPlugin)
 
 add_test(
@@ -37,6 +38,15 @@ add_test(
         "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
         "-DVNM_TERMINAL_TEST_ROOT=${PROJECT_BINARY_DIR}/tests/dependency_origin_contract"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/dependency_origin_contract_tests.cmake"
+)
+
+add_test(
+    NAME vnm_terminal_surface_semantic_dependency_contract
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DVNM_TERMINAL_TEST_ROOT=${PROJECT_BINARY_DIR}/tests/surface_semantic_dependency_contract"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/surface_semantic_dependency_contract_tests.cmake"
 )
 
 if(WIN32)
@@ -352,19 +362,15 @@ add_executable(vnm_terminal_custom_titlebar_integration
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_options_settings_adapter.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_presentation_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_profile_text.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_settings.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_shortcuts.cpp"
-    "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_search_bar.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_settings_controller.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_settings_window.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_window.cpp"
 )
 
 target_link_libraries(vnm_terminal_custom_titlebar_integration PRIVATE
+    vnm_terminal::vnm_terminal_app_support
+    vnm_terminal::vnm_terminal_default_shell
     vnm_terminal_surface::vnm_terminal_surface
     vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
@@ -404,19 +410,15 @@ add_executable(vnm_terminal_app_persistence
     "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
+    "${PROJECT_SOURCE_DIR}/src/app_options_settings_adapter.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_presentation_metrics.cpp"
     "${PROJECT_SOURCE_DIR}/src/app_profile_text.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_settings.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_shortcuts.cpp"
-    "${PROJECT_SOURCE_DIR}/src/qml_chrome.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_scrollbar.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_search_bar.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_settings_controller.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_settings_window.cpp"
     "${PROJECT_SOURCE_DIR}/src/terminal_window.cpp"
 )
 
 target_link_libraries(vnm_terminal_app_persistence PRIVATE
+    vnm_terminal::vnm_terminal_app_support
+    vnm_terminal::vnm_terminal_default_shell
     vnm_terminal_surface::vnm_terminal_surface
     vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
@@ -437,6 +439,37 @@ vnm_terminal_add_target_test(vnm_terminal_app_persistence
         ${vnm_terminal_qt_offscreen_environment}
         ${vnm_terminal_qt_unscaled_environment}
 )
+
+add_executable(vnm_terminal_app_support_tests
+    terminal_app/app_support_tests.cpp
+)
+target_link_libraries(vnm_terminal_app_support_tests PRIVATE
+    vnm_terminal::vnm_terminal_app_support
+    Qt6::Test
+)
+vnm_terminal_add_target_test(vnm_terminal_app_support_tests
+    ENVIRONMENT
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
+)
+
+add_executable(vnm_terminal_default_shell_tests
+    terminal_app/default_shell_tests.cpp
+)
+target_link_libraries(vnm_terminal_default_shell_tests PRIVATE
+    vnm_terminal::vnm_terminal_default_shell
+    Qt6::Test
+)
+vnm_terminal_add_target_test(vnm_terminal_default_shell_tests)
+
+add_executable(vnm_terminal_public_header_closure
+    terminal_app/public_header_closure.cpp
+)
+target_link_libraries(vnm_terminal_public_header_closure PRIVATE
+    vnm_terminal::vnm_terminal_app_support
+    vnm_terminal::vnm_terminal_default_shell
+)
+vnm_terminal_add_target_test(vnm_terminal_public_header_closure)
 
 if(TARGET vnm_terminal_canvas_fixture)
     add_test(

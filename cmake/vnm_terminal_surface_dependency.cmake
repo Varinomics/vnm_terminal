@@ -1,7 +1,12 @@
 set(VNM_TERMINAL_SURFACE_SOURCE_DIR "" CACHE PATH
     "Path to a source checkout of vnm_terminal_surface.")
 
-set(VNM_TERMINAL_SURFACE_EXPECTED_VERSION "${PROJECT_VERSION}")
+if(TARGET vnm_terminal_surface::vnm_terminal_surface)
+    vnm_terminal_adopt_existing_target_source(
+        vnm_terminal_surface::vnm_terminal_surface
+        VNM_TERMINAL_SURFACE_SOURCE_DIR)
+    return()
+endif()
 
 if(NOT VNM_TERMINAL_SURFACE_SOURCE_DIR)
     get_filename_component(vnm_terminal_default_surface_dir
@@ -38,25 +43,13 @@ if(VNM_TERMINAL_SURFACE_SOURCE_DIR)
         "${VNM_TERMINAL_SURFACE_SOURCE_DIR}"
         "${CMAKE_BINARY_DIR}/_deps/vnm_terminal_surface")
 
-    get_directory_property(vnm_terminal_surface_source_version
-        DIRECTORY "${CMAKE_BINARY_DIR}/_deps/vnm_terminal_surface"
-        DEFINITION vnm_terminal_surface_VERSION)
-
-    if(NOT vnm_terminal_surface_source_version)
-        message(FATAL_ERROR
-            "vnm_terminal_surface source checkout did not declare a project "
-            "version: ${VNM_TERMINAL_SURFACE_SOURCE_DIR}")
-    endif()
-
-    if(NOT "${vnm_terminal_surface_source_version}" VERSION_EQUAL
-        "${VNM_TERMINAL_SURFACE_EXPECTED_VERSION}")
-        message(FATAL_ERROR
-            "vnm_terminal_surface source checkout version "
-            "${vnm_terminal_surface_source_version} does not match "
-            "vnm_terminal ${VNM_TERMINAL_SURFACE_EXPECTED_VERSION}: "
-            "${VNM_TERMINAL_SURFACE_SOURCE_DIR}")
-    endif()
 else()
-    find_package(vnm_terminal_surface ${VNM_TERMINAL_SURFACE_EXPECTED_VERSION}
-        EXACT CONFIG REQUIRED)
+    find_package(vnm_terminal_surface CONFIG REQUIRED)
+endif()
+
+if(NOT TARGET vnm_terminal_surface::vnm_terminal_surface)
+    message(FATAL_ERROR
+        "vnm_terminal requires the semantic surface capability target "
+        "vnm_terminal_surface::vnm_terminal_surface. The selected source or "
+        "package does not provide the embedded terminal surface API.")
 endif()

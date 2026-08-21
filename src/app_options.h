@@ -1,7 +1,7 @@
 #pragma once
 
 #include "app_clipboard_policy.h"
-#include "app_shortcuts.h"
+#include "vnm_terminal/app_support/app_shortcuts.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
@@ -30,9 +30,6 @@ constexpr std::size_t k_backend_output_capture_max_bytes =
     64U * 1024U * 1024U;
 
 bool custom_titlebar_supported_on_platform();
-
-QString     environment_or_default(const char* name, const QString& fallback);
-QStringList default_shell_argv();
 
 struct App_options
 {

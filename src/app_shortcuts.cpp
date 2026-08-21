@@ -1,4 +1,4 @@
-#include "app_shortcuts.h"
+#include "vnm_terminal/app_support/app_shortcuts.h"
 
 #include <QClipboard>
 #include <QEvent>

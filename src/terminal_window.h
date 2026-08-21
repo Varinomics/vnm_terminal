@@ -1,8 +1,8 @@
 #pragma once
 
 #include "app_options.h"
-#include "qml_chrome.h"
-#include "terminal_scrollbar.h"
+#include "vnm_terminal/app_support/qml_chrome.h"
+#include "vnm_terminal/app_support/terminal_scrollbar.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 

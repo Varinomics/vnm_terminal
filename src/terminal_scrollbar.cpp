@@ -1,4 +1,4 @@
-#include "terminal_scrollbar.h"
+#include "vnm_terminal/app_support/terminal_scrollbar.h"
 
 #include "vnm_terminal/internal/wheel_gesture.h"
 

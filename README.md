@@ -123,10 +123,12 @@ The release dependency layout places `vnm_terminal_surface` and
 `vnm_qml_chrome` beside this repository. Custom locations are supported through
 `VNM_TERMINAL_SURFACE_SOURCE_DIR` and `VNM_QML_CHROME_SOURCE_DIR`.
 
-`vnm_terminal_surface` requires the same `project()` version as the
-application. `vnm_qml_chrome` requires the same major version and at least the
-1.8 top-frame stacking and default PID-reveal titlebar contracts. The validated
-Qt baseline is Qt 6.11.1 or newer.
+`vnm_terminal_surface` must provide the
+`vnm_terminal_surface::vnm_terminal_surface` embedded-surface API target; its
+release version is independent of the application version. `vnm_qml_chrome`
+requires the same major version and at least the 1.8 top-frame stacking and
+default PID-reveal titlebar contracts. The validated Qt baseline is Qt 6.11.1
+or newer.
 
 ```powershell
 cmake -S . -B build -DBUILD_TESTING=ON

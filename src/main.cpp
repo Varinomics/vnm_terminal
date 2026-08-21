@@ -5,14 +5,15 @@
 #include "app_hyperlink_policy.h"
 #include "app_metrics.h"
 #include "app_options.h"
+#include "app_options_settings_adapter.h"
 #include "app_profile_text.h"
-#include "app_settings.h"
-#include "app_shortcuts.h"
-#include "qml_chrome.h"
-#include "terminal_scrollbar.h"
-#include "terminal_search_bar.h"
-#include "terminal_settings_controller.h"
-#include "terminal_settings_window.h"
+#include "vnm_terminal/app_support/app_settings.h"
+#include "vnm_terminal/app_support/app_shortcuts.h"
+#include "vnm_terminal/app_support/qml_chrome.h"
+#include "vnm_terminal/app_support/terminal_scrollbar.h"
+#include "vnm_terminal/app_support/terminal_search_bar.h"
+#include "vnm_terminal/app_support/terminal_settings_controller.h"
+#include "vnm_terminal/app_support/terminal_settings_window.h"
 #include "terminal_window.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
@@ -89,10 +90,8 @@ using chrome::connect_row_timestamp_tooltip_to_chrome;
 using chrome::connect_terminal_metadata_to_chrome;
 using chrome::custom_titlebar_resize_border_active;
 using chrome::custom_titlebar_supported_on_platform;
-using chrome::default_shell_argv;
 using chrome::default_window_title;
 using chrome::enum_key;
-using chrome::environment_or_default;
 using chrome::handle_clipboard_write_request;
 using chrome::validated_terminal_hyperlink_url;
 using chrome::install_wheel_delivery_indicator_filter;

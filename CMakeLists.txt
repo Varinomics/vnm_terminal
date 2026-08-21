@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 project(vnm_terminal LANGUAGES C CXX VERSION 1.4.6)
 
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -20,6 +23,9 @@ option(VNM_TERMINAL_APP_BUILD_BENCHMARKS
 option(VNM_TERMINAL_BUILD_PACKAGES
     "Generate self-contained platform packages from the install tree"
     OFF)
+option(VNM_TERMINAL_BUILD_STANDALONE_APP
+    "Build the standalone vnm_terminal application"
+    ON)
 
 if(VNM_TERMINAL_DISTRIBUTION_BUILD AND VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
     message(FATAL_ERROR
@@ -71,6 +77,141 @@ add_custom_target(vnm_terminal_build_info ALL
     COMMENT "Refreshing build provenance"
     VERBATIM)
 
+set(vnm_terminal_app_support_headers
+    include/vnm_terminal/app_support/app_settings.h
+    include/vnm_terminal/app_support/app_shortcuts.h
+    include/vnm_terminal/app_support/qml_chrome.h
+    include/vnm_terminal/app_support/terminal_scrollbar.h
+    include/vnm_terminal/app_support/terminal_search_bar.h
+    include/vnm_terminal/app_support/terminal_settings_controller.h
+    include/vnm_terminal/app_support/terminal_settings_window.h
+)
+
+add_library(vnm_terminal_app_support STATIC
+    src/app_settings.cpp
+    include/vnm_terminal/app_support/app_settings.h
+    src/app_shortcuts.cpp
+    include/vnm_terminal/app_support/app_shortcuts.h
+    src/qml_chrome.cpp
+    include/vnm_terminal/app_support/qml_chrome.h
+    src/terminal_scrollbar.cpp
+    include/vnm_terminal/app_support/terminal_scrollbar.h
+    src/terminal_search_bar.cpp
+    include/vnm_terminal/app_support/terminal_search_bar.h
+    src/terminal_settings_controller.cpp
+    include/vnm_terminal/app_support/terminal_settings_controller.h
+    src/terminal_settings_window.cpp
+    include/vnm_terminal/app_support/terminal_settings_window.h
+)
+add_dependencies(vnm_terminal_app_support vnm_terminal_build_info)
+get_target_property(
+    vnm_terminal_qml_chrome_include_dirs
+    vnm_qml_chrome::vnm_qml_chrome
+    INTERFACE_INCLUDE_DIRECTORIES)
+target_include_directories(vnm_terminal_app_support
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CMAKE_CURRENT_BINARY_DIR}/generated"
+        ${vnm_terminal_qml_chrome_include_dirs}
+    PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
+target_compile_definitions(vnm_terminal_app_support PRIVATE
+    VNM_TERMINAL_BUILD_PROVENANCE_HEADER="vnm_terminal_build_info.h"
+)
+target_link_libraries(vnm_terminal_app_support
+    PUBLIC
+        vnm_terminal_surface::vnm_terminal_surface
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Quick
+)
+# A source-tree consumer needs the source chrome target, while the exported
+# archive's package config appends the co-installed chrome runtime target. Keep
+# the local target out of the export set with this build-only wrapper.
+add_library(vnm_terminal_app_support_source INTERFACE)
+target_link_libraries(vnm_terminal_app_support_source INTERFACE
+    vnm_terminal_app_support
+    vnm_qml_chrome::vnm_qml_chrome)
+add_library(
+    vnm_terminal::vnm_terminal_app_support
+    ALIAS vnm_terminal_app_support_source)
+
+add_library(vnm_terminal_default_shell STATIC
+    include/vnm_terminal/default_shell.h
+    src/default_shell.cpp
+)
+add_library(
+    vnm_terminal::vnm_terminal_default_shell
+    ALIAS vnm_terminal_default_shell)
+target_include_directories(vnm_terminal_default_shell PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
+target_link_libraries(vnm_terminal_default_shell PUBLIC Qt6::Core)
+
+if(MSVC)
+    target_compile_options(vnm_terminal_app_support PRIVATE /FS)
+    target_compile_options(vnm_terminal_default_shell PRIVATE /FS)
+endif()
+
+if(PROJECT_IS_TOP_LEVEL)
+    get_target_property(
+        vnm_terminal_qml_chrome_is_imported
+        vnm_qml_chrome::vnm_qml_chrome
+        IMPORTED)
+    if(vnm_terminal_qml_chrome_is_imported)
+        message(FATAL_ERROR
+            "Installing vnm_terminal app support requires a source-built "
+            "vnm_qml_chrome target because vnm_qml_chrome does not publish "
+            "an installed CMake package.")
+    endif()
+    get_target_property(
+        vnm_terminal_qml_chrome_source_dir
+        vnm_qml_chrome::vnm_qml_chrome
+        SOURCE_DIR)
+    set_target_properties(vnm_qml_chrome PROPERTIES
+        EXPORT_NAME vnm_terminal_qml_chrome_runtime)
+    install(TARGETS
+        vnm_terminal_app_support
+        vnm_terminal_default_shell
+        vnm_qml_chrome
+        EXPORT vnm_terminalTargets
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    )
+    install(FILES ${vnm_terminal_app_support_headers}
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/vnm_terminal/app_support")
+    install(FILES include/vnm_terminal/default_shell.h
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/vnm_terminal")
+    install(DIRECTORY
+        "${vnm_terminal_qml_chrome_source_dir}/include/vnm_qml_chrome"
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+    install(EXPORT vnm_terminalTargets
+        NAMESPACE vnm_terminal::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vnm_terminal")
+
+    configure_package_config_file(
+        cmake/vnm_terminalConfig.cmake.in
+        "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminalConfig.cmake"
+        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vnm_terminal")
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminalConfigVersion.cmake"
+        VERSION "${PROJECT_VERSION}"
+        COMPATIBILITY SameMajorVersion)
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminalConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminalConfigVersion.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vnm_terminal")
+endif()
+
+if(NOT VNM_TERMINAL_BUILD_STANDALONE_APP)
+    return()
+endif()
+
 set(vnm_terminal_sources
     src/main.cpp
     src/app_cli.cpp
@@ -87,24 +228,13 @@ set(vnm_terminal_sources
     src/app_metrics.h
     src/app_options.cpp
     src/app_options.h
+    src/app_options_settings_adapter.cpp
+    src/app_options_settings_adapter.h
+    src/app_settings_keys.h
     src/app_presentation_metrics.cpp
     src/app_presentation_metrics.h
     src/app_profile_text.cpp
     src/app_profile_text.h
-    src/app_settings.cpp
-    src/app_settings.h
-    src/app_shortcuts.cpp
-    src/app_shortcuts.h
-    src/qml_chrome.cpp
-    src/qml_chrome.h
-    src/terminal_scrollbar.cpp
-    src/terminal_scrollbar.h
-    src/terminal_search_bar.cpp
-    src/terminal_search_bar.h
-    src/terminal_settings_controller.cpp
-    src/terminal_settings_controller.h
-    src/terminal_settings_window.cpp
-    src/terminal_settings_window.h
     src/terminal_title_metadata.h
     src/terminal_window.cpp
     src/terminal_window.h
@@ -147,6 +277,8 @@ if(APPLE AND EXISTS "${vnm_terminal_macos_icon}")
 endif()
 
 target_link_libraries(vnm_terminal PRIVATE
+    vnm_terminal::vnm_terminal_app_support
+    vnm_terminal::vnm_terminal_default_shell
     vnm_terminal_surface::vnm_terminal_surface
     vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome

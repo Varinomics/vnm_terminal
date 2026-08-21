@@ -1,6 +1,6 @@
-#include "terminal_settings_window.h"
+#include "vnm_terminal/app_support/terminal_settings_window.h"
 
-#include "terminal_settings_controller.h"
+#include "vnm_terminal/app_support/terminal_settings_controller.h"
 
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
 

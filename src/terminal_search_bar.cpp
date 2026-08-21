@@ -1,6 +1,6 @@
-#include "terminal_search_bar.h"
+#include "vnm_terminal/app_support/terminal_search_bar.h"
 
-#include "qml_chrome.h"
+#include "vnm_terminal/app_support/qml_chrome.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 

@@ -83,3 +83,54 @@ function(vnm_terminal_require_dependency_origin target variable_name)
         message(FATAL_ERROR "${vnm_terminal_origin_problem}")
     endif()
 endfunction()
+
+# A source target supplied by an embedding parent is already the selected
+# dependency. Record the tree that actually defined it so build provenance does
+# not become "unknown" merely because the dependency script did not need to add
+# or find the target itself. Imported targets intentionally stay pathless: an
+# installed package has no truthful source checkout for this build to report.
+function(vnm_terminal_adopt_existing_target_source target variable_name)
+    if(NOT TARGET ${target})
+        return()
+    endif()
+
+    get_target_property(vnm_terminal_origin_imported ${target} IMPORTED)
+    if(vnm_terminal_origin_imported)
+        get_property(
+            vnm_terminal_origin_help
+            CACHE ${variable_name}
+            PROPERTY HELPSTRING)
+        set(${variable_name}
+            ""
+            CACHE PATH
+            "${vnm_terminal_origin_help}"
+            FORCE)
+        set(${variable_name} "" PARENT_SCOPE)
+        return()
+    endif()
+
+    get_target_property(vnm_terminal_origin_actual ${target} SOURCE_DIR)
+    if(NOT vnm_terminal_origin_actual)
+        message(FATAL_ERROR
+            "${target} is a source-built target but reports no SOURCE_DIR, "
+            "so vnm_terminal cannot record its build provenance.")
+    endif()
+
+    vnm_terminal_dependency_origin_violation(vnm_terminal_origin_problem
+        "${variable_name}"
+        "${${variable_name}}"
+        "${vnm_terminal_origin_actual}")
+    if(vnm_terminal_origin_problem)
+        message(FATAL_ERROR "${vnm_terminal_origin_problem}")
+    endif()
+
+    get_property(
+        vnm_terminal_origin_help
+        CACHE ${variable_name}
+        PROPERTY HELPSTRING)
+    set(${variable_name}
+        "${vnm_terminal_origin_actual}"
+        CACHE PATH
+        "${vnm_terminal_origin_help}"
+        FORCE)
+endfunction()

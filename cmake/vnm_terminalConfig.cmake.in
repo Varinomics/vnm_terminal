@@ -1,0 +1,18 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Qt6 6.11 REQUIRED COMPONENTS
+    Core
+    Gui
+    Qml
+    Quick
+    QuickControls2
+    QuickLayouts)
+find_dependency(vnm_terminal_surface CONFIG REQUIRED)
+
+include("${CMAKE_CURRENT_LIST_DIR}/vnm_terminalTargets.cmake")
+
+set_property(TARGET vnm_terminal::vnm_terminal_app_support APPEND PROPERTY
+    INTERFACE_LINK_LIBRARIES
+        vnm_terminal::vnm_terminal_qml_chrome_runtime)

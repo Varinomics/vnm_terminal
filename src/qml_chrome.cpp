@@ -1,4 +1,4 @@
-#include "qml_chrome.h"
+#include "vnm_terminal/app_support/qml_chrome.h"
 
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
 

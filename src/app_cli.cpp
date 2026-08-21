@@ -1,5 +1,7 @@
 #include "app_cli.h"
 
+#include "vnm_terminal/default_shell.h"
+
 #include "app_clipboard_policy.h"
 #include "app_common.h"
 #include "app_options.h"
@@ -1017,7 +1019,7 @@ Parse_result parse_arguments(const QStringList& arguments)
         }
     }
     else {
-        result.options.command = default_shell_argv();
+        result.options.command = vnm_terminal::default_shell_argv();
         if (result.options.command.isEmpty()) {
             result.error = QStringLiteral("no default shell is available on this platform");
             return result;
