@@ -1197,10 +1197,10 @@ bool test_terminal_chrome_native_outer_edge_pixels(QGuiApplication& app)
             true);
         auto backend = std::make_unique<Metadata_seed_backend>(
             QByteArrayLiteral("native outer edge pixel fixture\r\n"));
-        const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+        const bool started = term::VNM_TerminalSurface_render_bridge::start_backend_terminal(
             surface,
             std::move(backend),
-            {QStringLiteral("native-outer-edge-pixel-fixture")});
+            {QStringLiteral("native-outer-edge-pixel-fixture")}).accepted;
         term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
         ok &= check(started, "native pixel fixture seeds terminal surface content");
 
@@ -1314,10 +1314,10 @@ bool test_terminal_scrollbar_tracks_surface_viewport(QGuiApplication& app)
     scrollbar.set_surface(&surface);
 
     auto backend = std::make_unique<Metadata_seed_backend>(numbered_scroll_lines(80));
-    const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+    const bool started = term::VNM_TerminalSurface_render_bridge::start_backend_terminal(
         surface,
         std::move(backend),
-        {QStringLiteral("scrollbar-seed")});
+        {QStringLiteral("scrollbar-seed")}).accepted;
     term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
     pump_events(app);
 
@@ -1510,10 +1510,10 @@ bool test_terminal_scrollbar_immediate_public_projection_routes(QGuiApplication&
 
         auto backend = std::make_unique<Metadata_seed_backend>(numbered_scroll_lines(80));
         Metadata_seed_backend* backend_ptr = backend.get();
-        const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+        const bool started = term::VNM_TerminalSurface_render_bridge::start_backend_terminal(
             surface,
             std::move(backend),
-            {QStringLiteral("scrollbar-immediate-routes")});
+            {QStringLiteral("scrollbar-immediate-routes")}).accepted;
         term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
         pump_events(app);
 
@@ -1832,10 +1832,10 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
     auto backend = std::make_unique<Metadata_seed_backend>(
         osc1_icon_name_sequence(surface_icon_name));
     Metadata_seed_backend* backend_ptr = backend.get();
-    const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+    const bool started = term::VNM_TerminalSurface_render_bridge::start_backend_terminal(
         surface,
         std::move(backend),
-        {QStringLiteral("metadata-seed")});
+        {QStringLiteral("metadata-seed")}).accepted;
     term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
     pump_events(app);
     ok &= check(started,
@@ -2677,10 +2677,10 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
         "search bar reports a query whose session source is unavailable");
 
     auto backend = std::make_unique<Metadata_seed_backend>(numbered_scroll_lines(80));
-    const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+    const bool started = term::VNM_TerminalSurface_render_bridge::start_backend_terminal(
         surface,
         std::move(backend),
-        {QStringLiteral("search-scrollbar-seed")});
+        {QStringLiteral("search-scrollbar-seed")}).accepted;
     term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
     pump_events(app);
     ok &= check(started && scrollbar.scrollbar_visible(),
@@ -2765,10 +2765,10 @@ bool test_copy_on_select_copies_completed_plain_text_selection(QGuiApplication& 
 
     auto backend = std::make_unique<Metadata_seed_backend>(
         QByteArrayLiteral("alpha beta\r\n"));
-    const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+    const bool started = term::VNM_TerminalSurface_render_bridge::start_backend_terminal(
         surface,
         std::move(backend),
-        {QStringLiteral("copy-on-select-seed")});
+        {QStringLiteral("copy-on-select-seed")}).accepted;
     term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
     window.show();
     pump_events(app);

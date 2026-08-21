@@ -7,6 +7,7 @@
 #include "app_options.h"
 #include "app_options_settings_adapter.h"
 #include "app_profile_text.h"
+#include "standalone_environment.h"
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/app_shortcuts.h"
 #include "vnm_terminal/app_support/qml_chrome.h"
@@ -33,6 +34,7 @@
 #include <QColor>
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QEvent>
 #include <QGuiApplication>
@@ -1120,21 +1122,50 @@ int main(int argc, char** argv)
 
     surface->forceActiveFocus();
 
+    const std::vector<vnm_terminal::Terminal_environment_entry>
+        captured_environment = chrome::capture_standalone_ambient_environment();
+    std::optional<std::vector<vnm_terminal::Terminal_environment_entry>>
+        sanitized_environment =
+            chrome::sanitize_standalone_base_environment(captured_environment);
+    if (!sanitized_environment.has_value()) {
+        print_error(QStringLiteral("failed to sanitize the captured child environment"));
+        return k_exit_start_failed;
+    }
+    const QString terminal_working_directory =
+        options.working_directory.isEmpty()
+            ? QDir::currentPath()
+            : options.working_directory;
     const auto start_result =
-        vnm::qt::post(&app, [&options, &state, surface, &timeout_timer] {
-        if (!surface->start_process(options.command, options.working_directory)) {
-            if (state.backend_error_count == 0) {
-                print_error(QStringLiteral("failed to start terminal process"));
+        vnm::qt::post(
+            &app,
+            [&options,
+             &state,
+             surface,
+             &timeout_timer,
+             terminal_working_directory,
+             base_environment = std::move(*sanitized_environment)] {
+                const vnm_terminal::Terminal_process_start_result terminal_start =
+                    surface->start_terminal({
+                        options.command,
+                        terminal_working_directory,
+                        base_environment,
+                        std::nullopt,
+                    });
+                if (!terminal_start.accepted) {
+                    if (state.backend_error_count == 0) {
+                        print_error(QStringLiteral(
+                            "failed to start terminal process"));
+                    }
+
+                    QCoreApplication::exit(k_exit_start_failed);
+                    return;
+                }
+
+                if (options.timeout_ms.has_value()) {
+                    timeout_timer.start(*options.timeout_ms);
+                }
             }
-
-            QCoreApplication::exit(k_exit_start_failed);
-            return;
-        }
-
-        if (options.timeout_ms.has_value()) {
-            timeout_timer.start(*options.timeout_ms);
-        }
-    });
+        );
     const auto startup_exit_status =
         deferred_startup_exit_status(start_result);
     if (startup_exit_status.has_value()) {

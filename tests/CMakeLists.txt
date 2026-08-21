@@ -204,6 +204,35 @@ set_target_properties(vnm_terminal_title_metadata PROPERTIES
 vnm_terminal_add_target_test(vnm_terminal_title_metadata
 )
 
+add_executable(vnm_terminal_standalone_environment_policy
+    terminal_app/standalone_environment_tests.cpp
+    "${PROJECT_SOURCE_DIR}/src/standalone_environment.cpp"
+)
+vnm_terminal_configure_test_process(
+    vnm_terminal_standalone_environment_policy)
+
+target_link_libraries(vnm_terminal_standalone_environment_policy PRIVATE
+    vnm_framework::vnm_environment_policy
+    vnm_terminal_surface::vnm_terminal_surface
+    Qt6::Core
+)
+target_compile_definitions(vnm_terminal_standalone_environment_policy PRIVATE
+    VNM_TERMINAL_STANDALONE_TEST_APP_PATH="$<TARGET_FILE:vnm_terminal>"
+)
+add_dependencies(vnm_terminal_standalone_environment_policy
+    vnm_terminal
+)
+
+set_target_properties(vnm_terminal_standalone_environment_policy PROPERTIES
+    AUTOMOC OFF
+)
+
+vnm_terminal_add_target_test(vnm_terminal_standalone_environment_policy
+    ENVIRONMENT
+        ${vnm_terminal_qt_offscreen_environment}
+        ${vnm_terminal_qt_unscaled_environment}
+)
+
 if(WIN32)
     add_executable(vnm_terminal_portable_launcher_text
         terminal_app/portable_launcher_text_tests.cpp
@@ -306,6 +335,8 @@ add_executable(vnm_terminal_app_cli
 )
 
 target_link_libraries(vnm_terminal_app_cli PRIVATE
+    vnm_terminal::vnm_terminal_app_support
+    vnm_terminal::vnm_terminal_default_shell
     vnm_terminal_surface::vnm_terminal_surface
     Qt6::Core
     Qt6::Gui

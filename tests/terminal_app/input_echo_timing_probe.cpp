@@ -1458,10 +1458,10 @@ int main(int argc, char** argv)
 
     auto backend = std::make_unique<Echo_backend>(app_timer, options.echo_delay_ms);
     Echo_backend* backend_ptr = backend.get();
-    const bool started = term::VNM_TerminalSurface_render_bridge::start_process_with_backend(
+    const bool started = term::VNM_TerminalSurface_render_bridge::start_backend_terminal(
         surface,
         std::move(backend),
-        {QStringLiteral("input-echo-probe")});
+        {QStringLiteral("input-echo-probe")}).accepted;
     if (!started) {
         std::cerr << "ERROR: input echo probe backend did not start\n";
         return 3;

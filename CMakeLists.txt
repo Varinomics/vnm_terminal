@@ -212,6 +212,9 @@ if(NOT VNM_TERMINAL_BUILD_STANDALONE_APP)
     return()
 endif()
 
+include(cmake/vnm_environment_policy_dependency.cmake)
+vnm_terminal_environment_policy_make_available()
+
 set(vnm_terminal_sources
     src/main.cpp
     src/app_cli.cpp
@@ -231,6 +234,8 @@ set(vnm_terminal_sources
     src/app_options_settings_adapter.cpp
     src/app_options_settings_adapter.h
     src/app_settings_keys.h
+    src/standalone_environment.cpp
+    src/standalone_environment.h
     src/app_presentation_metrics.cpp
     src/app_presentation_metrics.h
     src/app_profile_text.cpp
@@ -282,6 +287,7 @@ target_link_libraries(vnm_terminal PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
     vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
+    vnm_framework::vnm_environment_policy
 )
 
 target_compile_definitions(vnm_terminal PRIVATE
