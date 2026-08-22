@@ -379,7 +379,9 @@ int main(int argc, char** argv)
     const QString child_marker_path = child_working_directory.filePath(
         QStringLiteral("standalone-child-environment-observed.txt"));
     standalone_process.setArguments({
+#if defined(_WIN32) || defined(__linux__)
         QStringLiteral("--native-titlebar"),
+#endif
         QStringLiteral("--window-size"),
         QStringLiteral("640x360"),
         QStringLiteral("--cwd"),
