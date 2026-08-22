@@ -551,17 +551,46 @@ set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
 )
 
 if(VNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER)
-    get_target_property(
-        vnm_terminal_msdf_text_package_dependency
-        vnm_msdf_text::vnm_msdf_text
-        IMPORTED)
-endif()
+    if(NOT TARGET vnm_terminal_surface::vnm_terminal_surface)
+        message(FATAL_ERROR
+            "Cannot classify the vnm_terminal_surface MSDF dependency because "
+            "vnm_terminal_surface::vnm_terminal_surface is unavailable")
+    endif()
 
-if(VNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER AND NOT vnm_terminal_msdf_text_package_dependency)
-    set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
-        SKIP_REGULAR_EXPRESSION
-            "Installing vnm_terminal_surface with MSDF requires packaged vnm_msdf_text"
-    )
+    get_target_property(
+        vnm_terminal_surface_package_dependency
+        vnm_terminal_surface::vnm_terminal_surface
+        IMPORTED)
+    if(vnm_terminal_surface_package_dependency STREQUAL "FALSE")
+        get_target_property(
+            vnm_terminal_surface_binary_dir
+            vnm_terminal_surface::vnm_terminal_surface
+            BINARY_DIR)
+        if(NOT vnm_terminal_surface_binary_dir OR
+           vnm_terminal_surface_binary_dir MATCHES "-NOTFOUND$")
+            message(FATAL_ERROR
+                "Cannot classify the source-built vnm_terminal_surface MSDF dependency "
+                "because its binary directory is unavailable")
+        endif()
+
+        get_directory_property(
+            vnm_terminal_surface_msdf_text_package_dependency
+            DIRECTORY "${vnm_terminal_surface_binary_dir}"
+            DEFINITION vnm_terminal_msdf_text_package_dependency)
+        if(vnm_terminal_surface_msdf_text_package_dependency STREQUAL "FALSE")
+            set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
+                SKIP_REGULAR_EXPRESSION
+                    "Installing vnm_terminal_surface with MSDF requires packaged vnm_msdf_text"
+            )
+        elseif(NOT vnm_terminal_surface_msdf_text_package_dependency STREQUAL "TRUE")
+            message(FATAL_ERROR
+                "Cannot classify the source-built vnm_terminal_surface MSDF dependency "
+                "from its owning build directory")
+        endif()
+    elseif(NOT vnm_terminal_surface_package_dependency STREQUAL "TRUE")
+        message(FATAL_ERROR
+            "Cannot classify whether vnm_terminal_surface is source-built or installed")
+    endif()
 endif()
 
 if(TARGET vnm_terminal_canvas_fixture)
