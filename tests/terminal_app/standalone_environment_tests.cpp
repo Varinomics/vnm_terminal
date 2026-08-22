@@ -52,6 +52,43 @@ bool has_name(
         });
 }
 
+bool entries_equal(
+    const std::vector<vnm_terminal::Terminal_environment_entry>& left,
+    const std::vector<vnm_terminal::Terminal_environment_entry>& right)
+{
+    return std::equal(
+        left.begin(),
+        left.end(),
+        right.begin(),
+        right.end(),
+        [](const auto& left_entry, const auto& right_entry) {
+            return
+                left_entry.name == right_entry.name &&
+                left_entry.value == right_entry.value;
+        });
+}
+
+QString qstring(std::string_view text)
+{
+    return QString::fromLatin1(
+        text.data(),
+        static_cast<qsizetype>(text.size()));
+}
+
+bool explicit_environment_is_rejected(
+    std::vector<vnm_terminal::Terminal_environment_entry> entries)
+{
+    return !vnm_terminal::terminal_app::sanitize_standalone_base_environment(
+                entries).has_value();
+}
+
+bool ambient_environment_is_rejected(
+    std::vector<vnm_terminal::Terminal_environment_entry> entries)
+{
+    return !vnm_terminal::terminal_app::sanitize_standalone_ambient_environment(
+                entries).has_value();
+}
+
 int run_child_environment_oracle(const QString& marker_path)
 {
     bool ok = true;
@@ -111,6 +148,7 @@ int main(int argc, char** argv)
     std::vector<vnm_terminal::Terminal_environment_entry> captured{
         {QStringLiteral("ORDINARY_NAME"), QStringLiteral("ordinary-value")},
         {QStringLiteral("EMPTY_VALUE"), QString()},
+        {QStringLiteral("SECOND_ORDINARY"), QStringLiteral("second-value")},
     };
     for (const std::string_view name : k_framework_canary_names) {
         captured.push_back({
@@ -131,12 +169,20 @@ int main(int argc, char** argv)
             captured);
     ok &= check(sanitized.has_value(), "explicit captured environment must sanitize");
     if (sanitized.has_value()) {
+        std::vector<vnm_terminal::Terminal_environment_entry> expected{
+            {QStringLiteral("ORDINARY_NAME"), QStringLiteral("ordinary-value")},
+            {QStringLiteral("EMPTY_VALUE"), QString()},
+            {QStringLiteral("SECOND_ORDINARY"), QStringLiteral("second-value")},
+        };
+#if defined(Q_OS_WIN)
+        expected.push_back({
+            QStringLiteral("=C:"),
+            QStringLiteral("C:\\explicit-pseudo-directory"),
+        });
+#endif
         ok &= check(
-            has_name(*sanitized, QStringLiteral("ORDINARY_NAME")),
-            "ordinary captured entries must survive");
-        ok &= check(
-            has_name(*sanitized, QStringLiteral("EMPTY_VALUE")),
-            "empty values must survive");
+            entries_equal(*sanitized, expected),
+            "ordinary entries, empty values, order, and valid pseudo variables must survive");
         for (const std::string_view name : k_framework_canary_names) {
             ok &= check(
                 !has_name(
@@ -151,6 +197,101 @@ int main(int argc, char** argv)
             has_name(*sanitized, QStringLiteral("=C:")),
             "trusted Windows leading-equals pseudo variables must survive");
 #endif
+    }
+
+    std::vector<vnm_terminal::Terminal_environment_entry> lowercase_canaries;
+    for (const std::string_view name : k_framework_canary_names) {
+        lowercase_canaries.push_back({
+            qstring(name).toLower(),
+            QStringLiteral("lowercase-canary"),
+        });
+    }
+    const auto sanitized_lowercase_canaries =
+        vnm_terminal::terminal_app::sanitize_standalone_base_environment(
+            lowercase_canaries);
+#if defined(Q_OS_WIN)
+    ok &= check(
+        sanitized_lowercase_canaries.has_value() &&
+            sanitized_lowercase_canaries->empty(),
+        "Windows reserved-name matching must use case-insensitive semantics");
+#else
+    ok &= check(
+        sanitized_lowercase_canaries.has_value() &&
+            sanitized_lowercase_canaries->size() ==
+                k_framework_canary_names.size(),
+        "POSIX reserved-name matching must remain case-sensitive");
+#endif
+
+    ok &= check(
+        explicit_environment_is_rejected({
+            {QString(), QStringLiteral("value")},
+        }),
+        "empty environment names must reject");
+    ok &= check(
+        explicit_environment_is_rejected({
+            {QString::fromLatin1("A\0B", 3), QStringLiteral("value")},
+        }),
+        "embedded NULs in environment names must reject");
+    ok &= check(
+        explicit_environment_is_rejected({
+            {QStringLiteral("NAME"), QString::fromLatin1("A\0B", 3)},
+        }),
+        "embedded NULs in environment values must reject");
+    ok &= check(
+        explicit_environment_is_rejected({
+            {QStringLiteral("A=B"), QStringLiteral("value")},
+        }),
+        "embedded equals signs in ordinary names must reject");
+    ok &= check(
+        explicit_environment_is_rejected({
+            {QStringLiteral("NAME"), QStringLiteral("first")},
+            {QStringLiteral("NAME"), QStringLiteral("second")},
+        }),
+        "exact duplicate names must reject before filtering");
+    ok &= check(
+        explicit_environment_is_rejected({
+            {QStringLiteral("VNM_CONTROL_TOKEN"), QStringLiteral("first")},
+            {QStringLiteral("VNM_CONTROL_TOKEN"), QStringLiteral("second")},
+        }),
+        "duplicate reserved names must reject before reserved-name filtering");
+
+    const std::vector<vnm_terminal::Terminal_environment_entry>
+        case_distinct_entries{
+            {QStringLiteral("Path"), QStringLiteral("first")},
+            {QStringLiteral("PATH"), QStringLiteral("second")},
+        };
+    const auto sanitized_case_distinct =
+        vnm_terminal::terminal_app::sanitize_standalone_base_environment(
+            case_distinct_entries);
+#if defined(Q_OS_WIN)
+    ok &= check(
+        !sanitized_case_distinct.has_value(),
+        "Windows ordinal case collisions must reject");
+    ok &= check(
+        explicit_environment_is_rejected({
+            {QStringLiteral("P\u00e4th"), QStringLiteral("first")},
+            {QStringLiteral("P\u00c4TH"), QStringLiteral("second")},
+        }),
+        "Windows ordinal matching must reject non-ASCII case collisions");
+#else
+    ok &= check(
+        sanitized_case_distinct.has_value() &&
+            entries_equal(*sanitized_case_distinct, case_distinct_entries),
+        "POSIX case-distinct names must remain distinct");
+#endif
+
+    for (const QString& malformed_pseudo : {
+             QStringLiteral("="),
+             QStringLiteral("=C"),
+             QStringLiteral("=CC:"),
+             QStringLiteral("=1:"),
+         })
+    {
+        ok &= check(
+            explicit_environment_is_rejected({
+                {malformed_pseudo, QStringLiteral("value")},
+            }),
+            "malformed or unsupported explicit pseudo variables must reject");
     }
 
     const std::vector<vnm_terminal::Terminal_environment_entry>
@@ -169,6 +310,20 @@ int main(int argc, char** argv)
                 *sanitized_unsupported_ambient,
                 QStringLiteral("ORDINARY_NAME")),
         "Windows ambient adapter must strip unsupported pseudo variables");
+    ok &= check(
+        ambient_environment_is_rejected({
+            {QStringLiteral("=::"), QStringLiteral("first")},
+            {QStringLiteral("=::"), QStringLiteral("second")},
+        }),
+        "ambient pseudo-variable stripping must not bypass duplicate validation");
+    ok &= check(
+        ambient_environment_is_rejected({
+            {
+                QStringLiteral("=::"),
+                QString::fromLatin1("value\0tail", 10),
+            },
+        }),
+        "ambient pseudo-variable stripping must not bypass value validation");
 #else
     ok &= check(
         !sanitized_unsupported_ambient.has_value(),
@@ -191,7 +346,7 @@ int main(int argc, char** argv)
     ok &= check(
         vnm_terminal::terminal_app::sanitize_standalone_ambient_environment(
             ambient_capture).has_value(),
-        "the real ambient capture must satisfy framework policy");
+        "the real ambient capture must satisfy the selected policy");
 
     QTemporaryDir child_working_directory;
     ok &= check(

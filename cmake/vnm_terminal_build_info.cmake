@@ -45,7 +45,13 @@ function(vnm_terminal_build_info_line out_var component_name commit modified)
     set(${out_var} "${line}" PARENT_SCOPE)
 endfunction()
 
-function(vnm_terminal_build_provenance_text out_var build_date terminal_dir surface_dir chrome_dir)
+function(vnm_terminal_build_provenance_text
+    out_var
+    build_date
+    environment_policy_provider
+    terminal_dir
+    surface_dir
+    chrome_dir)
     vnm_terminal_git_summary(
         terminal_commit
         terminal_modified
@@ -75,7 +81,10 @@ function(vnm_terminal_build_provenance_text out_var build_date terminal_dir surf
         "${chrome_commit}"
         "${chrome_modified}")
 
-    set(text "Build date: ${build_date}\n${terminal_line}\n${surface_line}\n${chrome_line}")
+    string(CONCAT text
+        "Build date: ${build_date}\n"
+        "Environment policy: ${environment_policy_provider}\n"
+        "${terminal_line}\n${surface_line}\n${chrome_line}")
     set(${out_var} "${text}" PARENT_SCOPE)
 endfunction()
 

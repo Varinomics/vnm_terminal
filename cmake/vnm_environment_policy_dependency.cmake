@@ -1,52 +1,30 @@
-include(FetchContent)
-
-set(VNM_TERMINAL_FRAMEWORK_SOURCE_DIR "" CACHE PATH
-    "Optional path to a local vnm_framework checkout")
-
 function(vnm_terminal_environment_policy_make_available)
+    add_library(vnm_terminal_local_environment_policy INTERFACE)
+    target_sources(vnm_terminal_local_environment_policy INTERFACE
+        "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/local_environment_policy.cpp")
+    target_compile_definitions(vnm_terminal_local_environment_policy INTERFACE
+        VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK=0)
+
+    add_library(vnm_terminal_environment_policy INTERFACE)
+    add_library(
+        vnm_terminal::vnm_terminal_environment_policy
+        ALIAS vnm_terminal_environment_policy)
+
     if(TARGET vnm_framework::vnm_environment_policy)
-        return()
-    endif()
-
-    if(VNM_TERMINAL_FRAMEWORK_SOURCE_DIR)
-        if(NOT EXISTS "${VNM_TERMINAL_FRAMEWORK_SOURCE_DIR}/CMakeLists.txt")
-            message(FATAL_ERROR
-                "VNM_TERMINAL_FRAMEWORK_SOURCE_DIR does not contain a "
-                "vnm_framework CMakeLists.txt: "
-                "${VNM_TERMINAL_FRAMEWORK_SOURCE_DIR}")
-        endif()
-        file(REAL_PATH
-            "${VNM_TERMINAL_FRAMEWORK_SOURCE_DIR}"
-            vnm_terminal_framework_source_dir)
-        FetchContent_Declare(vnm_terminal_framework
-            SOURCE_DIR "${vnm_terminal_framework_source_dir}"
-            BINARY_DIR "${CMAKE_BINARY_DIR}/_deps/vnm_framework-build")
+        set(provider "vnm_framework")
+        target_link_libraries(vnm_terminal_environment_policy INTERFACE
+            vnm_framework::vnm_environment_policy)
+        target_compile_definitions(vnm_terminal_environment_policy INTERFACE
+            VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK=1)
     else()
-        FetchContent_Declare(vnm_terminal_framework
-            GIT_REPOSITORY https://github.com/imakris/vnm_framework.git
-            GIT_TAG master
-            GIT_SHALLOW FALSE
-            BINARY_DIR "${CMAKE_BINARY_DIR}/_deps/vnm_framework-build")
+        set(provider "terminal-local substitute")
+        target_link_libraries(vnm_terminal_environment_policy INTERFACE
+            vnm_terminal_local_environment_policy)
     endif()
 
-    set(VNM_FRAMEWORK_BUILD_AGGREGATE OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_TEXT OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_MANAGER OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_QML_SHELL OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_SURFACE OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_CONTROL OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_WORKER_RUNTIME OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_APP_INIT OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_QML_RUNTIME OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_REMOTE_UI_RUNTIME OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_ENABLE_REMOTE_UI_RUNTIME OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_ENABLE_REMOTE_CONTROL OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_ENABLE_QML_CHROME OFF CACHE BOOL "" FORCE)
-    set(VNM_FRAMEWORK_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(vnm_terminal_framework)
-
-    if(NOT TARGET vnm_framework::vnm_environment_policy)
-        message(FATAL_ERROR
-            "vnm_framework did not publish vnm_framework::vnm_environment_policy")
-    endif()
+    set_property(TARGET vnm_terminal_environment_policy PROPERTY
+        VNM_TERMINAL_ENVIRONMENT_POLICY_PROVIDER "${provider}")
+    set(VNM_TERMINAL_ENVIRONMENT_POLICY_PROVIDER
+        "${provider}"
+        PARENT_SCOPE)
 endfunction()

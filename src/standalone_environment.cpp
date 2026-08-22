@@ -1,6 +1,12 @@
 #include "standalone_environment.h"
 
-#include <environment_policy/vnm_environment_policy.h>
+#if !defined(VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK)
+    #error "The selected environment-policy target must define its provider"
+#elif VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK
+    #include <environment_policy/vnm_environment_policy.h>
+#else
+    #include "local_environment_policy.h"
+#endif
 
 #include <QByteArray>
 #include <QProcessEnvironment>
@@ -10,17 +16,22 @@
 
 #include <cstddef>
 #include <string>
-#include <string_view>
 
 namespace vnm_terminal::terminal_app {
 namespace {
 
-vnm::environment_policy::Environment_platform environment_platform()
+#if VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK
+namespace selected_policy = vnm::environment_policy;
+#else
+namespace selected_policy = vnm_terminal::local_environment_policy;
+#endif
+
+selected_policy::Environment_platform environment_platform()
 {
 #if defined(Q_OS_WIN)
-    return vnm::environment_policy::Environment_platform::WINDOWS;
+    return selected_policy::Environment_platform::WINDOWS;
 #else
-    return vnm::environment_policy::Environment_platform::POSIX;
+    return selected_policy::Environment_platform::POSIX;
 #endif
 }
 
@@ -37,17 +48,46 @@ QString utf8_qstring(const std::string& value)
         static_cast<qsizetype>(value.size()));
 }
 
-using Environment_sanitizer =
-    vnm::environment_policy::Environment_sanitization_result (*)(
-        std::span<const vnm::environment_policy::Environment_entry>,
-        vnm::environment_policy::Environment_platform,
-        std::span<const std::string_view>);
+enum class Sanitizer_kind
+{
+    EXPLICIT,
+    AMBIENT,
+};
+
+selected_policy::Environment_sanitization_result sanitize_selected_environment(
+    std::span<const selected_policy::Environment_entry> entries,
+    Sanitizer_kind sanitizer_kind)
+{
+    if (sanitizer_kind == Sanitizer_kind::EXPLICIT) {
+#if VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK
+        return selected_policy::sanitize_explicit_base_environment(
+            entries,
+            environment_platform(),
+            {});
+#else
+        return selected_policy::sanitize_explicit_base_environment(
+            entries,
+            environment_platform());
+#endif
+    }
+
+#if VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK
+    return selected_policy::sanitize_ambient_environment(
+        entries,
+        environment_platform(),
+        {});
+#else
+    return selected_policy::sanitize_ambient_environment(
+        entries,
+        environment_platform());
+#endif
+}
 
 std::optional<std::vector<Terminal_environment_entry>> sanitize_environment(
     std::span<const Terminal_environment_entry> captured_environment,
-    Environment_sanitizer sanitizer)
+    Sanitizer_kind sanitizer_kind)
 {
-    std::vector<vnm::environment_policy::Environment_entry> entries;
+    std::vector<selected_policy::Environment_entry> entries;
     entries.reserve(captured_environment.size());
     for (const Terminal_environment_entry& entry : captured_environment) {
         entries.push_back({
@@ -56,15 +96,15 @@ std::optional<std::vector<Terminal_environment_entry>> sanitize_environment(
         });
     }
 
-    vnm::environment_policy::Environment_sanitization_result sanitized =
-        sanitizer(entries, environment_platform(), {});
+    selected_policy::Environment_sanitization_result sanitized =
+        sanitize_selected_environment(entries, sanitizer_kind);
     if (!sanitized.accepted) {
         return std::nullopt;
     }
 
     std::vector<Terminal_environment_entry> result;
     result.reserve(sanitized.entries.size());
-    for (vnm::environment_policy::Environment_entry& entry : sanitized.entries) {
+    for (selected_policy::Environment_entry& entry : sanitized.entries) {
         result.push_back({
             utf8_qstring(entry.name),
             utf8_qstring(entry.value),
@@ -81,7 +121,7 @@ sanitize_standalone_base_environment(
 {
     return sanitize_environment(
         captured_environment,
-        vnm::environment_policy::sanitize_explicit_base_environment);
+        Sanitizer_kind::EXPLICIT);
 }
 
 std::optional<std::vector<Terminal_environment_entry>>
@@ -90,7 +130,7 @@ sanitize_standalone_ambient_environment(
 {
     return sanitize_environment(
         captured_environment,
-        vnm::environment_policy::sanitize_ambient_environment);
+        Sanitizer_kind::AMBIENT);
 }
 
 std::vector<Terminal_environment_entry>

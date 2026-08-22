@@ -34,6 +34,7 @@ function(generate_build_info)
             "-DVNM_TERMINAL_SOURCE_DIR=${terminal_repo}"
             "-DVNM_TERMINAL_SURFACE_SOURCE_DIR=${surface_repo}"
             "-DVNM_QML_CHROME_SOURCE_DIR=${chrome_repo}"
+            "-DVNM_TERMINAL_ENVIRONMENT_POLICY_PROVIDER=contract-test provider"
             "-DVNM_TERMINAL_BUILD_DATE=2026-07-11 12:00:00 UTC"
             "-DVNM_TERMINAL_BUILD_INFO_OUTPUT=${output_header}"
             -P "${VNM_TERMINAL_SOURCE_ROOT}/cmake/vnm_terminal_generate_build_info.cmake"
@@ -68,4 +69,7 @@ generate_build_info()
 file(READ "${output_header}" clean_header)
 if(clean_header MATCHES "modified files present")
     message(FATAL_ERROR "Clean repositories were reported as modified")
+endif()
+if(NOT clean_header MATCHES "Environment policy: contract-test provider")
+    message(FATAL_ERROR "The selected environment-policy provider was not reported")
 endif()

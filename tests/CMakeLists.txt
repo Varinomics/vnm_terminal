@@ -41,6 +41,17 @@ add_test(
 )
 
 add_test(
+    NAME vnm_terminal_environment_policy_provider_contract
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DVNM_TERMINAL_TEST_ROOT=${PROJECT_BINARY_DIR}/tests/environment_policy_provider_contract"
+        "-DVNM_TERMINAL_TEST_GENERATOR=${CMAKE_GENERATOR}"
+        "-DVNM_TERMINAL_TEST_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/environment_policy_provider_contract_tests.cmake"
+)
+
+add_test(
     NAME vnm_terminal_surface_semantic_dependency_contract
     COMMAND
         "${CMAKE_COMMAND}"
@@ -204,34 +215,45 @@ set_target_properties(vnm_terminal_title_metadata PROPERTIES
 vnm_terminal_add_target_test(vnm_terminal_title_metadata
 )
 
-add_executable(vnm_terminal_standalone_environment_policy
-    terminal_app/standalone_environment_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/standalone_environment.cpp"
-)
-vnm_terminal_configure_test_process(
-    vnm_terminal_standalone_environment_policy)
+function(vnm_terminal_add_environment_policy_test target_name provider_target)
+    add_executable(${target_name}
+        terminal_app/standalone_environment_tests.cpp
+        "${PROJECT_SOURCE_DIR}/src/standalone_environment.cpp"
+    )
+    vnm_terminal_configure_test_process(${target_name})
 
-target_link_libraries(vnm_terminal_standalone_environment_policy PRIVATE
-    vnm_framework::vnm_environment_policy
-    vnm_terminal_surface::vnm_terminal_surface
-    Qt6::Core
-)
-target_compile_definitions(vnm_terminal_standalone_environment_policy PRIVATE
-    VNM_TERMINAL_STANDALONE_TEST_APP_PATH="$<TARGET_FILE:vnm_terminal>"
-)
-add_dependencies(vnm_terminal_standalone_environment_policy
-    vnm_terminal
-)
+    target_link_libraries(${target_name} PRIVATE
+        ${provider_target}
+        vnm_terminal_surface::vnm_terminal_surface
+        Qt6::Core
+    )
+    target_compile_definitions(${target_name} PRIVATE
+        VNM_TERMINAL_STANDALONE_TEST_APP_PATH="$<TARGET_FILE:vnm_terminal>"
+    )
+    add_dependencies(${target_name}
+        vnm_terminal
+    )
 
-set_target_properties(vnm_terminal_standalone_environment_policy PROPERTIES
-    AUTOMOC OFF
-)
+    set_target_properties(${target_name} PROPERTIES
+        AUTOMOC OFF
+    )
 
-vnm_terminal_add_target_test(vnm_terminal_standalone_environment_policy
-    ENVIRONMENT
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-)
+    vnm_terminal_add_target_test(${target_name}
+        ENVIRONMENT
+            ${vnm_terminal_qt_offscreen_environment}
+            ${vnm_terminal_qt_unscaled_environment}
+    )
+endfunction()
+
+vnm_terminal_add_environment_policy_test(
+    vnm_terminal_standalone_environment_policy
+    vnm_terminal::vnm_terminal_environment_policy)
+
+if(TARGET vnm_framework::vnm_environment_policy)
+    vnm_terminal_add_environment_policy_test(
+        vnm_terminal_standalone_environment_policy_local_conformance
+        vnm_terminal_local_environment_policy)
+endif()
 
 if(WIN32)
     add_executable(vnm_terminal_portable_launcher_text

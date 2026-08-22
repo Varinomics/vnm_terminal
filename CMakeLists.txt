@@ -60,6 +60,13 @@ vnm_terminal_require_dependency_origin(
 vnm_terminal_require_dependency_origin(
     vnm_msdf_text::vnm_msdf_text VNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR)
 
+if(VNM_TERMINAL_BUILD_STANDALONE_APP)
+    include(cmake/vnm_environment_policy_dependency.cmake)
+    vnm_terminal_environment_policy_make_available()
+else()
+    set(VNM_TERMINAL_ENVIRONMENT_POLICY_PROVIDER "not included")
+endif()
+
 set(vnm_terminal_build_info_header
     "${CMAKE_CURRENT_BINARY_DIR}/generated/vnm_terminal_build_info.h")
 string(TIMESTAMP vnm_terminal_build_date "%Y-%m-%d %H:%M:%S UTC" UTC)
@@ -69,6 +76,7 @@ add_custom_target(vnm_terminal_build_info ALL
         "-DVNM_TERMINAL_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
         "-DVNM_TERMINAL_SURFACE_SOURCE_DIR=${VNM_TERMINAL_SURFACE_SOURCE_DIR}"
         "-DVNM_QML_CHROME_SOURCE_DIR=${VNM_QML_CHROME_SOURCE_DIR}"
+        "-DVNM_TERMINAL_ENVIRONMENT_POLICY_PROVIDER=${VNM_TERMINAL_ENVIRONMENT_POLICY_PROVIDER}"
         "-DVNM_TERMINAL_BUILD_DATE=${vnm_terminal_build_date}"
         "-DVNM_TERMINAL_BUILD_INFO_OUTPUT=${vnm_terminal_build_info_header}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/vnm_terminal_generate_build_info.cmake"
@@ -212,9 +220,6 @@ if(NOT VNM_TERMINAL_BUILD_STANDALONE_APP)
     return()
 endif()
 
-include(cmake/vnm_environment_policy_dependency.cmake)
-vnm_terminal_environment_policy_make_available()
-
 set(vnm_terminal_sources
     src/main.cpp
     src/app_cli.cpp
@@ -287,7 +292,7 @@ target_link_libraries(vnm_terminal PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
     vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
-    vnm_framework::vnm_environment_policy
+    vnm_terminal::vnm_terminal_environment_policy
 )
 
 target_compile_definitions(vnm_terminal PRIVATE
