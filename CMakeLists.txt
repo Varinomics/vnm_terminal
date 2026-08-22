@@ -112,15 +112,10 @@ add_library(vnm_terminal_app_support STATIC
     include/vnm_terminal/app_support/terminal_settings_window.h
 )
 add_dependencies(vnm_terminal_app_support vnm_terminal_build_info)
-get_target_property(
-    vnm_terminal_qml_chrome_include_dirs
-    vnm_qml_chrome::vnm_qml_chrome
-    INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(vnm_terminal_app_support
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
         "${CMAKE_CURRENT_BINARY_DIR}/generated"
-        ${vnm_terminal_qml_chrome_include_dirs}
     PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
@@ -135,17 +130,12 @@ target_link_libraries(vnm_terminal_app_support
         Qt6::Gui
         Qt6::Qml
         Qt6::Quick
+    PRIVATE
+        vnm_qml_chrome::vnm_qml_chrome
 )
-# A source-tree consumer needs the source chrome target, while the exported
-# archive's package config appends the co-installed chrome runtime target. Keep
-# the local target out of the export set with this build-only wrapper.
-add_library(vnm_terminal_app_support_source INTERFACE)
-target_link_libraries(vnm_terminal_app_support_source INTERFACE
-    vnm_terminal_app_support
-    vnm_qml_chrome::vnm_qml_chrome)
 add_library(
     vnm_terminal::vnm_terminal_app_support
-    ALIAS vnm_terminal_app_support_source)
+    ALIAS vnm_terminal_app_support)
 
 add_library(vnm_terminal_default_shell STATIC
     include/vnm_terminal/default_shell.h
