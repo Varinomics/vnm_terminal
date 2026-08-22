@@ -398,6 +398,7 @@ add_executable(vnm_terminal_backend_output_capture_probe
 )
 
 target_link_libraries(vnm_terminal_backend_output_capture_probe PRIVATE
+    vnm_terminal::vnm_terminal_app_support
     vnm_terminal_surface::vnm_terminal_surface
     Qt6::Core
 )

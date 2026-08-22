@@ -162,7 +162,7 @@ jobs:
         with:
           version: '6.11.1'
           arch: 'win64_msvc2022_64'
-          archives: 'qtbase qtdeclarative'
+          archives: 'qtbase qtdeclarative qtsvg'
           cache: 'true'
           aqtsource: 'git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b'
 
@@ -364,7 +364,7 @@ jobs:
         with:
           version: '6.11.1'
           arch: 'win64_mingw'
-          archives: 'qtbase qtdeclarative'
+          archives: 'qtbase qtdeclarative qtsvg'
           tools: 'tools_mingw1310,qt.tools.win64_mingw1310'
           cache: 'true'
           aqtsource: 'git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b'
