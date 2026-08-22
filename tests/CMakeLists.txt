@@ -540,6 +540,7 @@ add_test(
         "-Dconsumer_binary_dir=${CMAKE_CURRENT_BINARY_DIR}/public_target_consumer/consumer_build"
         "-Dqt6_dir=${Qt6_DIR}"
         "-Dvnm_msdf_text_dir=${vnm_msdf_text_DIR}"
+        "-Dvnm_msdf_text_dependency_prefixes=${CMAKE_PREFIX_PATH}"
         "-Dvnm_terminal_surface_dir=${vnm_terminal_surface_DIR}"
         "-Dvnm_qt_dispatch_dir=${vnm_qt_dispatch_DIR}"
         -P "${PROJECT_SOURCE_DIR}/tests/public_target_consumer/expect_consumer_builds.cmake"

@@ -112,8 +112,15 @@ if(DEFINED qt6_dir AND NOT "${qt6_dir}" STREQUAL "")
     list(APPEND configure_args "-DQt6_DIR=${qt6_dir}")
 endif()
 if(DEFINED vnm_msdf_text_dir AND NOT "${vnm_msdf_text_dir}" STREQUAL "")
-    list(APPEND configure_args "-Dvnm_msdf_text_DIR=${vnm_msdf_text_dir}")
+    list(APPEND configure_args "-Dvnm_msdf_text_DIR:PATH=${vnm_msdf_text_dir}")
 endif()
+
+set(consumer_prefix_paths "${install_dir}")
+if(DEFINED vnm_msdf_text_dependency_prefixes AND
+    NOT "${vnm_msdf_text_dependency_prefixes}" STREQUAL "")
+    list(APPEND consumer_prefix_paths ${vnm_msdf_text_dependency_prefixes})
+endif()
+
 list(APPEND configure_args
     "-Dvnm_terminal_DIR:PATH=${vnm_terminal_package_dir}"
     "-Dvnm_terminal_surface_DIR:PATH=${vnm_terminal_surface_package_dir}"
@@ -124,13 +131,15 @@ list(APPEND configure_args
     "-DCMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY=TRUE"
     "-DCMAKE_FIND_PACKAGE_NO_SYSTEM_PACKAGE_REGISTRY=TRUE")
 
+# Keep the prefix list directly quoted so its semicolons remain one child
+# configure argument instead of becoming configure_args list separators.
 execute_process(
     COMMAND
         "${CMAKE_COMMAND}"
         ${configure_args}
         -S "${consumer_source_dir}"
         -B "${consumer_binary_dir}"
-        "-DCMAKE_PREFIX_PATH=${install_dir}"
+        "-DCMAKE_PREFIX_PATH:PATH=${consumer_prefix_paths}"
     RESULT_VARIABLE configure_result
     OUTPUT_VARIABLE configure_stdout
     ERROR_VARIABLE configure_stderr)
@@ -172,6 +181,10 @@ expect_consumer_package_dir(
     vnm_terminal_surface_DIR "${vnm_terminal_surface_package_dir}")
 expect_consumer_package_dir(
     vnm_qt_dispatch_DIR "${vnm_qt_dispatch_package_dir}")
+if(DEFINED vnm_msdf_text_dir AND NOT "${vnm_msdf_text_dir}" STREQUAL "")
+    expect_consumer_package_dir(
+        vnm_msdf_text_DIR "${vnm_msdf_text_dir}")
+endif()
 
 set(consumer_build_args
     --build "${consumer_binary_dir}")
