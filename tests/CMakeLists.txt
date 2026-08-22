@@ -540,6 +540,8 @@ add_test(
         "-Dconsumer_binary_dir=${CMAKE_CURRENT_BINARY_DIR}/public_target_consumer/consumer_build"
         "-Dqt6_dir=${Qt6_DIR}"
         "-Dvnm_msdf_text_dir=${vnm_msdf_text_DIR}"
+        "-Dvnm_terminal_surface_dir=${vnm_terminal_surface_DIR}"
+        "-Dvnm_qt_dispatch_dir=${vnm_qt_dispatch_DIR}"
         -P "${PROJECT_SOURCE_DIR}/tests/public_target_consumer/expect_consumer_builds.cmake"
 )
 
@@ -548,10 +550,19 @@ set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
     TIMEOUT 180
 )
 
-set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
-    SKIP_REGULAR_EXPRESSION
-        "Installing vnm_terminal_surface with MSDF requires packaged vnm_msdf_text"
-)
+if(VNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER)
+    get_target_property(
+        vnm_terminal_msdf_text_package_dependency
+        vnm_msdf_text::vnm_msdf_text
+        IMPORTED)
+endif()
+
+if(VNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER AND NOT vnm_terminal_msdf_text_package_dependency)
+    set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
+        SKIP_REGULAR_EXPRESSION
+            "Installing vnm_terminal_surface with MSDF requires packaged vnm_msdf_text"
+    )
+endif()
 
 if(TARGET vnm_terminal_canvas_fixture)
     add_test(

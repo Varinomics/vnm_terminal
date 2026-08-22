@@ -39,27 +39,46 @@ if(NOT install_result EQUAL 0)
         "${install_stdout}${install_stderr}")
 endif()
 
-function(find_staged_package_dir config_name output_var)
+function(resolve_package_dir config_name forwarded_dir output_var)
     file(GLOB_RECURSE config_paths
         LIST_DIRECTORIES FALSE
         "${install_dir}/${config_name}")
     list(LENGTH config_paths config_count)
-    if(NOT config_count EQUAL 1)
+    if(config_count GREATER 1)
         message(FATAL_ERROR
-            "Expected one staged ${config_name}, found ${config_count} under "
+            "Expected at most one staged ${config_name}, found ${config_count} under "
             "${install_dir}")
     endif()
-    list(GET config_paths 0 config_path)
-    get_filename_component(package_dir "${config_path}" DIRECTORY)
+
+    if(config_count EQUAL 1)
+        list(GET config_paths 0 config_path)
+        get_filename_component(package_dir "${config_path}" DIRECTORY)
+    else()
+        if("${forwarded_dir}" STREQUAL "")
+            message(FATAL_ERROR
+                "Expected staged ${config_name} or a forwarded package directory")
+        endif()
+        if(NOT EXISTS "${forwarded_dir}/${config_name}")
+            message(FATAL_ERROR
+                "Forwarded package directory does not contain ${config_name}: "
+                "${forwarded_dir}")
+        endif()
+        file(REAL_PATH "${forwarded_dir}" package_dir)
+    endif()
+
     set(${output_var} "${package_dir}" PARENT_SCOPE)
 endfunction()
 
-find_staged_package_dir(
-    vnm_terminalConfig.cmake vnm_terminal_package_dir)
-find_staged_package_dir(
-    vnm_terminal_surfaceConfig.cmake vnm_terminal_surface_package_dir)
-find_staged_package_dir(
-    vnm_qt_dispatchConfig.cmake vnm_qt_dispatch_package_dir)
+resolve_package_dir(
+    vnm_terminalConfig.cmake "" vnm_terminal_package_dir)
+resolve_package_dir(
+    vnm_terminal_surfaceConfig.cmake
+    "${vnm_terminal_surface_dir}"
+    vnm_terminal_surface_package_dir)
+resolve_package_dir(
+    vnm_qt_dispatchConfig.cmake
+    "${vnm_qt_dispatch_dir}"
+    vnm_qt_dispatch_package_dir)
 
 set(configure_args)
 if(DEFINED generator AND NOT "${generator}" STREQUAL "")
@@ -121,6 +140,38 @@ if(NOT configure_result EQUAL 0)
         "Public target consumer configure failed.\n"
         "${configure_stdout}${configure_stderr}")
 endif()
+
+function(expect_consumer_package_dir variable_name expected_dir)
+    set(consumer_cache "${consumer_binary_dir}/CMakeCache.txt")
+    file(STRINGS "${consumer_cache}" package_cache_entries
+        REGEX "^${variable_name}:PATH=")
+    list(LENGTH package_cache_entries package_cache_entry_count)
+    if(NOT package_cache_entry_count EQUAL 1)
+        message(FATAL_ERROR
+            "Public target consumer cache does not contain exactly one "
+            "${variable_name} entry:\n"
+            "  ${consumer_cache}")
+    endif()
+    list(GET package_cache_entries 0 package_cache_entry)
+    string(REGEX REPLACE "^[^=]*=" "" resolved_package_dir
+        "${package_cache_entry}")
+    file(REAL_PATH "${resolved_package_dir}" resolved_package_dir)
+    file(REAL_PATH "${expected_dir}" expected_dir)
+    if(NOT resolved_package_dir STREQUAL expected_dir)
+        message(FATAL_ERROR
+            "Public target consumer resolved ${variable_name} outside its "
+            "explicit package directory:\n"
+            "  expected=${expected_dir}\n"
+            "  actual=${resolved_package_dir}")
+    endif()
+endfunction()
+
+expect_consumer_package_dir(
+    vnm_terminal_DIR "${vnm_terminal_package_dir}")
+expect_consumer_package_dir(
+    vnm_terminal_surface_DIR "${vnm_terminal_surface_package_dir}")
+expect_consumer_package_dir(
+    vnm_qt_dispatch_DIR "${vnm_qt_dispatch_package_dir}")
 
 set(consumer_build_args
     --build "${consumer_binary_dir}")
