@@ -1126,7 +1126,8 @@ int main(int argc, char** argv)
         captured_environment = chrome::capture_standalone_ambient_environment();
     std::optional<std::vector<vnm_terminal::Terminal_environment_entry>>
         sanitized_environment =
-            chrome::sanitize_standalone_base_environment(captured_environment);
+            chrome::sanitize_standalone_ambient_environment(
+                captured_environment);
     if (!sanitized_environment.has_value()) {
         print_error(QStringLiteral("failed to sanitize the captured child environment"));
         return k_exit_start_failed;

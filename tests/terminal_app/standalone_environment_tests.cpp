@@ -153,6 +153,32 @@ int main(int argc, char** argv)
 #endif
     }
 
+    const std::vector<vnm_terminal::Terminal_environment_entry>
+        unsupported_pseudo_environment{
+            {QStringLiteral("=::"), QStringLiteral("::\\")},
+            {QStringLiteral("ORDINARY_NAME"), QStringLiteral("ordinary-value")},
+        };
+    const auto sanitized_unsupported_ambient =
+        vnm_terminal::terminal_app::sanitize_standalone_ambient_environment(
+            unsupported_pseudo_environment);
+#if defined(Q_OS_WIN)
+    ok &= check(
+        sanitized_unsupported_ambient.has_value() &&
+            !has_name(*sanitized_unsupported_ambient, QStringLiteral("=::")) &&
+            has_name(
+                *sanitized_unsupported_ambient,
+                QStringLiteral("ORDINARY_NAME")),
+        "Windows ambient adapter must strip unsupported pseudo variables");
+#else
+    ok &= check(
+        !sanitized_unsupported_ambient.has_value(),
+        "POSIX ambient adapter must reject leading-equals pseudo variables");
+#endif
+    ok &= check(
+        !vnm_terminal::terminal_app::sanitize_standalone_base_environment(
+             unsupported_pseudo_environment).has_value(),
+        "explicit adapter must reject unsupported pseudo variables");
+
     ok &= check(
         QProcessEnvironment::systemEnvironment() == ambient_before,
         "sanitizing an explicit capture must not mutate the ambient environment");
@@ -163,7 +189,7 @@ int main(int argc, char** argv)
         QProcessEnvironment::systemEnvironment() == ambient_before,
         "capturing the ambient environment must not mutate it");
     ok &= check(
-        vnm_terminal::terminal_app::sanitize_standalone_base_environment(
+        vnm_terminal::terminal_app::sanitize_standalone_ambient_environment(
             ambient_capture).has_value(),
         "the real ambient capture must satisfy framework policy");
 

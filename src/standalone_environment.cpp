@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <string>
+#include <string_view>
 
 namespace vnm_terminal::terminal_app {
 namespace {
@@ -36,11 +37,15 @@ QString utf8_qstring(const std::string& value)
         static_cast<qsizetype>(value.size()));
 }
 
-} // namespace
+using Environment_sanitizer =
+    vnm::environment_policy::Environment_sanitization_result (*)(
+        std::span<const vnm::environment_policy::Environment_entry>,
+        vnm::environment_policy::Environment_platform,
+        std::span<const std::string_view>);
 
-std::optional<std::vector<Terminal_environment_entry>>
-sanitize_standalone_base_environment(
-    std::span<const Terminal_environment_entry> captured_environment)
+std::optional<std::vector<Terminal_environment_entry>> sanitize_environment(
+    std::span<const Terminal_environment_entry> captured_environment,
+    Environment_sanitizer sanitizer)
 {
     std::vector<vnm::environment_policy::Environment_entry> entries;
     entries.reserve(captured_environment.size());
@@ -52,9 +57,7 @@ sanitize_standalone_base_environment(
     }
 
     vnm::environment_policy::Environment_sanitization_result sanitized =
-        vnm::environment_policy::sanitize_explicit_base_environment(
-            entries,
-            environment_platform());
+        sanitizer(entries, environment_platform(), {});
     if (!sanitized.accepted) {
         return std::nullopt;
     }
@@ -68,6 +71,26 @@ sanitize_standalone_base_environment(
         });
     }
     return result;
+}
+
+} // namespace
+
+std::optional<std::vector<Terminal_environment_entry>>
+sanitize_standalone_base_environment(
+    std::span<const Terminal_environment_entry> captured_environment)
+{
+    return sanitize_environment(
+        captured_environment,
+        vnm::environment_policy::sanitize_explicit_base_environment);
+}
+
+std::optional<std::vector<Terminal_environment_entry>>
+sanitize_standalone_ambient_environment(
+    std::span<const Terminal_environment_entry> captured_environment)
+{
+    return sanitize_environment(
+        captured_environment,
+        vnm::environment_policy::sanitize_ambient_environment);
 }
 
 std::vector<Terminal_environment_entry>

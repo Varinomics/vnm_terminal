@@ -15,4 +15,8 @@ std::optional<std::vector<Terminal_environment_entry>>
 sanitize_standalone_base_environment(
     std::span<const Terminal_environment_entry> captured_environment);
 
+std::optional<std::vector<Terminal_environment_entry>>
+sanitize_standalone_ambient_environment(
+    std::span<const Terminal_environment_entry> captured_environment);
+
 } // namespace vnm_terminal::terminal_app
