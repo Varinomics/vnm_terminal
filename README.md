@@ -90,7 +90,7 @@ successfully signed as Varinomics Ltd and timestamped.
 | Paste | `Ctrl+V` and `Ctrl+Shift+V`; the exact policy is configurable. |
 | Copy on selection | Disabled by default and available under **Settings > Behavior**. |
 | Custom window title | Alt+left-click the built-in titlebar, edit the title, then press `Enter` or click elsewhere. |
-| Native titlebar | Available through `--native-titlebar`; built-in chrome is the validated default. |
+| Native titlebar | On Windows and Linux, `--native-titlebar` selects the platform frame; built-in chrome is the default. Other platforms use the native frame by default. |
 
 ## Command line
 
@@ -105,7 +105,7 @@ Common application options:
 | Option | Values | Purpose |
 | --- | --- | --- |
 | `--window-size` | `<width>x<height>` | Initial window dimensions. |
-| `--native-titlebar` | — | Platform-provided window frame. |
+| `--native-titlebar` | — | On Windows and Linux, use the platform-provided window frame. |
 | `--text-renderer` | `auto`, `msdf`, `glyph` | Terminal text-renderer policy. |
 | `--lcd-subpixel` | `auto`, `none`, `rgb`, `bgr`, `vrgb`, `vbgr` | MSDF LCD sampling policy. |
 | `--paste-shortcut` | `<mode>` | Configurable paste-shortcut policy. |
