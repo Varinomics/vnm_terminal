@@ -525,6 +525,34 @@ target_link_libraries(vnm_terminal_public_header_closure PRIVATE
 )
 vnm_terminal_add_target_test(vnm_terminal_public_header_closure)
 
+add_test(
+    NAME vnm_terminal_public_target_consumer_builds
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-Dgenerator=${CMAKE_GENERATOR}"
+        "-Dgenerator_platform=${CMAKE_GENERATOR_PLATFORM}"
+        "-Dgenerator_toolset=${CMAKE_GENERATOR_TOOLSET}"
+        "-Dmake_program=${CMAKE_MAKE_PROGRAM}"
+        "-Dpackage_binary_dir=${CMAKE_BINARY_DIR}"
+        "-Dinstall_config=$<CONFIG>"
+        "-Dinstall_dir=${CMAKE_CURRENT_BINARY_DIR}/public_target_consumer/install"
+        "-Dconsumer_source_dir=${PROJECT_SOURCE_DIR}/tests/public_target_consumer"
+        "-Dconsumer_binary_dir=${CMAKE_CURRENT_BINARY_DIR}/public_target_consumer/consumer_build"
+        "-Dqt6_dir=${Qt6_DIR}"
+        "-Dvnm_msdf_text_dir=${vnm_msdf_text_DIR}"
+        -P "${PROJECT_SOURCE_DIR}/tests/public_target_consumer/expect_consumer_builds.cmake"
+)
+
+set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
+    LABELS "package;posture"
+    TIMEOUT 180
+)
+
+set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
+    SKIP_REGULAR_EXPRESSION
+        "Installing vnm_terminal_surface with MSDF requires packaged vnm_msdf_text"
+)
+
 if(TARGET vnm_terminal_canvas_fixture)
     add_test(
         NAME vnm_terminal_smoke

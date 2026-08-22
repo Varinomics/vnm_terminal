@@ -7,6 +7,10 @@
 #include "vnm_terminal/app_support/terminal_settings_window.h"
 #include "vnm_terminal/default_shell.h"
 
+#include <QQmlEngine>
+#include <QQuickWindow>
+#include <QtGlobal>
+
 #include <type_traits>
 
 int main()
@@ -19,5 +23,16 @@ int main()
     static_assert(std::is_base_of_v<QObject, Terminal_search_bar>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_controller>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_window>);
+
+    // Keep this build-only branch opaque so the final link pulls app support's
+    // packaged qml-chrome runtime dependency without running any GUI code.
+    if (qEnvironmentVariableIsSet(
+            "VNM_TERMINAL_PUBLIC_TARGET_CONSUMER_INSTANTIATE_CHROME")) {
+        QQmlEngine          engine;
+        QQuickWindow        window;
+        Terminal_qml_chrome chrome(engine, window);
+        return chrome.is_valid() ? 0 : 1;
+    }
+
     return vnm_terminal::default_shell_argv().isEmpty() ? 0 : 0;
 }
