@@ -81,7 +81,10 @@ set(vnm_terminal_deploy_plugins qoffscreen)
 set(vnm_terminal_deploy_excluded_plugin_types qmltooling)
 set(vnm_terminal_deploy_options)
 if(UNIX AND NOT APPLE)
-    list(APPEND vnm_terminal_deploy_plugins qwayland)
+    list(APPEND vnm_terminal_deploy_plugins
+        qsvg
+        qwayland
+    )
     list(APPEND vnm_terminal_deploy_excluded_plugin_types
         egldeviceintegrations
         generic

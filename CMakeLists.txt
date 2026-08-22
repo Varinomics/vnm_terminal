@@ -210,6 +210,11 @@ if(NOT VNM_TERMINAL_BUILD_STANDALONE_APP)
     return()
 endif()
 
+find_package(Qt6 6.11 REQUIRED COMPONENTS Svg)
+find_package(Qt6Svg 6.11 REQUIRED COMPONENTS
+    QSvgPlugin
+)
+
 set(vnm_terminal_sources
     src/main.cpp
     src/app_cli.cpp
@@ -283,6 +288,7 @@ target_link_libraries(vnm_terminal PRIVATE
     vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
     vnm_terminal::vnm_terminal_environment_policy
+    Qt6::Svg
 )
 
 target_compile_definitions(vnm_terminal PRIVATE
@@ -371,9 +377,6 @@ if(WIN32)
     find_package(Qt6Gui 6.11 REQUIRED COMPONENTS
         QICOPlugin
         QWindowsIntegrationPlugin
-    )
-    find_package(Qt6Svg 6.11 REQUIRED COMPONENTS
-        QSvgPlugin
     )
     find_package(Qt6 6.11 REQUIRED COMPONENTS
         QuickControls2Basic

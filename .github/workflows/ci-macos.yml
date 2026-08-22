@@ -167,7 +167,7 @@ jobs:
         with:
           version: '6.11.1'
           arch: 'clang_64'
-          archives: 'qtbase qtdeclarative'
+          archives: 'qtbase qtdeclarative qtsvg'
           cache: 'true'
 
       - name: Prepare MSDF package dependency
