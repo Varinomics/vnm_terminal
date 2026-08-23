@@ -169,7 +169,7 @@ for /f "delims=" %%I in ('git -C "%MSDFGEN_SOURCE_DIR%" status --porcelain --unt
 if "%VNM_MSDF_TEXT_SOURCE_FROM_FALLBACK%"=="1" (
     if not exist "%VNM_MSDF_TEXT_SOURCE_DIR%\CMakeLists.txt" (
         REM Fallback for standalone app checkouts without a local vnm_msdf_text source tree.
-        git clone --depth 1 --branch master https://github.com/imakris/vnm_msdf_text.git "%VNM_MSDF_TEXT_SOURCE_DIR%"
+        git clone --depth 1 --branch master https://github.com/Varinomics/vnm_msdf_text.git "%VNM_MSDF_TEXT_SOURCE_DIR%"
         if errorlevel 1 (
             echo ERROR: Failed to fetch vnm_msdf_text.
             exit /b 1

@@ -1,6 +1,6 @@
 name = "vnm_qml_chrome"
 spdx_license_expression = "NOASSERTION"
-upstream_url = "https://github.com/imakris/vnm_qml_chrome"
+upstream_url = "https://github.com/Varinomics/vnm_qml_chrome"
 commit_or_version = "master sibling checkout or installed package"
 source_path = "external Varinomics repository"
 imported_path = "not vendored"

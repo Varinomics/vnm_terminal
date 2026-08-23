@@ -21,7 +21,7 @@ window chrome and frame-shell components.
 
 Repository:
 
-- https://github.com/imakris/vnm_qml_chrome
+- https://github.com/Varinomics/vnm_qml_chrome
 
 The dependency does not include a license file and is treated as an internal
 Varinomics dependency.

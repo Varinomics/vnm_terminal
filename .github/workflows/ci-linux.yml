@@ -126,7 +126,7 @@ jobs:
       - name: Checkout chrome
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: imakris/vnm_qml_chrome
+          repository: Varinomics/vnm_qml_chrome
           path: vnm_qml_chrome
           ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
@@ -134,7 +134,7 @@ jobs:
       - name: Checkout MSDF text
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: imakris/vnm_msdf_text
+          repository: Varinomics/vnm_msdf_text
           path: vnm_msdf_text
           ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
           persist-credentials: false
@@ -215,7 +215,7 @@ jobs:
       - name: Checkout chrome
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: imakris/vnm_qml_chrome
+          repository: Varinomics/vnm_qml_chrome
           path: vnm_qml_chrome
           ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
@@ -223,7 +223,7 @@ jobs:
       - name: Checkout MSDF text
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: imakris/vnm_msdf_text
+          repository: Varinomics/vnm_msdf_text
           path: vnm_msdf_text
           ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
           persist-credentials: false
@@ -305,7 +305,7 @@ jobs:
       - name: Checkout chrome
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: imakris/vnm_qml_chrome
+          repository: Varinomics/vnm_qml_chrome
           path: vnm_qml_chrome
           ref: ${{ needs.resolve-dependencies.outputs.chrome }}
           persist-credentials: false
@@ -313,7 +313,7 @@ jobs:
       - name: Checkout MSDF text
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: imakris/vnm_msdf_text
+          repository: Varinomics/vnm_msdf_text
           path: vnm_msdf_text
           ref: ${{ needs.resolve-dependencies.outputs.msdf_text }}
           persist-credentials: false
