@@ -49,12 +49,15 @@ runs them on every host.
 - `resolve-dependencies` resolves every dependency commit once, from the lock,
   and every build, package and test job of that run checks out what it resolved.
   One workflow run therefore builds one source.
-- The Windows package job records `build_provenance.json`: the commit of the
-  application, of each owned dependency, and of each third-party clone, taken
-  from the trees the run actually compiled.
-- The signing job compares that record with the lock at the tag before it signs
-  anything, and verifies the payload file by file against the hashes the package
-  job recorded.
+- Release packages record the application, owned-dependency, and third-party
+  commits from the trees each platform actually compiled:
+  - Linux attaches `vnm_terminal_linux_x64_build_provenance.json`.
+  - Windows attaches `vnm_terminal_windows_x64_build_provenance.json`.
+  - macOS embeds `vnm_terminal_build_provenance.json` under
+    `Contents/Resources` and attaches no standalone provenance JSON.
+- The Windows signing job compares the Windows provenance record with the lock
+  at the tag before it signs anything, and verifies the payload file by file
+  against the hashes the package job recorded.
 - The job that attaches the Windows packages downloads the signed artifact and
   nothing else. That is what keeps the unsigned build out of a release: the
   unsigned portable archive has the same file name as the archive rebuilt from
