@@ -4,6 +4,10 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <QCoreApplication>
+#include <QFont>
+#include <QInputMethodEvent>
+#include <QKeyEvent>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
@@ -12,6 +16,7 @@
 #include <QQuickWindow>
 #include <QStringList>
 #include <QUrl>
+#include <QVariant>
 
 namespace vnm_terminal::terminal_app {
 
@@ -124,6 +129,7 @@ Item {
 
         Text {
             id: result_label
+            objectName: "terminal_search_result_text"
             anchors.right: previous_button.left
             anchors.rightMargin: 8
             anchors.verticalCenter: parent.verticalCenter
@@ -251,6 +257,17 @@ Terminal_search_bar::Terminal_search_bar(
         return;
     }
 
+    m_query_item = m_root_item->findChild<QQuickItem*>(
+        QStringLiteral("terminal_search_query_input"));
+    m_result_item = m_root_item->findChild<QQuickItem*>(
+        QStringLiteral("terminal_search_result_text"));
+    if (m_query_item == nullptr || m_result_item == nullptr) {
+        m_error_string = QStringLiteral("terminal search QML is missing required text items");
+        m_root_item = nullptr;
+        m_root_object.reset();
+        return;
+    }
+
     m_root_item->setParentItem(window.contentItem());
     m_root_item->setZ(11000.0);
     QObject::connect(
@@ -269,7 +286,10 @@ Terminal_search_bar::~Terminal_search_bar() = default;
 
 bool Terminal_search_bar::is_valid() const
 {
-    return m_root_item != nullptr;
+    return
+        m_root_item   != nullptr &&
+        m_query_item  != nullptr &&
+        m_result_item != nullptr;
 }
 
 bool Terminal_search_bar::is_visible() const
@@ -323,9 +343,70 @@ QQuickItem* Terminal_search_bar::root_item() const
     return m_root_item;
 }
 
+void Terminal_search_bar::set_text_font_family(const QString& font_family)
+{
+    if (m_query_item == nullptr || m_result_item == nullptr) {
+        return;
+    }
+
+    QFont query_font = m_query_item->property("font").value<QFont>();
+    query_font.setFamily(font_family);
+    m_query_item->setProperty("font", QVariant::fromValue(query_font));
+
+    QFont result_font = m_result_item->property("font").value<QFont>();
+    result_font.setFamily(font_family);
+    m_result_item->setProperty("font", QVariant::fromValue(result_font));
+}
+
+bool Terminal_search_bar::focus_query()
+{
+    if (m_query_item == nullptr || m_query_item->hasActiveFocus()) {
+        return false;
+    }
+
+    m_query_item->forceActiveFocus(Qt::OtherFocusReason);
+    return m_query_item->hasActiveFocus();
+}
+
+void Terminal_search_bar::commit_text(const QString& text)
+{
+    if (m_query_item == nullptr) {
+        return;
+    }
+
+    QInputMethodEvent event;
+    event.setCommitString(text);
+    QCoreApplication::sendEvent(m_query_item, &event);
+}
+
+void Terminal_search_bar::send_key_press(
+    int                   key,
+    Qt::KeyboardModifiers modifiers,
+    const QString&        text)
+{
+    if (m_query_item == nullptr) {
+        return;
+    }
+
+    QKeyEvent event(QEvent::KeyPress, key, modifiers, text);
+    QCoreApplication::sendEvent(m_query_item, &event);
+}
+
+void Terminal_search_bar::send_key_release(
+    int                   key,
+    Qt::KeyboardModifiers modifiers)
+{
+    if (m_query_item == nullptr) {
+        return;
+    }
+
+    QKeyEvent event(QEvent::KeyRelease, key, modifiers, QString{});
+    QCoreApplication::sendEvent(m_query_item, &event);
+}
+
 void Terminal_search_bar::show_search()
 {
-    if (m_root_item == nullptr || m_surface == nullptr) {
+    if (m_root_item == nullptr || m_query_item == nullptr || m_surface == nullptr) {
         return;
     }
 
@@ -335,12 +416,8 @@ void Terminal_search_bar::show_search()
         emit visibility_changed(true);
     }
 
-    QQuickItem* const query_input =
-        m_root_item->findChild<QQuickItem*>(QStringLiteral("terminal_search_query_input"));
-    if (query_input != nullptr) {
-        query_input->forceActiveFocus(Qt::ShortcutFocusReason);
-        QMetaObject::invokeMethod(query_input, "selectAll");
-    }
+    m_query_item->forceActiveFocus(Qt::ShortcutFocusReason);
+    QMetaObject::invokeMethod(m_query_item, "selectAll");
 }
 
 void Terminal_search_bar::dismiss_search()

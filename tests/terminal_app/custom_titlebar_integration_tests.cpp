@@ -2599,6 +2599,9 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
     pump_events(app);
     ok &= check(!search_bar.is_visible(), "terminal search bar starts hidden");
 
+    const QString restored_query = QStringLiteral("restored-query");
+    surface.set_search_query(restored_query);
+
     int visibility_changes = 0;
     QObject::connect(
         &search_bar,
@@ -2613,6 +2616,9 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
         ? root->findChild<QQuickItem*>(
             QStringLiteral("terminal_search_query_input"))
         : nullptr;
+    QQuickItem* const result_text = find_quick_item_recursive(
+        root,
+        QStringLiteral("terminal_search_result_text"));
     QQuickItem* const panel = find_quick_item_recursive(
         root,
         QStringLiteral("terminal_search_bar_panel"));
@@ -2633,8 +2639,12 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
         QStringLiteral("terminal_search_next_icon"));
     ok &= check(search_bar.is_visible() && root != nullptr && root->isVisible(),
         "showing search exposes the restrained overlay");
-    ok &= check(input != nullptr && input->hasActiveFocus(),
-        "showing search focuses its query input");
+    ok &= check(
+        input != nullptr &&
+        input->property("text").toString() == restored_query &&
+        input->hasActiveFocus() &&
+        input->property("selectedText").toString() == restored_query,
+        "showing search restores, focuses, and selects the surface query");
     ok &= check(
         panel != nullptr &&
         nearly_equal(panel->height(), 30.0) &&
@@ -2668,8 +2678,66 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
             QStringLiteral("FontAwesome"),
         "search navigation uses the requested Font Awesome up/down glyphs");
 
-    surface.set_search_query(QStringLiteral("needle"));
+    const QString ui_font_family = QStringLiteral("Varinomics Terminal Search Test Font");
+    search_bar.set_text_font_family(ui_font_family);
     pump_events(app);
+    ok &= check(
+        input       != nullptr &&
+        result_text != nullptr &&
+        input->property("font").value<QFont>().family() == ui_font_family &&
+        result_text->property("font").value<QFont>().family() == ui_font_family &&
+        previous_icon != nullptr &&
+        next_icon     != nullptr &&
+        previous_icon->property("font").value<QFont>().family() ==
+            QStringLiteral("FontAwesome") &&
+        next_icon->property("font").value<QFont>().family() ==
+            QStringLiteral("FontAwesome"),
+        "search text font ownership leaves navigation icon fonts unchanged");
+
+    if (input != nullptr) {
+        QMetaObject::invokeMethod(input, "deselect");
+    }
+    surface.forceActiveFocus(Qt::OtherFocusReason);
+    pump_events(app);
+    const bool focus_changed = search_bar.focus_query();
+    pump_events(app);
+    ok &= check(
+        focus_changed &&
+        input != nullptr &&
+        input->hasActiveFocus() &&
+        input->property("selectedText").toString().isEmpty(),
+        "refocusing search changes focus without selecting the query");
+    ok &= check(!search_bar.focus_query(),
+        "refocusing an already focused search query reports no change");
+
+    if (input != nullptr) {
+        input->setProperty("text", QString{});
+        input->setProperty("cursorPosition", 0);
+    }
+    search_bar.commit_text(QStringLiteral("needle"));
+    pump_events(app);
+    ok &= check(
+        input != nullptr &&
+        input->property("text").toString() == QStringLiteral("needle") &&
+        surface.search_query() == QStringLiteral("needle"),
+        "committed search text follows the TextInput editing path");
+
+    search_bar.send_key_press(
+        Qt::Key_X,
+        Qt::NoModifier,
+        QStringLiteral("x"));
+    pump_events(app);
+    const QString query_after_key_press = input != nullptr
+        ? input->property("text").toString()
+        : QString{};
+    search_bar.send_key_release(Qt::Key_X, Qt::NoModifier);
+    pump_events(app);
+    ok &= check(
+        query_after_key_press == QStringLiteral("needlex") &&
+        input != nullptr &&
+        input->property("text").toString() == query_after_key_press &&
+        surface.search_query() == query_after_key_press,
+        "search key press edits once and its release contributes no text");
     ok &= check(
         surface.search_result_state() ==
             VNM_TerminalSurface::Search_result_state::SOURCE_UNAVAILABLE &&
@@ -2689,6 +2757,36 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
         panel != nullptr &&
         nearly_equal(panel->x() + panel->width(), scrollbar.x()),
         "visible scrollbar remains unobscured beside the search strip");
+
+    if (input != nullptr) {
+        input->setProperty("text", QString{});
+        input->setProperty("cursorPosition", 0);
+    }
+    search_bar.commit_text(QStringLiteral("row-"));
+    pump_events(app);
+    ok &= check(
+        surface.search_result_state() ==
+            VNM_TerminalSurface::Search_result_state::MATCH &&
+        surface.search_match_count() > 1,
+        "committed query discovers multiple retained terminal matches");
+
+    const int first_match = surface.current_search_match();
+    search_bar.send_key_press(
+        Qt::Key_Return,
+        Qt::NoModifier,
+        QString(QChar('\r')));
+    search_bar.send_key_release(Qt::Key_Return, Qt::NoModifier);
+    pump_events(app);
+    ok &= check(surface.current_search_match() != first_match,
+        "Return dispatched through the owner navigates to the next search match");
+    search_bar.send_key_press(
+        Qt::Key_Return,
+        Qt::ShiftModifier,
+        QString(QChar('\r')));
+    search_bar.send_key_release(Qt::Key_Return, Qt::ShiftModifier);
+    pump_events(app);
+    ok &= check(surface.current_search_match() == first_match,
+        "Shift+Return dispatched through the owner restores the previous match");
 
     search_bar.dismiss_search();
     pump_events(app);

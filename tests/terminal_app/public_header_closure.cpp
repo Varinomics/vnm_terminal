@@ -17,6 +17,22 @@ int main()
     static_assert(std::is_base_of_v<QObject, Terminal_qml_chrome>);
     static_assert(std::is_base_of_v<QQuickPaintedItem, Terminal_scrollbar>);
     static_assert(std::is_base_of_v<QObject, Terminal_search_bar>);
+    static_assert(std::is_same_v<
+        decltype(&Terminal_search_bar::set_text_font_family),
+        void (Terminal_search_bar::*)(const QString&)>);
+    static_assert(std::is_same_v<
+        decltype(&Terminal_search_bar::focus_query),
+        bool (Terminal_search_bar::*)()>);
+    static_assert(std::is_same_v<
+        decltype(&Terminal_search_bar::commit_text),
+        void (Terminal_search_bar::*)(const QString&)>);
+    static_assert(std::is_same_v<
+        decltype(&Terminal_search_bar::send_key_press),
+        void (Terminal_search_bar::*)(
+            int, Qt::KeyboardModifiers, const QString&)>);
+    static_assert(std::is_same_v<
+        decltype(&Terminal_search_bar::send_key_release),
+        void (Terminal_search_bar::*)(int, Qt::KeyboardModifiers)>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_controller>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_window>);
     return vnm_terminal::default_shell_argv().isEmpty() ? 0 : 0;

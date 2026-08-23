@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <Qt>
 
 #include <memory>
 
@@ -41,6 +42,14 @@ public:
     QColor  chrome_frame_edge_color() const;
     QQuickItem* root_item() const;
 
+    void set_text_font_family(const QString& font_family);
+    bool focus_query();
+    void commit_text(const QString& text);
+    void send_key_press(
+        int                   key,
+        Qt::KeyboardModifiers modifiers,
+        const QString&        text = {});
+    void send_key_release(int key, Qt::KeyboardModifiers modifiers);
     void show_search();
     Q_INVOKABLE void dismiss_search();
 
@@ -55,6 +64,8 @@ private:
     std::unique_ptr<QQmlContext>   m_context;
     std::unique_ptr<QObject>       m_root_object;
     QQuickItem*                    m_root_item = nullptr;
+    QPointer<QQuickItem>           m_query_item;
+    QPointer<QQuickItem>           m_result_item;
     QString                        m_error_string;
 };
 
