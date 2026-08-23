@@ -6,21 +6,21 @@
       "branch": "master",
       "checkout_path": "vnm_terminal_surface",
       "output": "surface",
-      "commit": "381f9d84988d8a2c0fe3566c504c894071b7205f"
+      "commit": "013586b1cc806a95d17cdbac298e3e070266c256"
     },
     "vnm_qml_chrome": {
       "repository": "Varinomics/vnm_qml_chrome",
       "branch": "master",
       "checkout_path": "vnm_qml_chrome",
       "output": "chrome",
-      "commit": "011cda5531211b51bc316ec63e4f41ab6788e611"
+      "commit": "d7db984754b8f7c71db23b348b5c33d41f938b14"
     },
     "vnm_msdf_text": {
       "repository": "Varinomics/vnm_msdf_text",
       "branch": "master",
       "checkout_path": "vnm_msdf_text",
       "output": "msdf_text",
-      "commit": "cd2332526fdb7d768907455b16f9d8792c6ecb74"
+      "commit": "4d0097641551a5cee8447e1312d1d24af2a7166a"
     },
     "vnm_qt_dispatch": {
       "repository": "Varinomics/vnm_qt_dispatch",
