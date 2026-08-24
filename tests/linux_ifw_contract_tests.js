@@ -1,7 +1,5 @@
-// Contract gate for the Linux Qt IFW control script. IFW loads a control
-// script only in GUI mode, so the command-line installation lifecycle in
-// Linux CI can never reach this code. The control script is evaluated in this
-// module's scope, which requires sloppy mode.
+// Causal contract gate for the Linux Qt IFW control script. The control
+// script is evaluated in this module's scope, which requires sloppy mode.
 
 const fs = require("fs");
 const path = require("path");
@@ -11,56 +9,45 @@ if (!sourceRoot)
     throw new Error("usage: linux_ifw_contract_tests.js <source-root>");
 
 const ifwSourceRoot = path.join(sourceRoot, "packaging", "linux", "ifw");
-const controllerScriptPath = path.join(ifwSourceRoot, "controller.qs");
-const controllerScript = fs.readFileSync(controllerScriptPath, "utf8");
+const controllerScript = fs.readFileSync(
+    path.join(ifwSourceRoot, "controller.qs"), "utf8");
 const configTemplate = fs.readFileSync(
     path.join(ifwSourceRoot, "config.xml.in"), "utf8");
 
-function fail(message) {
-    throw new Error("Linux Qt IFW contract violation: " + message);
-}
-
 function assert(condition, message) {
     if (!condition)
-        fail(message);
+        throw new Error("Linux Qt IFW contract violation: " + message);
 }
 
-const maintenanceToolNameMatch =
-    /<MaintenanceToolName>([^<]+)<\/MaintenanceToolName>/.exec(configTemplate);
-assert(maintenanceToolNameMatch !== null,
-    "the installer configuration must declare a maintenance tool name");
-const maintenanceToolName = maintenanceToolNameMatch[1];
-const launcherLinkPath = "/usr/local/bin/vnm_terminal";
-const readlinkPath = "/usr/bin/readlink";
-
+const maintenanceToolName =
+    /<MaintenanceToolName>([^<]+)<\/MaintenanceToolName>/
+        .exec(configTemplate)[1];
 assert(controllerScript.indexOf(
     "Controller.prototype.maintenanceToolFileName = \"" +
-    maintenanceToolName + "\";") >= 0,
-    "existing-installation discovery must name the configured maintenance tool");
-assert(/function\s+Controller\s*\(\s*\)\s*\{[\s\S]*?Controller\.prototype\.detectExistingInstallations\s*\(\s*\)/
+        maintenanceToolName + "\";") >= 0,
+    "selected-folder detection must name the configured maintenance tool");
+const obsoleteDiscoveryOrReplacement = new RegExp([
+    "readlink",
+    "launcherInstallationDirectory",
+    "detectExistingInstallations",
+    "ambiguousInstallation",
+    "\\bpurge\\b",
+    "installationStarted",
+    "setCanceled",
+    "gainAdminRights",
+].join("|"));
+assert(!obsoleteDiscoveryOrReplacement.test(controllerScript),
+    "startup discovery and automatic replacement machinery must stay removed");
+assert(/TargetDirectoryPageCallback[\s\S]*?subTitle[\s\S]*?offerSelectedInstallationUninstaller/
     .test(controllerScript),
-    "an installed copy must be recognized before the wizard presents its pages");
-assert(/executeDetached\s*\([\s\S]*?\["--start-uninstaller"\]/
+    "the selected folder must be inspected only after its page is initialized");
+assert(!/TargetDirectoryLineEdit[\s\S]{0,80}?\.connect/.test(controllerScript),
+    "later target edits must remain owned by IFW validation");
+assert(/closeRequested\s*=\s*true[\s\S]*?rejectWithoutPrompt/
     .test(controllerScript),
-    "the handoff must open the installed maintenance tool in graphical uninstaller mode");
-assert(!/\bpurge\b|installationStarted|setCanceled|gainAdminRights|performOperation\s*\(/
-    .test(controllerScript),
-    "the new setup must not remove, elevate, or begin installing over the existing copy");
-
-const hiddenPages = [];
-const hiddenPagePattern =
-    /setDefaultPageVisible\s*\(\s*QInstaller\.(\w+)\s*,\s*(\w+)\s*\)/g;
-let hiddenPageMatch;
-while ((hiddenPageMatch = hiddenPagePattern.exec(controllerScript)) !== null) {
-    assert(hiddenPageMatch[2] === "false",
-        "setDefaultPageVisible is only used here to hide a page");
-    hiddenPages.push(hiddenPageMatch[1]);
-}
-assert(hiddenPages.join(",") === "ComponentSelection",
-    "only the forced component page may be hidden");
+    "a successful handoff must latch its close before requesting it");
 
 let state = null;
-
 global.QInstaller = {
     ComponentSelection: 1,
     Success: 0,
@@ -72,14 +59,8 @@ global.QMessageBox = {
     Yes: 0x00004000,
     No: 0x00010000,
     question(identifier, title, text, buttons, defaultButton) {
-        state.questions.push({
-            identifier,
-            title,
-            text,
-            buttons,
-            defaultButton,
-        });
-        return state.answer;
+        state.questions.push({ identifier, title, text, buttons, defaultButton });
+        return state.answers.length ? state.answers.shift() : state.answer;
     },
     critical(identifier, title, text) {
         state.errors.push({ identifier, title, text });
@@ -88,40 +69,18 @@ global.QMessageBox = {
 };
 global.installer = {
     status: QInstaller.Success,
-    isInstaller() { return true; },
+    isInstaller() { return state.installerMode; },
     hasAdminRights() { return state.isAdmin; },
-    setDefaultPageVisible(page) {
-        state.hiddenPages.push(page);
-    },
+    setDefaultPageVisible(page) { state.hiddenPages.push(page); },
     value(name) {
-        if (name === "TargetDir") return state.currentTargetDirectory;
-        fail("unexpected installer value: " + name);
+        if (name === "TargetDir") return state.targetDirectory;
+        throw new Error("unexpected installer value: " + name);
     },
     fileExists(candidate) {
-        if (state.maintenanceToolPaths.indexOf(candidate) >= 0) return true;
-        if (candidate === launcherLinkPath) return state.launcherPresent;
-        return false;
+        state.fileChecks.push(candidate);
+        return state.maintenanceToolPaths.indexOf(candidate) >= 0;
     },
-    execute(program, args, stdIn, stdInCodec, stdOutCodec) {
-        state.executions.push({
-            program,
-            args,
-            stdIn,
-            stdInCodec,
-            stdOutCodec,
-            argumentCount: arguments.length,
-        });
-        if (program !== readlinkPath)
-            fail("unexpected synchronous execution: " + program);
-        if (!state.readlinkStarts)
-            return [];
-        const outputEncoding = stdOutCodec === "UTF-8"
-            ? "utf8"
-            : "latin1";
-        const decodedOutput = Buffer.from(
-            state.launcherTarget + "\n", "utf8").toString(outputEncoding);
-        return [decodedOutput, state.readlinkExitCode];
-    },
+    execute() { throw new Error("startup discovery must not execute programs"); },
     executeDetached(program, args, workingDirectory) {
         state.detachedExecutions.push({ program, args, workingDirectory });
         return state.detachedLaunchSucceeds;
@@ -129,198 +88,132 @@ global.installer = {
 };
 global.gui = {
     rejectWithoutPrompt() { state.rejections += 1; },
-    pageWidgetByObjectName(name) {
-        if (!Object.prototype.hasOwnProperty.call(state.pages, name))
-            fail("unexpected page lookup: " + name);
-        return state.pages[name];
-    },
+    pageWidgetByObjectName(name) { return state.pages[name]; },
 };
 
 function labelStub() {
-    return {
-        text: "framework message",
-        setText(value) { this.text = value; },
-    };
+    return { text: "framework", setText(value) { this.text = value; } };
 }
 
 eval(controllerScript);
 
-function run(overrides) {
-    overrides = overrides || {};
-    const directory = overrides.directory || "/opt/vnm_terminal";
-    const installationPresent = overrides.installationPresent !== false;
+function createState(overrides) {
     state = Object.assign({
-        directory,
-        currentTargetDirectory: directory,
-        maintenanceToolPath: directory + "/" + maintenanceToolName,
-        maintenanceToolPaths: installationPresent
-            ? [directory + "/" + maintenanceToolName]
-            : [],
-        launcherPresent: installationPresent,
-        launcherTarget: directory + "/bin/vnm_terminal",
-        readlinkStarts: true,
-        readlinkExitCode: 0,
-        detachedLaunchSucceeds: true,
+        installerMode: true,
         isAdmin: false,
+        targetDirectory: "/opt/vnm_terminal",
+        maintenanceToolPaths: ["/opt/vnm_terminal/" + maintenanceToolName],
+        detachedLaunchSucceeds: true,
         answer: QMessageBox.Yes,
+        answers: [],
         questions: [],
         errors: [],
-        executions: [],
+        fileChecks: [],
         detachedExecutions: [],
         hiddenPages: [],
         rejections: 0,
         pages: {
             IntroductionPage: {
-                title: "",
-                subTitle: "",
-                MessageLabel: labelStub(),
+                title: "", subTitle: "", MessageLabel: labelStub(),
             },
-            TargetDirectoryPage: { subTitle: "" },
-            ReadyForInstallationPage: { subTitle: "" },
-            FinishedPage: {
-                title: "",
+            TargetDirectoryPage: {
                 subTitle: "",
-                MessageLabel: labelStub(),
-                RunItCheckBox: { hide() { this.hidden = true; } },
+                TargetDirectoryLineEdit: { text: "/opt/vnm_terminal" },
+            },
+            LicenseAgreementPage: { subTitle: "" },
+            ReadyForInstallationPage: { subTitle: "" },
+            PerformInstallationPage: { subTitle: "" },
+            FinishedPage: {
+                title: "", subTitle: "", MessageLabel: labelStub(),
+                RunItCheckBox: { hide() {} },
             },
         },
-    }, overrides);
-
-    Controller.prototype.existingInstallationDirectory = "";
-    Controller.prototype.ambiguousInstallationDirectories = [];
-    Controller.prototype.reportedAmbiguousInstallations = false;
-    Controller.prototype.existingInstallationHandoffHandled = false;
-
+    }, overrides || {});
     new Controller();
-    Controller.prototype.IntroductionPageCallback();
     return state;
 }
 
-let result = run({ installationPresent: false });
-Controller.prototype.TargetDirectoryPageCallback();
-Controller.prototype.ReadyForInstallationPageCallback();
-assert(result.hiddenPages.length === 1 &&
-    result.hiddenPages[0] === QInstaller.ComponentSelection,
-    "a fresh install must hide only the forced component page");
+let result = createState();
+Controller.prototype.IntroductionPageCallback();
 assert(result.questions.length === 0 &&
+    result.fileChecks.length === 0 &&
     result.detachedExecutions.length === 0 &&
-    result.rejections === 0,
-    "a fresh install must not enter the existing-installation handoff");
-assert(result.pages.IntroductionPage.subTitle.indexOf("Install") >= 0 &&
-    result.pages.TargetDirectoryPage.subTitle.indexOf("Choose") >= 0 &&
-    result.pages.ReadyForInstallationPage.subTitle.indexOf("Review") >= 0,
-    "fresh GUI installation pages must remain usable");
+    result.rejections === 0 &&
+    result.pages.IntroductionPage.subTitle.indexOf("Install") >= 0,
+"startup and Welcome must remain normal even when the default folder exists");
 
-result = run({});
-assert(result.questions.length === 1 &&
-    result.questions[0].text.indexOf(result.directory) >= 0 &&
-    result.questions[0].text.indexOf("does not replace") >= 0 &&
-    result.questions[0].text.indexOf("Nothing is removed until") >= 0 &&
-    result.questions[0].text.indexOf("run this setup again") >= 0,
-    "one installed copy must offer a clear, non-destructive two-step handoff");
+Controller.prototype.TargetDirectoryPageCallback();
+assert(result.pages.TargetDirectoryPage.subTitle.indexOf("Choose") >= 0 &&
+    result.questions.length === 1 &&
+    result.questions[0].text.indexOf("Select No") >= 0 &&
+    result.questions[0].text.indexOf("global launcher") >= 0 &&
+    result.questions[0].text.indexOf("not independent") >= 0,
+"the existing default folder must present the side-by-side tradeoff");
 assert(result.detachedExecutions.length === 1 &&
-    result.detachedExecutions[0].program === result.maintenanceToolPath &&
+    result.detachedExecutions[0].program ===
+        "/opt/vnm_terminal/" + maintenanceToolName &&
     result.detachedExecutions[0].args.join(" ") === "--start-uninstaller" &&
-    result.detachedExecutions[0].workingDirectory === result.directory &&
+    result.detachedExecutions[0].workingDirectory === "/opt/vnm_terminal" &&
     result.rejections === 1,
-    "accepting the handoff must open the installed graphical uninstaller and close setup");
+"Yes must open the exact graphical uninstaller and request setup close");
+Controller.prototype.TargetDirectoryPageCallback();
 Controller.prototype.IntroductionPageCallback();
 assert(result.questions.length === 1 &&
-    result.detachedExecutions.length === 1,
-    "re-entering Introduction must not repeat the handoff prompt or launch");
+    result.detachedExecutions.length === 1 &&
+    result.rejections === 3,
+"every close re-entry must reject again without another prompt or launch");
 
-result = run({ isAdmin: true });
+result = createState({ answer: QMessageBox.No });
+Controller.prototype.IntroductionPageCallback();
+Controller.prototype.TargetDirectoryPageCallback();
 assert(result.questions.length === 1 &&
     result.detachedExecutions.length === 0 &&
+    result.rejections === 0 &&
+    result.pages.TargetDirectoryPage.subTitle.indexOf("Choose") >= 0,
+"No must stay on the folder page and remain latched for an unchanged path");
+result.targetDirectory = "/srv/free";
+result.pages.TargetDirectoryPage.TargetDirectoryLineEdit.text = "/srv/free";
+Controller.prototype.LicenseAgreementPageCallback();
+Controller.prototype.ReadyForInstallationPageCallback();
+assert(result.questions.length === 1 &&
+    result.rejections === 0 &&
+    result.pages.LicenseAgreementPage.subTitle.indexOf("Review") >= 0 &&
+    result.pages.ReadyForInstallationPage.subTitle.indexOf("Review") >= 0,
+"choosing a free folder after No must proceed through ordinary callbacks");
+
+result = createState({ isAdmin: true });
+Controller.prototype.IntroductionPageCallback();
+Controller.prototype.TargetDirectoryPageCallback();
+assert(result.questions.length === 1 &&
     result.errors.length === 1 &&
     result.errors[0].text.indexOf("inherit those rights") >= 0 &&
-    result.errors[0].text.indexOf(result.maintenanceToolPath) >= 0 &&
-    result.rejections === 1,
-    "elevated setup must not detach the discovered maintenance tool");
-Controller.prototype.IntroductionPageCallback();
-assert(result.questions.length === 1 &&
+    result.errors[0].text.indexOf("/opt/vnm_terminal/" + maintenanceToolName) >= 0 &&
     result.detachedExecutions.length === 0 &&
-    result.errors.length === 1,
-    "elevated handoff rejection must remain latched during shutdown");
-
-const customDirectory = "/srv/varinomics/\u0130mak terminal";
-result = run({
-    installationPresent: false,
-    launcherPresent: true,
-    launcherTarget: customDirectory + "/bin/vnm_terminal",
-    maintenanceToolPath: customDirectory + "/" + maintenanceToolName,
-    maintenanceToolPaths: [customDirectory + "/" + maintenanceToolName],
-});
-assert(result.questions[0].text.indexOf(customDirectory) >= 0 &&
-    result.detachedExecutions[0].program ===
-        customDirectory + "/" + maintenanceToolName,
-    "launcher discovery must hand a custom installation to its own uninstaller");
-const linkProbe = result.executions.find(
-    (execution) => execution.program === readlinkPath);
-assert(linkProbe.argumentCount === 5 &&
-    linkProbe.stdIn === "" &&
-    linkProbe.stdInCodec === "UTF-8" &&
-    linkProbe.stdOutCodec === "UTF-8",
-    "launcher discovery must preserve a non-ASCII custom location");
-
-result = run({ answer: QMessageBox.No });
-assert(result.questions.length === 1 &&
-    result.detachedExecutions.length === 0 &&
-    result.rejections === 1,
-    "declining the handoff must close setup without opening or removing anything");
-Controller.prototype.IntroductionPageCallback();
-assert(result.questions.length === 1 &&
-    result.detachedExecutions.length === 0,
-    "declining must remain latched during setup shutdown");
-
-result = run({ detachedLaunchSucceeds: false });
-assert(result.questions.length === 1 &&
-    result.detachedExecutions.length === 1 &&
-    result.errors.length === 1 &&
     result.rejections === 0,
-    "a launch failure must leave setup open with one explanation");
-assert(result.errors[0].text.indexOf(result.maintenanceToolPath) >= 0 &&
-    result.errors[0].text.indexOf("No removal was started") >= 0 &&
-    result.errors[0].text.indexOf("manually") >= 0 &&
-    result.errors[0].text.indexOf("run setup again") >= 0,
-    "launch-failure recovery must be truthful and name the maintenance tool");
+"elevated handoff must be blocked once while leaving the folder page usable");
+
+result = createState({ detachedLaunchSucceeds: false });
 Controller.prototype.IntroductionPageCallback();
-assert(result.questions.length === 1 &&
-    result.detachedExecutions.length === 1 &&
-    result.errors.length === 1,
-    "a failed launch must not duplicate prompts, launches, or errors");
 Controller.prototype.TargetDirectoryPageCallback();
-assert(result.rejections === 1,
-    "trying to advance after launch failure must close instead of installing");
+assert(result.questions.length === 1 &&
+    result.errors.length === 1 &&
+    result.errors[0].text.indexOf("No removal was started") >= 0 &&
+    result.errors[0].text.indexOf("choose another folder") >= 0 &&
+    result.detachedExecutions.length === 1 &&
+    result.rejections === 0,
+"launch failure must remain safe, truthful, latched, and usable");
 
-result = run({
-    installationPresent: false,
-    launcherPresent: true,
-    launcherTarget: "/srv/stale/vnm_terminal/bin/vnm_terminal",
+result = createState({
+    targetDirectory: "/srv/fresh",
+    maintenanceToolPaths: [],
 });
+Controller.prototype.IntroductionPageCallback();
+Controller.prototype.TargetDirectoryPageCallback();
+Controller.prototype.ReadyForInstallationPageCallback();
 assert(result.questions.length === 0 &&
     result.detachedExecutions.length === 0 &&
     result.rejections === 0,
-    "a stale launcher link without a maintenance tool must remain a fresh install");
+"fresh graphical installation must retain its normal flow");
 
-result = run({
-    launcherTarget: customDirectory + "/bin/vnm_terminal",
-    maintenanceToolPaths: [
-        "/opt/vnm_terminal/" + maintenanceToolName,
-        customDirectory + "/" + maintenanceToolName,
-    ],
-});
-Controller.prototype.IntroductionPageCallback();
-assert(result.questions.length === 0 &&
-    result.detachedExecutions.length === 0 &&
-    result.errors.length === 1 &&
-    result.rejections === 2,
-    "ambiguous discovery must explain once, never launch, and close on every entry");
-assert(result.errors[0].text.indexOf("/opt/vnm_terminal") >= 0 &&
-    result.errors[0].text.indexOf(customDirectory) >= 0 &&
-    result.errors[0].text.indexOf("cannot choose which uninstaller") >= 0 &&
-    result.errors[0].text.indexOf("Remove the extra installations manually") >= 0,
-    "the ambiguity explanation must list the locations and give bounded recovery");
-
-process.stdout.write(
-    "Linux Qt IFW controller contract passed: " + controllerScriptPath + "\n");
+console.log("Linux Qt IFW controller contract passed: " +
+    path.relative(sourceRoot, path.join(ifwSourceRoot, "controller.qs")));

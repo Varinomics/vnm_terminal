@@ -3,13 +3,118 @@ function Controller()
     // IFW loads the control script before it presents the wizard.
     if (installer.isInstaller()) {
         installer.setDefaultPageVisible(QInstaller.ComponentSelection, false);
-        Controller.prototype.detectExistingInstallations();
+        Controller.prototype.promptedExistingInstallationDirectory = "";
+        Controller.prototype.closeRequested = false;
     }
+}
+
+// Must name the file config.xml declares through MaintenanceToolName. IFW
+// refuses any target directory that contains it, which is how it recognizes
+// one of its own installations.
+Controller.prototype.maintenanceToolFileName = "vnm_terminal_maintenance";
+
+// The folder callback may be re-entered without the user changing TargetDir.
+// Remember that exact answer, but let a changed path be evaluated afresh.
+Controller.prototype.promptedExistingInstallationDirectory = "";
+
+// IFW may re-enter a page callback while rejectWithoutPrompt is taking effect.
+// Every such callback repeats the close request without repeating the launch.
+Controller.prototype.closeRequested = false;
+
+Controller.prototype.continueRequestedClose = function()
+{
+    if (!Controller.prototype.closeRequested)
+        return false;
+    gui.rejectWithoutPrompt();
+    return true;
+}
+
+Controller.prototype.normalizedTargetDirectory = function()
+{
+    var targetDirectory = installer.value("TargetDir");
+    while (targetDirectory.length > 1 && /\/$/.test(targetDirectory))
+        targetDirectory = targetDirectory.substring(0, targetDirectory.length - 1);
+    return targetDirectory;
+}
+
+Controller.prototype.offerSelectedInstallationUninstaller = function()
+{
+    var targetDirectory = Controller.prototype.normalizedTargetDirectory();
+    var maintenanceToolPath =
+        targetDirectory + "/" + Controller.prototype.maintenanceToolFileName;
+    if (!installer.fileExists(maintenanceToolPath)) {
+        Controller.prototype.promptedExistingInstallationDirectory = "";
+        return;
+    }
+    if (targetDirectory ==
+        Controller.prototype.promptedExistingInstallationDirectory)
+    {
+        return;
+    }
+
+    Controller.prototype.promptedExistingInstallationDirectory = targetDirectory;
+    var response = QMessageBox.question(
+        "ExistingInstallationFound",
+        "Existing installation found",
+        "vnm_terminal is already installed in:\n\n"
+            + targetDirectory
+            + "\n\nThis offline installer does not replace an existing "
+            + "installation directly. Open its uninstaller now? Nothing is "
+            + "removed until you confirm removal there. After removal "
+            + "finishes, run this setup again. Select No to stay on this "
+            + "page and choose another folder. A side-by-side copy is best "
+            + "effort only: installations share the global launcher, desktop "
+            + "entry, and user settings, so they are not independent.",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.Yes);
+    if (response == QMessageBox.No)
+        return;
+
+    // executeDetached inherits setup's token. Never let an elevated setup
+    // launch a maintenance path selected from user-writable state. The folder
+    // page remains usable so the user can choose another target.
+    if (installer.hasAdminRights()) {
+        QMessageBox.critical(
+            "ElevatedExistingInstallationHandoff",
+            "Start setup normally",
+            "Setup is running with administrator rights and will not open "
+                + "the existing installation's maintenance tool, because it "
+                + "would inherit those rights. Start setup normally so the "
+                + "maintenance tool can request its own permissions, or open "
+                + "this maintenance tool manually:\n\n" + maintenanceToolPath
+                + "\n\nYou can also choose another folder on this page.");
+        return;
+    }
+
+    // The installed maintenance GUI owns its records, confirmation, and
+    // elevation. With the inherited-token constraint above, this intentional
+    // two-step handoff avoids deleting the old installation before the user
+    // commits in its uninstaller. It does not promise transactional recovery;
+    // setup is rerun after removal completes.
+    if (installer.executeDetached(
+            maintenanceToolPath,
+            ["--start-uninstaller"],
+            targetDirectory))
+    {
+        Controller.prototype.closeRequested = true;
+        gui.rejectWithoutPrompt();
+        return;
+    }
+
+    QMessageBox.critical(
+        "ExistingInstallationUninstallerLaunchFailed",
+        "Could not open the uninstaller",
+        "Setup could not open:\n\n" + maintenanceToolPath
+            + "\n\nNo removal was started. Open that maintenance tool "
+            + "manually, or choose another folder on this page. After "
+            + "removing vnm_terminal, run setup again.");
 }
 
 Controller.prototype.ReadyForInstallationPageCallback = function()
 {
     if (!installer.isInstaller())
+        return;
+    if (Controller.prototype.continueRequestedClose())
         return;
 
     var summaryPage = gui.pageWidgetByObjectName("ReadyForInstallationPage");
@@ -20,28 +125,7 @@ Controller.prototype.IntroductionPageCallback = function()
 {
     if (!installer.isInstaller())
         return;
-
-    var ambiguousDirectories =
-        Controller.prototype.ambiguousInstallationDirectories;
-    if (ambiguousDirectories.length > 1) {
-        if (!Controller.prototype.reportedAmbiguousInstallations) {
-            Controller.prototype.reportedAmbiguousInstallations = true;
-            QMessageBox.critical(
-                "MultipleExistingInstallations",
-                "Multiple installations found",
-                "Setup found more than one managed vnm_terminal "
-                + "installation:\n\n- "
-                + ambiguousDirectories.join("\n- ")
-                + "\n\nSetup cannot choose which uninstaller to open. "
-                + "Remove the extra installations manually, then run setup "
-                + "again.");
-        }
-        gui.rejectWithoutPrompt();
-        return;
-    }
-
-    Controller.prototype.offerExistingInstallationUninstaller();
-    if (Controller.prototype.existingInstallationDirectory != "")
+    if (Controller.prototype.continueRequestedClose())
         return;
 
     var introductionPage = gui.pageWidgetByObjectName("IntroductionPage");
@@ -61,183 +145,27 @@ Controller.prototype.TargetDirectoryPageCallback = function()
     if (!installer.isInstaller())
         return;
 
-    // A failed detached launch leaves the recovery instructions visible on
-    // Welcome. Trying to advance closes this setup instead of exposing IFW's
-    // unusable install-over-install path.
-    if (Controller.prototype.existingInstallationDirectory != "") {
-        gui.rejectWithoutPrompt();
-        return;
-    }
-
     var targetDirectoryPage = gui.pageWidgetByObjectName("TargetDirectoryPage");
     targetDirectoryPage.subTitle =
         "Choose where vnm_terminal will be installed.";
-}
-
-// Must name the file config.xml declares through MaintenanceToolName. IFW
-// refuses any target directory that contains it, which is how it recognizes
-// one of its own installations.
-Controller.prototype.maintenanceToolFileName = "vnm_terminal_maintenance";
-
-// The one installation whose graphical uninstaller this setup can offer.
-Controller.prototype.existingInstallationDirectory = "";
-
-// Every live installation found when setup cannot choose one safely.
-Controller.prototype.ambiguousInstallationDirectories = [];
-
-// Introduction can be entered more than once while setup is closing.
-Controller.prototype.reportedAmbiguousInstallations = false;
-
-// Introduction may be entered again while setup or its modal dialogs close.
-// One process must never prompt for or launch the same handoff twice.
-Controller.prototype.existingInstallationHandoffHandled = false;
-
-// The installed package owns this launcher link. Its target preserves the
-// selected TargetDir even when that directory was customized.
-Controller.prototype.launcherLinkPath = "/usr/local/bin/vnm_terminal";
-
-Controller.prototype.launcherInstallationDirectory = function()
-{
-    var launcherLinkPath = Controller.prototype.launcherLinkPath;
-    if (!installer.fileExists(launcherLinkPath))
-        return "";
-
-    var result = installer.execute(
-        "/usr/bin/readlink",
-        ["-e", "--", launcherLinkPath],
-        "",
-        "UTF-8",
-        "UTF-8");
-    if (result.length != 2 || result[1] != 0)
-        return "";
-
-    var executablePath = result[0].trim();
-    var executableSuffix = "/bin/vnm_terminal";
-    if (executablePath.length <= executableSuffix.length ||
-        executablePath.substring(
-            executablePath.length - executableSuffix.length) !=
-            executableSuffix)
-    {
-        return "";
-    }
-    return executablePath.substring(
-        0, executablePath.length - executableSuffix.length);
-}
-
-Controller.prototype.appendExistingInstallationDirectory = function(
-    directories, directory)
-{
-    while (directory.length > 1 && /\/$/.test(directory))
-        directory = directory.substring(0, directory.length - 1);
-
-    if (directory.indexOf("/") != 0 ||
-        !installer.fileExists(directory + "/"
-            + Controller.prototype.maintenanceToolFileName))
-    {
-        return;
-    }
-
-    for (var i = 0; i < directories.length; ++i) {
-        if (directories[i] == directory)
-            return;
-    }
-    directories.push(directory);
-}
-
-Controller.prototype.detectExistingInstallations = function()
-{
-    Controller.prototype.existingInstallationDirectory = "";
-    Controller.prototype.ambiguousInstallationDirectories = [];
-    Controller.prototype.reportedAmbiguousInstallations = false;
-    Controller.prototype.existingInstallationHandoffHandled = false;
-
-    var directories = [];
-    Controller.prototype.appendExistingInstallationDirectory(
-        directories, installer.value("TargetDir"));
-    Controller.prototype.appendExistingInstallationDirectory(
-        directories, Controller.prototype.launcherInstallationDirectory());
-
-    if (directories.length > 1) {
-        Controller.prototype.ambiguousInstallationDirectories = directories;
-        return;
-    }
-    if (directories.length == 0)
+    if (Controller.prototype.continueRequestedClose())
         return;
 
-    Controller.prototype.existingInstallationDirectory = directories[0];
-}
-
-Controller.prototype.offerExistingInstallationUninstaller = function()
-{
-    var targetDirectory =
-        Controller.prototype.existingInstallationDirectory;
-    if (targetDirectory == "" ||
-        Controller.prototype.existingInstallationHandoffHandled)
-    {
-        return;
-    }
-
-    Controller.prototype.existingInstallationHandoffHandled = true;
-    var maintenanceToolPath =
-        targetDirectory + "/" + Controller.prototype.maintenanceToolFileName;
-    var response = QMessageBox.question(
-        "ExistingInstallationFound",
-        "Existing installation found",
-        "vnm_terminal is already installed in:\n\n"
-            + targetDirectory
-            + "\n\nThis offline installer does not replace an existing "
-            + "installation directly. Open its uninstaller now? Nothing is "
-            + "removed until you confirm removal there. After removal "
-            + "finishes, run this setup again.",
-        QMessageBox.Yes | QMessageBox.No,
-        QMessageBox.Yes);
-    if (response == QMessageBox.No) {
-        gui.rejectWithoutPrompt();
-        return;
-    }
-
-    // executeDetached inherits setup's token. Never let an elevated setup
-    // launch a maintenance path discovered from user-writable state; restart
-    // setup normally so the maintenance GUI requests only its own permissions.
-    if (installer.hasAdminRights()) {
-        QMessageBox.critical(
-            "ElevatedExistingInstallationHandoff",
-            "Start setup normally",
-            "Setup is running with administrator rights and will not open "
-                + "the existing installation's maintenance tool, because it "
-                + "would inherit those rights. Start setup normally so the "
-                + "maintenance tool can request its own permissions, or open "
-                + "this maintenance tool manually:\n\n" + maintenanceToolPath);
-        gui.rejectWithoutPrompt();
-        return;
-    }
-
-    // The installed maintenance GUI owns its records, confirmation, and
-    // elevation. With the inherited-token constraint above, this intentional
-    // two-step handoff avoids deleting the old installation before the user
-    // commits in its uninstaller. It does not promise transactional recovery;
-    // setup is rerun after removal completes.
-    if (installer.executeDetached(
-            maintenanceToolPath,
-            ["--start-uninstaller"],
-            targetDirectory))
-    {
-        gui.rejectWithoutPrompt();
-        return;
-    }
-
-    QMessageBox.critical(
-        "ExistingInstallationUninstallerLaunchFailed",
-        "Could not open the uninstaller",
-        "Setup could not open:\n\n" + maintenanceToolPath
-            + "\n\nNo removal was started. Open that maintenance tool "
-            + "manually, remove vnm_terminal, close this setup, then run "
-            + "setup again.");
+    // Deliberately offer only the folder displayed when this page is entered.
+    // This avoids startup scans and policy lockouts. Later edits belong to
+    // IFW's validation; a free folder can proceed, while another managed
+    // folder may receive IFW's native refusal. Side-by-side copies are best
+    // effort because the global launcher, desktop entry, and settings are
+    // shared. The installed GUI owns removal, confirmation, and elevation;
+    // this manual two-step is preferred over non-transactional replacement.
+    Controller.prototype.offerSelectedInstallationUninstaller();
 }
 
 Controller.prototype.LicenseAgreementPageCallback = function()
 {
     if (!installer.isInstaller())
+        return;
+    if (Controller.prototype.continueRequestedClose())
         return;
 
     var licenseAgreementPage = gui.pageWidgetByObjectName("LicenseAgreementPage");
@@ -248,6 +176,8 @@ Controller.prototype.LicenseAgreementPageCallback = function()
 Controller.prototype.PerformInstallationPageCallback = function()
 {
     if (!installer.isInstaller())
+        return;
+    if (Controller.prototype.continueRequestedClose())
         return;
 
     var performInstallationPage =
@@ -269,6 +199,8 @@ Controller.prototype.escapeHtml = function(text)
 Controller.prototype.FinishedPageCallback = function()
 {
     if (!installer.isInstaller())
+        return;
+    if (Controller.prototype.continueRequestedClose())
         return;
 
     var finishedPage = gui.pageWidgetByObjectName("FinishedPage");

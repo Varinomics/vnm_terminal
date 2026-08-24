@@ -180,17 +180,6 @@ global.installer = {
                 state.logProbeOutput, "utf8").toString(outputEncoding);
             return [output, state.logProbeExitCode];
         }
-        if (args[4].indexOf("VNM_INSTALL:") >= 0) {
-            if (!state.registryProbeStarts) return [];
-            const encoded = state.registeredDirectories.map(
-                (directory) => "VNM_INSTALL:" + directory).join("\r\n");
-            const outputEncoding = stdOutCodec === "UTF-8"
-                ? "utf8"
-                : "latin1";
-            const output = Buffer.from(encoded, "utf8").toString(
-                outputEncoding);
-            return [output, state.registryProbeExitCode];
-        }
         throw new Error("unexpected PowerShell command");
     },
     executeDetached(program, args, workingDirectory) {
@@ -204,6 +193,16 @@ global.gui = {
         if (!Object.prototype.hasOwnProperty.call(state.pages, name))
             throw new Error("unexpected page lookup: " + name);
         return state.pages[name];
+    },
+    findChild(parent, name) {
+        if (parent !== state.pages.ReadyForInstallationPage ||
+            name !== "InstallComponentsTreeview")
+        {
+            throw new Error("unexpected recursive child lookup");
+        }
+        return {
+            hideColumn(index) { state.hiddenSummaryColumns.push(index); },
+        };
     },
 };
 
@@ -231,9 +230,6 @@ function run(overrides) {
         maintenanceToolPaths: installationPresent
             ? [maintenanceToolPath]
             : [],
-        registeredDirectories: installationPresent ? [nativeDirectory] : [],
-        registryProbeStarts: true,
-        registryProbeExitCode: 0,
         logProbeScript: "",
         logProbeOutput: "",
         logProbeStarts: true,
@@ -247,6 +243,7 @@ function run(overrides) {
         detachedExecutions: [],
         assignedValues: [],
         hiddenPages: [],
+        hiddenSummaryColumns: [],
         rejections: 0,
         pages: {
             IntroductionPage: {
@@ -254,7 +251,12 @@ function run(overrides) {
                 subTitle: "",
                 MessageLabel: labelStub(),
             },
-            TargetDirectoryPage: { subTitle: "" },
+            TargetDirectoryPage: {
+                subTitle: "",
+                TargetDirectoryLineEdit: { text: nativeDirectory },
+            },
+            LicenseAgreementPage: { subTitle: "" },
+            ReadyForInstallationPage: { subTitle: "" },
             FinishedPage: {
                 title: "",
                 subTitle: "",
@@ -268,30 +270,104 @@ function run(overrides) {
         RootDir: "C:\\",
     }, overrides.values || {});
 
-    Controller.prototype.existingInstallationDirectory = "";
-    Controller.prototype.ambiguousInstallationDirectories = [];
-    Controller.prototype.reportedAmbiguousInstallations = false;
-    Controller.prototype.existingInstallationHandoffHandled = false;
-
     new Controller();
     Controller.prototype.IntroductionPageCallback();
     return state;
 }
 
-let result = run({ installationPresent: false });
-Controller.prototype.TargetDirectoryPageCallback();
-if (result.hiddenPages.join(",") !== String(QInstaller.ComponentSelection) ||
-    result.questions.length !== 0 ||
+let result = run({});
+if (result.questions.length !== 0 ||
     result.detachedExecutions.length !== 0 ||
+    result.rejections !== 0 ||
+    result.pages.IntroductionPage.subTitle.indexOf("Install") < 0)
+{
+    throw new Error(
+        "startup and Welcome must remain normal when the default folder exists");
+}
+
+Controller.prototype.TargetDirectoryPageCallback();
+if (result.questions.length !== 1 ||
+    result.questions[0].text.indexOf(result.nativeDirectory) < 0 ||
+    result.questions[0].text.indexOf("Select No") < 0 ||
+    result.questions[0].text.indexOf("Start Menu shortcuts") < 0 ||
+    result.questions[0].text.indexOf("not independent") < 0 ||
+    result.detachedExecutions.length !== 1 ||
+    result.detachedExecutions[0].program !== result.maintenanceToolPath ||
+    result.detachedExecutions[0].args.join(" ") !== "--start-uninstaller" ||
+    result.detachedExecutions[0].workingDirectory !== result.nativeDirectory ||
+    result.rejections !== 1)
+{
+    throw new Error(
+        "the selected existing folder must hand off to its graphical uninstaller");
+}
+Controller.prototype.TargetDirectoryPageCallback();
+Controller.prototype.IntroductionPageCallback();
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 1 ||
+    result.rejections !== 3)
+{
+    throw new Error(
+        "close re-entry must reject again without another prompt or launch");
+}
+
+result = run({ answer: QMessageBox.No });
+Controller.prototype.TargetDirectoryPageCallback();
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 0 ||
+    result.rejections !== 0 ||
+    result.pages.TargetDirectoryPage.subTitle.indexOf("Choose") < 0)
+{
+    throw new Error(
+        "No must keep the folder page usable and latch the unchanged path");
+}
+result.values.TargetDir = "D:\\Fresh";
+result.pages.TargetDirectoryPage.TargetDirectoryLineEdit.text = "D:\\Fresh";
+Controller.prototype.LicenseAgreementPageCallback();
+Controller.prototype.ReadyForInstallationPageCallback();
+if (result.questions.length !== 1 ||
+    result.rejections !== 0 ||
+    result.pages.LicenseAgreementPage.subTitle.indexOf("Review") < 0 ||
+    result.pages.ReadyForInstallationPage.subTitle.indexOf("Review") < 0)
+    throw new Error(
+        "choosing a fresh folder after No must proceed through ordinary callbacks");
+
+result = run({ isAdmin: true });
+Controller.prototype.TargetDirectoryPageCallback();
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 0 ||
+    result.errors.length !== 1 ||
+    result.errors[0].text.indexOf("inherit those rights") < 0 ||
+    result.errors[0].text.indexOf(result.maintenanceToolPath) < 0 ||
     result.rejections !== 0)
 {
     throw new Error(
-        "a fresh install must keep its ordinary pages and avoid the handoff");
+        "elevated handoff must be blocked once while the folder stays usable");
 }
-if (result.pages.IntroductionPage.subTitle.indexOf("Install") < 0 ||
-    result.pages.TargetDirectoryPage.subTitle.indexOf("Choose") < 0)
+
+result = run({ detachedLaunchSucceeds: false });
+Controller.prototype.TargetDirectoryPageCallback();
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 1 ||
+    result.errors.length !== 1 ||
+    result.errors[0].text.indexOf("No removal was started") < 0 ||
+    result.errors[0].text.indexOf("choose another folder") < 0 ||
+    result.rejections !== 0)
 {
-    throw new Error("fresh GUI installation pages must remain usable");
+    throw new Error(
+        "launch failure must be safe, truthful, latched, and usable");
+}
+
+result = run({ installationPresent: false });
+Controller.prototype.TargetDirectoryPageCallback();
+Controller.prototype.ReadyForInstallationPageCallback();
+if (result.hiddenPages.join(",") !== String(QInstaller.ComponentSelection) ||
+    result.questions.length !== 0 ||
+    result.detachedExecutions.length !== 0 ||
+    result.rejections !== 0 ||
+    result.pages.ReadyForInstallationPage.subTitle.indexOf("Review") < 0 ||
+    result.hiddenSummaryColumns.join(",") !== "5")
+{
+    throw new Error("a fresh install must retain its ordinary flow");
 }
 
 const uncLogPath =
@@ -303,186 +379,8 @@ result = run({
 });
 const logAssignments = result.assignedValues.filter(
     (assignment) => assignment.name === "LogFileName");
-if (logAssignments.length !== 2 ||
-    logAssignments[1].value !== uncLogPath)
-{
-    throw new Error(
-        "a standard UNC log path must replace the safe fallback");
-}
-
-result = run({});
-if (result.questions.length !== 1 ||
-    result.questions[0].text.indexOf(result.nativeDirectory) < 0 ||
-    result.questions[0].text.indexOf("does not replace") < 0 ||
-    result.questions[0].text.indexOf("Nothing is removed until") < 0 ||
-    result.questions[0].text.indexOf("run this setup again") < 0)
-{
-    throw new Error(
-        "one installed copy must offer a clear non-destructive handoff");
-}
-if (result.detachedExecutions.length !== 1 ||
-    result.detachedExecutions[0].program !== result.maintenanceToolPath ||
-    result.detachedExecutions[0].args.join(" ") !== "--start-uninstaller" ||
-    result.detachedExecutions[0].workingDirectory !== result.nativeDirectory ||
-    result.rejections !== 1)
-{
-    throw new Error(
-        "accepting must open the installed graphical uninstaller and close setup");
-}
-Controller.prototype.IntroductionPageCallback();
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 1)
-{
-    throw new Error(
-        "re-entering Introduction must not repeat the prompt or launch");
-}
-
-result = run({ isAdmin: true });
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 0 ||
-    result.errors.length !== 1 ||
-    result.errors[0].text.indexOf("inherit those rights") < 0 ||
-    result.errors[0].text.indexOf(result.maintenanceToolPath) < 0 ||
-    result.rejections !== 1)
-{
-    throw new Error(
-        "elevated setup must not detach the discovered maintenance tool");
-}
-Controller.prototype.IntroductionPageCallback();
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 0 ||
-    result.errors.length !== 1)
-{
-    throw new Error(
-        "elevated handoff rejection must remain latched during shutdown");
-}
-
-result = run({ answer: QMessageBox.No });
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 0 ||
-    result.rejections !== 1)
-{
-    throw new Error(
-        "declining must close setup without opening or removing anything");
-}
-Controller.prototype.IntroductionPageCallback();
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 0)
-{
-    throw new Error("declining must remain latched during setup shutdown");
-}
-
-result = run({ detachedLaunchSucceeds: false });
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 1 ||
-    result.errors.length !== 1 ||
-    result.rejections !== 0)
-{
-    throw new Error(
-        "a launch failure must leave setup open with one explanation");
-}
-if (result.errors[0].text.indexOf(result.maintenanceToolPath) < 0 ||
-    result.errors[0].text.indexOf("No removal was started") < 0 ||
-    result.errors[0].text.indexOf("manually") < 0 ||
-    result.errors[0].text.indexOf("run setup again") < 0)
-{
-    throw new Error(
-        "launch-failure recovery must be truthful and name the maintenance tool");
-}
-Controller.prototype.IntroductionPageCallback();
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 1 ||
-    result.errors.length !== 1)
-{
-    throw new Error(
-        "a failed launch must not duplicate prompts, launches, or errors");
-}
-Controller.prototype.TargetDirectoryPageCallback();
-if (result.rejections !== 1)
-    throw new Error("advancing after launch failure must close setup");
-
-const customDirectory = "D:\\Varinomics\\İmak Terminal";
-const customMaintenanceTool =
-    customDirectory + "\\vnm_terminal_maintenance.exe";
-result = run({
-    installationPresent: false,
-    registeredDirectories: [customDirectory],
-    maintenanceToolPaths: [customMaintenanceTool],
-});
-if (result.questions[0].text.indexOf(customDirectory) < 0 ||
-    result.detachedExecutions[0].program !== customMaintenanceTool ||
-    result.detachedExecutions[0].workingDirectory !== customDirectory)
-{
-    throw new Error(
-        "registry discovery must hand a custom installation to its own uninstaller");
-}
-const registryProbe = result.executions.find(
-    (execution) => execution.program === powershellPath &&
-        execution.args[4].indexOf("VNM_INSTALL:") >= 0);
-if (registryProbe.argumentCount !== 5 ||
-    registryProbe.stdIn !== "" ||
-    registryProbe.stdInCodec !== "UTF-8" ||
-    registryProbe.stdOutCodec !== "UTF-8")
-{
-    throw new Error(
-        "registry discovery must preserve a non-ASCII custom location");
-}
-
-const uncDirectory = "\\\\server\\share\\vnm_terminal";
-result = run({
-    installationPresent: false,
-    registeredDirectories: [uncDirectory],
-    maintenanceToolPaths: [
-        uncDirectory + "\\vnm_terminal_maintenance.exe",
-    ],
-});
-if (result.detachedExecutions.length !== 1 ||
-    result.detachedExecutions[0].workingDirectory !== uncDirectory)
-{
-    throw new Error("a standard UNC installation must remain discoverable");
-}
-
-result = run({
-    installationPresent: false,
-    registeredDirectories: ["D:\\Stale\\vnm_terminal"],
-});
-if (result.questions.length !== 0 ||
-    result.detachedExecutions.length !== 0 ||
-    result.rejections !== 0)
-{
-    throw new Error(
-        "stale registry evidence without a maintenance tool must remain fresh");
-}
-
-const secondDirectory = "D:\\Varinomics\\vnm_terminal";
-result = run({
-    maintenanceToolPaths: [
-        "C:\\Program Files\\vnm_terminal\\vnm_terminal_maintenance.exe",
-        secondDirectory + "\\vnm_terminal_maintenance.exe",
-    ],
-    registeredDirectories: [
-        "C:\\Program Files\\vnm_terminal",
-        secondDirectory,
-    ],
-});
-Controller.prototype.IntroductionPageCallback();
-if (result.questions.length !== 0 ||
-    result.detachedExecutions.length !== 0 ||
-    result.errors.length !== 1 ||
-    result.rejections !== 2)
-{
-    throw new Error(
-        "ambiguous discovery must explain once, never launch, and close every entry");
-}
-if (result.errors[0].text.indexOf("C:\\Program Files\\vnm_terminal") < 0 ||
-    result.errors[0].text.indexOf(secondDirectory) < 0 ||
-    result.errors[0].text.indexOf("cannot choose which uninstaller") < 0 ||
-    result.errors[0].text.indexOf(
-        "Remove the extra installations manually") < 0)
-{
-    throw new Error(
-        "ambiguity must list locations and give bounded manual recovery");
-}
+if (logAssignments.length !== 2 || logAssignments[1].value !== uncLogPath)
+    throw new Error("the UTF-8 log probe and UNC result must remain intact");
 '@
         [IO.File]::WriteAllText(
             $harnessPath,
@@ -1606,6 +1504,8 @@ $installerPageSubtitles = @(
         'Review and accept the license to continue.'),
     @('StartMenuDirectoryPageCallback', 'StartMenuDirectoryPage', 'startMenuDirectoryPage',
         'Choose where Start Menu shortcuts will appear.'),
+    @('ReadyForInstallationPageCallback', 'ReadyForInstallationPage', 'summaryPage',
+        'Review your choices before installation.'),
     @('PerformInstallationPageCallback', 'PerformInstallationPage', 'performInstallationPage',
         'Installing vnm_terminal. Please wait.')
 )
@@ -1629,7 +1529,7 @@ Assert-IfwContract `
     ($controllerScript -match 'QMessageBox\.question\s*\([\s\S]{0,400}?"Existing installation found"' -and
         $controllerScript -match 'installer\.executeDetached\s*\(\s*maintenanceToolPath\s*,\s*\[\s*"--start-uninstaller"\s*\]\s*,\s*targetDirectory\s*\)' -and
         $controllerScript -match 'Nothing is\s*"\s*\+\s*"removed until you confirm removal there' -and
-        $controllerScript -match 'run\s*"\s*\+\s*"setup again' -and
+        $controllerScript -match 'run this setup again' -and
         $controllerScript -match 'gui\.rejectWithoutPrompt\s*\(\s*\)') `
     'an existing installation must be handed to its normal graphical uninstaller before this setup closes'
 Assert-IfwContract `
@@ -1660,7 +1560,7 @@ Assert-IfwContract `
         $config.Installer.Banner -eq 'varinomics_banner.png') `
     'the canonical wordmark must appear only in the Modern banner and no image may rely on QTextDocument resource lookup'
 Assert-IfwContract `
-    ($controllerScript -match 'Controller\.prototype\.FinishedPageCallback\s*=\s*function\s*\(\s*\)\s*\{\s*if\s*\(\s*!installer\.isInstaller\(\)\s*\)\s*return\s*;\s*var\s+finishedPage\s*=\s*gui\.pageWidgetByObjectName\s*\(\s*"FinishedPage"\s*\)') `
+    ($controllerScript -match 'Controller\.prototype\.FinishedPageCallback\s*=\s*function\s*\(\s*\)\s*\{\s*if\s*\(\s*!installer\.isInstaller\(\)\s*\)\s*return\s*;[\s\S]{0,300}?var\s+finishedPage\s*=\s*gui\.pageWidgetByObjectName\s*\(\s*"FinishedPage"\s*\)') `
     'initial-install branding must guard before reading or changing the finished page'
 Assert-IfwContract `
     ($controllerScript -match 'if\s*\(\s*installer\.status\s*==\s*QInstaller\.Success\s*\)\s*\{[\s\S]*?subTitle\s*=\s*"Installation completed successfully\.";[\s\S]*?heading\s*=\s*"vnm_terminal is ready\.";[\s\S]*?\}\s*else\s*if\s*\(\s*installer\.status\s*==\s*QInstaller\.Canceled\s*\)\s*\{[\s\S]*?subTitle\s*=\s*"Setup stopped at your request\.";[\s\S]*?heading\s*=\s*"Installation was canceled\.";[\s\S]*?escapeHtml\s*\(\s*frameworkMessage\s*\)[\s\S]*?\}\s*else\s*if\s*\(\s*installer\.status\s*==\s*QInstaller\.Unfinished\s*\)\s*\{[\s\S]*?subTitle\s*=\s*"Setup ended before installation completed\.";[\s\S]*?heading\s*=\s*"Installation did not complete\.";[\s\S]*?Setup ended before installation could be completed\.[\s\S]*?escapeHtml\s*\(\s*frameworkMessage\s*\)[\s\S]*?\}\s*else\s*\{[\s\S]*?subTitle\s*=\s*"Setup could not complete the installation\.";[\s\S]*?heading\s*=\s*"Installation failed\.";[\s\S]*?escapeHtml\s*\(\s*frameworkMessage\s*\)') `
@@ -1703,9 +1603,13 @@ Assert-IfwContract `
         $logPathProbe -match '\[IO\.File\]::Delete\(\$staleLog\)') `
     'the helper must reclaim the empty files that cancelled runs leave behind'
 Assert-IfwContract `
-    ($controllerScript -notmatch 'ReadyForInstallationPageCallback' -and
+    ($controllerScript -notmatch 'TargetDirectoryLineEdit[\s\S]{0,80}?\.connect') `
+    'later target edits must remain owned by IFW validation'
+Assert-IfwContract `
+    ($controllerScript -match 'gui\.findChild\s*\(\s*summaryPage\s*,\s*"InstallComponentsTreeview"\s*\)[\s\S]*?installComponentsTreeview\.hideColumn\s*\(\s*5\s*\)' -and
+        $controllerScript -notmatch 'summaryPage\.InstallComponentsTreeview' -and
         $installScript -notmatch 'DynamicReplacementCommitPageCallback') `
-    'fresh installs must use the framework Ready page without a replacement-only custom page'
+    'the restored Ready page must hide only the ambiguous subtotal through recursive child lookup'
 Assert-IfwContract `
     ($controllerScript -notmatch 'pageWidgetByObjectName\s*\(\s*"(?:SpaceItem|SpaceWidget)"' -and
         $controllerScript -notmatch '\.(?:SpaceItem|SpaceWidget)\.') `
@@ -1716,13 +1620,15 @@ Assert-IfwContract `
         [regex]::Escape($config.Installer.MaintenanceToolName) + '\.exe"')) `
     'the existing-installation probe must name the configured maintenance tool'
 Assert-IfwContract `
-    ($controllerScript -match 'function\s+Controller\s*\(\s*\)\s*\{[\s\S]*?Controller\.prototype\.detectExistingInstallations\s*\(\s*\)') `
-    'an installed copy must be recognized before the wizard presents its pages'
+    ($controllerScript -notmatch 'registeredInstallationDirectories|detectExistingInstallations|VNM_INSTALL:|CurrentVersion\\\\Uninstall' -and
+        $controllerScript -match 'TargetDirectoryPageCallback[\s\S]{0,1600}?offerSelectedInstallationUninstaller\s*\(\s*\)') `
+    'existing-installation detection must inspect only the current folder after its page is initialized'
 Assert-IfwContract `
-    ($controllerScript -match 'existingInstallationHandoffHandled\s*=\s*true[\s\S]{0,900}?QMessageBox\.question' -and
+    ($controllerScript -match 'promptedExistingInstallationDirectory\s*=\s*targetDirectory[\s\S]{0,400}?QMessageBox\.question' -and
+        $controllerScript -match 'closeRequested\s*=\s*true[\s\S]{0,160}?gui\.rejectWithoutPrompt' -and
         $controllerScript -match 'executeDetached[\s\S]{0,1200}?No removal was started' -and
-        $controllerScript -match 'reportedAmbiguousInstallations\s*=\s*true') `
-    'prompt, launch, and ambiguity reporting must be latched before re-entrant wizard callbacks'
+        $controllerScript -match 'continueRequestedClose[\s\S]{0,300}?gui\.rejectWithoutPrompt') `
+    'unchanged-folder prompts and successful-close re-entry must be latched before modal or close callbacks'
 Assert-IfwContract `
     ($installScript -notmatch 'runningTargetPaths|validateReplacementCommitPage|runMaintenancePurge|waitForDirectoryRemoval|gainAdminRights|executeDetached' -and
         $controllerScript -notmatch 'setDefaultPageVisible\s*\(\s*QInstaller\.(?:TargetDirectory|ReadyForInstallation)\s*,\s*false\s*\)') `
