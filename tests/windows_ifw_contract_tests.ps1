@@ -149,6 +149,7 @@ global.component = {
 global.installer = {
     status: QInstaller.Success,
     isInstaller() { return true; },
+    isCommandLineInstance() { return state.commandLineInstance; },
     setDefaultPageVisible(page) { state.hiddenPages.push(page); },
     addWizardPage(owner, pageName, beforePage) {
         state.pageRegistrations.push({ owner, pageName, beforePage });
@@ -301,6 +302,7 @@ function run(overrides) {
         waitStarts: true,
         waitExitCode: 0,
         addWizardPageSucceeds: true,
+        commandLineInstance: false,
         runningPaths: [],
         hasAdminRights: false,
         gainAdminResult: true,
@@ -353,9 +355,11 @@ function run(overrides) {
 
     new Controller();
     new Component();
-    Controller.prototype.IntroductionPageCallback();
-    Controller.prototype.TargetDirectoryPageCallback();
-    Component.prototype.DynamicReplacementCommitPageCallback();
+    if (!state.commandLineInstance) {
+        Controller.prototype.IntroductionPageCallback();
+        Controller.prototype.TargetDirectoryPageCallback();
+        Component.prototype.DynamicReplacementCommitPageCallback();
+    }
     return state;
 }
 
@@ -375,7 +379,59 @@ function validateCommit(runState) {
     return result;
 }
 
-let result = run({ installationPresent: false });
+let result = run({
+    installationPresent: false,
+    commandLineInstance: true,
+    addWizardPageSucceeds: false,
+});
+if (result.pageRegistrations.length !== 0 ||
+    result.validators.length !== 0)
+{
+    throw new Error(
+        "a headless IFW install command must not attempt to construct GUI pages");
+}
+
+let headlessReplacementFailure = "";
+try {
+    run({
+        commandLineInstance: true,
+        addWizardPageSucceeds: false,
+    });
+}
+catch (error) {
+    headlessReplacementFailure = String(error);
+}
+if (headlessReplacementFailure.indexOf(
+        "Replacing an existing installation requires interactive setup") < 0 ||
+    headlessReplacementFailure.indexOf("start setup normally") < 0 ||
+    state.pageRegistrations.length !== 0 ||
+    state.validators.length !== 0 ||
+    state.processChecks.length !== 0 ||
+    state.elevationRequests !== 0 ||
+    state.executions.some((execution) =>
+        execution.program === powershellPath &&
+        (execution.args[4].indexOf("Start-Process") >= 0 ||
+            execution.args[4].indexOf("$deadline") >= 0)))
+{
+    throw new Error(
+        "a headless replacement must stop before every page, process, removal, oracle, and elevation effect");
+}
+
+let guiPageFailureCaught = false;
+try {
+    run({
+        installationPresent: false,
+        addWizardPageSucceeds: false,
+    });
+}
+catch (error) {
+    guiPageFailureCaught = String(error).indexOf(
+        "Could not add the installation summary page") >= 0;
+}
+if (!guiPageFailureCaught)
+    throw new Error("a GUI run must still fail if its packaged page is unavailable");
+
+result = run({ installationPresent: false });
 if (result.hiddenPages.join(",") !==
         [QInstaller.ComponentSelection, QInstaller.ReadyForInstallation].join(","))
 {
@@ -1865,9 +1921,10 @@ Assert-IfwContract `
     'the final StartMenuDir group must be mapped once from an expected Programs root to the all-users root'
 Assert-IfwContract `
     ($installScript -notmatch 'setDefaultPageVisible|ComponentSelection|hideColumn' -and
+        $installScript -match 'function\s+Component\s*\(\s*\)[\s\S]*?if\s*\(\s*installer\.isCommandLineInstance\(\)\s*\)[\s\S]*?installer\.value\s*\(\s*Component\.prototype\.replacementTargetValueName\s*\)[\s\S]*?if\s*\(\s*replacementDirectory\s*==\s*""\s*\)\s*return\s*;[\s\S]*?Replacing an existing installation requires interactive setup' -and
         $installScript -match 'addWizardPage\s*\([\s\S]*?"ReplacementCommitPage"[\s\S]*?QInstaller\.PerformInstallation' -and
         $installScript -match 'setValidatorForCustomPage\s*\([\s\S]*?"ReplacementCommitPage"[\s\S]*?"validateReplacementCommitPage"') `
-    'the component must add one validated commit page immediately before installation without mutating built-in pages'
+    'the component must allow fresh headless installs, block headless replacements, and add one validated commit page immediately before GUI installation without mutating built-in pages'
 Assert-IfwContract `
     ($controllerScript -match 'function\s+Controller\s*\(\s*\)\s*\{[\s\S]*?if\s*\(installer\.isInstaller\(\)\)[\s\S]*?setDefaultPageVisible\s*\(\s*QInstaller\.ComponentSelection\s*,\s*false\s*\)') `
     'the pre-display Controller constructor must skip the single forced component page during initial installation'

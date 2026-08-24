@@ -3,6 +3,16 @@ function Component()
     if (!installer.isInstaller())
         return;
 
+    if (installer.isCommandLineInstance())
+    {
+        var replacementDirectory = installer.value(
+            Component.prototype.replacementTargetValueName);
+        if (replacementDirectory == "")
+            return;
+        throw new Error(
+            "Replacing an existing installation requires interactive setup. Close this command and start setup normally.");
+    }
+
     if (!installer.addWizardPage(
             component,
             "ReplacementCommitPage",
