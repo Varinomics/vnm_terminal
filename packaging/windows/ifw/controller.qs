@@ -4,6 +4,7 @@ function Controller()
     // scripts load later, after the initial page list has already been shown.
     if (installer.isInstaller()) {
         installer.setDefaultPageVisible(QInstaller.ComponentSelection, false);
+        installer.setDefaultPageVisible(QInstaller.ReadyForInstallation, false);
         Controller.prototype.configureUserLogFile();
         Controller.prototype.adoptExistingInstallation();
     }
@@ -56,12 +57,13 @@ Controller.prototype.windowsPowerShellPath = function()
 Controller.prototype.maintenanceToolFileName = "vnm_terminal_maintenance.exe";
 
 // The installation this run replaces, empty when this run replaces none. Read
-// by the pages that have to say so and by the removal itself.
+// by the pages that have to say so.
 Controller.prototype.replacedInstallationDirectory = "";
 
-// Set when that removal fails. The run is stopped, and the finished page has
-// to report that reason rather than the cancellation it looks like.
-Controller.prototype.replacementFailed = false;
+// Component scripts load after discovery, so the replacement validator reads
+// the selected installation through this installer-owned process value.
+Controller.prototype.replacementTargetValueName =
+    "VnmReplacementTargetDirectory";
 
 // Every live installation found when setup cannot choose one safely.
 Controller.prototype.ambiguousInstallationDirectories = [];
@@ -149,6 +151,7 @@ Controller.prototype.adoptExistingInstallation = function()
 {
     Controller.prototype.ambiguousInstallationDirectories = [];
     Controller.prototype.reportedAmbiguousInstallations = false;
+    installer.setValue(Controller.prototype.replacementTargetValueName, "");
 
     var directories = [];
     Controller.prototype.appendExistingInstallationDirectory(
@@ -175,114 +178,9 @@ Controller.prototype.adoptExistingInstallation = function()
         installer.setValue("TargetDir", targetDirectory);
 
     Controller.prototype.replacedInstallationDirectory = targetDirectory;
-    installer.setDefaultPageVisible(QInstaller.TargetDirectory, false);
-    installer.installationStarted.connect(
-        Controller.prototype.replaceExistingInstallation);
-}
-
-// The replaced installation's own maintenance tool owns the removal: it undoes
-// the recorded operations, drops the Start Menu shortcut, and unregisters the
-// Windows uninstall entry. Extracting over the files instead would strand that
-// entry, because every installation registers itself under a freshly generated
-// UUID, and would leave behind every file the previous version owned and this
-// one does not.
-//
-// installationStarted is the last moment that is still ahead of every file the
-// framework writes and already past the decision to install: the framework
-// emits it before it creates the target directory, and only reaches it once
-// the summary page, which states this removal, has been accepted.
-Controller.prototype.replaceExistingInstallation = function()
-{
-    var targetDirectory = Controller.prototype.replacedInstallationDirectory;
-    var maintenanceToolPath = targetDirectory + "\\"
-        + Controller.prototype.maintenanceToolFileName;
-    if (Controller.prototype.removeInstallation(
-            maintenanceToolPath, targetDirectory))
-    {
-        return;
-    }
-
-    Controller.prototype.replacementFailed = true;
-
-    // The framework owns the target directory once a run has started, and
-    // clears the installation record out of it when the run is abandoned.
-    // Point it at a directory of this run's own before abandoning it, so that
-    // the cleanup cannot alter whatever files or records the failed purge left
-    // behind.
     installer.setValue(
-        "TargetDir",
-        installer.value("HomeDir") + "/vnm_terminal_setup_stopped");
-    QMessageBox.critical(
-        "ExistingInstallationRemovalFailed",
-        "Error",
-        "Setup could not complete removal of the installation in "
-        + targetDirectory
-        + ", and stopped without installing this version.\n\nThe previous "
-        + "installation may now be incomplete. Close "
-        + "vnm_terminal if it is running and start setup again, or remove "
-        + "vnm_terminal through Windows Settings first.");
-    installer.setCanceled();
-}
-
-Controller.prototype.removeInstallation = function(
-    maintenanceToolPath, targetDirectory)
-{
-    var result = installer.execute(
-        maintenanceToolPath,
-        ["purge", "--accept-messages", "--confirm-command"]);
-    if (result.length != 2 || result[1] != 0)
-        return false;
-
-    // Windows cannot delete a running executable, so the maintenance tool
-    // hands its own removal, and the directory's, to a detached process that
-    // starts once its own has exited. That process reports to nobody and takes
-    // seconds, which leaves the directory as the only completion signal there
-    // is. It is a final one: the removal never comes back to a directory it
-    // has already deleted.
-    return Controller.prototype.waitForDirectoryRemoval(targetDirectory);
-}
-
-// Waiting is the whole purpose of this helper, so it reports through the exit
-// code of the process that does the waiting. The command travels in the
-// argument list because installer.execute() delivers standard input intact
-// only when it is not asked to encode it as UTF-8, which costs that input its
-// first statement.
-Controller.prototype.waitForDirectoryRemoval = function(directory)
-{
-    var powershellPath = Controller.prototype.windowsPowerShellPath();
-    var command = "$path = "
-        + Controller.prototype.powershellLiteral(directory)
-        + ";$deadline = [DateTime]::UtcNow.AddSeconds(30)"
-        + ";while ([DateTime]::UtcNow -lt $deadline -and "
-        + "(Test-Path -LiteralPath $path)) { Start-Sleep -Milliseconds 250 }"
-        + ";if (Test-Path -LiteralPath $path) { exit 2 }";
-    var result = installer.execute(
-        powershellPath,
-        ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command]);
-    return result.length == 2 && result[1] == 0;
-}
-
-Controller.prototype.powershellLiteral = function(value)
-{
-    return "'" + value.replace(/'/g, "''") + "'";
-}
-
-Controller.prototype.ReadyForInstallationPageCallback = function()
-{
-    if (!installer.isInstaller())
-        return;
-
-    var summaryPage = gui.pageWidgetByObjectName("ReadyForInstallationPage");
-    summaryPage.subTitle = Controller.prototype.replacedInstallationDirectory
-        ? "Setup will replace the installation in "
-            + Controller.prototype.replacedInstallationDirectory + "."
-        : "Review your choices before installation.";
-
-    // IFW's component size excludes the maintenance-tool resources that its
-    // labeled SpaceWidget includes. Hide the ambiguous, unlabeled tree value.
-    var installComponentsTreeview =
-        gui.findChild(summaryPage, "InstallComponentsTreeview");
-    installComponentsTreeview.hideColumn(5);
+        Controller.prototype.replacementTargetValueName, targetDirectory);
+    installer.setDefaultPageVisible(QInstaller.TargetDirectory, false);
 }
 
 Controller.prototype.IntroductionPageCallback = function()
@@ -390,17 +288,6 @@ Controller.prototype.FinishedPageCallback = function()
     var heading;
     var detail;
 
-    if (Controller.prototype.replacementFailed) {
-        finishedPage.title = "Installation stopped";
-        finishedPage.subTitle = "Setup did not install this version.";
-        heading = "This version was not installed.";
-        detail = "Setup stopped because removal of the installation "
-            + "in " + Controller.prototype.escapeHtml(
-                Controller.prototype.replacedInstallationDirectory)
-            + " did not complete. The previous installation may now be "
-            + "incomplete.";
-    }
-    else
     if (installer.status == QInstaller.Success) {
         finishedPage.title = "Finished";
         finishedPage.subTitle = "Installation completed successfully.";
