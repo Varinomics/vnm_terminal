@@ -1,7 +1,10 @@
 function Controller()
 {
-    if (installer.isInstaller())
+    // IFW loads the control script before it presents the wizard.
+    if (installer.isInstaller()) {
         installer.setDefaultPageVisible(QInstaller.ComponentSelection, false);
+        Controller.prototype.adoptExistingInstallation();
+    }
 }
 
 Controller.prototype.ReadyForInstallationPageCallback = function()
@@ -10,7 +13,10 @@ Controller.prototype.ReadyForInstallationPageCallback = function()
         return;
 
     var summaryPage = gui.pageWidgetByObjectName("ReadyForInstallationPage");
-    summaryPage.subTitle = "Review your choices before installation.";
+    summaryPage.subTitle = Controller.prototype.replacedInstallationDirectory
+        ? "Setup will replace the installation in "
+            + Controller.prototype.replacedInstallationDirectory + "."
+        : "Review your choices before installation.";
 }
 
 Controller.prototype.IntroductionPageCallback = function()
@@ -18,18 +24,47 @@ Controller.prototype.IntroductionPageCallback = function()
     if (!installer.isInstaller())
         return;
 
+    var ambiguousDirectories =
+        Controller.prototype.ambiguousInstallationDirectories;
+    if (ambiguousDirectories.length > 1) {
+        if (!Controller.prototype.reportedAmbiguousInstallations) {
+            Controller.prototype.reportedAmbiguousInstallations = true;
+            QMessageBox.critical(
+                "MultipleExistingInstallations",
+                "Multiple installations found",
+                "Only one managed vnm_terminal installation is supported. "
+                + "Setup cannot safely repair or remove this ambiguous state "
+                + "automatically.\n\nSetup found:\n- "
+                + ambiguousDirectories.join("\n- ")
+                + "\n\nRemove all listed installations and any remaining "
+                + "shared launcher state before running setup for a fresh "
+                + "installation. If cleanup or removal fails, contact "
+                + "Varinomics support.");
+        }
+        gui.rejectWithoutPrompt();
+        return;
+    }
+
     var introductionPage = gui.pageWidgetByObjectName("IntroductionPage");
 
+    var replacedDirectory = Controller.prototype.replacedInstallationDirectory;
     introductionPage.title = "Welcome";
-    introductionPage.subTitle = "Install vnm_terminal on this computer.";
+    introductionPage.subTitle = replacedDirectory
+        ? "Replace the installed vnm_terminal with this version."
+        : "Install vnm_terminal on this computer.";
     introductionPage.MessageLabel.setText(
         "<div class=\"BrandPresentation\" style=\"color:#E0E0E0;\">"
         + "<span style=\"color:#999999;\">vnm_terminal</span>"
         + "<br /><span style=\"font-size:20px; font-weight:600;\">"
         + "A focused terminal for the desktop.</span>"
-        + "<br /><br /><span>This setup will install vnm_terminal "
-        + "and its required runtime.</span>"
-        + "</div>");
+        + "<br /><br /><span>"
+        + (replacedDirectory
+            ? "vnm_terminal is already installed in "
+                + Controller.prototype.escapeHtml(replacedDirectory)
+                + ". This setup will remove that installation and install "
+                + "this version in its place."
+            : "This setup will install vnm_terminal and its required runtime.")
+        + "</span></div>");
 }
 
 Controller.prototype.TargetDirectoryPageCallback = function()
@@ -40,8 +75,6 @@ Controller.prototype.TargetDirectoryPageCallback = function()
     var targetDirectoryPage = gui.pageWidgetByObjectName("TargetDirectoryPage");
     targetDirectoryPage.subTitle =
         "Choose where vnm_terminal will be installed.";
-
-    Controller.prototype.offerToRemoveExistingInstallation();
 }
 
 // Must name the file config.xml declares through MaintenanceToolName. IFW
@@ -49,50 +82,162 @@ Controller.prototype.TargetDirectoryPageCallback = function()
 // one of its own installations.
 Controller.prototype.maintenanceToolFileName = "vnm_terminal_maintenance";
 
-// An offline installer has no update mode, so installing this version over an
-// existing one means removing that installation first. Its own maintenance
-// tool owns the removal: it undoes the recorded operations, drops the launcher
-// symlink and the desktop entry, and deletes the installation directory.
-// Extracting over the files instead would leave every file the previous
-// version owned and this one does not.
-Controller.prototype.offerToRemoveExistingInstallation = function()
+// The installation this run replaces, empty when this run replaces none. Read
+// by the pages that have to say so and by the removal itself.
+Controller.prototype.replacedInstallationDirectory = "";
+
+// Set when that removal fails. The run is stopped, and the finished page has
+// to report that reason rather than the cancellation it looks like.
+Controller.prototype.replacementFailed = false;
+
+// Every live installation found when setup cannot choose one safely.
+Controller.prototype.ambiguousInstallationDirectories = [];
+
+// Introduction can be entered more than once while setup is closing.
+Controller.prototype.reportedAmbiguousInstallations = false;
+
+// The installed package owns this launcher link. Its target preserves the
+// selected TargetDir even when that directory was customized.
+Controller.prototype.launcherLinkPath = "/usr/local/bin/vnm_terminal";
+
+Controller.prototype.launcherInstallationDirectory = function()
 {
-    var targetDirectory = installer.value("TargetDir");
-    var maintenanceToolPath =
-        targetDirectory + "/" + Controller.prototype.maintenanceToolFileName;
-    if (!installer.fileExists(maintenanceToolPath))
-        return;
+    var launcherLinkPath = Controller.prototype.launcherLinkPath;
+    if (!installer.fileExists(launcherLinkPath))
+        return "";
 
-    var answer = QMessageBox.question(
-        "RemoveExistingInstallation",
-        "Existing installation",
-        "vnm_terminal is already installed in " + targetDirectory + ".\n\n"
-        + "Setup can remove that installation and then install this version "
-        + "into the same directory. Removal can take a few moments.\n\n"
-        + "Remove the existing installation?",
-        QMessageBox.Yes | QMessageBox.No);
-    if (answer != QMessageBox.Yes)
-        return;
-
-    // The maintenance tool deletes itself and then the installation directory
-    // before its own process exits, so the directory is a settled result by
-    // the time this call returns.
     var result = installer.execute(
-        maintenanceToolPath,
-        ["purge", "--accept-messages", "--confirm-command"]);
-    if (result.length == 2 && result[1] == 0 &&
-        !installer.fileExists(targetDirectory))
+        "/usr/bin/readlink",
+        ["-e", "--", launcherLinkPath],
+        "",
+        "UTF-8",
+        "UTF-8");
+    if (result.length != 2 || result[1] != 0)
+        return "";
+
+    var executablePath = result[0].trim();
+    var executableSuffix = "/bin/vnm_terminal";
+    if (executablePath.length <= executableSuffix.length ||
+        executablePath.substring(
+            executablePath.length - executableSuffix.length) !=
+            executableSuffix)
+    {
+        return "";
+    }
+    return executablePath.substring(
+        0, executablePath.length - executableSuffix.length);
+}
+
+Controller.prototype.appendExistingInstallationDirectory = function(
+    directories, directory)
+{
+    while (directory.length > 1 && /\/$/.test(directory))
+        directory = directory.substring(0, directory.length - 1);
+
+    if (directory.indexOf("/") != 0 ||
+        !installer.fileExists(directory + "/"
+            + Controller.prototype.maintenanceToolFileName))
     {
         return;
     }
 
+    for (var i = 0; i < directories.length; ++i) {
+        if (directories[i] == directory)
+            return;
+    }
+    directories.push(directory);
+}
+
+// An offline installer has no update mode, and IFW refuses a target directory
+// that already holds one of its installations. That refusal belongs to the
+// installation folder page, so an upgrade can only stay inside a single run if
+// the folder stops being a question: the installed copy becomes the target,
+// the wizard says so, and the page that would refuse it is not shown.
+Controller.prototype.adoptExistingInstallation = function()
+{
+    Controller.prototype.ambiguousInstallationDirectories = [];
+    Controller.prototype.reportedAmbiguousInstallations = false;
+
+    var directories = [];
+    Controller.prototype.appendExistingInstallationDirectory(
+        directories, installer.value("TargetDir"));
+    Controller.prototype.appendExistingInstallationDirectory(
+        directories, Controller.prototype.launcherInstallationDirectory());
+
+    if (directories.length > 1) {
+        Controller.prototype.ambiguousInstallationDirectories = directories;
+        return;
+    }
+    if (directories.length == 0)
+        return;
+
+    var targetDirectory = directories[0];
+    if (targetDirectory != installer.value("TargetDir"))
+        installer.setValue("TargetDir", targetDirectory);
+
+    Controller.prototype.replacedInstallationDirectory = targetDirectory;
+    installer.setDefaultPageVisible(QInstaller.TargetDirectory, false);
+    installer.installationStarted.connect(
+        Controller.prototype.replaceExistingInstallation);
+}
+
+// The replaced installation's own maintenance tool owns the removal: it undoes
+// the recorded operations, drops the launcher symlink and the desktop entry,
+// and deletes the installation directory. Extracting over the files instead
+// would leave behind every file the previous version owned and this one does
+// not.
+//
+// installationStarted is the last moment that is still ahead of every file the
+// framework writes and already past the decision to install: the framework
+// emits it before it creates the target directory, and only reaches it once
+// the summary page, which states this removal, has been accepted.
+Controller.prototype.replaceExistingInstallation = function()
+{
+    var targetDirectory = Controller.prototype.replacedInstallationDirectory;
+    var maintenanceToolPath =
+        targetDirectory + "/" + Controller.prototype.maintenanceToolFileName;
+    if (Controller.prototype.removeInstallation(
+            maintenanceToolPath, targetDirectory))
+    {
+        return;
+    }
+
+    Controller.prototype.replacementFailed = true;
+
+    // The framework owns the target directory once a run has started, and
+    // clears the installation record out of it when the run is abandoned.
+    // Point it at a directory of this run's own before abandoning it, so that
+    // the cleanup cannot alter whatever files or records the failed purge left
+    // behind.
+    installer.setValue(
+        "TargetDir",
+        installer.value("HomeDir") + "/vnm_terminal_setup_stopped");
     QMessageBox.critical(
-        "ExistingInstallationRetained",
+        "ExistingInstallationRemovalFailed",
         "Error",
-        "Setup could not remove the installation in " + targetDirectory
-        + ".\n\nRun this installer with the privileges that directory needs, "
-        + "remove the installation with " + maintenanceToolPath
-        + ", or choose a different directory.");
+        "Setup could not complete removal of the installation in "
+        + targetDirectory
+        + ", and stopped without installing this version.\n\nThe previous "
+        + "installation may now be incomplete. Start setup with "
+        + "the privileges that directory needs, or remove the installation "
+        + "with " + maintenanceToolPath + " first.");
+    installer.setCanceled();
+}
+
+Controller.prototype.removeInstallation = function(
+    maintenanceToolPath, targetDirectory)
+{
+    var result = installer.execute(
+        maintenanceToolPath,
+        ["purge", "--accept-messages", "--confirm-command"]);
+    if (result.length != 2 || result[1] != 0)
+        return false;
+
+    // A running executable can be unlinked here, so the maintenance tool
+    // deletes itself and then the installation directory before its own
+    // process exits: the directory is a settled result by the time the purge
+    // returns, and needs no wait of its own.
+    return !installer.fileExists(targetDirectory);
 }
 
 Controller.prototype.LicenseAgreementPageCallback = function()
@@ -136,6 +281,17 @@ Controller.prototype.FinishedPageCallback = function()
     var heading;
     var detail;
 
+    if (Controller.prototype.replacementFailed) {
+        finishedPage.title = "Installation stopped";
+        finishedPage.subTitle = "Setup did not install this version.";
+        heading = "This version was not installed.";
+        detail = "Setup stopped because removal of the installation "
+            + "in " + Controller.prototype.escapeHtml(
+                Controller.prototype.replacedInstallationDirectory)
+            + " did not complete. The previous installation may now be "
+            + "incomplete.";
+    }
+    else
     if (installer.status == QInstaller.Success) {
         finishedPage.title = "Finished";
         finishedPage.subTitle = "Installation completed successfully.";
