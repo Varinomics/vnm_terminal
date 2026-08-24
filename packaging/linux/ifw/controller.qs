@@ -13,8 +13,23 @@ function Controller()
 // one of its own installations.
 Controller.prototype.maintenanceToolFileName = "vnm_terminal_maintenance";
 
+// Product policy: do not redesign this offline-install flow implicitly.
+// After the Target Directory page is initialized, inspect only the TargetDir
+// that was present on entry. If it is an installation, offer its normal GUI
+// uninstaller. No keeps folder selection available; a free side-by-side target
+// is allowed as best effort, but copies share the global launcher, desktop
+// entry, and user settings and are not independent. Later edits belong to IFW
+// validation and may receive its native existing-installation refusal. Yes
+// starts this exact maintenance tool detached with --start-uninstaller, closes
+// setup, and the user reruns setup after removal. The detached process must
+// never inherit an elevated setup token. Unless the product owner explicitly
+// changes this contract, do not add startup registry or readlink discovery,
+// ambiguity lockout, automatic purge-and-continue, setup elevation
+// choreography, or a repository updater. The manual two-step intentionally
+// makes no transactional promise.
+
 // The folder callback may be re-entered without the user changing TargetDir.
-// Remember that exact answer, but let a changed path be evaluated afresh.
+// Remember that answer; this latch does not monitor later field edits.
 Controller.prototype.promptedExistingInstallationDirectory = "";
 
 // IFW may re-enter a page callback while rejectWithoutPrompt is taking effect.
@@ -151,13 +166,8 @@ Controller.prototype.TargetDirectoryPageCallback = function()
     if (Controller.prototype.continueRequestedClose())
         return;
 
-    // Deliberately offer only the folder displayed when this page is entered.
-    // This avoids startup scans and policy lockouts. Later edits belong to
-    // IFW's validation; a free folder can proceed, while another managed
-    // folder may receive IFW's native refusal. Side-by-side copies are best
-    // effort because the global launcher, desktop entry, and settings are
-    // shared. The installed GUI owns removal, confirmation, and elevation;
-    // this manual two-step is preferred over non-transactional replacement.
+    // Apply the product policy only after the folder page is initialized.
+    // Subsequent field edits remain entirely under IFW validation.
     Controller.prototype.offerSelectedInstallationUninstaller();
 }
 

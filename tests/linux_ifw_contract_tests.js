@@ -11,6 +11,7 @@ if (!sourceRoot)
 const ifwSourceRoot = path.join(sourceRoot, "packaging", "linux", "ifw");
 const controllerScript = fs.readFileSync(
     path.join(ifwSourceRoot, "controller.qs"), "utf8");
+const controllerCode = controllerScript.replace(/^\s*\/\/.*$/gm, "");
 const configTemplate = fs.readFileSync(
     path.join(ifwSourceRoot, "config.xml.in"), "utf8");
 
@@ -36,7 +37,7 @@ const obsoleteDiscoveryOrReplacement = new RegExp([
     "setCanceled",
     "gainAdminRights",
 ].join("|"));
-assert(!obsoleteDiscoveryOrReplacement.test(controllerScript),
+assert(!obsoleteDiscoveryOrReplacement.test(controllerCode),
     "startup discovery and automatic replacement machinery must stay removed");
 assert(/TargetDirectoryPageCallback[\s\S]*?subTitle[\s\S]*?offerSelectedInstallationUninstaller/
     .test(controllerScript),
