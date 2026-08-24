@@ -12,7 +12,4 @@
         <License name="GNU General Public License version 3" file="LICENSE.txt" />
     </Licenses>
     <Script>installscript.qs</Script>
-    <UserInterfaces>
-        <UserInterface>replacement_commit.ui</UserInterface>
-    </UserInterfaces>
 </Package>

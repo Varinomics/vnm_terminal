@@ -442,8 +442,6 @@ Write-Template `
     }
 Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'installscript.qs') `
     -Destination $packageMetaRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'replacement_commit.ui') `
-    -Destination $packageMetaRoot
 Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'maintenance_installscript.qs') `
     -Destination $maintenanceMetaRoot
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSE') `

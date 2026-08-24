@@ -93,74 +93,60 @@ function Get-IfwPngDimensions {
     }
 }
 
-function Assert-IfwReplacementCommitRuntime {
+function Assert-IfwExistingInstallationHandoffRuntime {
     param(
         [Parameter(Mandatory = $true)]
-        [string]$ControllerScriptPath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$InstallScriptPath
+        [string]$ControllerScriptPath
     )
 
     $node = Get-Command node.exe -ErrorAction SilentlyContinue
-    Assert-IfwContract ($null -ne $node) 'the replacement commit-page contract requires node.exe'
+    Assert-IfwContract ($null -ne $node) 'the existing-installation handoff contract requires node.exe'
 
     $harnessPath = [IO.Path]::Combine(
         [IO.Path]::GetTempPath(),
-        "vnm-terminal-ifw-replacement-$([Guid]::NewGuid().ToString('N')).js")
+        "vnm-terminal-ifw-handoff-$([Guid]::NewGuid().ToString('N')).js")
     try {
         $harness = @'
 const fs = require("fs");
 const controllerScript = fs.readFileSync(process.argv[2], "utf8");
-const installScript = fs.readFileSync(process.argv[3], "utf8");
 const powershellPath =
     "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 let state = null;
 
 global.QInstaller = {
     ComponentSelection: 1,
-    ReadyForInstallation: 2,
-    TargetDirectory: 3,
-    PerformInstallation: 4,
     Success: 0,
     Failure: 1,
     Canceled: 3,
     Unfinished: 4,
 };
 global.QMessageBox = {
-    Retry: 0x00080000,
-    Cancel: 0x00400000,
+    Yes: 0x00004000,
+    No: 0x00010000,
+    question(identifier, title, text, buttons, defaultButton) {
+        state.questions.push({
+            identifier,
+            title,
+            text,
+            buttons,
+            defaultButton,
+        });
+        return state.answer;
+    },
     critical(identifier, title, text) {
         state.errors.push({ identifier, title, text });
         return 0x00000400;
     },
-    warning(identifier, title, text, choices, defaultChoice) {
-        state.warnings.push({
-            identifier, title, text, choices, defaultChoice,
-        });
-        return state.warningAnswer;
-    },
-};
-global.buttons = { NextButton: 1 };
-global.component = {
-    createOperations() {},
-    addElevatedOperation() {},
 };
 global.installer = {
     status: QInstaller.Success,
     isInstaller() { return true; },
-    isCommandLineInstance() { return state.commandLineInstance; },
-    setDefaultPageVisible(page) { state.hiddenPages.push(page); },
-    addWizardPage(owner, pageName, beforePage) {
-        state.pageRegistrations.push({ owner, pageName, beforePage });
-        return state.addWizardPageSucceeds;
-    },
-    setValidatorForCustomPage(owner, pageName, callbackName) {
-        state.validators.push({ owner, pageName, callbackName });
+    hasAdminRights() { return state.isAdmin; },
+    setDefaultPageVisible(page) {
+        state.hiddenPages.push(page);
     },
     setValue(name, value) {
         state.assignedValues.push({ name, value });
-        state.values[name] = value;
     },
     readFile() { return state.logProbeScript; },
     toNativeSeparators(value) { return value.replace(/\//g, "\\"); },
@@ -169,25 +155,9 @@ global.installer = {
             return state.values[name];
         throw new Error("unexpected installer value: " + name);
     },
-    fileExists(path) {
-        return path === powershellPath ||
-            state.maintenanceToolPaths.indexOf(path) >= 0;
-    },
-    isProcessRunning(path) {
-        state.lifecycle.push("process:" + path);
-        state.processChecks.push(path);
-        return state.runningPaths.indexOf(path) >= 0;
-    },
-    hasAdminRights() {
-        state.adminRightsChecks += 1;
-        return state.hasAdminRights;
-    },
-    gainAdminRights() {
-        state.lifecycle.push("elevation");
-        state.elevationRequests += 1;
-        if (state.gainAdminThrows)
-            throw new Error(state.gainAdminThrows);
-        return state.gainAdminResult;
+    fileExists(candidate) {
+        return candidate === powershellPath ||
+            state.maintenanceToolPaths.indexOf(candidate) >= 0;
     },
     execute(program, args, stdIn, stdInCodec, stdOutCodec) {
         const execution = {
@@ -199,10 +169,9 @@ global.installer = {
             argumentCount: arguments.length,
         };
         state.executions.push(execution);
-        if (state.maintenanceToolPaths.indexOf(program) >= 0)
-            throw new Error(
-                "the unsigned old tool must not run through IFW's elevated client");
-        if (program === powershellPath && args[4] === "-") {
+        if (program !== powershellPath)
+            throw new Error("unexpected synchronous execution: " + program);
+        if (args[4] === "-") {
             if (!state.logProbeStarts) return [];
             const outputEncoding = stdOutCodec === "UTF-8"
                 ? "utf8"
@@ -211,9 +180,7 @@ global.installer = {
                 state.logProbeOutput, "utf8").toString(outputEncoding);
             return [output, state.logProbeExitCode];
         }
-        if (program === powershellPath &&
-            args[4].indexOf("VNM_INSTALL:") >= 0)
-        {
+        if (args[4].indexOf("VNM_INSTALL:") >= 0) {
             if (!state.registryProbeStarts) return [];
             const encoded = state.registeredDirectories.map(
                 (directory) => "VNM_INSTALL:" + directory).join("\r\n");
@@ -224,38 +191,15 @@ global.installer = {
                 outputEncoding);
             return [output, state.registryProbeExitCode];
         }
-        if (program === powershellPath &&
-            args[4].indexOf("Start-Process") >= 0)
-        {
-            state.lifecycle.push("old-runas");
-            if (state.oldToolStartFails)
-                return ["VNM_PURGE_START_FAILED\r\n", 2];
-            if (!state.oldToolWrapperStarts)
-                return [];
-            if (state.oldToolWrapperOutput !== null)
-                return [
-                    state.oldToolWrapperOutput,
-                    state.oldToolWrapperExitCode,
-                ];
-            return [
-                "VNM_PURGE_EXIT:" + state.purgeExitCode + "\r\n",
-                state.oldToolWrapperExitCode,
-            ];
-        }
-        if (program === powershellPath &&
-            args[4].indexOf("$deadline") >= 0)
-        {
-            state.lifecycle.push("wait");
-            return state.waitStarts ? ["", state.waitExitCode] : [];
-        }
-        throw new Error("unexpected execution: " + program);
+        throw new Error("unexpected PowerShell command");
+    },
+    executeDetached(program, args, workingDirectory) {
+        state.detachedExecutions.push({ program, args, workingDirectory });
+        return state.detachedLaunchSucceeds;
     },
 };
 global.gui = {
     rejectWithoutPrompt() { state.rejections += 1; },
-    setButtonText(button, text) {
-        state.buttonTexts.push({ button, text });
-    },
     pageWidgetByObjectName(name) {
         if (!Object.prototype.hasOwnProperty.call(state.pages, name))
             throw new Error("unexpected page lookup: " + name);
@@ -271,7 +215,6 @@ function labelStub() {
 }
 
 eval(controllerScript);
-eval(installScript);
 
 function run(overrides) {
     overrides = overrides || {};
@@ -284,6 +227,7 @@ function run(overrides) {
     state = Object.assign({
         directory,
         nativeDirectory,
+        maintenanceToolPath,
         maintenanceToolPaths: installationPresent
             ? [maintenanceToolPath]
             : [],
@@ -294,45 +238,23 @@ function run(overrides) {
         logProbeOutput: "",
         logProbeStarts: true,
         logProbeExitCode: 0,
-        purgeExitCode: 0,
-        oldToolStartFails: false,
-        oldToolWrapperStarts: true,
-        oldToolWrapperOutput: null,
-        oldToolWrapperExitCode: 0,
-        waitStarts: true,
-        waitExitCode: 0,
-        addWizardPageSucceeds: true,
-        commandLineInstance: false,
-        runningPaths: [],
-        hasAdminRights: false,
-        gainAdminResult: true,
-        gainAdminThrows: "",
-        warningAnswer: QMessageBox.Retry,
+        detachedLaunchSucceeds: true,
+        isAdmin: false,
+        answer: QMessageBox.Yes,
+        questions: [],
         errors: [],
-        warnings: [],
         executions: [],
+        detachedExecutions: [],
         assignedValues: [],
         hiddenPages: [],
-        pageRegistrations: [],
-        validators: [],
-        processChecks: [],
-        lifecycle: [],
-        elevationRequests: 0,
-        adminRightsChecks: 0,
         rejections: 0,
-        buttonTexts: [],
-        validationResults: [],
         pages: {
             IntroductionPage: {
-                title: "", subTitle: "", MessageLabel: labelStub(),
+                title: "",
+                subTitle: "",
+                MessageLabel: labelStub(),
             },
             TargetDirectoryPage: { subTitle: "" },
-            DynamicReplacementCommitPage: {
-                HeadingLabel: { text: "" },
-                SummaryLabel: { text: "" },
-                TargetLabel: { text: "" },
-                CommitLabel: { text: "" },
-            },
             FinishedPage: {
                 title: "",
                 subTitle: "",
@@ -344,123 +266,32 @@ function run(overrides) {
     state.values = Object.assign({
         TargetDir: directory,
         RootDir: "C:\\",
-        HomeDir: "C:\\Users\\tester",
     }, overrides.values || {});
 
-    Controller.prototype.replacedInstallationDirectory = "";
+    Controller.prototype.existingInstallationDirectory = "";
     Controller.prototype.ambiguousInstallationDirectories = [];
     Controller.prototype.reportedAmbiguousInstallations = false;
-    Component.prototype.replacementRemovalCompleted = false;
-    Component.prototype.replacementCommitted = false;
+    Controller.prototype.existingInstallationHandoffHandled = false;
 
     new Controller();
-    new Component();
-    if (!state.commandLineInstance) {
-        Controller.prototype.IntroductionPageCallback();
-        Controller.prototype.TargetDirectoryPageCallback();
-        Component.prototype.DynamicReplacementCommitPageCallback();
-    }
+    Controller.prototype.IntroductionPageCallback();
     return state;
 }
 
-function validateCommit(runState) {
-    state = runState;
-    if (runState.validators.length !== 1)
-        throw new Error("the custom commit page must have one validator");
-    const callbackName = runState.validators[0].callbackName;
-    const result = Component.prototype[callbackName]();
-    runState.validationResults.push(result);
-    runState.purges = runState.executions.filter(
-        (execution) => execution.program === powershellPath &&
-            execution.args[4].indexOf("Start-Process") >= 0);
-    runState.waits = runState.executions.filter(
-        (execution) => execution.program === powershellPath &&
-            execution.args[4].indexOf("$deadline") >= 0);
-    return result;
-}
-
-let result = run({
-    installationPresent: false,
-    commandLineInstance: true,
-    addWizardPageSucceeds: false,
-});
-if (result.pageRegistrations.length !== 0 ||
-    result.validators.length !== 0)
+let result = run({ installationPresent: false });
+Controller.prototype.TargetDirectoryPageCallback();
+if (result.hiddenPages.join(",") !== String(QInstaller.ComponentSelection) ||
+    result.questions.length !== 0 ||
+    result.detachedExecutions.length !== 0 ||
+    result.rejections !== 0)
 {
     throw new Error(
-        "a headless IFW install command must not attempt to construct GUI pages");
+        "a fresh install must keep its ordinary pages and avoid the handoff");
 }
-
-let headlessReplacementFailure = "";
-try {
-    run({
-        commandLineInstance: true,
-        addWizardPageSucceeds: false,
-    });
-}
-catch (error) {
-    headlessReplacementFailure = String(error);
-}
-if (headlessReplacementFailure.indexOf(
-        "Replacing an existing installation requires interactive setup") < 0 ||
-    headlessReplacementFailure.indexOf("start setup normally") < 0 ||
-    state.pageRegistrations.length !== 0 ||
-    state.validators.length !== 0 ||
-    state.processChecks.length !== 0 ||
-    state.elevationRequests !== 0 ||
-    state.executions.some((execution) =>
-        execution.program === powershellPath &&
-        (execution.args[4].indexOf("Start-Process") >= 0 ||
-            execution.args[4].indexOf("$deadline") >= 0)))
+if (result.pages.IntroductionPage.subTitle.indexOf("Install") < 0 ||
+    result.pages.TargetDirectoryPage.subTitle.indexOf("Choose") < 0)
 {
-    throw new Error(
-        "a headless replacement must stop before every page, process, removal, oracle, and elevation effect");
-}
-
-let guiPageFailureCaught = false;
-try {
-    run({
-        installationPresent: false,
-        addWizardPageSucceeds: false,
-    });
-}
-catch (error) {
-    guiPageFailureCaught = String(error).indexOf(
-        "Could not add the installation summary page") >= 0;
-}
-if (!guiPageFailureCaught)
-    throw new Error("a GUI run must still fail if its packaged page is unavailable");
-
-result = run({ installationPresent: false });
-if (result.hiddenPages.join(",") !==
-        [QInstaller.ComponentSelection, QInstaller.ReadyForInstallation].join(","))
-{
-    throw new Error(
-        "a fresh install must hide only the forced component and default Ready pages");
-}
-if (result.pageRegistrations.length !== 1 ||
-    result.pageRegistrations[0].pageName !== "ReplacementCommitPage" ||
-    result.pageRegistrations[0].beforePage !== QInstaller.PerformInstallation ||
-    result.validators[0].pageName !== "ReplacementCommitPage")
-{
-    throw new Error(
-        "the validated installation summary must immediately precede installation");
-}
-if (result.pages.DynamicReplacementCommitPage.HeadingLabel.text.indexOf(
-        "replace") >= 0 ||
-    result.pages.IntroductionPage.MessageLabel.text.indexOf(
-        "already installed") >= 0 ||
-    !validateCommit(result))
-{
-    throw new Error("a fresh install must remain an ordinary usable path");
-}
-if (result.processChecks.length !== 0 ||
-    result.adminRightsChecks !== 0 ||
-    result.elevationRequests !== 0 ||
-    result.purges.length !== 0)
-{
-    throw new Error(
-        "a fresh install must not inspect rights, check old processes, elevate, or purge");
+    throw new Error("fresh GUI installation pages must remain usable");
 }
 
 const uncLogPath =
@@ -480,230 +311,97 @@ if (logAssignments.length !== 2 ||
 }
 
 result = run({});
-if (result.hiddenPages.join(",") !== [
-        QInstaller.ComponentSelection,
-        QInstaller.ReadyForInstallation,
-        QInstaller.TargetDirectory,
-    ].join(","))
+if (result.questions.length !== 1 ||
+    result.questions[0].text.indexOf(result.nativeDirectory) < 0 ||
+    result.questions[0].text.indexOf("does not replace") < 0 ||
+    result.questions[0].text.indexOf("Nothing is removed until") < 0 ||
+    result.questions[0].text.indexOf("run this setup again") < 0)
 {
     throw new Error(
-        "a unique installed copy must also hide the installation folder page");
+        "one installed copy must offer a clear non-destructive handoff");
 }
-if (result.executions.some((execution) =>
-        execution.program === powershellPath &&
-        execution.args[4].indexOf("Start-Process") >= 0) ||
-    result.elevationRequests !== 0)
+if (result.detachedExecutions.length !== 1 ||
+    result.detachedExecutions[0].program !== result.maintenanceToolPath ||
+    result.detachedExecutions[0].args.join(" ") !== "--start-uninstaller" ||
+    result.detachedExecutions[0].workingDirectory !== result.nativeDirectory ||
+    result.rejections !== 1)
 {
     throw new Error(
-        "page entry must not elevate or remove the installed copy");
+        "accepting must open the installed graphical uninstaller and close setup");
 }
-if (result.pages.DynamicReplacementCommitPage.TargetLabel.text !==
-        result.nativeDirectory ||
-    result.pages.DynamicReplacementCommitPage.HeadingLabel.text.indexOf(
-        "replace") < 0 ||
-    result.pages.DynamicReplacementCommitPage.CommitLabel.text.indexOf(
-        "remove the old installation") < 0 ||
-    result.pages.DynamicReplacementCommitPage.CommitLabel.text.indexOf(
-        "install this version") < 0)
+Controller.prototype.IntroductionPageCallback();
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 1)
 {
     throw new Error(
-        "the commit page must identify the replacement and exact target");
-}
-if (!validateCommit(result))
-    throw new Error("a clear, removable installed copy must validate");
-const launcherPath = result.nativeDirectory + "\\vnm_terminal.exe";
-const runtimePath = result.nativeDirectory +
-    "\\vnm_terminal_runtime\\vnm_terminal.exe";
-if (result.lifecycle.join("|") !== [
-        "process:" + launcherPath,
-        "process:" + runtimePath,
-        "old-runas",
-        "wait",
-        "elevation",
-    ].join("|"))
-{
-    throw new Error(
-        "validation must check both processes before old-tool runas, the oracle, and new-installer elevation");
-}
-if (result.purges.length !== 1 ||
-    result.purges[0].program !== powershellPath ||
-    result.purges[0].args[4].indexOf("Start-Process") < 0 ||
-    result.purges[0].args[4].indexOf("-Verb RunAs") < 0 ||
-    result.purges[0].args[4].indexOf("-WindowStyle Hidden") < 0 ||
-    result.purges[0].args[4].indexOf("-Wait -PassThru") < 0 ||
-    result.purges[0].args[4].indexOf(
-        "-ArgumentList @('purge','--accept-messages','--confirm-command')") < 0 ||
-    result.waits.length !== 1 ||
-    result.waits[0].argumentCount !== 2 ||
-    result.waits[0].args[4].indexOf(
-        "Test-Path -LiteralPath $path") < 0 ||
-    result.waits[0].args[4].indexOf("exit 2") < 0)
-{
-    throw new Error(
-        "the old tool must own its runas authorization, fixed purge flags, exit, and removal oracle");
-}
-if (!validateCommit(result) ||
-    result.purges.length !== 1 ||
-    result.elevationRequests !== 1)
-{
-    throw new Error(
-        "successful validation cannot authorize or purge twice");
+        "re-entering Introduction must not repeat the prompt or launch");
 }
 
-result = run({});
-result.runningPaths = [result.nativeDirectory + "\\vnm_terminal.exe"];
-if (validateCommit(result) ||
-    result.warnings.length !== 1 ||
-    result.rejections !== 0 ||
-    result.elevationRequests !== 0 ||
-    result.purges.length !== 0 ||
-    result.processChecks.length !== 2)
-{
-    throw new Error(
-        "Retry must keep setup open before authorization and check both paths");
-}
-result.runningPaths = [];
-if (!validateCommit(result) ||
-    result.processChecks.length !== 4 ||
-    result.purges.length !== 1)
-{
-    throw new Error("Retry must causally recheck processes");
-}
-
-result = run({ warningAnswer: QMessageBox.Cancel });
-result.runningPaths = [
-    result.nativeDirectory + "\\vnm_terminal_runtime\\vnm_terminal.exe",
-];
-if (validateCommit(result) ||
-    result.rejections !== 1 ||
-    result.elevationRequests !== 0 ||
-    result.purges.length !== 0)
-{
-    throw new Error(
-        "Cancel must close setup before elevation or removal");
-}
-
-result = run({ hasAdminRights: true });
-if (validateCommit(result) ||
-    result.adminRightsChecks !== 1 ||
-    result.processChecks.length !== 0 ||
-    result.purges.length !== 0 ||
-    result.waits.length !== 0 ||
-    result.elevationRequests !== 0 ||
-    Component.prototype.replacementRemovalCompleted ||
-    Component.prototype.replacementCommitted ||
+result = run({ isAdmin: true });
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 0 ||
     result.errors.length !== 1 ||
-    result.errors[0].identifier !== "ReplacementSetupAlreadyElevated" ||
-    result.errors[0].text.indexOf("start it normally") < 0 ||
-    result.errors[0].text.indexOf("Run as administrator") < 0 ||
-    result.errors[0].text.indexOf(
-        "authorize the installed removal tool separately") < 0)
+    result.errors[0].text.indexOf("inherit those rights") < 0 ||
+    result.errors[0].text.indexOf(result.maintenanceToolPath) < 0 ||
+    result.rejections !== 1)
 {
     throw new Error(
-        "an already-elevated replacement must block before every process, removal, and gain action");
+        "elevated setup must not detach the discovered maintenance tool");
 }
-
-result = run({ oldToolStartFails: true });
-if (validateCommit(result) ||
-    result.elevationRequests !== 0 ||
-    result.purges.length !== 1 ||
-    result.waits.length !== 0 ||
-    result.errors[0].identifier !==
-        "ExistingInstallationRemovalNotStarted" ||
-    result.errors[0].text.indexOf("presumed unchanged") < 0 ||
-    result.errors[0].text.indexOf("has not been installed") < 0)
+Controller.prototype.IntroductionPageCallback();
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 0 ||
+    result.errors.length !== 1)
 {
     throw new Error(
-        "old-tool UAC denial must report a presumed-unchanged installation before new-installer elevation");
+        "elevated handoff rejection must remain latched during shutdown");
 }
 
-result = run({ oldToolWrapperStarts: false });
-if (validateCommit(result) ||
-    result.elevationRequests !== 0 ||
-    result.purges.length !== 1 ||
-    result.waits.length !== 0 ||
-    result.errors[0].identifier !==
-        "ExistingInstallationRemovalNotStarted" ||
-    result.errors[0].text.indexOf("presumed unchanged") < 0)
+result = run({ answer: QMessageBox.No });
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 0 ||
+    result.rejections !== 1)
 {
     throw new Error(
-        "an unstartable runas wrapper must preserve the old installation");
+        "declining must close setup without opening or removing anything");
 }
-
-result = run({ purgeExitCode: 7 });
-if (validateCommit(result) ||
-    result.purges.length !== 1 ||
-    result.waits.length !== 0 ||
-    result.errors[0].text.indexOf(result.nativeDirectory) < 0 ||
-    result.errors[0].text.indexOf("may now be incomplete") < 0 ||
-    result.errors[0].text.indexOf("has not been installed") < 0 ||
-    result.errors[0].text.indexOf("exit code 7") < 0)
+Controller.prototype.IntroductionPageCallback();
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 0)
 {
-    throw new Error(
-        "purge failure must block with truthful nontransactional wording");
+    throw new Error("declining must remain latched during setup shutdown");
 }
 
-result = run({
-    oldToolWrapperOutput: "unexpected wrapper output",
-});
-if (validateCommit(result) ||
-    result.purges.length !== 1 ||
-    result.waits.length !== 0 ||
+result = run({ detachedLaunchSucceeds: false });
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 1 ||
     result.errors.length !== 1 ||
-    result.errors[0].text.indexOf("may now be incomplete") < 0)
+    result.rejections !== 0)
 {
     throw new Error(
-        "ambiguous post-start evidence must use possibly-incomplete wording");
+        "a launch failure must leave setup open with one explanation");
 }
+if (result.errors[0].text.indexOf(result.maintenanceToolPath) < 0 ||
+    result.errors[0].text.indexOf("No removal was started") < 0 ||
+    result.errors[0].text.indexOf("manually") < 0 ||
+    result.errors[0].text.indexOf("run setup again") < 0)
+{
+    throw new Error(
+        "launch-failure recovery must be truthful and name the maintenance tool");
+}
+Controller.prototype.IntroductionPageCallback();
+if (result.questions.length !== 1 ||
+    result.detachedExecutions.length !== 1 ||
+    result.errors.length !== 1)
+{
+    throw new Error(
+        "a failed launch must not duplicate prompts, launches, or errors");
+}
+Controller.prototype.TargetDirectoryPageCallback();
+if (result.rejections !== 1)
+    throw new Error("advancing after launch failure must close setup");
 
-result = run({ gainAdminResult: false });
-if (validateCommit(result) ||
-    result.purges.length !== 1 ||
-    result.waits.length !== 1 ||
-    result.elevationRequests !== 1 ||
-    result.errors[0].identifier !== "NewInstallerAuthorizationFailed" ||
-    result.errors[0].text.indexOf(
-        "existing installation was removed") < 0 ||
-    result.errors[0].text.indexOf("has not been installed") < 0 ||
-    !Component.prototype.replacementRemovalCompleted ||
-    Component.prototype.replacementCommitted)
-{
-    throw new Error(
-        "new-installer UAC denial must report old removed and new not installed");
-}
-result.gainAdminResult = true;
-if (!validateCommit(result) ||
-    result.purges.length !== 1 ||
-    result.waits.length !== 1 ||
-    result.elevationRequests !== 2 ||
-    result.processChecks.length !== 2)
-{
-    throw new Error(
-        "retry after new-installer UAC denial must not rerun the removed old tool");
-}
-
-result = run({ gainAdminThrows: "new installer UAC unavailable" });
-if (validateCommit(result) ||
-    result.purges.length !== 1 ||
-    result.waits.length !== 1 ||
-    result.errors[0].identifier !== "NewInstallerAuthorizationFailed" ||
-    result.errors[0].text.indexOf("new installer UAC unavailable") < 0)
-{
-    throw new Error(
-        "new-installer elevation exception must preserve the removed-old-install recovery diagnostic");
-}
-
-result = run({ waitExitCode: 2 });
-if (validateCommit(result) ||
-    result.purges.length !== 1 ||
-    result.waits.length !== 1 ||
-    result.errors[0].text.indexOf("may now be incomplete") < 0)
-{
-    throw new Error(
-        "directory-oracle failure must not claim a pristine old install");
-}
-
-const customDirectory = "D:\\Varinomics\\İmak O'Brien Terminal";
+const customDirectory = "D:\\Varinomics\\İmak Terminal";
 const customMaintenanceTool =
     customDirectory + "\\vnm_terminal_maintenance.exe";
 result = run({
@@ -711,22 +409,12 @@ result = run({
     registeredDirectories: [customDirectory],
     maintenanceToolPaths: [customMaintenanceTool],
 });
-if (result.values.TargetDir !== customDirectory ||
-    result.pages.DynamicReplacementCommitPage.TargetLabel.text !==
-        customDirectory ||
-    !validateCommit(result) ||
-    result.purges[0].program !== powershellPath ||
-    result.purges[0].args[4].indexOf(
-        "-FilePath 'D:\\Varinomics\\İmak O''Brien Terminal\\vnm_terminal_maintenance.exe'") < 0)
+if (result.questions[0].text.indexOf(customDirectory) < 0 ||
+    result.detachedExecutions[0].program !== customMaintenanceTool ||
+    result.detachedExecutions[0].workingDirectory !== customDirectory)
 {
     throw new Error(
-        "a spaces-and-Unicode registry target must be replaced");
-}
-if (result.waits[0].args[4].indexOf(
-        "$path='D:\\Varinomics\\İmak O''Brien Terminal'") < 0)
-{
-    throw new Error(
-        "the directory oracle must preserve Unicode, spaces, and apostrophes");
+        "registry discovery must hand a custom installation to its own uninstaller");
 }
 const registryProbe = result.executions.find(
     (execution) => execution.program === powershellPath &&
@@ -737,24 +425,7 @@ if (registryProbe.argumentCount !== 5 ||
     registryProbe.stdOutCodec !== "UTF-8")
 {
     throw new Error(
-        "registry discovery must explicitly decode UTF-8 output");
-}
-
-result = run({
-    installationPresent: false,
-    registeredDirectories: ["D:\\Varinomics\\Stale Terminal"],
-});
-if (result.hiddenPages.join(",") !== [
-        QInstaller.ComponentSelection,
-        QInstaller.ReadyForInstallation,
-    ].join(",") ||
-    !validateCommit(result) ||
-    result.processChecks.length !== 0 ||
-    result.elevationRequests !== 0 ||
-    result.purges.length !== 0)
-{
-    throw new Error(
-        "stale registry evidence without a maintenance tool must stay a fresh install");
+        "registry discovery must preserve a non-ASCII custom location");
 }
 
 const uncDirectory = "\\\\server\\share\\vnm_terminal";
@@ -765,57 +436,60 @@ result = run({
         uncDirectory + "\\vnm_terminal_maintenance.exe",
     ],
 });
-if (result.values.TargetDir !== uncDirectory ||
-    !validateCommit(result) ||
-    result.purges[0].program !== powershellPath ||
-    result.purges[0].args[4].indexOf(
-        "-FilePath '\\\\server\\share\\vnm_terminal\\vnm_terminal_maintenance.exe'") < 0 ||
-    result.processChecks[0] !==
-        uncDirectory + "\\vnm_terminal.exe" ||
-    result.processChecks[1] !==
-        uncDirectory + "\\vnm_terminal_runtime\\vnm_terminal.exe")
+if (result.detachedExecutions.length !== 1 ||
+    result.detachedExecutions[0].workingDirectory !== uncDirectory)
 {
-    throw new Error(
-        "a standard UNC target must be adopted and checked exactly");
+    throw new Error("a standard UNC installation must remain discoverable");
 }
 
-const secondDirectory = "E:\\vnm_terminal";
 result = run({
-    registeredDirectories: [
-        "C:\\Program Files\\vnm_terminal",
-        secondDirectory,
-    ],
+    installationPresent: false,
+    registeredDirectories: ["D:\\Stale\\vnm_terminal"],
+});
+if (result.questions.length !== 0 ||
+    result.detachedExecutions.length !== 0 ||
+    result.rejections !== 0)
+{
+    throw new Error(
+        "stale registry evidence without a maintenance tool must remain fresh");
+}
+
+const secondDirectory = "D:\\Varinomics\\vnm_terminal";
+result = run({
     maintenanceToolPaths: [
         "C:\\Program Files\\vnm_terminal\\vnm_terminal_maintenance.exe",
         secondDirectory + "\\vnm_terminal_maintenance.exe",
     ],
+    registeredDirectories: [
+        "C:\\Program Files\\vnm_terminal",
+        secondDirectory,
+    ],
 });
 Controller.prototype.IntroductionPageCallback();
-if (result.errors.length !== 1 ||
-    result.errors[0].identifier !== "MultipleExistingInstallations" ||
-    result.rejections !== 2 ||
-    result.processChecks.length !== 0 ||
-    result.elevationRequests !== 0 ||
-    result.executions.some((execution) =>
-        execution.program === powershellPath &&
-        execution.args[4].indexOf("Start-Process") >= 0) ||
-    result.values.VnmReplacementTargetDirectory !== "" ||
-    result.errors[0].text.indexOf(
-        "C:\\Program Files\\vnm_terminal") < 0 ||
-    result.errors[0].text.indexOf(secondDirectory) < 0 ||
-    result.errors[0].text.indexOf("Remove the unwanted copies") < 0 ||
-    result.errors[0].text.indexOf("run setup again") < 0)
+if (result.questions.length !== 0 ||
+    result.detachedExecutions.length !== 0 ||
+    result.errors.length !== 1 ||
+    result.rejections !== 2)
 {
     throw new Error(
-        "ambiguity must explain once, reject every entry, and never purge");
+        "ambiguous discovery must explain once, never launch, and close every entry");
+}
+if (result.errors[0].text.indexOf("C:\\Program Files\\vnm_terminal") < 0 ||
+    result.errors[0].text.indexOf(secondDirectory) < 0 ||
+    result.errors[0].text.indexOf("cannot choose which uninstaller") < 0 ||
+    result.errors[0].text.indexOf(
+        "Remove the extra installations manually") < 0)
+{
+    throw new Error(
+        "ambiguity must list locations and give bounded manual recovery");
 }
 '@
         [IO.File]::WriteAllText(
             $harnessPath,
             $harness,
             [Text.UTF8Encoding]::new($false))
-        $runtimeOutput = & $node.Source $harnessPath $ControllerScriptPath $InstallScriptPath 2>&1 | Out-String
-        Assert-IfwContract ($LASTEXITCODE -eq 0) "the replacement commit-page runtime contract must pass: $runtimeOutput"
+        & $node.Source $harnessPath $ControllerScriptPath
+        Assert-IfwContract ($LASTEXITCODE -eq 0) 'the existing-installation handoff runtime contract must pass'
     }
     finally {
         Remove-Item -LiteralPath $harnessPath -Force -ErrorAction SilentlyContinue
@@ -1489,7 +1163,6 @@ $logPathProbePath = Join-Path $ifwSourceRoot 'log_path_probe.ps1'
 $themeResourcesPath = Join-Path $ifwSourceRoot 'theme_resources.qrc'
 $packagePath = Join-Path $ifwSourceRoot 'package.xml.in'
 $installScriptPath = Join-Path $ifwSourceRoot 'installscript.qs'
-$replacementCommitUiPath = Join-Path $ifwSourceRoot 'replacement_commit.ui'
 $maintenancePackagePath = Join-Path $ifwSourceRoot 'maintenance_package.xml.in'
 $maintenanceInstallScriptPath = Join-Path $ifwSourceRoot 'maintenance_installscript.qs'
 $buildScriptPath = Join-Path $resolvedSourceRoot 'tools\build_windows_ifw_installer.ps1'
@@ -1517,7 +1190,6 @@ $logPathProbe = Get-Content -Raw -LiteralPath $logPathProbePath
 [xml]$package = Get-Content -Raw -LiteralPath $packagePath
 [xml]$maintenancePackage = Get-Content -Raw -LiteralPath $maintenancePackagePath
 $installScript = Get-Content -Raw -LiteralPath $installScriptPath
-[xml]$replacementCommitUi = Get-Content -Raw -LiteralPath $replacementCommitUiPath
 $maintenanceInstallScript = Get-Content -Raw -LiteralPath $maintenanceInstallScriptPath
 $buildScript = Get-Content -Raw -LiteralPath $buildScriptPath
 $provisionScript = Get-Content -Raw -LiteralPath $provisionScriptPath
@@ -1528,7 +1200,7 @@ $brandRenderer = Get-Content -Raw -LiteralPath $brandRendererPath
 $notices = Get-Content -Raw -LiteralPath $noticesPath
 $installationTests = Get-Content -Raw -LiteralPath $installationTestsPath
 
-Assert-IfwReplacementCommitRuntime $controllerScriptPath $installScriptPath
+Assert-IfwExistingInstallationHandoffRuntime $controllerScriptPath
 Assert-IfwHashRuntime $buildScriptPath 'the IFW build script'
 Assert-IfwHashRuntime $provisionScriptPath 'the IFW provisioner'
 Assert-IfwCertificateTableRuntime $buildScriptPath
@@ -1762,15 +1434,12 @@ if ($DumpPath) {
         Join-Path $resolvedDumpPath 'metadata\installer-config\varinomics_banner_png@2x'
     $dumpedInstallScriptPath = Join-Path `
         $resolvedDumpPath 'metadata\com.varinomics.vnm_terminal\installscript.qs'
-    $dumpedReplacementCommitUiPath = Join-Path `
-        $resolvedDumpPath 'metadata\com.varinomics.vnm_terminal\replacement_commit.ui'
     Assert-IfwContract `
         ((Test-Path -LiteralPath $dumpedConfigPath -PathType Leaf) -and
             (Test-Path -LiteralPath $dumpedBannerPath -PathType Leaf) -and
             (Test-Path -LiteralPath $dumpedBannerHighDpiPath -PathType Leaf) -and
-            (Test-Path -LiteralPath $dumpedInstallScriptPath -PathType Leaf) -and
-            (Test-Path -LiteralPath $dumpedReplacementCommitUiPath -PathType Leaf)) `
-        'devtool dump must materialize the IFW config, component script, commit UI, and both Banner density paths'
+            (Test-Path -LiteralPath $dumpedInstallScriptPath -PathType Leaf)) `
+        'devtool dump must materialize the IFW config, component script, and both Banner density paths'
 
     [xml]$dumpedConfig = Get-Content -LiteralPath $dumpedConfigPath -Raw
     $dumpedBannerHash =
@@ -1782,10 +1451,8 @@ if ($DumpPath) {
             $dumpedBannerHash -eq $brandBannerHash -and
             $dumpedBannerHighDpiHash -eq $brandBannerHighDpiHash -and
             (Get-Content -LiteralPath $dumpedInstallScriptPath -Raw) -eq
-                $installScript -and
-            (Get-Content -LiteralPath $dumpedReplacementCommitUiPath -Raw) -eq
-                (Get-Content -LiteralPath $replacementCommitUiPath -Raw)) `
-        'the dumped component script, commit UI, Banner setting, and embedded resources must match their exact source bodies'
+                $installScript) `
+        'the dumped component script, Banner setting, and embedded resources must match their exact source bodies'
 
     $dumpedBannerDimensions = Get-IfwPngDimensions $dumpedBannerPath
     $dumpedBannerHighDpiDimensions = Get-IfwPngDimensions $dumpedBannerHighDpiPath
@@ -1877,30 +1544,12 @@ Assert-IfwContract ($package.Package.RequiresAdminRights -eq 'true') `
 Assert-IfwContract ($package.Package.Script -eq 'installscript.qs') `
     'the package must load its integration script'
 Assert-IfwContract `
-    ($package.Package.UserInterfaces.UserInterface -eq `
-        'replacement_commit.ui') `
-    'the package must ship the validated replacement commit page'
-Assert-IfwContract `
-    ($replacementCommitUi.ui.class -eq 'ReplacementCommitPage' -and
-        $replacementCommitUi.ui.widget.name -eq 'ReplacementCommitPage') `
-    'the custom UI class and root object must use the page name IFW loads'
-Assert-IfwContract `
-    (@($replacementCommitUi.ui.widget.layout.item.widget.name) -contains `
-        'HeadingLabel' -and
-        @($replacementCommitUi.ui.widget.layout.item.widget.name) -contains `
-            'SummaryLabel' -and
-        @($replacementCommitUi.ui.widget.layout.item.widget.name) -contains `
-            'TargetLabel' -and
-        @($replacementCommitUi.ui.widget.layout.item.widget.name) -contains `
-            'CommitLabel') `
-    'the custom commit page must expose every widget its callback owns'
-Assert-IfwContract `
     ($package.Package.Licenses.License.file -eq 'LICENSE.txt') `
     'the package must present the project license'
 Assert-IfwContract `
-    ($buildScript -match `
-        'Copy-Item -LiteralPath \(Join-Path \$ifwSourceRoot ''replacement_commit\.ui''\)[\s\S]{0,120}?-Destination \$packageMetaRoot') `
-    'the IFW build must copy the commit UI into package metadata'
+    ($null -eq $package.Package.UserInterfaces -and
+        $buildScript -notmatch 'replacement_commit\.ui') `
+    'the package must not retain the superseded replacement page'
 
 Assert-IfwContract `
     ([regex]::Matches(
@@ -1920,11 +1569,8 @@ Assert-IfwContract `
             '@AllUsersStartMenuProgramsPath@\s*/\s*@StartMenuDir@') `
     'the final StartMenuDir group must be mapped once from an expected Programs root to the all-users root'
 Assert-IfwContract `
-    ($installScript -notmatch 'setDefaultPageVisible|ComponentSelection|hideColumn' -and
-        $installScript -match 'function\s+Component\s*\(\s*\)[\s\S]*?if\s*\(\s*installer\.isCommandLineInstance\(\)\s*\)[\s\S]*?installer\.value\s*\(\s*Component\.prototype\.replacementTargetValueName\s*\)[\s\S]*?if\s*\(\s*replacementDirectory\s*==\s*""\s*\)\s*return\s*;[\s\S]*?Replacing an existing installation requires interactive setup' -and
-        $installScript -match 'addWizardPage\s*\([\s\S]*?"ReplacementCommitPage"[\s\S]*?QInstaller\.PerformInstallation' -and
-        $installScript -match 'setValidatorForCustomPage\s*\([\s\S]*?"ReplacementCommitPage"[\s\S]*?"validateReplacementCommitPage"') `
-    'the component must allow fresh headless installs, block headless replacements, and add one validated commit page immediately before GUI installation without mutating built-in pages'
+    ($installScript -notmatch 'setDefaultPageVisible|ComponentSelection|hideColumn|isCommandLineInstance|addWizardPage|setValidatorForCustomPage') `
+    'the component script must leave fresh GUI and headless page lifecycles to IFW'
 Assert-IfwContract `
     ($controllerScript -match 'function\s+Controller\s*\(\s*\)\s*\{[\s\S]*?if\s*\(installer\.isInstaller\(\)\)[\s\S]*?setDefaultPageVisible\s*\(\s*QInstaller\.ComponentSelection\s*,\s*false\s*\)') `
     'the pre-display Controller constructor must skip the single forced component page during initial installation'
@@ -1933,9 +1579,9 @@ Assert-IfwContract `
             $controllerScript,
             'setDefaultPageVisible\s*\(\s*QInstaller\.(?<page>\w+)\s*,\s*false\s*\)') |
         ForEach-Object { $_.Groups['page'].Value }) -join ',') -eq
-        'ComponentSelection,ReadyForInstallation,TargetDirectory' -and
-        [regex]::Matches($controllerScript, 'setDefaultPageVisible\s*\(').Count -eq 3) `
-    'the controller must replace the default Ready page and may additionally hide the forced component and adopted target pages'
+        'ComponentSelection' -and
+        [regex]::Matches($controllerScript, 'setDefaultPageVisible\s*\(').Count -eq 1) `
+    'the controller must hide only the forced component page'
 Assert-IfwContract `
     ($controllerScript -notmatch 'isUpdater\(\)[\s\S]*?setDefaultPageVisible\s*\(\s*QInstaller\.ComponentSelection' -and
         $controllerScript -notmatch 'isPackageManager\(\)[\s\S]*?setDefaultPageVisible\s*\(\s*QInstaller\.ComponentSelection' -and
@@ -1980,16 +1626,12 @@ foreach ($subtitleContract in $installerPageSubtitles) {
         "$objectName must receive its concise subtitle after an immediate installer-only guard"
 }
 Assert-IfwContract `
-    ($controllerScript -match 'introductionPage\.subTitle\s*=\s*replacedDirectory\s*\?\s*"Replace the installed vnm_terminal with this version\."\s*:\s*"Install vnm_terminal on this computer\.";' -and
-        $controllerScript -match 'introductionPage\.MessageLabel\.setText[\s\S]{0,600}?"vnm_terminal is already installed in "[\s\S]{0,200}?escapeHtml\s*\(\s*replacedDirectory\s*\)') `
-    'the welcome page must announce the replacement, and name its directory, only when this run replaces an installation'
-Assert-IfwContract `
-    ($installScript -match 'DynamicReplacementCommitPageCallback' -and
-        $installScript -match 'page\.TargetLabel\.text\s*=\s*targetDirectory' -and
-        $installScript -match 'Ready to replace vnm_terminal' -and
-        $installScript -match 'authorization may be required to remove the old installation and install this version' -and
-        $installScript -match 'gui\.setButtonText\s*\(\s*buttons\.NextButton\s*,\s*"Install"\s*\)') `
-    'the custom page must state the replacement target at the final Install decision'
+    ($controllerScript -match 'QMessageBox\.question\s*\([\s\S]{0,400}?"Existing installation found"' -and
+        $controllerScript -match 'installer\.executeDetached\s*\(\s*maintenanceToolPath\s*,\s*\[\s*"--start-uninstaller"\s*\]\s*,\s*targetDirectory\s*\)' -and
+        $controllerScript -match 'Nothing is\s*"\s*\+\s*"removed until you confirm removal there' -and
+        $controllerScript -match 'run\s*"\s*\+\s*"setup again' -and
+        $controllerScript -match 'gui\.rejectWithoutPrompt\s*\(\s*\)') `
+    'an existing installation must be handed to its normal graphical uninstaller before this setup closes'
 Assert-IfwContract `
     ($controllerScript -notmatch 'Please read the following license agreement\. You must accept the terms') `
     'the controller must not preserve the overflowing framework License subtitle'
@@ -2001,8 +1643,7 @@ $userVisibleInstallerSources = @(
     $package.Package.DisplayName,
     $maintenancePackage.Package.DisplayName,
     $controllerScript,
-    $installScript,
-    $replacementCommitUi.OuterXml
+    $installScript
 )
 foreach ($visibleSource in $userVisibleInstallerSources) {
     $productNameMatches = [regex]::Matches(
@@ -2047,9 +1688,8 @@ Assert-IfwContract `
         $controllerScript -notmatch 'finishButtonClicked\.connect') `
     'failure logging must preserve status and avoid privileged target writes, elevation, or launch actions'
 Assert-IfwContract `
-    ($controllerScript -notmatch 'installer\.installationStarted|installer\.setCanceled' -and
-        $installScript -notmatch 'installer\.runInstaller\s*\(') `
-    'replacement failures must remain in validation before framework installation begins'
+    (($controllerScript + $installScript) -notmatch 'installer\.installationStarted|installer\.setCanceled|installer\.runInstaller\s*\(|Start-Process|VNM_PURGE_EXIT') `
+    'the handoff must not enter installation or retain the superseded automatic-removal machinery'
 Assert-IfwContract `
     ($logPathProbe -match '\[IO\.Path\]::IsPathRooted\(\$candidate\)' -and
         $logPathProbe -match '\[IO\.Directory\]::Exists\(\$candidate\)' -and
@@ -2064,8 +1704,8 @@ Assert-IfwContract `
     'the helper must reclaim the empty files that cancelled runs leave behind'
 Assert-IfwContract `
     ($controllerScript -notmatch 'ReadyForInstallationPageCallback' -and
-        $installScript -match 'DynamicReplacementCommitPageCallback') `
-    'the hidden default Ready page must be superseded by the package-owned commit page'
+        $installScript -notmatch 'DynamicReplacementCommitPageCallback') `
+    'fresh installs must use the framework Ready page without a replacement-only custom page'
 Assert-IfwContract `
     ($controllerScript -notmatch 'pageWidgetByObjectName\s*\(\s*"(?:SpaceItem|SpaceWidget)"' -and
         $controllerScript -notmatch '\.(?:SpaceItem|SpaceWidget)\.') `
@@ -2076,31 +1716,17 @@ Assert-IfwContract `
         [regex]::Escape($config.Installer.MaintenanceToolName) + '\.exe"')) `
     'the existing-installation probe must name the configured maintenance tool'
 Assert-IfwContract `
-    ($controllerScript -match 'function\s+Controller\s*\(\s*\)\s*\{[\s\S]*?Controller\.prototype\.adoptExistingInstallation\s*\(\s*\)') `
+    ($controllerScript -match 'function\s+Controller\s*\(\s*\)\s*\{[\s\S]*?Controller\.prototype\.detectExistingInstallations\s*\(\s*\)') `
     'an installed copy must be recognized before the wizard presents its pages'
 Assert-IfwContract `
-    ($controllerScript -match 'adoptExistingInstallation\s*=\s*function[\s\S]*?setDefaultPageVisible\s*\(\s*QInstaller\.TargetDirectory\s*,\s*false\s*\)') `
-    'the installation folder page may only be withdrawn for the directory that already holds an installation'
+    ($controllerScript -match 'existingInstallationHandoffHandled\s*=\s*true[\s\S]{0,900}?QMessageBox\.question' -and
+        $controllerScript -match 'executeDetached[\s\S]{0,1200}?No removal was started' -and
+        $controllerScript -match 'reportedAmbiguousInstallations\s*=\s*true') `
+    'prompt, launch, and ambiguity reporting must be latched before re-entrant wizard callbacks'
 Assert-IfwContract `
-    ($installScript -match 'runningTargetPaths\s*=\s*function[\s\S]*?isProcessRunning\s*\(\s*launcherPath\s*\)[\s\S]*?isProcessRunning\s*\(\s*runtimePath\s*\)' -and
-        $installScript -match 'validateReplacementCommitPage\s*=\s*function[\s\S]*?confirmTargetProcessesStopped\s*\([\s\S]*?runMaintenancePurge\s*\([\s\S]*?waitForDirectoryRemoval\s*\([\s\S]*?gainAdminRights\s*\(' -and
-        $installScript -match 'QMessageBox\.Retry\s*\|\s*QMessageBox\.Cancel' -and
-        $installScript -match 'gui\.rejectWithoutPrompt\s*\(\s*\)') `
-    'commit validation must check both exact executables before old-tool runas, the removal oracle, and new-installer elevation, with Retry and Cancel behavior'
-Assert-IfwContract `
-    ($installScript -match 'Start-Process' -and
-        $installScript -match '-FilePath\s*"\s*\+\s*literal\(maintenanceTool\)' -and
-        $installScript -match '-ArgumentList\s*@\(' -and
-        $installScript -match '-Verb RunAs -WindowStyle Hidden -Wait -PassThru' -and
-        $installScript -match 'VNM_PURGE_EXIT:' -and
-        $installScript -notmatch 'installer\.execute\s*\(\s*maintenanceTool' -and
-        [regex]::Matches(
-            $installScript, 'installer\.gainAdminRights\s*\(').Count -eq 1 -and
-        $installScript -notmatch 'dropAdminRights') `
-    'the old tool must request its own runas authorization and report its exit before the new installer gains and keeps rights'
-Assert-IfwContract `
-    ($installScript -match 'waitForDirectoryRemoval\s*=\s*function[\s\S]*?installer\.execute\s*\(\s*powershellPath\s*,\s*\[[^\]]*"-Command"\s*,\s*command\s*\]\s*\)') `
-    'the wait for the detached deletion must pass its command through the argument list, because installer.execute() loses the first statement of UTF-8 standard input'
+    ($installScript -notmatch 'runningTargetPaths|validateReplacementCommitPage|runMaintenancePurge|waitForDirectoryRemoval|gainAdminRights|executeDetached' -and
+        $controllerScript -notmatch 'setDefaultPageVisible\s*\(\s*QInstaller\.(?:TargetDirectory|ReadyForInstallation)\s*,\s*false\s*\)') `
+    'the package script must contain no replacement validator, elevation, purge, or page-suppression machinery'
 Assert-IfwContract `
     (($controllerScript + $installScript) -notmatch 'RemoveTargetDir' -and
         ($controllerScript + $installScript) -notmatch 'performOperation\s*\(') `
