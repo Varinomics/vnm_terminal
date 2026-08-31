@@ -1795,6 +1795,9 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
         return ok;
     }
 
+    ok &= check(default_window_title() == QStringLiteral("vnm_terminal"),
+        "default window title uses the product name");
+
     sync_terminal_title(window, &titlebar, QString(), QString());
     ok &= check(window.title() == default_window_title(),
         "empty terminal title uses native fallback title");

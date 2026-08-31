@@ -25,7 +25,7 @@ namespace vnm_terminal::terminal_app {
 
 QString default_window_title()
 {
-    return QStringLiteral("vnm_terminal example terminal");
+    return QStringLiteral("vnm_terminal");
 }
 
 Wheel_delivery_indicator_filter::Wheel_delivery_indicator_filter(Terminal_qml_chrome& titlebar)
