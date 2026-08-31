@@ -64,7 +64,9 @@ public:
     QRectF content_interior_rect() const;
     qreal device_pixel_ratio() const;
     void set_title(const QString& title);
+    void set_title_editing_enabled(bool enabled);
     void set_activity_marker_text(const QString& marker_text);
+    void set_settings_button_visible(bool visible);
     void set_active(bool active);
     void set_maximized(bool maximized);
     void set_fullscreen(bool fullscreen);

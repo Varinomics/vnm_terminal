@@ -543,9 +543,19 @@ void chrome::Terminal_qml_chrome::set_title(const QString& title)
     set_property("title", title);
 }
 
+void chrome::Terminal_qml_chrome::set_title_editing_enabled(bool enabled)
+{
+    set_property("title_editing_enabled", enabled);
+}
+
 void chrome::Terminal_qml_chrome::set_activity_marker_text(const QString& marker_text)
 {
     set_property("activity_marker_text", marker_text);
+}
+
+void chrome::Terminal_qml_chrome::set_settings_button_visible(bool visible)
+{
+    set_property("settings_button_visible", visible);
 }
 
 void chrome::Terminal_qml_chrome::set_active(bool active)

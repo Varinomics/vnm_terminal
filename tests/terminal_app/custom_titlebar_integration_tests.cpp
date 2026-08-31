@@ -718,6 +718,23 @@ bool test_custom_titlebar_geometry()
         return ok;
     }
 
+    titlebar.set_title_editing_enabled(false);
+    titlebar.set_settings_button_visible(false);
+    ok &= check(
+        !titlebar.root_item()->property("title_editing_enabled").toBool(),
+        "typed chrome API disables rendered title editing");
+    ok &= check(
+        !titlebar.root_item()->property("settings_button_visible").toBool(),
+        "typed chrome API hides the rendered settings button");
+    titlebar.set_title_editing_enabled(true);
+    titlebar.set_settings_button_visible(true);
+    ok &= check(
+        titlebar.root_item()->property("title_editing_enabled").toBool(),
+        "typed chrome API restores rendered title editing");
+    ok &= check(
+        titlebar.root_item()->property("settings_button_visible").toBool(),
+        "typed chrome API restores the rendered settings button");
+
     apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
 
     ok &= check_rect_equal(item_rect(*titlebar.root_item()), QRectF(0.0, 0.0, 800.0, 480.0),
