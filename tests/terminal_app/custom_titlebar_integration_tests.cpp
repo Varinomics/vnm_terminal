@@ -735,6 +735,43 @@ bool test_custom_titlebar_geometry()
         titlebar.root_item()->property("settings_button_visible").toBool(),
         "typed chrome API restores the rendered settings button");
 
+    QQmlComponent trailing_action(&engine);
+    trailing_action.setData(
+        QByteArrayLiteral(
+            "import QtQuick\n"
+            "Item {\n"
+            "    objectName: \"typed_trailing_action\"\n"
+            "    width: 24\n"
+            "    height: 20\n"
+            "}\n"),
+        QUrl());
+    ok &= check(
+        trailing_action.isReady(),
+        "typed trailing action component compiles");
+    QQuickItem* const trailing_action_loader = find_quick_item_recursive(
+        titlebar.root_item(),
+        QStringLiteral("trailing_action_loader"));
+    ok &= check(
+        trailing_action_loader != nullptr,
+        "shared chrome exposes its trailing action loader");
+    titlebar.set_trailing_action_component(&trailing_action);
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    QObject* const rendered_trailing_action = trailing_action_loader == nullptr
+        ? nullptr
+        : trailing_action_loader->property("item").value<QObject*>();
+    ok &= check(
+        rendered_trailing_action != nullptr &&
+            rendered_trailing_action->objectName() ==
+                QStringLiteral("typed_trailing_action"),
+        "typed chrome API instantiates the trailing action");
+    titlebar.set_trailing_action_component(nullptr);
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    ok &= check(
+        trailing_action_loader == nullptr ||
+            trailing_action_loader->property("item").value<QObject*>() ==
+                nullptr,
+        "typed chrome API removes the trailing action");
+
     apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
 
     ok &= check_rect_equal(item_rect(*titlebar.root_item()), QRectF(0.0, 0.0, 800.0, 480.0),

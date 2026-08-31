@@ -49,6 +49,7 @@ Item {
     property bool fullscreen: false
     property bool wheel_delivery_indicator_visible: false
     property bool settings_button_visible: true
+    property Component trailing_action_component: null
     property bool row_timestamp_tooltip_visible: false
     property real row_timestamp_tooltip_anchor_x: 0
     property real row_timestamp_tooltip_anchor_y: 0
@@ -176,8 +177,11 @@ Item {
         maximized: root.maximized
         resize_enabled: root.resize_enabled
         activity_marker_text: root.activity_marker_text
-        trailing_action_component:
-            root.wheel_delivery_indicator_visible ? trailing_actions_component : null
+        trailing_action_component: root.trailing_action_component
+            ? root.trailing_action_component
+            : (root.wheel_delivery_indicator_visible
+                ? trailing_actions_component
+                : null)
         custom_buttons: root.settings_button_visible
             ? [{
                 object_name: "settings_button",
@@ -556,6 +560,14 @@ void chrome::Terminal_qml_chrome::set_activity_marker_text(const QString& marker
 void chrome::Terminal_qml_chrome::set_settings_button_visible(bool visible)
 {
     set_property("settings_button_visible", visible);
+}
+
+void chrome::Terminal_qml_chrome::set_trailing_action_component(
+    QQmlComponent* component)
+{
+    set_property(
+        "trailing_action_component",
+        QVariant::fromValue(component));
 }
 
 void chrome::Terminal_qml_chrome::set_active(bool active)

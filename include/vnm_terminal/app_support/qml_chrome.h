@@ -13,6 +13,7 @@
 
 #include <memory>
 
+class QQmlComponent;
 class QQmlEngine;
 class QQuickItem;
 class QQuickWindow;
@@ -67,6 +68,9 @@ public:
     void set_title_editing_enabled(bool enabled);
     void set_activity_marker_text(const QString& marker_text);
     void set_settings_button_visible(bool visible);
+    // Non-owning. The component must belong to this chrome's QQmlEngine and
+    // outlive the chrome or be cleared first. nullptr removes the action.
+    void set_trailing_action_component(QQmlComponent* component);
     void set_active(bool active);
     void set_maximized(bool maximized);
     void set_fullscreen(bool fullscreen);
