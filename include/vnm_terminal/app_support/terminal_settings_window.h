@@ -3,13 +3,15 @@
 #include <QMetaObject>
 #include <QObject>
 #include <QPointer>
+#include <QRect>
 #include <QString>
+#include <QtGlobal>
 
+#include <functional>
 #include <memory>
 
 class QQmlEngine;
 class QQuickWindow;
-class QRect;
 class QScreen;
 class QWindow;
 class VNM_TerminalSurface;
@@ -29,6 +31,8 @@ class Terminal_settings_window final : public QObject
     Q_OBJECT
 
 public:
+    using Native_anchor_id_provider = std::function<quintptr()>;
+
     Terminal_settings_window(
         QQmlEngine&                   engine,
         VNM_TerminalSurface&          surface,
@@ -42,6 +46,10 @@ public:
 
     void set_transient_parent(QWindow* parent);
     void set_fallback_anchor_window_title(const QString& title);
+    // On Windows the provider is copied and called once at the start of each
+    // show. Its native id is used only when it names a visible top-level
+    // window. Other platforms retain their existing placement behavior.
+    void set_native_anchor_id_provider(Native_anchor_id_provider provider);
 
 public slots:
     void show_window();
@@ -54,7 +62,7 @@ private slots:
 private:
     void apply_available_geometry(const QRect& available_geometry);
     void clamp_to_available_geometry(const QRect& available_geometry);
-    void place_within_transient_parent();
+    void place_within_anchor(const QRect& native_anchor_geometry = {});
     void watch_available_geometry(QScreen* screen);
 
     std::unique_ptr<QObject> m_root_object;
@@ -63,8 +71,9 @@ private:
     QMetaObject::Connection  m_available_geometry_connection;
     QMetaObject::Connection  m_transient_parent_screen_connection;
     QString                  m_error_string;
-    QString                  m_fallback_anchor_window_title;
-    bool                     m_positioned = false;
+    QString                   m_fallback_anchor_window_title;
+    Native_anchor_id_provider m_native_anchor_id_provider;
+    bool                      m_positioned = false;
 };
 
 } // namespace vnm_terminal::terminal_app

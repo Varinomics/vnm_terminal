@@ -2,6 +2,8 @@
 #include "../../src/main.cpp"
 #undef VNM_TERMINAL_APP_NO_MAIN
 
+#include "../../src/terminal_settings_native_window_owner.h"
+
 #include "terminal_title_metadata.h"
 
 #include "vnm_qml_chrome/vnm_chrome_geometry.h"
@@ -45,6 +47,16 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#ifdef Q_OS_WIN
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 namespace chrome_test = vnm_terminal::terminal_app;
 namespace term = vnm_terminal::internal;
@@ -718,6 +730,30 @@ bool test_custom_titlebar_geometry()
         return ok;
     }
 
+    ok &= check(
+        titlebar.root_item()->property("titlebar_button_icon_color").value<QColor>() ==
+            QColor(QStringLiteral("#e2e8f0")),
+        "terminal chrome keeps its default active window-button icon color");
+    ok &= check(
+        titlebar.root_item()->property("titlebar_button_hover_color").value<QColor>() ==
+            QColor(QStringLiteral("#272f3a")),
+        "terminal chrome keeps its default window-button hover color");
+    ok &= check(
+        titlebar.root_item()->property("titlebar_button_pressed_color").value<QColor>() ==
+            QColor(QStringLiteral("#343d4a")),
+        "terminal chrome keeps its default window-button pressed color");
+    ok &= check(
+        titlebar.root_item()->property("titlebar_close_hover_color").value<QColor>() ==
+            QColor(QStringLiteral("#c6303a")),
+        "terminal chrome keeps its default close-button hover color");
+    ok &= check(
+        titlebar.root_item()->property("titlebar_close_pressed_color").value<QColor>() ==
+            QColor(QStringLiteral("#96222a")),
+        "terminal chrome keeps its default close-button pressed color");
+    ok &= check(
+        titlebar.titlebar_item()->clip(),
+        "terminal chrome clips control visuals to its titlebar extent");
+
     titlebar.set_title_editing_enabled(false);
     titlebar.set_settings_button_visible(false);
     ok &= check(
@@ -742,7 +778,7 @@ bool test_custom_titlebar_geometry()
             "Item {\n"
             "    objectName: \"typed_trailing_action\"\n"
             "    width: 24\n"
-            "    height: 20\n"
+            "    height: 36\n"
             "}\n"),
         QUrl());
     ok &= check(
@@ -764,6 +800,24 @@ bool test_custom_titlebar_geometry()
             rendered_trailing_action->objectName() ==
                 QStringLiteral("typed_trailing_action"),
         "typed chrome API instantiates the trailing action");
+    auto* const rendered_trailing_action_item =
+        qobject_cast<QQuickItem*>(rendered_trailing_action);
+    if (rendered_trailing_action_item != nullptr) {
+        titlebar.root_item()->ensurePolished();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+        const QRectF action_rect(
+            rendered_trailing_action_item->mapToItem(
+                titlebar.titlebar_item(),
+                QPointF(0.0, 0.0)),
+            rendered_trailing_action_item->size());
+        ok &= check(
+            action_rect.top() < 0.0 ||
+                action_rect.bottom() > titlebar.titlebar_item()->height(),
+            "oversized trailing action exercises titlebar visual containment");
+        ok &= check(
+            titlebar.titlebar_item()->clip(),
+            "oversized trailing action cannot paint below the titlebar");
+    }
     titlebar.set_trailing_action_component(nullptr);
     QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
     ok &= check(
@@ -771,6 +825,43 @@ bool test_custom_titlebar_geometry()
             trailing_action_loader->property("item").value<QObject*>() ==
                 nullptr,
         "typed chrome API removes the trailing action");
+
+    const chrome_test::Terminal_chrome_window_control_palette control_palette{
+        QColor(QStringLiteral("#d2d7df")),
+        QColor(QStringLiteral("#30343a")),
+        QColor(QStringLiteral("#3b4149")),
+        QColor(QStringLiteral("#b42318")),
+        QColor(QStringLiteral("#8f1c13")),
+    };
+    titlebar.set_window_control_palette(control_palette);
+    auto* const minimize_button = find_quick_item_recursive(
+        titlebar.titlebar_item(),
+        QStringLiteral("minimize_button"));
+    auto* const close_button = find_quick_item_recursive(
+        titlebar.titlebar_item(),
+        QStringLiteral("close_button"));
+    ok &= check(
+        minimize_button != nullptr &&
+            minimize_button->property("hover_color").value<QColor>() ==
+                control_palette.hover &&
+            minimize_button->property("pressed_color").value<QColor>() ==
+                control_palette.pressed,
+        "typed control palette reaches normal window-button states");
+    ok &= check(
+        close_button != nullptr &&
+            close_button->property("hover_color").value<QColor>() ==
+                control_palette.close_hover &&
+            close_button->property("pressed_color").value<QColor>() ==
+                control_palette.close_pressed,
+        "typed control palette reaches close-button states");
+    QQuickItem* const minimize_icon = find_item_of_type_recursive(
+        minimize_button,
+        "QQuickCanvasItem");
+    ok &= check(
+        minimize_icon != nullptr &&
+            minimize_icon->property("stroke_color").value<QColor>() ==
+                control_palette.icon,
+        "typed control palette reaches native-control glyphs");
 
     apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
 
@@ -1191,6 +1282,23 @@ bool test_custom_titlebar_geometry()
         "very short custom scrollbar clamps nonnegative height");
 
     window.resize(360, 240);
+    titlebar.set_titlebar_height(32.0);
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    ok &= check_rect_equal(
+        item_rect(*titlebar.titlebar_item()),
+        QRectF(0.0, 0.0, 360.0, 32.0),
+        "typed chrome API applies an explicit logical titlebar height");
+    ok &= check(
+        nearly_equal(
+            titlebar.root_item()->property("content_interior_y").toReal(),
+            33.0),
+        "explicit titlebar height advances the content interior exactly once");
+    if (shell_top_left_resize_area != nullptr) {
+        ok &= check(
+            shell_top_left_resize_area->property("enabled").toBool(),
+            "explicit titlebar height preserves resize hit areas");
+    }
+
     apply_terminal_shell_geometry(window, surface, scrollbar, nullptr, false);
     ok &= check_rect_equal(item_rect(surface), QRectF(0.0, 0.0, 348.0, 240.0),
         "native-decoration path reserves scrollbar gutter");
@@ -3232,8 +3340,22 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     }
 
     settings_window.set_transient_parent(&window);
+#ifdef Q_OS_WIN
+    int native_anchor_provider_calls = 0;
+    settings_window.set_native_anchor_id_provider(
+        [&native_anchor_provider_calls] {
+            ++native_anchor_provider_calls;
+            return quintptr{1};
+        });
+#endif
     settings_window.show_window();
     pump_events(app);
+#ifdef Q_OS_WIN
+    ok &= check(
+        native_anchor_provider_calls == 1,
+        "settings window captures its injected native anchor exactly once per show");
+    settings_window.set_native_anchor_id_provider({});
+#endif
 
     QQuickWindow* settings_qml_window = nullptr;
     const auto top_level_windows = QGuiApplication::topLevelWindows();
@@ -3637,6 +3759,90 @@ bool test_renderer_mode_enum_assignment_from_qml(QGuiApplication& app)
     return ok;
 }
 
+#ifdef Q_OS_WIN
+bool test_settings_native_window_owner_reassignment()
+{
+    const HINSTANCE instance = GetModuleHandleW(nullptr);
+    const auto create_window = [instance] {
+        return CreateWindowExW(
+            0,
+            L"STATIC",
+            L"vnm_terminal_settings_owner_test",
+            WS_OVERLAPPED,
+            0,
+            0,
+            1,
+            1,
+            nullptr,
+            nullptr,
+            instance,
+            nullptr);
+    };
+    const HWND settings_window = create_window();
+    const HWND owner_a = create_window();
+    const HWND owner_b = create_window();
+    const auto destroy_window = [](HWND window) {
+        if (window != nullptr) {
+            DestroyWindow(window);
+        }
+    };
+
+    const bool native_windows_valid =
+        settings_window != nullptr &&
+        owner_a != nullptr &&
+        owner_b != nullptr &&
+        IsWindow(settings_window) &&
+        IsWindow(owner_a) &&
+        IsWindow(owner_b) &&
+        GetAncestor(settings_window, GA_ROOT) == settings_window &&
+        GetAncestor(owner_a, GA_ROOT) == owner_a &&
+        GetAncestor(owner_b, GA_ROOT) == owner_b;
+    bool ok = true;
+    ok &= check(
+        native_windows_valid,
+        "settings owner test creates real native top-level windows");
+    if (native_windows_valid) {
+        chrome_test::detail::set_terminal_settings_native_window_owner(
+            reinterpret_cast<quintptr>(settings_window),
+            reinterpret_cast<quintptr>(owner_a));
+        ok &= check(
+            reinterpret_cast<HWND>(
+                GetWindowLongPtrW(settings_window, GWLP_HWNDPARENT)) == owner_a,
+            "settings owner synchronization installs a native owner");
+        chrome_test::detail::set_terminal_settings_native_window_owner(
+            reinterpret_cast<quintptr>(settings_window),
+            0);
+        ok &= check(
+            GetWindowLongPtrW(settings_window, GWLP_HWNDPARENT) == 0,
+            "settings owner synchronization clears a previous native owner");
+
+        chrome_test::detail::set_terminal_settings_native_window_owner(
+            reinterpret_cast<quintptr>(settings_window),
+            reinterpret_cast<quintptr>(owner_a));
+        ok &= check(
+            reinterpret_cast<HWND>(
+                GetWindowLongPtrW(settings_window, GWLP_HWNDPARENT)) == owner_a,
+            "settings owner synchronization establishes its replacement baseline");
+        chrome_test::detail::set_terminal_settings_native_window_owner(
+            reinterpret_cast<quintptr>(settings_window),
+            reinterpret_cast<quintptr>(owner_b));
+        ok &= check(
+            reinterpret_cast<HWND>(
+                GetWindowLongPtrW(settings_window, GWLP_HWNDPARENT)) == owner_b,
+            "settings owner synchronization replaces a previous native owner");
+
+        chrome_test::detail::set_terminal_settings_native_window_owner(
+            reinterpret_cast<quintptr>(settings_window),
+            0);
+    }
+
+    destroy_window(settings_window);
+    destroy_window(owner_a);
+    destroy_window(owner_b);
+    return ok;
+}
+#endif
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -3669,6 +3875,9 @@ int main(int argc, char** argv)
     ok &= test_settings_shortcut_requests_settings(app);
     ok &= test_host_shortcuts_preserve_title_editor_keys(app);
     ok &= test_renderer_mode_enum_assignment_from_qml(app);
+#ifdef Q_OS_WIN
+    ok &= test_settings_native_window_owner_reassignment();
+#endif
 #if defined(Q_OS_MACOS)
     ok &= test_macos_command_shortcuts_are_host_shortcuts(app);
 #endif

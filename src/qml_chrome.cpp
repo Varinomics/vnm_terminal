@@ -61,6 +61,12 @@ Item {
     property color unfocused_frame_background_color
     property color focused_frame_edge_color
     property color unfocused_frame_edge_color
+    property color titlebar_button_icon_color:
+        active ? "#e2e8f0" : "#8e97a3"
+    property color titlebar_button_hover_color: "#272f3a"
+    property color titlebar_button_pressed_color: "#343d4a"
+    property color titlebar_close_hover_color: "#c6303a"
+    property color titlebar_close_pressed_color: "#96222a"
     // The window ratio is the live one. Screen.devicePixelRatio never
     // re-notifies while the window stays on one screen, and a Windows scale
     // change updates that screen in place, so binding to it would pin the whole
@@ -79,6 +85,7 @@ Item {
         reduced_chrome_width(
             base_titlebar_height,
             titlebar_physical_reduction)
+    property real titlebar_height: reduced_titlebar_height
     readonly property real frame_edge_thickness:
         1 / VNM_chrome_geometry.normalized_device_pixel_ratio(device_pixel_ratio)
     readonly property real active_frame_gap:
@@ -127,11 +134,11 @@ Item {
 
         titlebar: root.frame_background_color
         titlebar_text: root.active ? "#ebeff5" : "#939ca9"
-        titlebar_button_icon: root.active ? "#e2e8f0" : "#8e97a3"
-        titlebar_button_hover: "#272f3a"
-        titlebar_button_pressed: "#343d4a"
-        titlebar_close_hover: "#c6303a"
-        titlebar_close_pressed: "#96222a"
+        titlebar_button_icon: root.titlebar_button_icon_color
+        titlebar_button_hover: root.titlebar_button_hover_color
+        titlebar_button_pressed: root.titlebar_button_pressed_color
+        titlebar_close_hover: root.titlebar_close_hover_color
+        titlebar_close_pressed: root.titlebar_close_pressed_color
         titlebar_activity_marker: root.active ? "#71b4ff" : "#5f7793"
         titlebar_content_border: "transparent"
         window_frame_border: root.frame_edge_color
@@ -165,7 +172,7 @@ Item {
         frame_inner_edge: root.shell_inner_edge_thickness
         frame_inner_edge_color: root.frame_edge_color
         device_pixel_ratio: root.device_pixel_ratio
-        titlebar_height: Math.min(root.reduced_titlebar_height, root.height)
+        titlebar_height: Math.min(root.titlebar_height, root.height)
         // Product invariant: the Varinomics mark aligns with the terminal
         // surface itself. The shared default instead clears the larger resize
         // hit band and moves the mark right of the surface. Keep this explicit
@@ -472,6 +479,10 @@ chrome::Terminal_qml_chrome::Terminal_qml_chrome(QQmlEngine& engine, QQuickWindo
         m_root_item = nullptr;
         return;
     }
+    // Shared titlebar actions may carry their app's nominal titlebar height.
+    // Clip their painting at this adapter's actual extent without changing
+    // the shared resize-area geometry or event handlers.
+    m_titlebar_item->setClip(true);
 
     m_root_item->setParentItem(window.contentItem());
     m_root_item->setZ(10000.0);
@@ -568,6 +579,21 @@ void chrome::Terminal_qml_chrome::set_trailing_action_component(
     set_property(
         "trailing_action_component",
         QVariant::fromValue(component));
+}
+
+void chrome::Terminal_qml_chrome::set_window_control_palette(
+    const Terminal_chrome_window_control_palette& palette)
+{
+    set_property("titlebar_button_icon_color", palette.icon);
+    set_property("titlebar_button_hover_color", palette.hover);
+    set_property("titlebar_button_pressed_color", palette.pressed);
+    set_property("titlebar_close_hover_color", palette.close_hover);
+    set_property("titlebar_close_pressed_color", palette.close_pressed);
+}
+
+void chrome::Terminal_qml_chrome::set_titlebar_height(qreal height)
+{
+    set_property("titlebar_height", height);
 }
 
 void chrome::Terminal_qml_chrome::set_active(bool active)

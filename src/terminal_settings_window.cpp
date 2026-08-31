@@ -1,5 +1,7 @@
 #include "vnm_terminal/app_support/terminal_settings_window.h"
 
+#include "terminal_settings_native_window_owner.h"
+
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
 
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
@@ -20,6 +22,8 @@
 #include <QWindow>
 #include <Qt>
 
+#include <utility>
+
 #ifdef Q_OS_WIN
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -31,6 +35,28 @@
 #endif
 
 namespace settings = vnm_terminal::terminal_app;
+
+#ifdef Q_OS_WIN
+namespace vnm_terminal::terminal_app::detail {
+
+void set_terminal_settings_native_window_owner(
+    quintptr settings_window_id,
+    quintptr owner_window_id)
+{
+    const HWND settings_window = reinterpret_cast<HWND>(settings_window_id);
+    if (settings_window == nullptr) {
+        return;
+    }
+
+    const HWND owner_window = reinterpret_cast<HWND>(owner_window_id);
+    SetWindowLongPtrW(
+        settings_window,
+        GWLP_HWNDPARENT,
+        reinterpret_cast<LONG_PTR>(owner_window));
+}
+
+} // namespace vnm_terminal::terminal_app::detail
+#endif
 
 namespace {
 
@@ -76,6 +102,12 @@ struct Window_title_search
     HWND hwnd = nullptr;
 };
 
+struct Native_window_anchor
+{
+    quintptr id = 0;
+    QRect geometry;
+};
+
 BOOL CALLBACK find_visible_window_with_title(HWND hwnd, LPARAM user_data)
 {
     auto* search = reinterpret_cast<Window_title_search*>(user_data);
@@ -106,41 +138,78 @@ BOOL CALLBACK find_visible_window_with_title(HWND hwnd, LPARAM user_data)
     return TRUE;
 }
 
-QRect window_geometry_for_title(const QString& title)
+bool valid_native_anchor(
+    HWND  candidate,
+    HWND  settings_window,
+    QRect* geometry)
 {
-    if (title.isEmpty()) {
-        return {};
+    if (candidate == nullptr ||
+        candidate == settings_window ||
+        !IsWindow(candidate) ||
+        !IsWindowVisible(candidate) ||
+        GetAncestor(candidate, GA_ROOT) != candidate)
+    {
+        return false;
     }
 
-    Window_title_search search;
-    search.title = &title;
-    EnumWindows(find_visible_window_with_title, reinterpret_cast<LPARAM>(&search));
-    return search.geometry;
-}
-
-HWND window_handle_for_title(const QString& title)
-{
-    if (title.isEmpty()) {
-        return nullptr;
+    RECT rect{};
+    if (!GetWindowRect(candidate, &rect) ||
+        rect.right <= rect.left ||
+        rect.bottom <= rect.top)
+    {
+        return false;
     }
 
-    Window_title_search search;
-    search.title = &title;
-    EnumWindows(find_visible_window_with_title, reinterpret_cast<LPARAM>(&search));
-    return search.hwnd;
+    *geometry = QRect(
+        QPoint(rect.left, rect.top),
+        QPoint(rect.right - 1, rect.bottom - 1));
+    return true;
 }
 
-void show_window_above_anchor(QWindow& window, const QString& preferred_window_title)
+Native_window_anchor resolve_native_window_anchor(
+    QWindow&       settings_window,
+    quintptr       requested_anchor_id,
+    const QString& preferred_window_title)
+{
+    const HWND settings_hwnd = reinterpret_cast<HWND>(settings_window.winId());
+    const HWND requested_hwnd = reinterpret_cast<HWND>(requested_anchor_id);
+    Native_window_anchor anchor;
+    if (valid_native_anchor(
+            requested_hwnd,
+            settings_hwnd,
+            &anchor.geometry))
+    {
+        anchor.id = requested_anchor_id;
+        return anchor;
+    }
+
+    if (!preferred_window_title.isEmpty()) {
+        Window_title_search search;
+        search.title = &preferred_window_title;
+        EnumWindows(
+            find_visible_window_with_title,
+            reinterpret_cast<LPARAM>(&search));
+        if (valid_native_anchor(
+                search.hwnd,
+                settings_hwnd,
+                &anchor.geometry))
+        {
+            anchor.id = reinterpret_cast<quintptr>(search.hwnd);
+        }
+    }
+    return anchor;
+}
+
+void show_window_above_anchor(QWindow& window, quintptr anchor_id)
 {
     const HWND hwnd = reinterpret_cast<HWND>(window.winId());
     if (hwnd == nullptr) {
         return;
     }
 
-    const HWND owner = window_handle_for_title(preferred_window_title);
-    if (owner != nullptr) {
-        SetWindowLongPtr(hwnd, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
-    }
+    settings::detail::set_terminal_settings_native_window_owner(
+        reinterpret_cast<quintptr>(hwnd),
+        anchor_id);
 
     ShowWindow(hwnd, SW_SHOWNORMAL);
     SetWindowPos(
@@ -163,14 +232,9 @@ void show_window_above_anchor(QWindow& window, const QString& preferred_window_t
 }
 #endif
 
-QRect fallback_anchor_geometry(const QString& preferred_window_title)
+QRect foreground_anchor_geometry()
 {
 #ifdef Q_OS_WIN
-    const QRect preferred_geometry = window_geometry_for_title(preferred_window_title);
-    if (!preferred_geometry.isEmpty()) {
-        return preferred_geometry;
-    }
-
     const HWND foreground_window = GetForegroundWindow();
     RECT rect{};
     if (foreground_window != nullptr &&
@@ -1188,7 +1252,7 @@ void settings::Terminal_settings_window::set_transient_parent(QWindow* parent)
             [this](QScreen*) {
                 if (m_window != nullptr && m_window->isVisible()) {
                     m_positioned = false;
-                    place_within_transient_parent();
+                    place_within_anchor();
                 }
             });
     }
@@ -1199,20 +1263,37 @@ void settings::Terminal_settings_window::set_fallback_anchor_window_title(const 
     m_fallback_anchor_window_title = title;
 }
 
+void settings::Terminal_settings_window::set_native_anchor_id_provider(
+    Native_anchor_id_provider provider)
+{
+    m_native_anchor_id_provider = std::move(provider);
+}
+
 void settings::Terminal_settings_window::show_window()
 {
     if (m_window == nullptr) {
         return;
     }
 
-    place_within_transient_parent();
+#ifdef Q_OS_WIN
+    const quintptr requested_anchor_id = m_native_anchor_id_provider
+        ? m_native_anchor_id_provider()
+        : 0;
+    const Native_window_anchor native_anchor = resolve_native_window_anchor(
+        *m_window,
+        requested_anchor_id,
+        m_fallback_anchor_window_title);
+    place_within_anchor(native_anchor.geometry);
+#else
+    place_within_anchor();
+#endif
 
     if (!m_window->isVisible()) {
         m_window->show();
     }
 
 #ifdef Q_OS_WIN
-    show_window_above_anchor(*m_window, m_fallback_anchor_window_title);
+    show_window_above_anchor(*m_window, native_anchor.id);
 #endif
     m_window->raise();
     m_window->requestActivate();
@@ -1266,17 +1347,22 @@ void settings::Terminal_settings_window::clamp_to_available_geometry(
     m_window->setPosition(top_left);
 }
 
-void settings::Terminal_settings_window::place_within_transient_parent()
+void settings::Terminal_settings_window::place_within_anchor(
+    const QRect& native_anchor_geometry)
 {
     if (m_window == nullptr) {
         return;
     }
 
-    const QWindow* anchor = m_window->transientParent();
-    const QRect anchor_geometry =
-        anchor != nullptr && anchor->isVisible()
+    const bool native_anchor_selected = !native_anchor_geometry.isEmpty();
+    const QWindow* anchor = native_anchor_selected
+        ? nullptr
+        : m_window->transientParent();
+    const QRect anchor_geometry = native_anchor_selected
+        ? native_anchor_geometry
+        : (anchor != nullptr && anchor->isVisible()
             ? anchor->geometry()
-            : fallback_anchor_geometry(m_fallback_anchor_window_title);
+            : foreground_anchor_geometry());
     if (anchor_geometry.isEmpty()) {
         return;
     }

@@ -36,6 +36,15 @@ struct Terminal_chrome_palette
     QColor unfocused_frame_edge;
 };
 
+struct Terminal_chrome_window_control_palette
+{
+    QColor icon;
+    QColor hover;
+    QColor pressed;
+    QColor close_hover;
+    QColor close_pressed;
+};
+
 Terminal_chrome_palette default_terminal_chrome_palette();
 
 const Terminal_chrome_palette& terminal_chrome_palette();
@@ -71,6 +80,9 @@ public:
     // Non-owning. The component must belong to this chrome's QQmlEngine and
     // outlive the chrome or be cleared first. nullptr removes the action.
     void set_trailing_action_component(QQmlComponent* component);
+    void set_window_control_palette(
+        const Terminal_chrome_window_control_palette& palette);
+    void set_titlebar_height(qreal height);
     void set_active(bool active);
     void set_maximized(bool maximized);
     void set_fullscreen(bool fullscreen);

@@ -109,6 +109,7 @@ add_library(vnm_terminal_app_support STATIC
     src/terminal_settings_controller.cpp
     include/vnm_terminal/app_support/terminal_settings_controller.h
     src/terminal_settings_window.cpp
+    src/terminal_settings_native_window_owner.h
     include/vnm_terminal/app_support/terminal_settings_window.h
 )
 add_dependencies(vnm_terminal_app_support vnm_terminal_build_info)
