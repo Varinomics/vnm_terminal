@@ -34,6 +34,8 @@ struct Terminal_chrome_palette
     QColor unfocused_background;
     QColor focused_frame_edge;
     QColor unfocused_frame_edge;
+    QColor focused_title;
+    QColor unfocused_title;
 };
 
 struct Terminal_chrome_window_control_palette

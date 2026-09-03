@@ -61,6 +61,8 @@ Item {
     property color unfocused_frame_background_color
     property color focused_frame_edge_color
     property color unfocused_frame_edge_color
+    property color focused_titlebar_text_color
+    property color unfocused_titlebar_text_color
     property color titlebar_button_icon_color:
         active ? "#e2e8f0" : "#8e97a3"
     property color titlebar_button_hover_color: "#272f3a"
@@ -133,7 +135,9 @@ Item {
         id: terminal_chrome_theme
 
         titlebar: root.frame_background_color
-        titlebar_text: root.active ? "#ebeff5" : "#939ca9"
+        titlebar_text: root.active
+            ? root.focused_titlebar_text_color
+            : root.unfocused_titlebar_text_color
         titlebar_button_icon: root.titlebar_button_icon_color
         titlebar_button_hover: root.titlebar_button_hover_color
         titlebar_button_pressed: root.titlebar_button_pressed_color
@@ -406,6 +410,9 @@ chrome::Terminal_chrome_palette chrome::default_terminal_chrome_palette()
     palette.unfocused_background = QColor(14, 17, 22);
     palette.focused_frame_edge   = QColor(59, 69, 83);
     palette.unfocused_frame_edge = QColor(31, 36, 44);
+    // What the title bar's text used to be written as inside the chrome QML.
+    palette.focused_title        = QColor(0xeb, 0xef, 0xf5);
+    palette.unfocused_title      = QColor(0x93, 0x9c, 0xa9);
     return palette;
 }
 
@@ -458,6 +465,8 @@ chrome::Terminal_qml_chrome::Terminal_qml_chrome(QQmlEngine& engine, QQuickWindo
         {QStringLiteral("unfocused_frame_background_color"), palette.unfocused_background},
         {QStringLiteral("focused_frame_edge_color"),         palette.focused_frame_edge},
         {QStringLiteral("unfocused_frame_edge_color"),       palette.unfocused_frame_edge},
+        {QStringLiteral("focused_titlebar_text_color"),      palette.focused_title},
+        {QStringLiteral("unfocused_titlebar_text_color"),    palette.unfocused_title},
     }));
     if (m_root_object == nullptr) {
         m_error_string = component_error_string(component);
