@@ -17,6 +17,7 @@
 #include <QColor>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 #include <QFont>
@@ -2928,11 +2929,31 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
         input->setProperty("cursorPosition", 0);
     }
     search_bar.commit_text(QStringLiteral("row-"));
+    ok &= check(
+        surface.search_result_state() == VNM_TerminalSurface::Search_result_state::SEARCHING &&
+        !search_bar.result_text().isEmpty() &&
+        result_text != nullptr &&
+        result_text->property("text").toString() == search_bar.result_text(),
+        "pending search publishes nonempty result text through the QML binding");
+
+    QElapsedTimer search_deadline;
+    search_deadline.start();
+    while (surface.search_result_state() == VNM_TerminalSurface::Search_result_state::SEARCHING &&
+        search_deadline.elapsed() < 5000)
+    {
+        pump_events(app);
+        QThread::msleep(1);
+    }
     pump_events(app);
     ok &= check(
         surface.search_result_state() ==
             VNM_TerminalSurface::Search_result_state::MATCH &&
-        surface.search_match_count() > 1,
+        surface.search_match_count() > 1 &&
+        search_bar.result_text() == QStringLiteral("%1 of %2")
+            .arg(surface.current_search_match())
+            .arg(surface.search_match_count()) &&
+        result_text != nullptr &&
+        result_text->property("text").toString() == search_bar.result_text(),
         "committed query discovers multiple retained terminal matches");
 
     const int first_match = surface.current_search_match();

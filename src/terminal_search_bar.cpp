@@ -313,14 +313,17 @@ QString Terminal_search_bar::result_text() const
             return {};
         case VNM_TerminalSurface::Search_result_state::SOURCE_UNAVAILABLE:
             return QStringLiteral("Unavailable");
+        case VNM_TerminalSurface::Search_result_state::SEARCHING:
+            return QStringLiteral("Searching...");
         case VNM_TerminalSurface::Search_result_state::NO_MATCH:
             return QStringLiteral("No matches");
         case VNM_TerminalSurface::Search_result_state::MATCH:
             return QStringLiteral("%1 of %2")
                 .arg(m_surface->current_search_match())
                 .arg(m_surface->search_match_count());
+        default:
+            return {};
     }
-    return {};
 }
 
 bool Terminal_search_bar::chrome_active() const
