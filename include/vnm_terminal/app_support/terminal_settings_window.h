@@ -45,6 +45,7 @@ public:
     QString error_string() const;
 
     void set_transient_parent(QWindow* parent);
+    void set_dark_mode(bool dark_mode);
     void set_fallback_anchor_window_title(const QString& title);
     // On Windows the provider is copied and called once at the start of each
     // show. Its native id is used only when it names a visible top-level

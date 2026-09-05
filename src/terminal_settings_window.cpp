@@ -259,10 +259,9 @@ QRect foreground_anchor_geometry()
 //
 // The dialog styles every control itself (dialog-local inline `component`
 // definitions over QtQuick.Controls.Basic, carrying the S_ prefix) because the
-// stock Basic style is light-themed and clashes with the dark chrome. The
-// palette is derived from the chrome colors of the main terminal window so the
-// two windows read as one family. The form keeps its natural height when the
-// screen can contain it; on a smaller screen its body scrolls below the fixed
+// controls and chrome follow the host application's dark/light selection,
+// independently of the terminal's color scheme. The form keeps its natural
+// height when the screen can contain it; on a smaller screen its body scrolls below the fixed
 // titlebar.
 constexpr const char* k_settings_window_qml = R"qml(
 import QtQuick
@@ -274,6 +273,7 @@ import VNM_Chrome
 Window {
     id: win
     objectName: "terminal_settings_window"
+    property bool dark_mode: true
 
     readonly property int preferred_width: 560
     readonly property int unconstrained_maximum_size: 16777215
@@ -298,7 +298,7 @@ Window {
     maximumHeight: effective_height_limit
     visible: false
     flags: Qt.Tool | Qt.FramelessWindowHint
-    color: "#202020"
+    color: dark_mode ? "#202020" : "#f4f4f4"
     title: "vnm_terminal - Settings"
 
     signal close_requested()
@@ -314,22 +314,23 @@ Window {
             frame_border_width,
             VNM_chrome_geometry.default_resize_target_extent)
 
-    readonly property color section_color:      "#8d99a8"
-    readonly property color label_color:        "#9aa4b2"
-    readonly property color value_color:        "#dfe5ee"
-    readonly property color hint_color:         "#6c7886"
-    readonly property color warning_color:      "#d6b25a"
-    readonly property color accent_color:       "#71b4ff"
-    readonly property color separator_color:    "#343434"
-    readonly property color field_color:        "#262626"
-    readonly property color field_hover_color:  "#2e2e2e"
-    readonly property color field_border_color: "#3a3a3a"
-    readonly property color field_focus_color:  "#5a5a5a"
-    readonly property color popup_color:        "#242424"
-    readonly property color row_hover_color:    "#303030"
-    readonly property color card_color:         "#252525"
-    readonly property color card_hover_color:   "#2d2d2d"
-    readonly property color card_border_color:  "#383838"
+    readonly property color section_color:      dark_mode ? "#8d99a8" : "#465366"
+    readonly property color label_color:        dark_mode ? "#9aa4b2" : "#465366"
+    readonly property color value_color:        dark_mode ? "#dfe5ee" : "#202834"
+    readonly property color hint_color:         dark_mode ? "#6c7886" : "#596575"
+    readonly property color warning_color:      dark_mode ? "#d6b25a" : "#896315"
+    readonly property color accent_color:       dark_mode ? "#71b4ff" : "#1763ad"
+    readonly property color separator_color:    dark_mode ? "#343434" : "#d0d0d0"
+    readonly property color field_color:        dark_mode ? "#262626" : "#ffffff"
+    readonly property color field_hover_color:  dark_mode ? "#2e2e2e" : "#eaeaea"
+    readonly property color field_border_color: dark_mode ? "#3a3a3a" : "#b8b8b8"
+    readonly property color field_focus_color:  dark_mode ? "#5a5a5a" : "#1763ad"
+    readonly property color popup_color:        dark_mode ? "#242424" : "#ffffff"
+    readonly property color row_hover_color:    dark_mode ? "#303030" : "#e5e5e5"
+    readonly property color card_color:         dark_mode ? "#252525" : "#ffffff"
+    readonly property color card_hover_color:   dark_mode ? "#2d2d2d" : "#eaeaea"
+    readonly property color card_border_color:  dark_mode ? "#383838" : "#b8b8b8"
+    readonly property color selection_color:    dark_mode ? "#2f4a6b" : "#c4dfff"
 
     function enforce_size_limits() {
         const bounded_width = Math.max(minimumWidth, Math.min(width, maximumWidth))
@@ -395,7 +396,7 @@ Window {
         contentItem: Rectangle {
             implicitWidth: 4
             radius: 2
-            color: bar.pressed ? "#5d6979" : "#414c5b"
+            color: bar.pressed ? win.label_color : win.hint_color
         }
     }
 
@@ -518,7 +519,7 @@ R"qml(
             text: spin.displayText
             font: spin.font
             color: win.value_color
-            selectionColor: "#2f4a6b"
+            selectionColor: win.selection_color
             selectedTextColor: win.value_color
             horizontalAlignment: Qt.AlignHCenter
             verticalAlignment: Qt.AlignVCenter
@@ -580,9 +581,13 @@ R"qml(
             implicitWidth: 38
             implicitHeight: 20
             radius: height / 2
-            color: sw.checked ? "#33598a" : "#222a35"
+            color: win.dark_mode
+                ? (sw.checked ? "#33598a" : "#222a35")
+                : (sw.checked ? win.accent_color : win.field_hover_color)
             border.width: 1
-            border.color: sw.checked ? "#46719f" : "#36404e"
+            border.color: win.dark_mode
+                ? (sw.checked ? "#46719f" : "#36404e")
+                : (sw.checked ? win.accent_color : win.field_border_color)
 
             Behavior on color { ColorAnimation { duration: 120 } }
 
@@ -592,8 +597,9 @@ R"qml(
                 radius: 7
                 anchors.verticalCenter: parent.verticalCenter
                 x: sw.checked ? parent.width - width - 3 : 3
-                color: sw.pressed ? "#c4d2e2"
-                    : sw.hovered ? "#eef4fb" : "#dfe9f5"
+                color: !win.dark_mode && !sw.checked
+                    ? (sw.pressed ? "#202834" : sw.hovered ? "#465366" : "#596575")
+                    : (sw.pressed ? "#c4d2e2" : sw.hovered ? "#eef4fb" : "#dfe9f5")
 
                 Behavior on x {
                     NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
@@ -650,15 +656,15 @@ R"qml(
     VNM_ChromeTheme {
         id: settings_theme
 
-        titlebar: "#202020"
-        titlebar_text: "#e8e8e8"
-        titlebar_button_icon: "#d8d8d8"
-        titlebar_button_hover: "#303030"
-        titlebar_button_pressed: "#3a3a3a"
-        titlebar_close_hover: "#c6303a"
-        titlebar_close_pressed: "#96222a"
-        titlebar_content_border: "#343434"
-        window_frame_border: "#343434"
+        titlebar: win.color
+        titlebar_text: win.value_color
+        titlebar_button_icon: win.value_color
+        titlebar_button_hover: win.row_hover_color
+        titlebar_button_pressed: win.field_border_color
+        titlebar_close_hover: win.dark_mode ? "#c6303a" : "#f3bdc1"
+        titlebar_close_pressed: win.dark_mode ? "#96222a" : "#e99ba2"
+        titlebar_content_border: win.separator_color
+        window_frame_border: win.separator_color
     }
 
     VNM_NativeWindowFrame {
@@ -1125,7 +1131,7 @@ R"qml(
                 textFormat: TextEdit.PlainText
                 color: win.hint_color
                 selectedTextColor: win.value_color
-                selectionColor: "#2f4a6b"
+                selectionColor: win.selection_color
                 font.family: surface.fontFamily
                 font.pixelSize: 10
                 readOnly: true
@@ -1255,6 +1261,13 @@ void settings::Terminal_settings_window::set_transient_parent(QWindow* parent)
                     place_within_anchor();
                 }
             });
+    }
+}
+
+void settings::Terminal_settings_window::set_dark_mode(bool dark_mode)
+{
+    if (m_window != nullptr) {
+        m_window->setProperty("dark_mode", dark_mode);
     }
 }
 

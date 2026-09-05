@@ -3391,6 +3391,20 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     if (settings_qml_window != nullptr) {
         ok &= check(settings_qml_window->isVisible(),
             "settings window becomes visible when shown");
+        const QString terminal_scheme = surface.color_scheme();
+        settings_window.set_dark_mode(false);
+        pump_events(app);
+        ok &= check(settings_qml_window->color().lightness() > 200 &&
+                settings_qml_window->property("value_color").value<QColor>().lightness() < 100 &&
+                settings_qml_window->property("field_color").value<QColor>().lightness() > 200,
+            "light application theme gives settings a light surface and dark text");
+        settings_window.set_dark_mode(true);
+        pump_events(app);
+        ok &= check(settings_qml_window->color().lightness() < 100 &&
+                settings_qml_window->property("value_color").value<QColor>().lightness() > 200,
+            "open settings window follows a switch back to dark application theme");
+        ok &= check(surface.color_scheme() == terminal_scheme,
+            "application theme changes do not change the terminal color scheme");
         ok &= check(
             settings_qml_window->findChild<QQuickItem*>(
                 QStringLiteral("settings_window_titlebar")) != nullptr,
