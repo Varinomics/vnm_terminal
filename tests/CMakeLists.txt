@@ -1,3 +1,8 @@
+add_executable(vnm_portable_launcher_atomic_text terminal_app/portable_launcher_atomic_text_tests.c)
+target_link_libraries(vnm_portable_launcher_atomic_text PRIVATE vnm_terminal::portable_launcher_text)
+set_target_properties(vnm_portable_launcher_atomic_text PROPERTIES AUTOMOC OFF)
+add_test(NAME vnm_portable_launcher_atomic_text COMMAND vnm_portable_launcher_atomic_text)
+
 if(WIN32)
     set(vnm_terminal_qt_runtime_path
         "PATH=$<TARGET_FILE_DIR:Qt6::Core>$<SEMICOLON>$ENV{PATH}")
@@ -255,31 +260,34 @@ if(TARGET vnm_framework::vnm_environment_policy)
         vnm_terminal_local_environment_policy)
 endif()
 
+add_executable(vnm_terminal_portable_launcher_text
+    terminal_app/portable_launcher_text_tests.cpp
+)
+
+target_link_libraries(vnm_terminal_portable_launcher_text PRIVATE
+    vnm_terminal::portable_launcher_text
+)
+
+set_target_properties(vnm_terminal_portable_launcher_text PROPERTIES
+    AUTOMOC OFF
+)
+
+vnm_terminal_configure_test_process(vnm_terminal_portable_launcher_text)
+
+vnm_terminal_add_target_test(vnm_terminal_portable_launcher_text
+)
+
 if(WIN32)
-    add_executable(vnm_terminal_portable_launcher_text
-        terminal_app/portable_launcher_text_tests.cpp
-        "${PROJECT_SOURCE_DIR}/src/portable_launcher_text.c"
-    )
+    target_link_libraries(vnm_terminal_portable_launcher_text PRIVATE shell32)
+endif()
 
-    target_link_libraries(vnm_terminal_portable_launcher_text PRIVATE
-        shell32
-    )
-
-    set_target_properties(vnm_terminal_portable_launcher_text PROPERTIES
-        AUTOMOC OFF
-    )
-
-    vnm_terminal_configure_test_process(vnm_terminal_portable_launcher_text)
-
-    vnm_terminal_add_target_test(vnm_terminal_portable_launcher_text
-    )
-
+if(WIN32)
     add_executable(vnm_terminal_portable_launcher_win
         terminal_app/portable_launcher_win_tests.c
-        "${PROJECT_SOURCE_DIR}/src/portable_launcher_text.c"
     )
 
     target_link_libraries(vnm_terminal_portable_launcher_win PRIVATE
+        vnm_terminal::portable_launcher_text
         shell32
     )
 
@@ -289,7 +297,9 @@ if(WIN32)
 
     vnm_terminal_configure_test_process(vnm_terminal_portable_launcher_win)
 
+    add_dependencies(vnm_terminal_portable_launcher_win vnm_terminal_portable_launcher)
     vnm_terminal_add_target_test(vnm_terminal_portable_launcher_win
+        ARGUMENTS $<TARGET_FILE:vnm_terminal_portable_launcher>
     )
 endif()
 

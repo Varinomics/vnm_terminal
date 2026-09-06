@@ -41,30 +41,6 @@ static void show_last_error(const wchar_t* title, const wchar_t* prefix)
     show_error_message(title, combined);
 }
 
-// GetModuleFileNameW reports the buffer element count when the module path does not fit:
-// it leaves a truncated but NUL-terminated path behind and sets ERROR_INSUFFICIENT_BUFFER
-// instead of failing. A truncated launcher path names a different directory, so the
-// runtime would be looked for beside the wrong file. Only a length strictly inside the
-// buffer is a complete path.
-static int module_path_is_complete(DWORD length, size_t capacity)
-{
-    return length > 0 && (size_t)length < capacity;
-}
-
-static void trim_to_directory(wchar_t* path)
-{
-    int len = lstrlenW(path);
-    while (len > 0) {
-        wchar_t ch = path[len - 1];
-        if (ch == L'\\' || ch == L'/') {
-            path[len - 1] = L'\0';
-            return;
-        }
-        len--;
-    }
-    path[0] = L'\0';
-}
-
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, int show_cmd)
 {
     wchar_t launcher_path[VNM_TERMINAL_MAX_PATH_CHARS + 1];
@@ -95,7 +71,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, 
         show_last_error(L"vnm_terminal", L"Failed to locate vnm_terminal.exe.");
         return 1;
     }
-    if (!module_path_is_complete(launcher_length, launcher_path_capacity)) {
+    if (!portable_launcher_module_path_is_complete(launcher_length, launcher_path_capacity)) {
         show_error_message(L"vnm_terminal", L"The portable launcher path is too long.");
         return 1;
     }
@@ -104,7 +80,7 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE prev_instance, LPSTR cmd_line, 
     // of the destination. The guard above bounds the source below that count, so the copy
     // reproduces the launcher path exactly instead of dropping its last character.
     lstrcpynW(launcher_dir, launcher_path, (int)launcher_dir_capacity);
-    trim_to_directory(launcher_dir);
+    portable_launcher_trim_to_directory(launcher_length, launcher_dir);
 
     target_path[0] = L'\0';
     if (!portable_launcher_append_text(

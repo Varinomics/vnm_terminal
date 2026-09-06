@@ -39,6 +39,8 @@ if(VNM_TERMINAL_BUILD_PACKAGES AND NOT VNM_TERMINAL_DISTRIBUTION_BUILD)
         "VNM_TERMINAL_DISTRIBUTION_BUILD=ON")
 endif()
 
+add_subdirectory(portable_launcher)
+
 find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2)
 include(cmake/vnm_terminal_dependency_origin.cmake)
 include(cmake/vnm_terminal_surface_dependency.cmake)
@@ -423,12 +425,11 @@ if(WIN32)
     vnm_terminal_copy_qt_qml_module(QtQuick)
 
     add_executable(vnm_terminal_portable_launcher WIN32
-        src/portable_launcher_text.c
-        src/portable_launcher_text.h
         src/portable_launcher_win.c
         src/vnm_terminal.rc
     )
     target_link_libraries(vnm_terminal_portable_launcher PRIVATE
+        vnm_terminal::portable_launcher_text
         shell32
     )
     if(CMAKE_C_COMPILER_ID STREQUAL "GNU")

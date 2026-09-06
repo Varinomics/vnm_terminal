@@ -40,6 +40,31 @@ int portable_launcher_append_quoted_arg(
     size_t*         offset,
     const wchar_t*  arg);
 
+// Atomic assembly: returns 0 without modifying the output if the complete result
+// (including its terminating NUL) exceeds in_capacity. Inputs must not overlap output.
+int portable_launcher_join_text(
+    const wchar_t* in_left,
+    const wchar_t* in_separator,
+    const wchar_t* in_right,
+    size_t in_capacity,
+    wchar_t* out_text);
+
+// Replaces argv[0] with in_target_path and forwards argv[1..in_argc). Uses the same
+// escaping as append_quoted_arg, but rejects an oversized whole command atomically.
+// Inputs must not overlap output; in_capacity includes the terminating NUL.
+int portable_launcher_build_command_line(
+    const wchar_t* in_target_path,
+    int in_argc,
+    wchar_t* const* in_argv,
+    size_t in_capacity,
+    wchar_t* out_command_line);
+
+// in_length is the path length excluding NUL; both Windows path separators are accepted.
+void portable_launcher_trim_to_directory(size_t in_length, wchar_t* out_path);
+
+// GetModuleFileNameW returns the buffer capacity when the reported path is truncated.
+int portable_launcher_module_path_is_complete(size_t in_length, size_t in_capacity);
+
 #ifdef __cplusplus
 }
 #endif

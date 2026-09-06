@@ -11,8 +11,10 @@
 #include "portable_launcher_text.h"
 #include "helpers/test_check.h"
 
+#ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
+#endif
 
 #include <cwchar>
 #include <iostream>
@@ -23,6 +25,7 @@ using vnm_terminal::test_helpers::check;
 
 namespace {
 
+#ifdef _WIN32
 std::string utf8_text(const std::wstring& text)
 {
     if (text.empty()) {
@@ -125,6 +128,8 @@ bool test_round_trip_arguments()
     ok &= check_round_trip({L"--tab", L"", L"x y"}, "mixed_arguments");
     return ok;
 }
+
+#endif
 
 // The trailing-backslash run of a quoted argument is doubled, so an argument that is
 // itself far shorter than the buffer can still overflow it. This is the case that used to
@@ -268,7 +273,9 @@ bool test_rejected_append_leaves_the_buffer_terminated()
 int main()
 {
     bool ok = true;
+#ifdef _WIN32
     ok &= test_round_trip_arguments();
+#endif
     ok &= test_expansion_heavy_argument_is_rejected();
     ok &= test_max_path_target_composition();
     ok &= test_capacity_boundary();
