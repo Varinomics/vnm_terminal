@@ -289,6 +289,7 @@ if(WIN32)
     target_link_libraries(vnm_terminal_portable_launcher_win PRIVATE
         vnm_terminal::portable_launcher_text
         shell32
+        user32
     )
 
     set_target_properties(vnm_terminal_portable_launcher_win PROPERTIES
@@ -301,6 +302,7 @@ if(WIN32)
     vnm_terminal_add_target_test(vnm_terminal_portable_launcher_win
         ARGUMENTS $<TARGET_FILE:vnm_terminal_portable_launcher>
     )
+    set_tests_properties(vnm_terminal_portable_launcher_win PROPERTIES TIMEOUT 60)
 endif()
 
 add_executable(vnm_terminal_app_presentation_metrics
