@@ -89,6 +89,7 @@ add_custom_target(vnm_terminal_build_info ALL
 
 set(vnm_terminal_app_support_headers
     include/vnm_terminal/app_support/app_settings.h
+    include/vnm_terminal/app_support/terminal_display_settings.h
     include/vnm_terminal/app_support/app_shortcuts.h
     include/vnm_terminal/app_support/qml_chrome.h
     include/vnm_terminal/app_support/terminal_scrollbar.h
@@ -99,7 +100,9 @@ set(vnm_terminal_app_support_headers
 
 add_library(vnm_terminal_app_support STATIC
     src/app_settings.cpp
+    src/terminal_display_settings.cpp
     include/vnm_terminal/app_support/app_settings.h
+    include/vnm_terminal/app_support/terminal_display_settings.h
     src/app_shortcuts.cpp
     include/vnm_terminal/app_support/app_shortcuts.h
     src/qml_chrome.cpp
