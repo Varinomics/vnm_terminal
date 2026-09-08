@@ -79,6 +79,8 @@ resolve_package_dir(
     vnm_qt_dispatchConfig.cmake
     "${vnm_qt_dispatch_dir}"
     vnm_qt_dispatch_package_dir)
+resolve_package_dir(
+    vnm_fonts-config.cmake "${vnm_fonts_dir}" vnm_fonts_package_dir)
 
 set(configure_args)
 if(DEFINED generator AND NOT "${generator}" STREQUAL "")
@@ -125,6 +127,7 @@ list(APPEND configure_args
     "-Dvnm_terminal_DIR:PATH=${vnm_terminal_package_dir}"
     "-Dvnm_terminal_surface_DIR:PATH=${vnm_terminal_surface_package_dir}"
     "-Dvnm_qt_dispatch_DIR:PATH=${vnm_qt_dispatch_package_dir}"
+    "-Dvnm_fonts_DIR:PATH=${vnm_fonts_package_dir}"
     "-DCMAKE_FIND_USE_PACKAGE_ROOT_PATH=FALSE"
     "-DCMAKE_FIND_USE_PACKAGE_REGISTRY=FALSE"
     "-DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=FALSE"
@@ -181,6 +184,8 @@ expect_consumer_package_dir(
     vnm_terminal_surface_DIR "${vnm_terminal_surface_package_dir}")
 expect_consumer_package_dir(
     vnm_qt_dispatch_DIR "${vnm_qt_dispatch_package_dir}")
+expect_consumer_package_dir(
+    vnm_fonts_DIR "${vnm_fonts_package_dir}")
 if(DEFINED vnm_msdf_text_dir AND NOT "${vnm_msdf_text_dir}" STREQUAL "")
     expect_consumer_package_dir(
         vnm_msdf_text_DIR "${vnm_msdf_text_dir}")

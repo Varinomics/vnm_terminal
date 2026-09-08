@@ -8,11 +8,10 @@ set(VNM_FONTS_SOURCE_DIR "" CACHE PATH
 # face this application draws is the file it carries rather than whatever the
 # host has installed under the same name.
 #
-# It is added rather than found because it publishes no installed package, and
-# it returns early when its target already exists, so reaching it through more
-# than one dependency path in one configure is ordinary.
-if(TARGET vnm_fonts)
-    vnm_terminal_adopt_existing_target_source(vnm_fonts VNM_FONTS_SOURCE_DIR)
+# Reuse the public target whether a source dependency or an installed package
+# supplied it earlier in the configure.
+if(TARGET vnm::fonts)
+    vnm_terminal_adopt_existing_target_source(vnm::fonts VNM_FONTS_SOURCE_DIR)
     return()
 endif()
 
@@ -27,23 +26,6 @@ if(NOT VNM_FONTS_SOURCE_DIR)
             "Path to a source checkout of vnm_fonts."
             FORCE)
     endif()
-endif()
-
-# Redistributing the fonts means redistributing their licences, and vnm_fonts
-# installs them for us - but into a CPack component. CPACK_COMPONENTS_ALL names
-# only the runtime component and CPack drops every component outside that list
-# without a diagnostic, so vnm_fonts' default would take the licence texts out
-# of the package silently. Only a build that produces a package has an opinion
-# here; an embedded one leaves vnm_fonts' own default alone.
-#
-# Forced because a build directory configured before this line existed already
-# holds the default, and an unforced set would leave that stale value in place -
-# which is the same silent loss, one configure later.
-if(VNM_TERMINAL_BUILD_STANDALONE_APP)
-    set(VNM_FONTS_INSTALL_COMPONENT "${vnm_terminal_runtime_component}"
-        CACHE STRING
-        "CPack component the font licences and notices install into"
-        FORCE)
 endif()
 
 # No EXCLUDE_FROM_ALL on the declaration below: FetchContent passes that form

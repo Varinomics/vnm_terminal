@@ -556,6 +556,7 @@ add_test(
         "-Dvnm_msdf_text_dependency_prefixes=${CMAKE_PREFIX_PATH}"
         "-Dvnm_terminal_surface_dir=${vnm_terminal_surface_DIR}"
         "-Dvnm_qt_dispatch_dir=${vnm_qt_dispatch_DIR}"
+        "-Dvnm_fonts_dir=${vnm_fonts_DIR}"
         -P "${PROJECT_SOURCE_DIR}/tests/public_target_consumer/expect_consumer_builds.cmake"
 )
 
