@@ -209,7 +209,9 @@ Item {
         onClose_requested: root.close_requested()
         onTitle_edit_accepted: (title) => root.title_edit_accepted(title)
     }
-
+)"
+// MSVC C2026 caps one literal at ~16 KB; adjacent raw strings concatenate.
+R"(
     // The settings gear is stroked here rather than taken from an icon font.
     // No single font family carries a gear on every platform, and the ones
     // that do disagree on how it looks, so a glyph would render as a different
