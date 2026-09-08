@@ -25,6 +25,11 @@ class Terminal_search_bar final : public QObject
         READ chrome_background_color NOTIFY chrome_palette_changed)
     Q_PROPERTY(QColor chromeFrameEdgeColor
         READ chrome_frame_edge_color NOTIFY chrome_palette_changed)
+    // The family the navigation chevrons are drawn in, as the font database
+    // resolved it. The marked name is decided by vnm_fonts at registration and
+    // is fixed for the life of the bar, so the QML reads it rather than naming
+    // a face of its own.
+    Q_PROPERTY(QString iconFontFamily READ icon_font_family CONSTANT)
 
 public:
     Terminal_search_bar(
@@ -37,6 +42,7 @@ public:
     bool    is_visible() const;
     QString error_string() const;
     QString result_text() const;
+    QString icon_font_family() const;
     bool    chrome_active() const;
     QColor  chrome_background_color() const;
     QColor  chrome_frame_edge_color() const;
@@ -66,6 +72,7 @@ private:
     QQuickItem*                    m_root_item = nullptr;
     QPointer<QQuickItem>           m_query_item;
     QPointer<QQuickItem>           m_result_item;
+    QString                        m_icon_font_family;
     QString                        m_error_string;
 };
 

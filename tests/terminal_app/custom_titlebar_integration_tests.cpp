@@ -12,6 +12,8 @@
 #include "vnm_terminal/internal/terminal_transcript.h"
 #include "helpers/test_check.h"
 
+#include <vnm_font_namespace.h>
+
 #include <QByteArray>
 #include <QClipboard>
 #include <QColor>
@@ -21,6 +23,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFont>
+#include <QFontInfo>
 #include <QGuiApplication>
 #include <QImage>
 #include <QJsonObject>
@@ -67,6 +70,34 @@ namespace {
 QString scalar_text(char32_t codepoint)
 {
     return QString::fromUcs4(&codepoint, 1);
+}
+
+// The two halves of a font-family assertion, which answer different questions
+// and are both needed.
+//
+// The requested family is what the item asked for. Compared against a literal
+// it pins nothing - it is equally true of a family no font supplies - but
+// compared against the family a registration returned it proves that the QML
+// carries that registration's name rather than a hand-written copy of it.
+//
+// The resolved family is what the font database served. It proves the face is
+// really there. On its own it is weak under the offscreen platform, whose font
+// database holds only the fonts this process registered, so an unmatched
+// request still lands on one of them.
+QString requested_font_family(const QQuickItem* item)
+{
+    if (item == nullptr) {
+        return {};
+    }
+    return item->property("font").value<QFont>().family();
+}
+
+QString resolved_font_family(const QQuickItem* item)
+{
+    if (item == nullptr) {
+        return {};
+    }
+    return QFontInfo(item->property("font").value<QFont>()).family();
 }
 
 using vnm_terminal::test_helpers::check;
@@ -2833,16 +2864,24 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
             root,
             QStringLiteral("terminal_search_top_edge")) == nullptr,
         "search strip reuses the live chrome palette and omits a top border");
+    // Registration is idempotent per font id, so this returns the family the
+    // search bar's own registration produced rather than registering the bytes
+    // a second time. Asking for it keeps the marked name out of this file: a
+    // literal here would assert the spelling rather than the registration.
+    const QString icon_font_family = vnm_fonts::register_shipped_font(
+        vnm_fonts::Shipped_font::FONT_AWESOME_4).family;
+    ok &= check(!icon_font_family.isEmpty(),
+        "the shipped Font Awesome face registers under a resolvable family");
     ok &= check(
         previous_icon != nullptr &&
         next_icon     != nullptr &&
         previous_icon->property("text").toString() == scalar_text(0xf139) &&
         next_icon->property("text").toString()     == scalar_text(0xf13a) &&
-        previous_icon->property("font").value<QFont>().family() ==
-            QStringLiteral("FontAwesome") &&
-        next_icon->property("font").value<QFont>().family() ==
-            QStringLiteral("FontAwesome"),
-        "search navigation uses the requested Font Awesome up/down glyphs");
+        requested_font_family(previous_icon) == icon_font_family &&
+        requested_font_family(next_icon)     == icon_font_family &&
+        resolved_font_family(previous_icon)  == icon_font_family &&
+        resolved_font_family(next_icon)      == icon_font_family,
+        "search navigation draws the Font Awesome up/down glyphs from the shipped face");
 
     const QString ui_font_family = QStringLiteral("Varinomics Terminal Search Test Font");
     search_bar.set_text_font_family(ui_font_family);
@@ -2854,10 +2893,10 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
         result_text->property("font").value<QFont>().family() == ui_font_family &&
         previous_icon != nullptr &&
         next_icon     != nullptr &&
-        previous_icon->property("font").value<QFont>().family() ==
-            QStringLiteral("FontAwesome") &&
-        next_icon->property("font").value<QFont>().family() ==
-            QStringLiteral("FontAwesome"),
+        requested_font_family(previous_icon) == icon_font_family &&
+        requested_font_family(next_icon)     == icon_font_family &&
+        resolved_font_family(previous_icon)  == icon_font_family &&
+        resolved_font_family(next_icon)      == icon_font_family,
         "search text font ownership leaves navigation icon fonts unchanged");
 
     if (input != nullptr) {

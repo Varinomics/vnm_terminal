@@ -26,6 +26,25 @@ Repository:
 The dependency does not include a license file and is treated as an internal
 Varinomics dependency.
 
+## vnm_fonts
+
+The app links the Varinomics `vnm_fonts` library for the Font Awesome 4 face the
+search bar's navigation chevrons are drawn from. The library carries the font
+files in a Qt resource, so the released binary redistributes the face; it
+registers a font under a family name marked for the running process, because two
+files declaring one family name merge into a single font-database entry and
+glyph lookup and rasterisation can then be served from different files.
+
+`FontAwesome.otf` is redistributed byte-verbatim from Font Awesome 4.7.0
+(revision `a8386aae19e200ddb0f6845b5feeee5eb7013687`) under the SIL Open Font
+License 1.1, copyright Dave Gandy 2016. The complete licence text and the
+provenance record of every shipped file are in the dependency's own
+`LICENSES/` and `THIRD_PARTY/` directories.
+
+Repository:
+
+- https://github.com/Varinomics/vnm_fonts
+
 ## Qt 6
 
 Qt 6 Core, Gui, Qml, Quick, Quick Controls 2, and Quick Layouts are required.

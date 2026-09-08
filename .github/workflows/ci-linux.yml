@@ -54,6 +54,7 @@ jobs:
       chrome: ${{ steps.resolve.outputs.chrome }}
       msdf_text: ${{ steps.resolve.outputs.msdf_text }}
       qt_dispatch: ${{ steps.resolve.outputs.qt_dispatch }}
+      fonts: ${{ steps.resolve.outputs.fonts }}
       freetype: ${{ steps.resolve.outputs.freetype }}
       msdfgen: ${{ steps.resolve.outputs.msdfgen }}
       source_tuple: ${{ steps.resolve.outputs.source_tuple }}
@@ -147,6 +148,14 @@ jobs:
           ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
           persist-credentials: false
 
+      - name: Checkout fonts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_fonts
+          path: vnm_fonts
+          ref: ${{ needs.resolve-dependencies.outputs.fonts }}
+          persist-credentials: false
+
       # The static contract cannot see a checkout it fails to parse, and a ref
       # that resolves to the empty string silently takes a default branch, so
       # the commits this job actually built from are compared with the ones the
@@ -178,7 +187,7 @@ jobs:
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
-            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
+            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch"             -DVNM_FONTS_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_fonts" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DBUILD_TESTING=ON
 
@@ -237,6 +246,14 @@ jobs:
           ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
           persist-credentials: false
 
+      - name: Checkout fonts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_fonts
+          path: vnm_fonts
+          ref: ${{ needs.resolve-dependencies.outputs.fonts }}
+          persist-credentials: false
+
       # The static contract cannot see a checkout it fails to parse, and a ref
       # that resolves to the empty string silently takes a default branch, so
       # the commits this job actually built from are compared with the ones the
@@ -268,7 +285,7 @@ jobs:
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
-            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
+            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch"             -DVNM_FONTS_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_fonts" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON \
             -DBUILD_TESTING=ON
@@ -326,6 +343,14 @@ jobs:
           repository: Varinomics/vnm_qt_dispatch
           path: vnm_qt_dispatch
           ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
+          persist-credentials: false
+
+      - name: Checkout fonts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_fonts
+          path: vnm_fonts
+          ref: ${{ needs.resolve-dependencies.outputs.fonts }}
           persist-credentials: false
 
       # The static contract cannot see a checkout it fails to parse, and a ref
@@ -422,7 +447,7 @@ jobs:
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
-            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
+            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch"             -DVNM_FONTS_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_fonts" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DVNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER=ON \
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_USE_SYSTEM_LIBS=ON \

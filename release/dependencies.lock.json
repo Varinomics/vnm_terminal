@@ -28,6 +28,13 @@
       "checkout_path": "vnm_qt_dispatch",
       "output": "qt_dispatch",
       "commit": "a4ed685d140f4ed99abeb2fcf11864c87a8ced65"
+    },
+    "vnm_fonts": {
+      "repository": "Varinomics/vnm_fonts",
+      "branch": "master",
+      "checkout_path": "vnm_fonts",
+      "output": "fonts",
+      "commit": "6fc53b8e5ee5a4c2ff21b0fd6b91ada76c29074c"
     }
   },
   "third_party": {

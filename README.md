@@ -119,9 +119,11 @@ Example:
 
 ## Source build
 
-The release dependency layout places `vnm_terminal_surface` and
-`vnm_qml_chrome` beside this repository. Custom locations are supported through
-`VNM_TERMINAL_SURFACE_SOURCE_DIR` and `VNM_QML_CHROME_SOURCE_DIR`.
+The release dependency layout places `vnm_terminal_surface`, `vnm_qml_chrome`
+and `vnm_fonts` beside this repository. Custom locations are supported through
+`VNM_TERMINAL_SURFACE_SOURCE_DIR`, `VNM_QML_CHROME_SOURCE_DIR` and
+`VNM_FONTS_SOURCE_DIR`; `vnm_fonts` is cloned from its `master` branch when no
+checkout is found.
 
 `vnm_terminal_surface` must provide the
 `vnm_terminal_surface::vnm_terminal_surface` embedded-surface API target; its

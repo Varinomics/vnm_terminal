@@ -21,3 +21,5 @@ REM Optional: if unset, build_portable.bat clones vnm_msdf_text under build_port
 REM set VNM_MSDF_TEXT_SOURCE_DIR=C:\plms\bsd_licensed\vnm_msdf_text
 REM Optional: if unset, the surface fetches vnm_qt_dispatch itself.
 REM set VNM_QT_DISPATCH_SOURCE_DIR=C:\plms\varinomics\vnm_qt_dispatch
+REM Optional: if unset, the build uses a sibling vnm_fonts checkout or clones master.
+REM set VNM_FONTS_SOURCE_DIR=C:\plms\varinomics\vnm_fonts

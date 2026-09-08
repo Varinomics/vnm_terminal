@@ -4,6 +4,8 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <vnm_font_namespace.h>
+
 #include <QCoreApplication>
 #include <QFont>
 #include <QInputMethodEvent>
@@ -156,7 +158,7 @@ Item {
                 anchors.centerIn: parent
                 text: "\uf139"
                 color: searchBar.chromeActive ? "#e2e8f0" : "#8e97a3"
-                font.family: "FontAwesome"
+                font.family: searchBar.iconFontFamily
                 font.pixelSize: 14
             }
             MouseArea {
@@ -182,7 +184,7 @@ Item {
                 anchors.centerIn: parent
                 text: "\uf13a"
                 color: searchBar.chromeActive ? "#e2e8f0" : "#8e97a3"
-                font.family: "FontAwesome"
+                font.family: searchBar.iconFontFamily
                 font.pixelSize: 14
             }
             MouseArea {
@@ -232,6 +234,20 @@ Terminal_search_bar::Terminal_search_bar(
     m_surface(&surface),
     m_context(std::make_unique<QQmlContext>(engine.rootContext()))
 {
+    // The chevrons are Font Awesome 4 codepoints, so the bar registers that
+    // face itself rather than naming a family and relying on some other library
+    // in the process having registered one. Registration marks the family name,
+    // and the marked name is what the QML above binds to: a hand-written copy
+    // of it drifts from the binary, and a face the host has installed under the
+    // unmarked name would merge with it.
+    const vnm_fonts::Registered_font icon_font =
+        vnm_fonts::register_shipped_font(vnm_fonts::Shipped_font::FONT_AWESOME_4);
+    if (!icon_font.is_valid()) {
+        m_error_string = icon_font.error;
+        return;
+    }
+    m_icon_font_family = icon_font.family;
+
     m_context->setContextProperty(QStringLiteral("terminalSurface"), &surface);
     m_context->setContextProperty(QStringLiteral("searchBar"), this);
 
@@ -300,6 +316,11 @@ bool Terminal_search_bar::is_visible() const
 QString Terminal_search_bar::error_string() const
 {
     return m_error_string;
+}
+
+QString Terminal_search_bar::icon_font_family() const
+{
+    return m_icon_font_family;
 }
 
 QString Terminal_search_bar::result_text() const

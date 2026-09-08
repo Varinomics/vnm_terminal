@@ -54,6 +54,7 @@ jobs:
       chrome: ${{ steps.resolve.outputs.chrome }}
       msdf_text: ${{ steps.resolve.outputs.msdf_text }}
       qt_dispatch: ${{ steps.resolve.outputs.qt_dispatch }}
+      fonts: ${{ steps.resolve.outputs.fonts }}
       freetype: ${{ steps.resolve.outputs.freetype }}
       msdfgen: ${{ steps.resolve.outputs.msdfgen }}
       source_tuple: ${{ steps.resolve.outputs.source_tuple }}
@@ -147,6 +148,14 @@ jobs:
           ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
           persist-credentials: false
 
+      - name: Checkout fonts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_fonts
+          path: vnm_fonts
+          ref: ${{ needs.resolve-dependencies.outputs.fonts }}
+          persist-credentials: false
+
       # The static contract cannot see a checkout it fails to parse, and a ref
       # that resolves to the empty string silently takes a default branch, so
       # the commits this job actually built from are compared with the ones the
@@ -176,6 +185,7 @@ jobs:
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
             -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
+            -DVNM_FONTS_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_fonts" \
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
             -DBUILD_TESTING=ON
 
@@ -217,6 +227,7 @@ jobs:
           $chromeDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_qml_chrome'
           $msdfTextDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_msdf_text'
           $qtDispatchDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_qt_dispatch'
+          $fontsDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_fonts'
 
           cmake -B $buildDir -S $sourceRoot `
             -G "Visual Studio 17 2022" `
@@ -225,6 +236,7 @@ jobs:
             -DVNM_QML_CHROME_SOURCE_DIR="$chromeDir" `
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="$msdfTextDir" `
             -DVNM_QT_DISPATCH_SOURCE_DIR="$qtDispatchDir" `
+            -DVNM_FONTS_SOURCE_DIR="$fontsDir" `
             -DVNM_TERMINAL_ENABLE_PROFILING=OFF `
             -DBUILD_TESTING=ON
           if ($LASTEXITCODE -ne 0) {
@@ -310,6 +322,14 @@ jobs:
           ref: ${{ needs.resolve-dependencies.outputs.qt_dispatch }}
           persist-credentials: false
 
+      - name: Checkout fonts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Varinomics/vnm_fonts
+          path: vnm_fonts
+          ref: ${{ needs.resolve-dependencies.outputs.fonts }}
+          persist-credentials: false
+
       # The static contract cannot see a checkout it fails to parse, and a ref
       # that resolves to the empty string silently takes a default branch, so
       # the commits this job actually built from are compared with the ones the
@@ -384,6 +404,7 @@ jobs:
               "set VNM_QML_CHROME_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qml_chrome",
               "set VNM_MSDF_TEXT_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_msdf_text",
               "set VNM_QT_DISPATCH_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qt_dispatch",
+              "set VNM_FONTS_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_fonts",
               "set FREETYPE_COMMIT=${{ needs.resolve-dependencies.outputs.freetype }}",
               "set MSDFGEN_COMMIT=${{ needs.resolve-dependencies.outputs.msdfgen }}",
               "set IFW_ROOT=$env:IFW_ROOT"

@@ -276,6 +276,14 @@ if not "%VNM_QT_DISPATCH_SOURCE_DIR%"=="" (
     set VNM_QT_DISPATCH_CMAKE_ARG=-DVNM_QT_DISPATCH_SOURCE_DIR="%VNM_QT_DISPATCH_SOURCE_DIR%"
 )
 
+REM Unset, the build resolves vnm_fonts itself: a sibling checkout, or a
+REM clone of master. A packaging run names the checkout the run resolved, so
+REM the fonts compiled into the package are the ones its provenance describes.
+set VNM_FONTS_CMAKE_ARG=
+if not "%VNM_FONTS_SOURCE_DIR%"=="" (
+    set VNM_FONTS_CMAKE_ARG=-DVNM_FONTS_SOURCE_DIR="%VNM_FONTS_SOURCE_DIR%"
+)
+
 echo.
 echo [2/6] Configuring CMake ...
 "%CMAKE%" -G Ninja ^
@@ -289,6 +297,7 @@ echo [2/6] Configuring CMake ...
     -DVNM_QML_CHROME_SOURCE_DIR="%VNM_QML_CHROME_SOURCE_DIR%" ^
     -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="%VNM_MSDF_TEXT_SOURCE_DIR%" ^
     %VNM_QT_DISPATCH_CMAKE_ARG% ^
+    %VNM_FONTS_CMAKE_ARG% ^
     -DVNM_TERMINAL_ENABLE_PROFILING=OFF ^
     -DVNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER=ON ^
     -DVNM_TERMINAL_MSDF_TEXT_RENDERER_USE_SYSTEM_LIBS=ON ^
@@ -310,6 +319,33 @@ if "%PACKAGE_VERSION%"=="" (
     exit /b 1
 )
 echo Package version: %PACKAGE_VERSION%
+
+REM This script assembles a tree by hand instead of running `cmake --install`,
+REM so it needs the font licences as source paths. vnm_fonts publishes them in
+REM the cache, which is also the only place that knows which checkout the
+REM configure above actually resolved.
+set VNM_FONTS_LICENSES_DIR=
+set VNM_FONTS_NOTICES_FILE=
+for /f "tokens=1,* delims==" %%K in (
+    'findstr /b /c:"VNM_FONTS_LICENSES_DIR:" /c:"VNM_FONTS_NOTICES_FILE:" "%BUILD_DIR%\CMakeCache.txt"'
+) do (
+    if "%%K"=="VNM_FONTS_LICENSES_DIR:INTERNAL" set "VNM_FONTS_LICENSES_DIR=%%L"
+    if "%%K"=="VNM_FONTS_NOTICES_FILE:INTERNAL" set "VNM_FONTS_NOTICES_FILE=%%L"
+)
+if "%VNM_FONTS_LICENSES_DIR%"=="" (
+    echo ERROR: the configure did not record VNM_FONTS_LICENSES_DIR. The package
+    echo would redistribute the fonts without their licences.
+    exit /b 1
+)
+if "%VNM_FONTS_NOTICES_FILE%"=="" (
+    echo ERROR: the configure did not record VNM_FONTS_NOTICES_FILE. The package
+    echo would redistribute the fonts without their notices.
+    exit /b 1
+)
+REM CMake writes cache paths with forward slashes; `copy` reads a leading one as
+REM a switch.
+set "VNM_FONTS_LICENSES_DIR=%VNM_FONTS_LICENSES_DIR:/=\%"
+set "VNM_FONTS_NOTICES_FILE=%VNM_FONTS_NOTICES_FILE:/=\%"
 
 echo.
 echo [3/6] Building ...
@@ -340,6 +376,22 @@ if errorlevel 1 (
 
 copy /y "%~dp0LICENSE" "%PORTABLE_DIR%\LICENSE" >nul
 copy /y "%~dp0THIRD_PARTY_NOTICES.md" "%PORTABLE_DIR%\THIRD_PARTY_NOTICES.md" >nul
+
+REM The fonts vnm_fonts carries are compiled into this executable, and every one
+REM of their licences requires the licence and copyright notice to accompany the
+REM copy. An installed tree gets them from vnm_fonts' own install rules; this
+REM tree is assembled by hand, so it copies them here.
+mkdir "%PORTABLE_DIR%\licenses\vnm_fonts"
+copy /y "%VNM_FONTS_LICENSES_DIR%\*.txt" "%PORTABLE_DIR%\licenses\vnm_fonts" >nul
+if errorlevel 1 (
+    echo ERROR: failed to copy the font licences from %VNM_FONTS_LICENSES_DIR%.
+    exit /b 1
+)
+copy /y "%VNM_FONTS_NOTICES_FILE%" "%PORTABLE_DIR%\licenses\vnm_fonts\THIRD_PARTY_NOTICES.md" >nul
+if errorlevel 1 (
+    echo ERROR: failed to copy the font notices from %VNM_FONTS_NOTICES_FILE%.
+    exit /b 1
+)
 
 "%WINDEPLOYQT%" --release --no-translations --dir "%RUNTIME_DIR%" "%RUNTIME_DIR%\vnm_terminal.exe"
 if errorlevel 1 (

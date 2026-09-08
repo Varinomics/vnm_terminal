@@ -1,6 +1,8 @@
 include(GNUInstallDirs)
 
-set(vnm_terminal_runtime_component vnm_terminal_runtime)
+# vnm_terminal_runtime_component is set in the top-level CMakeLists.txt, which
+# needs it before this file is included so that a dependency can install into
+# the component this file packages.
 
 if(APPLE)
     set(vnm_terminal_executable_destination ".")

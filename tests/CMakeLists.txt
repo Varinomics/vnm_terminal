@@ -440,6 +440,7 @@ target_link_libraries(vnm_terminal_custom_titlebar_integration PRIVATE
     vnm_terminal_surface::vnm_terminal_surface
     vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
+    vnm::fonts
     Qt6::Core
     Qt6::Gui
     Qt6::Qml

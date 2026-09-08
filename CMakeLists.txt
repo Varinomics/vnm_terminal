@@ -46,6 +46,13 @@ include(cmake/vnm_terminal_dependency_origin.cmake)
 include(cmake/vnm_terminal_surface_dependency.cmake)
 include(cmake/vnm_qml_chrome_dependency.cmake)
 
+# The one CPack component this build packages. It is named here rather than in
+# cmake/vnm_terminal_packaging.cmake, which is included at the end of this file,
+# because a dependency added above has to install into it.
+set(vnm_terminal_runtime_component vnm_terminal_runtime)
+
+include(cmake/vnm_fonts_dependency.cmake)
+
 if(NOT TARGET vnm_qt_dispatch::vnm_qt_dispatch)
     message(FATAL_ERROR
         "vnm_terminal_surface did not make "
@@ -138,6 +145,7 @@ target_link_libraries(vnm_terminal_app_support
         Qt6::Quick
     PRIVATE
         vnm_qml_chrome::vnm_qml_chrome
+        vnm::fonts
 )
 add_library(
     vnm_terminal::vnm_terminal_app_support
@@ -178,10 +186,18 @@ if(PROJECT_IS_TOP_LEVEL)
         SOURCE_DIR)
     set_target_properties(vnm_qml_chrome PROPERTIES
         EXPORT_NAME vnm_terminal_qml_chrome_runtime)
+
+    # vnm_fonts is a private link dependency of the app support library, and a
+    # static library's private dependencies still have to be resolvable by a
+    # consumer of the installed package. It publishes no package of its own, so
+    # it travels in this one, exactly as vnm_qml_chrome does.
+    set_target_properties(vnm_fonts PROPERTIES
+        EXPORT_NAME vnm_terminal_fonts_runtime)
     install(TARGETS
         vnm_terminal_app_support
         vnm_terminal_default_shell
         vnm_qml_chrome
+        vnm_fonts
         EXPORT vnm_terminalTargets
         ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
