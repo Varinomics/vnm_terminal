@@ -92,6 +92,9 @@ public:
     void pulse_wheel_delivery_indicator();
     void show_row_timestamp_tooltip(const QRectF& row_rect, const QDateTime& timestamp);
     void hide_row_timestamp_tooltip();
+    // Drives the label's right-edge anchor: against the scrollbar's left
+    // edge when the scrollbar is visible, the window's right edge otherwise.
+    void set_row_timestamp_tooltip_scrollbar_visible(bool visible);
 
 signals:
     void settings_requested();

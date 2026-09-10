@@ -52,6 +52,7 @@ Item {
     property Component trailing_action_component: null
     property bool row_timestamp_tooltip_visible: false
     property rect row_timestamp_tooltip_row_rect: Qt.rect(0, 0, 0, 0)
+    property bool row_timestamp_tooltip_scrollbar_visible: false
     property date row_timestamp_tooltip_timestamp: new Date()
     // Set from Terminal_chrome_palette when the component is created. The
     // colors are deliberately not spelled out here: C++ owns them so the
@@ -349,9 +350,10 @@ R"(
     // Row-timestamp hover label. It lives in the chrome because the chrome
     // root is the always-on-top layer over the terminal surface, so the
     // label can anchor to the hovered row's right end without a second
-    // overlay mechanism. The panel touches the window content's right edge -
-    // past the scrollbar strip - and fades in from the left, so it reads as
-    // part of the row rather than as a floating card.
+    // overlay mechanism. The panel touches the scrollbar's left edge when
+    // the scrollbar is visible and the window content's right edge when it
+    // is not, and fades in from the left, so it reads as part of the row
+    // rather than as a floating card.
     Rectangle {
         id: row_timestamp_tooltip
         objectName: "row_timestamp_tooltip"
@@ -359,9 +361,15 @@ R"(
         readonly property real edge_margin: 4
         readonly property real fade_width: 48
         readonly property rect row_rect: root.row_timestamp_tooltip_row_rect
+        // The row rect spans the surface, whose right edge is the scrollbar's
+        // left edge; the window content's right edge lies past the scrollbar
+        // strip.
+        readonly property real anchor_right:
+            root.row_timestamp_tooltip_scrollbar_visible
+                ? row_rect.x + row_rect.width
+                : root.content_interior_rect.x + root.content_interior_rect.width
 
-        x: Math.max(edge_margin,
-            root.content_interior_rect.x + root.content_interior_rect.width - width)
+        x: Math.max(edge_margin, anchor_right - width)
         y: Math.max(edge_margin, Math.min(
             row_rect.y + (row_rect.height - height) / 2,
             root.height - height - edge_margin))
@@ -652,6 +660,12 @@ void chrome::Terminal_qml_chrome::show_row_timestamp_tooltip(
 void chrome::Terminal_qml_chrome::hide_row_timestamp_tooltip()
 {
     set_property("row_timestamp_tooltip_visible", false);
+}
+
+void chrome::Terminal_qml_chrome::set_row_timestamp_tooltip_scrollbar_visible(
+    bool visible)
+{
+    set_property("row_timestamp_tooltip_scrollbar_visible", visible);
 }
 
 void chrome::Terminal_qml_chrome::connect_window_commands()

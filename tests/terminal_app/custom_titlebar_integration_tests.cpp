@@ -2272,7 +2272,8 @@ bool test_row_timestamp_tooltip_chrome(QGuiApplication& app)
     }
 
     apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
-    connect_row_timestamp_tooltip_to_chrome(surface, &titlebar);
+    scrollbar.set_surface(&surface);
+    connect_row_timestamp_tooltip_to_chrome(surface, &titlebar, &scrollbar);
     window.show();
     pump_events(app);
 
@@ -2289,9 +2290,9 @@ bool test_row_timestamp_tooltip_chrome(QGuiApplication& app)
 
     // Drive the real wiring: emitting the surface signal must place the
     // tooltip in chrome coordinates. The surface sits at (5, 31) in this
-    // 800x480 fixture (see test_custom_titlebar_geometry). The tooltip
-    // touches the window content's right edge - past the scrollbar strip -
-    // and centers vertically on the reported row.
+    // 800x480 fixture (see test_custom_titlebar_geometry). With no scrollbar
+    // visible, the tooltip touches the window content's right edge and
+    // centers vertically on the reported row.
     const QDateTime timestamp(QDate(2026, 6, 10), QTime(14, 30, 5));
     QMetaObject::invokeMethod(
         &surface,
@@ -2332,6 +2333,36 @@ bool test_row_timestamp_tooltip_chrome(QGuiApplication& app)
         "tooltip touches the window content's right edge on a bottom row");
     ok &= check(nearly_equal(tooltip->y(), 480.0 - tooltip->height() - 4.0),
         "tooltip clamps to the bottom window edge");
+
+    // Seeding scrollback makes the scrollbar visible; the tooltip must then
+    // trade the window edge for the scrollbar's left edge, which is the
+    // surface's right edge.
+    auto backend = std::make_unique<Metadata_seed_backend>(numbered_scroll_lines(80));
+    const bool started = term::VNM_TerminalSurface_render_bridge::start_backend_terminal(
+        surface,
+        std::move(backend),
+        {QStringLiteral("tooltip-scrollbar-seed")}).accepted;
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    pump_events(app);
+    ok &= check(started && scrollbar.scrollbar_visible(),
+        "seeded scrollback makes the fixture's scrollbar visible");
+    ok &= check(
+        titlebar.root_item()
+            ->property("row_timestamp_tooltip_scrollbar_visible").toBool(),
+        "scrollbar visibility reaches the chrome tooltip anchor");
+
+    QMetaObject::invokeMethod(
+        &surface,
+        "row_timestamp_tooltip_requested",
+        Q_ARG(QRectF, QRectF(0.0, 20.0, surface.width(), 18.0)),
+        Q_ARG(QDateTime, timestamp));
+    pump_events(app);
+    const qreal surface_right = surface
+        .mapToItem(titlebar.root_item(), QPointF(surface.width(), 0.0))
+        .x();
+    ok &= check(
+        nearly_equal(tooltip->x(), surface_right - tooltip->width()),
+        "visible scrollbar anchors the tooltip to its left edge");
 
     window.resize(160, 480);
     apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);

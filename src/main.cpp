@@ -752,7 +752,7 @@ int main(int argc, char** argv)
     }
 
     connect_terminal_metadata_to_chrome(*surface, window, titlebar_ptr);
-    connect_row_timestamp_tooltip_to_chrome(*surface, titlebar_ptr);
+    connect_row_timestamp_tooltip_to_chrome(*surface, titlebar_ptr, scrollbar);
     QObject::connect(
         surface,
         &VNM_TerminalSurface::explicit_hyperlink_activation_requested,

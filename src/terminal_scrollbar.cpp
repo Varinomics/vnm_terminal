@@ -187,7 +187,11 @@ void scrollbar::Terminal_scrollbar::geometryChange(
     const QRectF&  new_geometry,
     const QRectF&  old_geometry)
 {
+    const bool was_visible = scrollbar_visible();
     QQuickPaintedItem::geometryChange(new_geometry, old_geometry);
+    if (scrollbar_visible() != was_visible) {
+        emit scrollbar_visibility_changed();
+    }
     update();
 }
 
@@ -639,11 +643,15 @@ void scrollbar::Terminal_scrollbar::set_viewport_state(
         return;
     }
 
+    const bool was_visible = scrollbar_visible();
     m_scrollback_rows  = scrollback_rows;
     m_visible_rows     = visible_rows;
     m_offset_from_tail = offset_from_tail;
     if (!scrollbar_visible()) {
         set_drag_active(false);
+    }
+    if (scrollbar_visible() != was_visible) {
+        emit scrollbar_visibility_changed();
     }
     update();
 }

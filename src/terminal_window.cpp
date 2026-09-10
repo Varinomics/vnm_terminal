@@ -402,7 +402,8 @@ void connect_terminal_metadata_to_chrome(
 
 void connect_row_timestamp_tooltip_to_chrome(
     VNM_TerminalSurface&           surface,
-    Terminal_qml_chrome*           titlebar)
+    Terminal_qml_chrome*           titlebar,
+    Terminal_scrollbar*            scrollbar)
 {
     // Without the built-in chrome there is no overlay layer to host the
     // tooltip, so the surface's hover signals stay unconsumed.
@@ -429,6 +430,19 @@ void connect_row_timestamp_tooltip_to_chrome(
         [titlebar] {
             titlebar->hide_row_timestamp_tooltip();
         });
+
+    if (scrollbar != nullptr) {
+        titlebar->set_row_timestamp_tooltip_scrollbar_visible(
+            scrollbar->scrollbar_visible());
+        QObject::connect(
+            scrollbar,
+            &Terminal_scrollbar::scrollbar_visibility_changed,
+            titlebar,
+            [titlebar, scrollbar] {
+                titlebar->set_row_timestamp_tooltip_scrollbar_visible(
+                    scrollbar->scrollbar_visible());
+            });
+    }
 }
 
 void sync_chrome_window_state(

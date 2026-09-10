@@ -16,6 +16,8 @@ namespace vnm_terminal::terminal_app {
 
 class Terminal_scrollbar final : public QQuickPaintedItem
 {
+    Q_OBJECT
+
 public:
     explicit Terminal_scrollbar(QQuickItem* parent = nullptr);
 
@@ -29,6 +31,11 @@ public:
     QRectF thumb_rect() const;
 
     void paint(QPainter* painter) override;
+
+signals:
+    // Emitted when scrollbar_visible() flips in either direction, whether
+    // from viewport state or from the item's own geometry.
+    void scrollbar_visibility_changed();
 
 protected:
     void geometryChange(const QRectF& new_geometry, const QRectF& old_geometry) override;
