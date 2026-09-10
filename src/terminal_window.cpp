@@ -414,11 +414,12 @@ void connect_row_timestamp_tooltip_to_chrome(
         &surface,
         &VNM_TerminalSurface::row_timestamp_tooltip_requested,
         titlebar,
-        [titlebar, &surface](qreal x, qreal y, const QDateTime& timestamp) {
-            // The surface reports the pointer in its own item coordinates;
-            // the chrome root spans the window, so map before anchoring.
+        [titlebar, &surface](const QRectF& row_rect, const QDateTime& timestamp) {
+            // The surface reports the row's rectangle in its own item
+            // coordinates; the chrome root spans the window, so map before
+            // anchoring.
             titlebar->show_row_timestamp_tooltip(
-                surface.mapToItem(titlebar->root_item(), QPointF(x, y)),
+                surface.mapToItem(titlebar->root_item(), row_rect),
                 timestamp);
         });
     QObject::connect(

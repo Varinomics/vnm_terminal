@@ -2289,24 +2289,32 @@ bool test_row_timestamp_tooltip_chrome(QGuiApplication& app)
 
     // Drive the real wiring: emitting the surface signal must place the
     // tooltip in chrome coordinates. The surface sits at (5, 31) in this
-    // 800x480 fixture (see test_custom_titlebar_geometry), and the tooltip
-    // anchors 12px down-right of the pointer.
+    // 800x480 fixture (see test_custom_titlebar_geometry). The tooltip
+    // touches the window content's right edge - past the scrollbar strip -
+    // and centers vertically on the reported row.
     const QDateTime timestamp(QDate(2026, 6, 10), QTime(14, 30, 5));
     QMetaObject::invokeMethod(
         &surface,
         "row_timestamp_tooltip_requested",
-        Q_ARG(qreal, 40.0),
-        Q_ARG(qreal, 20.0),
+        Q_ARG(QRectF, QRectF(40.0, 20.0, 700.0, 18.0)),
         Q_ARG(QDateTime, timestamp));
     pump_events(app);
+
+    const QRectF content_interior = titlebar.root_item()
+        ->property("content_interior_rect").toRectF();
+    ok &= check(content_interior.isValid(),
+        "chrome exposes its content interior rect");
+    const qreal content_right = content_interior.x() + content_interior.width();
 
     ok &= check(
         titlebar.root_item()->property("row_timestamp_tooltip_visible").toBool(),
         "tooltip request raises the chrome visibility flag");
-    ok &= check(nearly_equal(tooltip->x(), 40.0 + 5.0 + 12.0),
-        "tooltip anchors right of the reported pointer position");
-    ok &= check(nearly_equal(tooltip->y(), 20.0 + 31.0 + 12.0),
-        "tooltip anchors below the reported pointer position");
+    ok &= check(
+        nearly_equal(tooltip->x(), content_right - tooltip->width()),
+        "tooltip touches the window content's right edge");
+    ok &= check(
+        nearly_equal(tooltip->y(), 20.0 + 31.0 + (18.0 - tooltip->height()) / 2.0),
+        "tooltip centers vertically on the reported row");
 
     auto* tooltip_text = find_quick_item_recursive(
         tooltip, QStringLiteral("row_timestamp_tooltip_text"));
@@ -2318,12 +2326,19 @@ bool test_row_timestamp_tooltip_chrome(QGuiApplication& app)
             "tooltip formats the timestamp as a concrete local date and time");
     }
 
-    titlebar.show_row_timestamp_tooltip(QPointF(795.0, 475.0), timestamp);
+    titlebar.show_row_timestamp_tooltip(QRectF(0.0, 470.0, 800.0, 20.0), timestamp);
     pump_events(app);
-    ok &= check(nearly_equal(tooltip->x(), 800.0 - tooltip->width()  - 4.0),
-        "tooltip clamps to the right window edge");
+    ok &= check(nearly_equal(tooltip->x(), content_right - tooltip->width()),
+        "tooltip touches the window content's right edge on a bottom row");
     ok &= check(nearly_equal(tooltip->y(), 480.0 - tooltip->height() - 4.0),
         "tooltip clamps to the bottom window edge");
+
+    window.resize(160, 480);
+    apply_terminal_shell_geometry(window, surface, scrollbar, &titlebar, true);
+    titlebar.show_row_timestamp_tooltip(QRectF(0.0, 100.0, 100.0, 18.0), timestamp);
+    pump_events(app);
+    ok &= check(nearly_equal(tooltip->x(), 4.0),
+        "tooltip clamps to the left window edge when the window is narrower than itself");
 
     QMetaObject::invokeMethod(&surface, "row_timestamp_tooltip_dismissed");
     pump_events(app);

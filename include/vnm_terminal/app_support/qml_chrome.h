@@ -90,7 +90,7 @@ public:
     void set_fullscreen(bool fullscreen);
     void set_resize_enabled(bool resize_enabled);
     void pulse_wheel_delivery_indicator();
-    void show_row_timestamp_tooltip(const QPointF& position, const QDateTime& timestamp);
+    void show_row_timestamp_tooltip(const QRectF& row_rect, const QDateTime& timestamp);
     void hide_row_timestamp_tooltip();
 
 signals:
