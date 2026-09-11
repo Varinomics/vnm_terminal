@@ -436,8 +436,8 @@ REM windeployqt cannot discover the chrome's QML imports: the chrome QML is a
 REM C++ raw-string literal (see k_terminal_chrome_qml in src\qml_chrome.cpp),
 REM loaded via QQmlComponent with a synthetic qrc: URL, so there is no .qml file
 REM for windeployqt's import scanner to read, and it leaves qml\ empty. The chrome
-REM imports QtQuick and QtQuick.Window (QtQuick.Window lives under the QtQuick
-REM module tree). Mirror the regular build's post-build step
+REM imports QtQuick, QtQuick.Window (which lives under the QtQuick module tree),
+REM and QtQuick.Shapes. Mirror the regular build's post-build step
 REM (vnm_terminal_copy_qt_qml_module for QtQml and QtQuick in CMakeLists.txt) by
 REM copying those module trees from the Qt kit. Without them the portable app
 REM exits immediately with: module "QtQuick.Window" is not installed
@@ -462,19 +462,21 @@ if not exist "%RUNTIME_DIR%\qml\QtQuick\Window" (
 
 REM Deploy the QtQuick.Controls / Templates / Layouts runtime DLLs.
 REM The chrome QML and the VNM_Chrome module it loads import QtQuick.Controls,
-REM QtQuick.Controls.Basic and QtQuick.Layouts. windeployqt cannot see these
-REM imports (the chrome QML is a C++ string and the VNM_Chrome QML is qrc-embedded
-REM in the vnm_qml_chrome library), so it does not deploy the C++ libraries that
-REM the QtQuick.Controls QML plugins load dynamically. A local dev build resolves
-REM them from the Qt bin on PATH; a portable build has no such fallback. Mirror the
-REM regular build's explicit list (vnm_terminal_copy_qt_runtime_library for the
-REM QuickControls2 libraries in CMakeLists.txt) and add the QuickControls2 /
-REM QuickTemplates2 base libraries and QuickLayouts that those plugins depend on.
+REM QtQuick.Controls.Basic, QtQuick.Layouts and QtQuick.Shapes. windeployqt cannot
+REM see these imports (the chrome QML is a C++ string and the VNM_Chrome QML is
+REM qrc-embedded in the vnm_qml_chrome library), so it does not deploy the C++
+REM libraries that the QtQuick.Controls and QtQuick.Shapes QML plugins load
+REM dynamically. A local dev build resolves them from the Qt bin on PATH; a
+REM portable build has no such fallback. Mirror the regular build's explicit list
+REM (vnm_terminal_copy_qt_runtime_library in CMakeLists.txt) and add the
+REM QuickControls2 / QuickTemplates2 base libraries and QuickLayouts that those
+REM plugins depend on.
 REM Without them the portable app exits immediately with:
 REM   Cannot load library ...qtquickcontrols2plugin.dll
 REM The chrome forces the Basic style (QT_QUICK_CONTROLS_STYLE=Basic in the
 REM vnm_qml_chrome build); the wider style set matches the regular build.
 for %%F in (
+    Qt6QuickShapes.dll
     Qt6QuickControls2.dll
     Qt6QuickControls2Impl.dll
     Qt6QuickControls2Basic.dll

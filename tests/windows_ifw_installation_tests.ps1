@@ -253,10 +253,13 @@ try {
         $installRoot 'vnm_terminal_runtime\vnm_terminal.exe'
     $windowsPluginPath = Join-Path `
         $installRoot 'vnm_terminal_runtime\platforms\qwindows.dll'
+    $quickShapesRuntimePath = Join-Path `
+        $installRoot 'vnm_terminal_runtime\Qt6QuickShapes.dll'
     foreach ($requiredFile in @(
         $launcherPath,
         $runtimePath,
         $windowsPluginPath,
+        $quickShapesRuntimePath,
         $maintenancePath,
         $shortcutPath
     )) {
@@ -297,6 +300,13 @@ try {
             -ArgumentList '--help' -Wait -PassThru
         Assert-InstallationContract ($process.ExitCode -eq 0) `
             "$executable --help must exit successfully"
+    }
+
+    foreach ($executable in @($launcherPath, $runtimePath)) {
+        $process = Start-Process -FilePath $executable `
+            -ArgumentList @('--timeout-ms', '1500') -Wait -PassThru
+        Assert-InstallationContract ($process.ExitCode -eq 5) `
+            "$executable must complete the startup smoke test with timeout exit code 5"
     }
 
     Invoke-IfwCommand `

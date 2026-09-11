@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(vnm_terminal LANGUAGES C CXX VERSION 1.4.8)
+project(vnm_terminal LANGUAGES C CXX VERSION 1.4.9)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -41,7 +41,7 @@ endif()
 
 add_subdirectory(portable_launcher)
 
-find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2 QuickShapes)
 # The one CPack component this build packages. It is named here rather than in
 # cmake/vnm_terminal_packaging.cmake, which is included at the end of this file,
 # because dependencies must know it before registering their install rules.
@@ -413,6 +413,7 @@ if(WIN32)
     vnm_terminal_copy_qt_plugin(Qt6::QICOPlugin imageformats)
     vnm_terminal_copy_qt_plugin(Qt6::QSvgPlugin imageformats)
     vnm_terminal_copy_qt_runtime_library(Qt6::Svg)
+    vnm_terminal_copy_qt_runtime_library(Qt6::QuickShapes)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Basic)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2BasicStyleImpl)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Fusion)
