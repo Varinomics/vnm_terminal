@@ -35,18 +35,6 @@ QColor thumb_color(bool active)
         : QColor(132, 143, 158, 170);
 }
 
-QColor terminal_background_color(const VNM_TerminalSurface* surface)
-{
-    if (surface == nullptr) {
-        return QColor(0, 0, 0);
-    }
-
-    // Match the scrollbar gutter to the active color scheme's background.
-    const QVariantMap preview = surface->color_scheme_preview(surface->color_scheme());
-    const QVariant background = preview.value(QStringLiteral("background"));
-    return background.canConvert<QColor>() ? background.value<QColor>() : QColor(0, 0, 0);
-}
-
 } // namespace
 
 scrollbar::Terminal_scrollbar::Terminal_scrollbar(QQuickItem* parent)
@@ -99,7 +87,7 @@ void scrollbar::Terminal_scrollbar::set_surface(VNM_TerminalSurface* surface)
             &VNM_TerminalSurface::color_scheme_changed,
             this,
             [this] {
-                update();
+                sync_background_color();
             });
         m_destroyed_connection = QObject::connect(
             m_surface,
@@ -107,12 +95,14 @@ void scrollbar::Terminal_scrollbar::set_surface(VNM_TerminalSurface* surface)
             this,
             [this] {
                 m_surface = nullptr;
+                sync_background_color();
                 set_drag_active(false);
                 set_viewport_state(0, 0, 0);
             });
     }
 
     sync_from_surface();
+    sync_background_color();
 }
 
 bool scrollbar::Terminal_scrollbar::wheel_trace_enabled() const
@@ -166,7 +156,7 @@ void scrollbar::Terminal_scrollbar::paint(QPainter* painter)
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
     painter->setPen(Qt::NoPen);
-    painter->fillRect(boundingRect(), terminal_background_color(m_surface));
+    painter->fillRect(boundingRect(), m_background_color);
 
     if (!scrollbar_visible()) {
         painter->restore();
@@ -625,6 +615,27 @@ void scrollbar::Terminal_scrollbar::sync_from_surface()
         m_surface->scrollback_rows(),
         m_surface->viewport_visible_rows(),
         m_surface->viewport_offset_from_tail());
+}
+
+void scrollbar::Terminal_scrollbar::sync_background_color()
+{
+    QColor background(0, 0, 0);
+    if (m_surface != nullptr) {
+        // Match the scrollbar gutter to the active color scheme's background.
+        const QVariantMap preview =
+            m_surface->color_scheme_preview(m_surface->color_scheme());
+        const QVariant value = preview.value(QStringLiteral("background"));
+        if (value.canConvert<QColor>()) {
+            background = value.value<QColor>();
+        }
+    }
+
+    if (m_background_color == background) {
+        return;
+    }
+
+    m_background_color = background;
+    update();
 }
 
 void scrollbar::Terminal_scrollbar::set_viewport_state(

@@ -2,6 +2,7 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <QColor>
 #include <QMetaObject>
 #include <QPointer>
 #include <QQuickPaintedItem>
@@ -95,6 +96,8 @@ private:
 
     void sync_from_surface();
 
+    void sync_background_color();
+
     void   set_viewport_state(
         int                    scrollback_rows,
         int                    visible_rows,
@@ -108,6 +111,7 @@ private:
     int                            m_scrollback_rows              = 0;
     int                            m_visible_rows                 = 0;
     int                            m_offset_from_tail             = 0;
+    QColor                         m_background_color             = QColor(0, 0, 0);
     qreal                          m_drag_grab_offset_y           = 0.0;
     qreal                          m_wheel_scroll_angle_remainder = 0.0;
     qreal                          m_wheel_scroll_pixel_remainder = 0.0;

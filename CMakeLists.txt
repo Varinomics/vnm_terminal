@@ -100,6 +100,7 @@ add_custom_target(vnm_terminal_build_info ALL
 set(vnm_terminal_app_support_headers
     include/vnm_terminal/app_support/app_settings.h
     include/vnm_terminal/app_support/terminal_display_settings.h
+    include/vnm_terminal/app_support/diagnostic_sink.h
     include/vnm_terminal/app_support/app_shortcuts.h
     include/vnm_terminal/app_support/qml_chrome.h
     include/vnm_terminal/app_support/terminal_scrollbar.h
