@@ -19,6 +19,19 @@ install(TARGETS vnm_terminal
         COMPONENT "${vnm_terminal_runtime_component}"
 )
 
+if(WIN32)
+    vnm_terminal_install_conpty(
+        DESTINATION "${vnm_terminal_executable_destination}"
+        COMPONENT "${vnm_terminal_runtime_component}")
+
+    # The portable assembler installs only this component into its runtime
+    # directory; exclude it from normal installs to preserve their bin layout.
+    vnm_terminal_install_conpty(
+        DESTINATION "."
+        COMPONENT vnm_terminal_portable_conpty
+        EXCLUDE_FROM_ALL)
+endif()
+
 install(FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
     "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"

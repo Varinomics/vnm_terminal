@@ -343,6 +343,8 @@ if(APPLE)
 endif()
 
 if(WIN32)
+    vnm_terminal_deploy_conpty(vnm_terminal)
+
     set_target_properties(vnm_terminal PROPERTIES
         WIN32_EXECUTABLE TRUE
     )

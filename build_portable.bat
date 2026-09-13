@@ -377,6 +377,15 @@ if errorlevel 1 (
 copy /y "%~dp0LICENSE" "%PORTABLE_DIR%\LICENSE" >nul
 copy /y "%~dp0THIRD_PARTY_NOTICES.md" "%PORTABLE_DIR%\THIRD_PARTY_NOTICES.md" >nul
 
+REM ConPTY is loaded dynamically, so windeployqt cannot discover its DLL or
+REM console hosts. Reuse the surface's install rules for binaries and notices.
+"%CMAKE%" --install "%BUILD_DIR%" --config "%CONFIG%" ^
+    --prefix "%RUNTIME_DIR%" --component vnm_terminal_portable_conpty
+if errorlevel 1 (
+    echo ERROR: failed to deploy the ConPTY runtime and notices.
+    exit /b 1
+)
+
 REM The fonts vnm_fonts carries are compiled into this executable, and every one
 REM of their licences requires the licence and copyright notice to accompany the
 REM copy. An installed tree gets them from vnm_fonts' own install rules; this

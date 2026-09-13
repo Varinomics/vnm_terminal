@@ -14,6 +14,14 @@ Repository:
 
 - https://github.com/Varinomics/vnm_terminal_surface
 
+## Microsoft.Windows.Console.ConPTY
+
+Windows packages include Microsoft's ConPTY runtime (`conpty.dll` and the
+architecture-specific `OpenConsole.exe` hosts), distributed under the MIT
+license. The complete license accompanies the runtime in `licenses/conpty`.
+
+Upstream source: https://github.com/microsoft/terminal
+
 ## vnm_qml_chrome
 
 The app depends on the Varinomics `vnm_qml_chrome` library for shared Qt Quick
