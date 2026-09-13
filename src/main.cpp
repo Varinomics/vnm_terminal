@@ -496,6 +496,7 @@ int main(int argc, char** argv)
     auto* titlebar_ptr = titlebar.get();
 
     auto* surface = new VNM_TerminalSurface(window.contentItem());
+    surface->set_cursor_settle_delay_ms(80);
     surface->set_clipboard_text_reader(read_clipboard_text_with_broker);
     surface->set_selection_trace_enabled(options.selection_trace_enabled);
 #if VNM_TERMINAL_PROFILING_ENABLED
