@@ -275,7 +275,7 @@ Window {
     objectName: "terminal_settings_window"
     property bool dark_mode: true
 
-    readonly property int preferred_width: 574
+    readonly property int preferred_width: 510
     readonly property int unconstrained_maximum_size: 16777215
     property int available_width_limit: 0
     property int available_height_limit: 0
@@ -619,11 +619,17 @@ R"qml(
     component S_Switch: Basic.Switch {
         id: sw
 
+        implicitWidth: 38
         implicitHeight: 30
         hoverEnabled: true
+        leftPadding: 0
+        rightPadding: 0
+        topPadding: 0
+        bottomPadding: 0
         Layout.minimumWidth: implicitWidth
 
         indicator: Rectangle {
+            anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             implicitWidth: 38
             implicitHeight: 20
@@ -984,235 +990,301 @@ R"qml(
                 Layout.topMargin: 6
                 spacing: 24
 
-                // The right column holds a fixed share of the form, except
+                // The right column holds a smaller fixed share of the form, except
                 // on a narrow window, where it keeps the width its own controls
                 // need and the left column gives up the difference: a combo box
                 // elides gracefully, a spin box does not.
                 readonly property int right_column_width: Math.max(
                     form_right_column.implicitWidth,
-                    Math.round((settings_body.width - spacing) * 0.38))
+                    Math.round((settings_body.width - spacing) * 0.32))
 
-                GridLayout {
+                ColumnLayout {
+                    id: form_left_column
                     objectName: "settings_form_left_column"
+
+                    readonly property int left_column_label_width: 72
 
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignTop
-                    columns: 2
-                    columnSpacing: 24
-                    rowSpacing: 10
+                    spacing: 10
 
                     S_SectionHeader {
                         text: "Font"
-                        Layout.columnSpan: 2
                     }
 
-                    S_Label {
-                        text: "Family"
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    S_Combo {
-                        objectName: "font_family_combo"
+                    RowLayout {
                         Layout.fillWidth: true
-                        use_row_font: true
-                        model: settings.available_font_families()
-                        currentIndex: Math.max(0, model.indexOf(surface.fontFamily))
-                        onActivated: surface.fontFamily = currentText
+                        spacing: 24
+
+                        S_Label {
+                            text: "Family"
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.minimumWidth: form_left_column.left_column_label_width
+                            Layout.preferredWidth: form_left_column.left_column_label_width
+                            Layout.maximumWidth: form_left_column.left_column_label_width
+                        }
+
+                        S_Combo {
+                            objectName: "font_family_combo"
+                            Layout.fillWidth: true
+                            use_row_font: true
+                            model: settings.available_font_families()
+                            currentIndex: Math.max(0, model.indexOf(surface.fontFamily))
+                            onActivated: surface.fontFamily = currentText
+                        }
                     }
 
-                    S_Label {
-                        text: "Size"
-                        Layout.alignment: Qt.AlignVCenter
-                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 24
 
-                    S_SpinBox {
-                        objectName: "font_size_spin"
-                        from: 6
-                        to: 72
-                        value: Math.round(surface.fontSize)
-                        onValueModified: surface.fontSize = value
+                        S_Label {
+                            text: "Size"
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.minimumWidth: form_left_column.left_column_label_width
+                            Layout.preferredWidth: form_left_column.left_column_label_width
+                            Layout.maximumWidth: form_left_column.left_column_label_width
+                        }
+
+                        S_SpinBox {
+                            objectName: "font_size_spin"
+                            from: 6
+                            to: 72
+                            value: Math.round(surface.fontSize)
+                            onValueModified: surface.fontSize = value
+                        }
                     }
 
                     S_SectionHeader {
                         text: "Rendering"
-                        Layout.columnSpan: 2
                         Layout.topMargin: 10
                     }
 
-                    S_Label {
-                        text: "Renderer"
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    ColumnLayout {
+                    RowLayout {
                         Layout.fillWidth: true
-                        spacing: 6
+                        spacing: 24
 
-                        RowLayout {
+                        S_Label {
+                            text: "Renderer"
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.minimumWidth: form_left_column.left_column_label_width
+                            Layout.preferredWidth: form_left_column.left_column_label_width
+                            Layout.maximumWidth: form_left_column.left_column_label_width
+                        }
+
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 8
+                            spacing: 6
 
-                            S_Combo {
-                                id: renderer_combo
-                                objectName: "renderer_mode_combo"
-
+                            RowLayout {
                                 Layout.fillWidth: true
-                                // Automatic maps to Text_renderer_mode 0: it prefers MSDF
-                                // and falls back to the glyph renderer wherever needed.
-                                // Glyph only maps to Text_renderer_mode 2.
-                                textRole: "label"
-                                model: [
-                                    { label: "Automatic (MSDF preferred)" },
-                                    { label: "Glyph only" }
-                                ]
-                                // Show the selected policy. Automatic remains selected
-                                // when it falls back, while the tooltip explains why.
-                                currentIndex: surface.textRendererMode === 2 ? 1 : 0
-                                onActivated: (index) =>
-                                    surface.textRendererMode = index === 1 ? 2 : 0
+                                spacing: 8
 
-                                S_ToolTip {
-                                    content_object_name: "renderer_status_label"
-                                    text: win.renderer_status_text
-                                    visible: renderer_combo.hovered
-                                        && !renderer_combo.popup.visible
+                                S_Combo {
+                                    id: renderer_combo
+                                    objectName: "renderer_mode_combo"
+
+                                    Layout.fillWidth: true
+                                    // Automatic maps to Text_renderer_mode 0: it prefers MSDF
+                                    // and falls back to the glyph renderer wherever needed.
+                                    // Glyph only maps to Text_renderer_mode 2.
+                                    textRole: "label"
+                                    model: [
+                                        { label: "Automatic (MSDF preferred)" },
+                                        { label: "Glyph only" }
+                                    ]
+                                    // Show the selected policy. Automatic remains selected
+                                    // when it falls back, while the tooltip explains why.
+                                    currentIndex: surface.textRendererMode === 2 ? 1 : 0
+                                    onActivated: (index) =>
+                                        surface.textRendererMode = index === 1 ? 2 : 0
+
+                                    S_ToolTip {
+                                        content_object_name: "renderer_status_label"
+                                        text: win.renderer_status_text
+                                        visible: renderer_combo.hovered
+                                            && !renderer_combo.popup.visible
+                                    }
+                                }
+
+                                // The status itself lives in the picker's tooltip;
+                                // only its warning state needs to be visible without
+                                // hovering.
+                                Text {
+                                    objectName: "renderer_warning_glyph"
+
+                                    visible: win.msdf_unavailable
+                                    text: "\u26A0"
+                                    font.pixelSize: 12
+                                    color: win.warning_color
                                 }
                             }
 
-                            // The status itself lives in the picker's tooltip;
-                            // only its warning state needs to be visible without
-                            // hovering.
-                            Text {
-                                objectName: "renderer_warning_glyph"
-
-                                visible: win.msdf_unavailable
-                                text: "\u26A0"
-                                font.pixelSize: 12
-                                color: win.warning_color
+                            S_ProgressBar {
+                                Layout.fillWidth: true
+                                indeterminate: true
+                                visible: surface.msdfTextChecking
                             }
                         }
+                    }
 
-                        S_ProgressBar {
-                            Layout.fillWidth: true
-                            indeterminate: true
-                            visible: surface.msdfTextChecking
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 24
+
+                        S_Label {
+                            text: "LCD subpixel"
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.minimumWidth: form_left_column.left_column_label_width
+                            Layout.preferredWidth: form_left_column.left_column_label_width
+                            Layout.maximumWidth: form_left_column.left_column_label_width
                         }
-                    }
 
-                    S_Label {
-                        text: "LCD subpixel"
-                        Layout.alignment: Qt.AlignVCenter
-                    }
-
-                    S_Switch {
-                        objectName: "lcd_subpixel_switch"
-                        // lcdSubpixelOrder: AUTO=0 (on, auto-detected order), NONE=1
-                        // (off, grayscale). RGB/BGR/etc. chosen via the CLI also
-                        // read as on here.
-                        checked: surface.lcdSubpixelOrder !== 1
-                        onToggled: surface.lcdSubpixelOrder = checked ? 0 : 1
+                        S_Switch {
+                            objectName: "lcd_subpixel_switch"
+                            // lcdSubpixelOrder: AUTO=0 (on, auto-detected order), NONE=1
+                            // (off, grayscale). RGB/BGR/etc. chosen via the CLI also
+                            // read as on here.
+                            checked: surface.lcdSubpixelOrder !== 1
+                            onToggled: surface.lcdSubpixelOrder = checked ? 0 : 1
+                        }
                     }
                 }
 
-                GridLayout {
+                ColumnLayout {
                     id: form_right_column
                     objectName: "settings_form_right_column"
 
                     Layout.alignment: Qt.AlignTop
+                    Layout.minimumWidth: form_columns.right_column_width
                     Layout.preferredWidth: form_columns.right_column_width
-                    columns: 2
-                    columnSpacing: 24
-                    rowSpacing: 10
+                    Layout.maximumWidth: form_columns.right_column_width
+                    spacing: 10
 
                     S_SectionHeader {
                         text: "Behavior"
-                        Layout.columnSpan: 2
                     }
 
-                    S_Label {
-                        text: "Row timestamps"
-                        Layout.alignment: Qt.AlignVCenter
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+
+                        S_Label {
+                            text: "Row timestamps"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        S_Switch {
+                            objectName: "row_timestamp_switch"
+                            checked: surface.rowTimestampTooltipEnabled
+                            onToggled: surface.rowTimestampTooltipEnabled = checked
+                        }
                     }
 
-                    S_Switch {
-                        objectName: "row_timestamp_switch"
-                        checked: surface.rowTimestampTooltipEnabled
-                        onToggled: surface.rowTimestampTooltipEnabled = checked
-                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
 
-                    S_Label {
-                        text: "Copy on selection"
-                        Layout.alignment: Qt.AlignVCenter
-                    }
+                        S_Label {
+                            text: "Copy on selection"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
 
-                    S_Switch {
-                        objectName: "copy_on_select_switch"
-                        checked: surface.copyOnSelect
-                        onToggled: surface.copyOnSelect = checked
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        S_Switch {
+                            objectName: "copy_on_select_switch"
+                            checked: surface.copyOnSelect
+                            onToggled: surface.copyOnSelect = checked
+                        }
                     }
 
                     S_SectionHeader {
                         text: "Scrollback"
-                        Layout.columnSpan: 2
                         Layout.topMargin: 10
                     }
 
-                    S_Label {
-                        text: "Lines"
-                        Layout.alignment: Qt.AlignVCenter
-                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
 
-                    S_SpinBox {
-                        id: scrollback_spin
-                        objectName: "scrollback_spin"
+                        S_Label {
+                            text: "Lines"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
 
-                        // Narrowest width that still shows "1,000,000" in
-                        // full; this sets the right column's minimum, so every
-                        // pixel here is one the combo boxes do not get.
-                        implicitWidth: 104
-                        from: 0
-                        to: 1000000
-                        stepSize: 1000
-                        value: surface.scrollbackLimit
-                        onValueModified: surface.scrollbackLimit = value
+                        Item {
+                            Layout.fillWidth: true
+                        }
 
-                        S_ToolTip {
-                            text: "0 keeps no history beyond the screen."
-                            visible: scrollback_spin.hovered
+                        S_SpinBox {
+                            id: scrollback_spin
+                            objectName: "scrollback_spin"
+
+                            // Narrowest width that still shows "1,000,000" in
+                            // full; this sets the right column's minimum, so every
+                            // pixel here is one the combo boxes do not get.
+                            implicitWidth: 104
+                            from: 0
+                            to: 1000000
+                            stepSize: 1000
+                            value: surface.scrollbackLimit
+                            onValueModified: surface.scrollbackLimit = value
+
+                            S_ToolTip {
+                                text: "0 keeps no history beyond the screen."
+                                visible: scrollback_spin.hovered
+                            }
                         }
                     }
 
                     S_SectionHeader {
                         visible: interactionDiagnosticsUnlocked
                         text: "Diagnostics"
-                        Layout.columnSpan: 2
                         Layout.topMargin: 10
                     }
 
-                    S_Label {
+                    RowLayout {
                         visible: interactionDiagnosticsUnlocked
-                        text: "Interaction trace"
-                        Layout.alignment: Qt.AlignVCenter
-                    }
+                        Layout.fillWidth: true
+                        spacing: 12
 
-                    S_Switch {
-                        id: interaction_diagnostics_switch
-                        objectName: "interaction_diagnostics_switch"
-
-                        visible: interactionDiagnosticsUnlocked
-                        checked: surface.interactionDiagnosticsEnabled
-                        onToggled: {
-                            surface.interactionDiagnosticsEnabled = checked
-                            if (checked !== surface.interactionDiagnosticsEnabled)
-                                checked = surface.interactionDiagnosticsEnabled
+                        S_Label {
+                            visible: interactionDiagnosticsUnlocked
+                            text: "Interaction trace"
+                            Layout.alignment: Qt.AlignVCenter
                         }
 
-                        S_ToolTip {
-                            text: surface.interactionDiagnosticsError.length > 0
-                                ? surface.interactionDiagnosticsError
-                                : "Bounded trace (records control keys and event timing): "
-                                    + surface.interactionDiagnosticsPath
-                            visible: interaction_diagnostics_switch.hovered
+                        Item {
+                            visible: interactionDiagnosticsUnlocked
+                            Layout.fillWidth: true
+                        }
+
+                        S_Switch {
+                            id: interaction_diagnostics_switch
+                            objectName: "interaction_diagnostics_switch"
+
+                            visible: interactionDiagnosticsUnlocked
+                            checked: surface.interactionDiagnosticsEnabled
+                            onToggled: {
+                                surface.interactionDiagnosticsEnabled = checked
+                                if (checked !== surface.interactionDiagnosticsEnabled)
+                                    checked = surface.interactionDiagnosticsEnabled
+                            }
+
+                            S_ToolTip {
+                                text: surface.interactionDiagnosticsError.length > 0
+                                    ? surface.interactionDiagnosticsError
+                                    : "Bounded trace (records control keys and event timing): "
+                                        + surface.interactionDiagnosticsPath
+                                visible: interaction_diagnostics_switch.hovered
+                            }
                         }
                     }
                 }
