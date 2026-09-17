@@ -403,6 +403,15 @@ void Terminal_search_bar::commit_text(const QString& text)
     QCoreApplication::sendEvent(m_query_item, &event);
 }
 
+void Terminal_search_bar::send_key_event(QKeyEvent& event)
+{
+    if (m_query_item != nullptr &&
+        (event.type() == QEvent::KeyPress || event.type() == QEvent::KeyRelease))
+    {
+        QCoreApplication::sendEvent(m_query_item, &event);
+    }
+}
+
 void Terminal_search_bar::send_key_press(
     int                   key,
     Qt::KeyboardModifiers modifiers,

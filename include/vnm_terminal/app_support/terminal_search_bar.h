@@ -8,6 +8,7 @@
 
 #include <memory>
 
+class QKeyEvent;
 class QQmlContext;
 class QQmlEngine;
 class QQuickItem;
@@ -51,6 +52,9 @@ public:
     void set_text_font_family(const QString& font_family);
     bool focus_query();
     void commit_text(const QString& text);
+    // Synchronous delivery. Preserves the original key text, native metadata,
+    // repetition and timestamp; the caller retains ownership of the event.
+    void send_key_event(QKeyEvent& event);
     void send_key_press(
         int                   key,
         Qt::KeyboardModifiers modifiers,
