@@ -834,7 +834,7 @@ R"qml(
             height: Math.max(implicitHeight, settings_body_flickable.height)
             spacing: 10
 
-            S_SectionHeader { text: "Color scheme" }
+            S_SectionHeader { text: "Terminal color preset" }
 
             GridView {
                 id: scheme_grid
@@ -940,14 +940,44 @@ R"qml(
                                     }
                                 }
 
-                                Text {
+                                Row {
                                     anchors.right: parent.right
                                     anchors.rightMargin: 8
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: "Aa"
-                                    color: preview.foreground
-                                    font.family: surface.fontFamily
-                                    font.pixelSize: 12
+                                    spacing: 4
+
+                                    Text {
+                                        id: unselected_sample
+                                        text: "Aa"
+                                        color: preview.foreground
+                                        font.family: surface.fontFamily
+                                        font.pixelSize: 12
+                                    }
+
+                                    Rectangle {
+                                        width: Math.max(
+                                            7,
+                                            Math.round(unselected_sample.implicitHeight * 0.55))
+                                        height: unselected_sample.implicitHeight
+                                        color: preview.cursor
+                                    }
+
+                                    Rectangle {
+                                        width: selected_sample.implicitWidth + 6
+                                        height: selected_sample.implicitHeight
+                                        color: preview.selection
+
+                                        Text {
+                                            id: selected_sample
+                                            anchors.fill: parent
+                                            text: "Aa"
+                                            color: preview.selection_foreground
+                                            font.family: surface.fontFamily
+                                            font.pixelSize: 12
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
                                 }
                             }
 
