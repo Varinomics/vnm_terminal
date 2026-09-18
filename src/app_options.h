@@ -52,6 +52,8 @@ struct App_options
         VNM_TerminalSurface::Synchronized_output_scroll_policy::DEFER_UNTIL_CONTENT_PUBLICATION;
     VNM_TerminalSurface::Text_renderer_mode text_renderer_mode =
         VNM_TerminalSurface::Text_renderer_mode::AUTO;
+    vnm_terminal::Font_advance_policy font_advance_policy =
+        vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE;
     VNM_TerminalSurface::Lcd_subpixel_order lcd_subpixel_order =
         VNM_TerminalSurface::Lcd_subpixel_order::AUTO;
     Osc52_clipboard_policy osc52_clipboard_policy = Osc52_clipboard_policy::DENY;

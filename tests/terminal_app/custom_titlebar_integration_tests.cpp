@@ -107,6 +107,21 @@ bool nearly_equal(qreal actual, qreal expected)
     return std::abs(actual - expected) <= 0.000001;
 }
 
+qreal logical_dpi_for_window(const QWindow& window)
+{
+    const QScreen* const screen = window.screen();
+    if (screen == nullptr) {
+        return vnm_terminal::k_default_logical_dpi;
+    }
+
+    const qreal logical_dpi = screen->logicalDotsPerInch();
+    if (!std::isfinite(logical_dpi) || logical_dpi <= 0.0) {
+        return vnm_terminal::k_default_logical_dpi;
+    }
+
+    return std::max<qreal>(1.0, logical_dpi);
+}
+
 bool color_nearly_equal(
     const QColor& actual,
     const QColor& expected)
@@ -2503,7 +2518,9 @@ bool test_text_area_resize_request_respects_window_state()
     const vnm_terminal::Cell_metrics cell_metrics = vnm_terminal::cell_metrics_for_font(
         surface.font_family(),
         surface.font_size(),
-        window.devicePixelRatio());
+        window.devicePixelRatio(),
+        surface.font_advance_policy(),
+        logical_dpi_for_window(window));
     ok &= check(vnm_terminal::cell_metrics_valid(cell_metrics),
         "text-area resize fixture resolves cell metrics");
 
@@ -2633,7 +2650,9 @@ bool test_text_area_resize_policy_tracks_window_state(QGuiApplication& app)
     const vnm_terminal::Cell_metrics cell_metrics = vnm_terminal::cell_metrics_for_font(
         surface.font_family(),
         surface.font_size(),
-        window.devicePixelRatio());
+        window.devicePixelRatio(),
+        surface.font_advance_policy(),
+        logical_dpi_for_window(window));
     ok &= check(vnm_terminal::cell_metrics_valid(cell_metrics),
         "text-area resize policy fixture resolves cell metrics");
 

@@ -80,6 +80,18 @@ Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
         }
     }
 
+    if (const std::optional<int> policy =
+            settings_int_value(settings, k_appearance_font_advance_policy))
+    {
+        const int minimum =
+            static_cast<int>(vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE);
+        const int maximum =
+            static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
+        if (*policy >= minimum && *policy <= maximum) {
+            snapshot.font_advance_policy = *policy;
+        }
+    }
+
     if (const std::optional<int> order =
             settings_int_value(settings, k_appearance_lcd_subpixel_order))
     {
@@ -114,6 +126,7 @@ Terminal_settings_snapshot terminal_settings_snapshot(
     snapshot.color_scheme = surface.color_scheme();
     snapshot.font_family  = surface.font_family();
     snapshot.font_size    = surface.font_size();
+    snapshot.font_advance_policy = surface.font_advance_policy_value();
     snapshot.text_renderer_mode = static_cast<int>(surface.text_renderer_mode());
     snapshot.lcd_subpixel_order = static_cast<int>(surface.lcd_subpixel_order());
     snapshot.row_timestamp_tooltip_enabled =
@@ -144,6 +157,18 @@ void save_terminal_settings_snapshot(
         settings.setValue(
             QLatin1String(k_appearance_font_family),
             snapshot.font_family);
+    }
+
+    const int minimum_policy =
+        static_cast<int>(vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE);
+    const int maximum_policy =
+        static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
+    if (snapshot.font_advance_policy >= minimum_policy &&
+        snapshot.font_advance_policy <= maximum_policy)
+    {
+        settings.setValue(
+            QLatin1String(k_appearance_font_advance_policy),
+            snapshot.font_advance_policy);
     }
 
     const int minimum_renderer =
@@ -201,6 +226,15 @@ void apply_terminal_settings_snapshot(
     }
     if (std::isfinite(snapshot.font_size) && snapshot.font_size > 0.0) {
         surface.set_font_size(snapshot.font_size);
+    }
+    const int minimum_policy =
+        static_cast<int>(vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE);
+    const int maximum_policy =
+        static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
+    if (snapshot.font_advance_policy >= minimum_policy &&
+        snapshot.font_advance_policy <= maximum_policy)
+    {
+        surface.set_font_advance_policy_value(snapshot.font_advance_policy);
     }
 
     const int minimum_renderer =

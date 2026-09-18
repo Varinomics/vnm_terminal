@@ -275,7 +275,7 @@ Window {
     objectName: "terminal_settings_window"
     property bool dark_mode: true
 
-    readonly property int preferred_width: 510
+    readonly property int preferred_width: 540
     readonly property int unconstrained_maximum_size: 16777215
     property int available_width_limit: 0
     property int available_height_limit: 0
@@ -288,7 +288,7 @@ Window {
         + titlebar_height
         + 2 * body_margin
         + settings_body.implicitHeight)
-    readonly property int preferred_height: Math.max(550, natural_height)
+    readonly property int preferred_height: Math.max(600, natural_height)
 
     width: Math.min(preferred_width, effective_width_limit)
     height: Math.min(preferred_height, effective_height_limit)
@@ -980,9 +980,10 @@ R"qml(
             // column, so Font/Rendering labels line up with each other and
             // Behavior/Scrollback labels line up with each other, but not
             // across the gap: the left column is deliberately wider because
-            // its combo boxes need the room. Font and Behavior carry the same
-            // number of rows, which is what puts the Rendering and Scrollback
-            // headers on a single line.
+            // its combo boxes need the room. Font and Behavior account for the
+            // same vertical row heights, which is what puts the Rendering and
+            // Scrollback headers on a single line; the right column reserves
+            // the matching height for Font's Advance control below.
             RowLayout {
                 id: form_columns
 
@@ -1046,12 +1047,57 @@ R"qml(
                             Layout.maximumWidth: form_left_column.left_column_label_width
                         }
 
-                        S_SpinBox {
-                            objectName: "font_size_spin"
-                            from: 6
-                            to: 72
-                            value: Math.round(surface.fontSize)
-                            onValueModified: surface.fontSize = value
+                        RowLayout {
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            S_SpinBox {
+                                objectName: "font_size_spin"
+                                implicitWidth: 76
+                                Layout.maximumWidth: 76
+                                from: 6
+                                to: 72
+                                value: Math.round(surface.fontSize)
+                                onValueModified: surface.fontSize = value
+                            }
+
+                            S_Label {
+                                objectName: "font_effective_size_label"
+                                readonly property bool effective_size_differs:
+                                    Math.abs(surface.effectiveFontSize - surface.fontSize) > 0.005
+                                text: effective_size_differs
+                                    ? "Using " + surface.effectiveFontSize.toFixed(2) + " px"
+                                    : ""
+                                visible: effective_size_differs
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        id: font_advance_row
+                        Layout.fillWidth: true
+                        spacing: 24
+
+                        S_Label {
+                            text: "Cell width"
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.minimumWidth: form_left_column.left_column_label_width
+                            Layout.preferredWidth: form_left_column.left_column_label_width
+                            Layout.maximumWidth: form_left_column.left_column_label_width
+                        }
+
+                        S_Combo {
+                            objectName: "font_advance_policy_combo"
+                            Layout.fillWidth: true
+                            model: [
+                                "Adjust font size to device-pixel grid",
+                                "Snap upward (ceil)",
+                                "Snap to nearest (may overlap)"
+                            ]
+                            currentIndex: surface.fontAdvancePolicy
+                            onActivated: surface.fontAdvancePolicy = index
                         }
                     }
 
@@ -1203,6 +1249,14 @@ R"qml(
                             checked: surface.copyOnSelect
                             onToggled: surface.copyOnSelect = checked
                         }
+                    }
+
+                    // Font has an Advance row which Behavior does not need.
+                    // Reserve its control height so the following section
+                    // header remains aligned with Rendering.
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: font_advance_row.implicitHeight
                     }
 
                     S_SectionHeader {

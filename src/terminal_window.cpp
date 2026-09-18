@@ -14,6 +14,7 @@
 #include <QPointF>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QScreen>
 #include <QSize>
 #include <QWindow>
 #include <algorithm>
@@ -117,6 +118,21 @@ bool custom_titlebar_resize_border_active(const QQuickWindow& window)
     return !window_geometry_is_window_manager_owned(window);
 }
 
+qreal logical_dpi_for_window(const QWindow& window)
+{
+    const QScreen* const screen = window.screen();
+    if (screen == nullptr) {
+        return vnm_terminal::k_default_logical_dpi;
+    }
+
+    const qreal logical_dpi = screen->logicalDotsPerInch();
+    if (!std::isfinite(logical_dpi) || logical_dpi <= 0.0) {
+        return vnm_terminal::k_default_logical_dpi;
+    }
+
+    return std::max<qreal>(1.0, logical_dpi);
+}
+
 void apply_terminal_shell_geometry(
     QQuickWindow&                  window,
     VNM_TerminalSurface&           surface,
@@ -215,7 +231,9 @@ bool resize_window_for_text_area_request(
     const vnm_terminal::Cell_metrics cell_metrics = vnm_terminal::cell_metrics_for_font(
         surface.font_family(),
         surface.font_size(),
-        window.devicePixelRatio());
+        window.devicePixelRatio(),
+        surface.font_advance_policy(),
+        logical_dpi_for_window(window));
     if (!vnm_terminal::cell_metrics_valid(cell_metrics)) {
         return false;
     }

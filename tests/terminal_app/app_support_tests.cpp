@@ -29,6 +29,8 @@ private slots:
         const QVariantMap changes{
             {QStringLiteral("font_family"), QStringLiteral("Cascadia Mono")},
             {QStringLiteral("font_size"), 27},
+            {QStringLiteral("font_advance_policy"),
+                static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_UP)},
             {QStringLiteral("text_renderer_mode"),
                 static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH)},
             {QStringLiteral("lcd_subpixel_order"),
@@ -90,6 +92,7 @@ private slots:
         const QString palette   = QStringLiteral("color_scheme");
         const QString tooltip   = QStringLiteral("row_timestamp_tooltip_enabled");
         const QString size      = QStringLiteral("font_size");
+        const QString advance   = QStringLiteral("font_advance_policy");
         const QString renderer  = QStringLiteral("text_renderer_mode");
         const QString lcd       = QStringLiteral("lcd_subpixel_order");
         const QString scrollback = QStringLiteral("scrollback_limit");
@@ -118,6 +121,11 @@ private slots:
         QTest::newRow("size-bool")     << size << QVariant(true) << false << false;
         QTest::newRow("size-infinite") << size
             << QVariant(std::numeric_limits<double>::infinity()) << false << false;
+        QTest::newRow("advance-min")   << advance << QVariant(0) << true << true;
+        QTest::newRow("advance-max")   << advance << QVariant(2) << true << true;
+        QTest::newRow("advance-low")   << advance << QVariant(-1) << false << false;
+        QTest::newRow("advance-high")  << advance << QVariant(3) << false << false;
+        QTest::newRow("advance-frac")  << advance << QVariant(1.5) << false << false;
         QTest::newRow("renderer-min")  << renderer << QVariant(0) << true << true;
         QTest::newRow("renderer-max")  << renderer << QVariant(2) << true << true;
         QTest::newRow("renderer-high") << renderer << QVariant(3) << false << false;
@@ -175,6 +183,8 @@ private slots:
         expected.font_family = QStringLiteral("Cascadia Mono");
         expected.color_scheme = QStringLiteral("Campbell");
         expected.font_size = 23.5;
+        expected.font_advance_policy =
+            static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
         expected.text_renderer_mode = 2;
         expected.lcd_subpixel_order = 5;
         expected.row_timestamp_tooltip_enabled = false;
@@ -215,6 +225,8 @@ private slots:
         expected.color_scheme = QStringLiteral("Solarized Light");
         expected.font_family  = QStringLiteral("Cascadia Mono");
         expected.font_size    = 18.0;
+        expected.font_advance_policy =
+            static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_UP);
         expected.text_renderer_mode =
             static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH);
         expected.lcd_subpixel_order =
@@ -229,6 +241,7 @@ private slots:
         QCOMPARE(actual.color_scheme, expected.color_scheme);
         QCOMPARE(actual.font_family, expected.font_family);
         QCOMPARE(actual.font_size, expected.font_size);
+        QCOMPARE(actual.font_advance_policy, expected.font_advance_policy);
         QCOMPARE(actual.text_renderer_mode, expected.text_renderer_mode);
         QCOMPARE(actual.lcd_subpixel_order, expected.lcd_subpixel_order);
         QCOMPARE(
@@ -249,6 +262,7 @@ private slots:
         settings.setValue(QStringLiteral("appearance/color_scheme"), QStringLiteral("missing"));
         settings.setValue(QStringLiteral("appearance/font_family"), QStringLiteral("  "));
         settings.setValue(QStringLiteral("appearance/text_renderer_mode"), 999);
+        settings.setValue(QStringLiteral("appearance/font_advance_policy"), 999);
         settings.setValue(QStringLiteral("appearance/lcd_subpixel_order"), -1);
         settings.setValue(QStringLiteral("appearance/scrollback_limit"), -2);
 
@@ -258,6 +272,7 @@ private slots:
         QCOMPARE(actual.color_scheme, defaults.color_scheme);
         QCOMPARE(actual.font_family, defaults.font_family);
         QCOMPARE(actual.font_size, defaults.font_size);
+        QCOMPARE(actual.font_advance_policy, defaults.font_advance_policy);
         QCOMPARE(actual.text_renderer_mode, defaults.text_renderer_mode);
         QCOMPARE(actual.lcd_subpixel_order, defaults.lcd_subpixel_order);
         QCOMPARE(actual.scrollback_limit, defaults.scrollback_limit);
@@ -301,12 +316,15 @@ private slots:
         terminal_app::Terminal_settings_snapshot snapshot;
         snapshot.color_scheme = QStringLiteral("Solarized Light");
         snapshot.font_size    = 20.0;
+        snapshot.font_advance_policy =
+            static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
         snapshot.scrollback_limit = 512;
 
         VNM_TerminalSurface surface;
         terminal_app::apply_terminal_settings_snapshot(snapshot, surface);
         QCOMPARE(surface.color_scheme(), snapshot.color_scheme);
         QCOMPARE(surface.font_size(), snapshot.font_size);
+        QCOMPARE(surface.font_advance_policy_value(), snapshot.font_advance_policy);
         QCOMPARE(surface.scrollback_limit(), *snapshot.scrollback_limit);
     }
 

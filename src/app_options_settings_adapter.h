@@ -30,6 +30,7 @@ struct Persisted_appearance_settings
 {
     std::optional<QString> color_scheme;
     std::optional<QString> font_family;
+    std::optional<int>     font_advance_policy;
     std::optional<int>     text_renderer_mode;
     std::optional<int>     lcd_subpixel_order;
     std::optional<bool>    row_timestamp_tooltip;

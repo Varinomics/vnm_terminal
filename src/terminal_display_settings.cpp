@@ -54,6 +54,11 @@ bool settings_values_valid(const QVariantMap& changes, bool snapshot)
                 maximum = 72.0;
             }
             else
+            if (key == QStringLiteral("font_advance_policy")) {
+                minimum = static_cast<int>(vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE);
+                maximum = static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
+            }
+            else
             if (key == QStringLiteral("text_renderer_mode")) {
                 maximum = static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH);
             }
@@ -98,6 +103,7 @@ Terminal_settings_snapshot settings_snapshot(
     read("color_scheme",                  base.color_scheme);
     read("font_family",                   base.font_family);
     read("font_size",                     base.font_size);
+    read("font_advance_policy",           base.font_advance_policy);
     read("text_renderer_mode",            base.text_renderer_mode);
     read("lcd_subpixel_order",            base.lcd_subpixel_order);
     read("row_timestamp_tooltip_enabled",  base.row_timestamp_tooltip_enabled);
@@ -136,6 +142,7 @@ QVariantMap terminal_settings_payload(const Terminal_settings_snapshot& settings
         {QStringLiteral("color_scheme"), settings.color_scheme},
         {QStringLiteral("font_family"), settings.font_family},
         {QStringLiteral("font_size"), settings.font_size},
+        {QStringLiteral("font_advance_policy"), settings.font_advance_policy},
         {QStringLiteral("text_renderer_mode"), settings.text_renderer_mode},
         {QStringLiteral("lcd_subpixel_order"), settings.lcd_subpixel_order},
         {QStringLiteral("row_timestamp_tooltip_enabled"), settings.row_timestamp_tooltip_enabled},

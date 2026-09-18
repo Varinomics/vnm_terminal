@@ -84,6 +84,17 @@ void apply_persisted_appearance_settings(
     if (!options->font_family_explicit && state.font_family.has_value()) {
         options->font_family = *state.font_family;
     }
+    if (state.font_advance_policy.has_value()) {
+        const int policy = *state.font_advance_policy;
+        const int minimum =
+            static_cast<int>(vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE);
+        const int maximum =
+            static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
+        if (policy >= minimum && policy <= maximum) {
+            options->font_advance_policy =
+                static_cast<vnm_terminal::Font_advance_policy>(policy);
+        }
+    }
     if (!options->text_renderer_mode_explicit && state.text_renderer_mode.has_value()) {
         const int mode = *state.text_renderer_mode;
         if (mode >= static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO) &&
@@ -306,6 +317,8 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
 
     state.text_renderer_mode =
         settings_int_value(settings, k_appearance_text_renderer_mode);
+    state.font_advance_policy =
+        settings_int_value(settings, k_appearance_font_advance_policy);
     state.lcd_subpixel_order =
         settings_int_value(settings, k_appearance_lcd_subpixel_order);
     state.row_timestamp_tooltip =
@@ -348,6 +361,11 @@ void save_persisted_appearance_settings(
     if (!command_line_override_still_holds(overrides.font_family, font_family)) {
         settings.setValue(QLatin1String(k_appearance_font_family), font_family);
     }
+
+    const int font_advance_policy = surface.font_advance_policy_value();
+    settings.setValue(
+        QLatin1String(k_appearance_font_advance_policy),
+        font_advance_policy);
 
     const int text_renderer_mode = static_cast<int>(surface.text_renderer_mode());
     if (surface.text_renderer_mode() != VNM_TerminalSurface::Text_renderer_mode::MSDF &&

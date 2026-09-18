@@ -115,6 +115,7 @@ using chrome::k_text_area_resize_max_window_axis;
 using chrome::k_timeout_force_exit_grace_ms;
 using chrome::k_appearance_color_scheme;
 using chrome::k_appearance_font_family;
+using chrome::k_appearance_font_advance_policy;
 using chrome::k_appearance_lcd_subpixel_order;
 using chrome::k_appearance_row_timestamp_tooltip;
 using chrome::k_appearance_scrollback_limit;
@@ -519,6 +520,7 @@ int main(int argc, char** argv)
     scrollbar->set_wheel_trace_enabled(options.wheel_trace_enabled);
     surface->set_font_family(options.font_family);
     surface->set_font_size(options.font_size);
+    surface->set_font_advance_policy(options.font_advance_policy);
     surface->set_color_scheme(options.color_scheme);
     surface->set_copy_on_select(options.copy_on_select);
     surface->set_wheel_event_policy(
@@ -907,6 +909,11 @@ int main(int argc, char** argv)
     QObject::connect(
         surface,
         &VNM_TerminalSurface::font_family_changed,
+        surface,
+        persist_appearance);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::font_advance_policy_changed,
         surface,
         persist_appearance);
     QObject::connect(

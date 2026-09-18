@@ -262,6 +262,9 @@ bool test_appearance_settings_round_trip()
     writer.setValue(QLatin1String(k_appearance_color_scheme), QStringLiteral("Solarized Dark"));
     writer.setValue(QLatin1String(k_appearance_font_family),  QStringLiteral("Cascadia Mono"));
     writer.setValue(
+        QLatin1String(k_appearance_font_advance_policy),
+        static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST));
+    writer.setValue(
         QLatin1String(k_appearance_text_renderer_mode),
         static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH));
     writer.setValue(
@@ -279,6 +282,10 @@ bool test_appearance_settings_round_trip()
         "persisted color scheme round-trips");
     ok &= check(state.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
         "persisted font family round-trips");
+    ok &= check(
+        state.font_advance_policy.value_or(-1) ==
+            static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST),
+        "persisted font-advance policy round-trips");
     ok &= check(
         state.text_renderer_mode.value_or(-1) ==
             static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH),
@@ -298,6 +305,9 @@ bool test_appearance_settings_round_trip()
         "persisted color scheme is applied without command-line override");
     ok &= check(options.font_family == QStringLiteral("Cascadia Mono"),
         "persisted font family is applied without command-line override");
+    ok &= check(
+        options.font_advance_policy == vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST,
+        "persisted font-advance policy is applied without command-line override");
     ok &= check(
         options.text_renderer_mode == VNM_TerminalSurface::Text_renderer_mode::GLYPH,
         "persisted renderer mode is applied without command-line override");
@@ -327,6 +337,10 @@ bool test_appearance_settings_round_trip()
         "explicit color scheme overrides persisted scheme");
     ok &= check(explicit_options.font_family == QStringLiteral("Consolas"),
         "explicit font family overrides persisted family");
+    ok &= check(
+        explicit_options.font_advance_policy ==
+            vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST,
+        "font-advance policy is not a command-line override");
     ok &= check(
         explicit_options.text_renderer_mode == VNM_TerminalSurface::Text_renderer_mode::MSDF,
         "explicit renderer mode overrides persisted mode");
@@ -696,6 +710,7 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     surface.set_color_scheme(options.color_scheme);
     surface.set_font_family(options.font_family);
     surface.set_font_size(options.font_size);
+    surface.set_font_advance_policy(options.font_advance_policy);
     surface.set_text_renderer_mode(options.text_renderer_mode);
     surface.set_lcd_subpixel_order(options.lcd_subpixel_order);
     surface.set_row_timestamp_tooltip_enabled(options.row_timestamp_tooltip_enabled);
@@ -722,6 +737,10 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
         "an explicit color scheme leaves the stored scheme alone");
     ok &= check(appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
         "an explicit font family leaves the stored family alone");
+    ok &= check(
+        appearance.font_advance_policy.value_or(-1) ==
+            static_cast<int>(vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE),
+        "font-advance policy is stored because it has no command-line override");
     ok &= check(
         appearance.text_renderer_mode.value_or(-1) ==
             static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO),
@@ -750,6 +769,7 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     // must reach their stored preferences.
     surface.set_color_scheme(QStringLiteral("Solarized Light"));
     surface.set_font_size(22.0);
+    surface.set_font_advance_policy(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_UP);
     surface.set_row_timestamp_tooltip_enabled(false);
     surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::AUTO);
     surface.set_lcd_subpixel_order(VNM_TerminalSurface::Lcd_subpixel_order::BGR);
@@ -773,6 +793,10 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
         "a scheme chosen during the session replaces the stored scheme");
     ok &= check_optional_font_size(changed_window.font_size, 22.0,
         "a font size chosen during the session replaces the stored size");
+    ok &= check(
+        changed_appearance.font_advance_policy.value_or(-1) ==
+            static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_UP),
+        "a font-advance policy chosen during the session replaces the stored policy");
     ok &= check_optional_size(changed_window.size, QSize(1280, 800),
         "a window size chosen during the session replaces the stored size");
     ok &= check(
@@ -794,6 +818,7 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     // setting unable to store half its states for the rest of the session.
     surface.set_color_scheme(QStringLiteral("Campbell"));
     surface.set_font_size(30.0);
+    surface.set_font_advance_policy(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
     surface.set_row_timestamp_tooltip_enabled(true);
     surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::GLYPH);
     surface.set_lcd_subpixel_order(VNM_TerminalSurface::Lcd_subpixel_order::RGB);
@@ -819,6 +844,10 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
         "returning to the forced font size stores it");
     ok &= check_optional_size(restored_window.size, QSize(640, 480),
         "returning to the forced window size stores it");
+    ok &= check(
+        restored_appearance.font_advance_policy.value_or(-1) ==
+            static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST),
+        "returning to the nearest font-advance policy stores it");
     ok &= check(
         restored_appearance.row_timestamp_tooltip.value_or(false),
         "toggling a forced flag off and back on stores the final choice");

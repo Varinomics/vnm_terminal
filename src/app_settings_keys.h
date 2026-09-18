@@ -15,6 +15,7 @@ constexpr char k_window_settings_y[]         = "y";
 constexpr char k_appearance_settings_group[]        = "appearance";
 constexpr char k_appearance_color_scheme[]          = "color_scheme";
 constexpr char k_appearance_font_family[]           = "font_family";
+constexpr char k_appearance_font_advance_policy[]   = "font_advance_policy";
 constexpr char k_appearance_text_renderer_mode[]    = "text_renderer_mode";
 constexpr char k_appearance_lcd_subpixel_order[]    = "lcd_subpixel_order";
 constexpr char k_appearance_row_timestamp_tooltip[] = "row_timestamp_tooltip";

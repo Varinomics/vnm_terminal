@@ -20,6 +20,8 @@ struct Terminal_settings_snapshot
     QString color_scheme = QStringLiteral("Classic");
     QString font_family  = vnm_terminal::default_monospace_font_family();
     qreal   font_size    = vnm_terminal::k_default_font_pixel_size;
+    int     font_advance_policy =
+        static_cast<int>(vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE);
     int     text_renderer_mode =
         static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO);
     int     lcd_subpixel_order =
