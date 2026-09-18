@@ -271,7 +271,7 @@ bool test_appearance_settings_round_trip()
         QLatin1String(k_appearance_lcd_subpixel_order),
         static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::NONE));
     writer.setValue(QLatin1String(k_appearance_row_timestamp_tooltip), false);
-    writer.setValue(QLatin1String(k_appearance_scrollback_limit), 25000);
+    writer.setValue(QLatin1String(k_appearance_scrollback_buffer_size_mib), 32);
     writer.endGroup();
     writer.sync();
 
@@ -296,8 +296,8 @@ bool test_appearance_settings_round_trip()
         "persisted lcd subpixel order round-trips");
     ok &= check(state.row_timestamp_tooltip.has_value() && !*state.row_timestamp_tooltip,
         "persisted row timestamp toggle round-trips");
-    ok &= check(state.scrollback_limit.value_or(-1) == 25000,
-        "persisted scrollback limit round-trips");
+    ok &= check(state.scrollback_buffer_size_mib.value_or(-1) == 32,
+        "persisted scrollback buffer size round-trips");
 
     App_options options;
     apply_persisted_appearance_settings(state, &options);
@@ -316,8 +316,9 @@ bool test_appearance_settings_round_trip()
         "persisted lcd subpixel order is applied without command-line override");
     ok &= check(!options.row_timestamp_tooltip_enabled,
         "persisted row timestamp toggle is applied without command-line override");
-    ok &= check(options.scrollback_limit.value_or(0) == 25000,
-        "persisted scrollback limit is applied without command-line override");
+    ok &= check(
+        options.retained_history_capacity_bytes.value_or(0) == 32U * 1024U * 1024U,
+        "persisted scrollback buffer size is applied without command-line override");
 
     App_options explicit_options;
     explicit_options.color_scheme                   = QStringLiteral("Campbell");
@@ -330,8 +331,8 @@ bool test_appearance_settings_round_trip()
     explicit_options.lcd_subpixel_order_explicit    = true;
     explicit_options.row_timestamp_tooltip_enabled  = true;
     explicit_options.row_timestamp_tooltip_explicit = true;
-    explicit_options.scrollback_limit               = 4000;
-    explicit_options.scrollback_limit_explicit      = true;
+    explicit_options.retained_history_capacity_bytes = 4U * 1024U * 1024U;
+    explicit_options.retained_history_capacity_explicit = true;
     apply_persisted_appearance_settings(state, &explicit_options);
     ok &= check(explicit_options.color_scheme == QStringLiteral("Campbell"),
         "explicit color scheme overrides persisted scheme");
@@ -349,8 +350,9 @@ bool test_appearance_settings_round_trip()
         "explicit lcd subpixel order overrides persisted order");
     ok &= check(explicit_options.row_timestamp_tooltip_enabled,
         "explicit row timestamp flag overrides persisted toggle");
-    ok &= check(explicit_options.scrollback_limit.value_or(0) == 4000,
-        "explicit scrollback limit overrides persisted limit");
+    ok &= check(
+        explicit_options.retained_history_capacity_bytes.value_or(0) == 4U * 1024U * 1024U,
+        "explicit scrollback buffer size overrides persisted size");
 
     Persisted_appearance_settings bogus;
     bogus.color_scheme = QStringLiteral("Not A Real Scheme");
@@ -409,7 +411,7 @@ bool test_save_appearance_settings_from_surface()
     surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::GLYPH);
     surface.set_lcd_subpixel_order(VNM_TerminalSurface::Lcd_subpixel_order::NONE);
     surface.set_row_timestamp_tooltip_enabled(false);
-    surface.set_scrollback_limit(25000);
+    surface.set_scrollback_buffer_size_mib(32);
 
     Command_line_setting_overrides overrides;
     QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
@@ -432,8 +434,10 @@ bool test_save_appearance_settings_from_surface()
         "surface lcd subpixel order persists immediately");
     ok &= check(state.row_timestamp_tooltip.has_value() && !*state.row_timestamp_tooltip,
         "surface row timestamp toggle persists immediately");
-    ok &= check(state.scrollback_limit.value_or(-1) == surface.scrollback_limit(),
-        "surface scrollback limit persists immediately");
+    ok &= check(
+        state.scrollback_buffer_size_mib.value_or(-1) ==
+            surface.scrollback_buffer_size_mib(),
+        "surface scrollback buffer size persists immediately");
 
     surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::MSDF);
     save_persisted_appearance_settings(writer, surface, overrides);
@@ -677,7 +681,7 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
         QLatin1String(k_appearance_lcd_subpixel_order),
         static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::NONE));
     stored.setValue(QLatin1String(k_appearance_row_timestamp_tooltip), false);
-    stored.setValue(QLatin1String(k_appearance_scrollback_limit), 25000);
+    stored.setValue(QLatin1String(k_appearance_scrollback_buffer_size_mib), 32);
     stored.endGroup();
     stored.beginGroup(QLatin1String(k_window_settings_group));
     stored.setValue(QLatin1String(k_window_settings_font_size), 14.0);
@@ -701,8 +705,8 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     options.lcd_subpixel_order_explicit    = true;
     options.row_timestamp_tooltip_enabled  = true;
     options.row_timestamp_tooltip_explicit = true;
-    options.scrollback_limit               = 4000;
-    options.scrollback_limit_explicit      = true;
+    options.retained_history_capacity_bytes = 4U * 1024U * 1024U;
+    options.retained_history_capacity_explicit = true;
     options.window_size                    = QSize(640, 480);
     options.window_size_explicit           = true;
 
@@ -714,7 +718,8 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     surface.set_text_renderer_mode(options.text_renderer_mode);
     surface.set_lcd_subpixel_order(options.lcd_subpixel_order);
     surface.set_row_timestamp_tooltip_enabled(options.row_timestamp_tooltip_enabled);
-    surface.set_scrollback_limit(*options.scrollback_limit);
+    surface.set_retained_history_capacity_bytes(
+        *options.retained_history_capacity_bytes);
 
     Command_line_setting_overrides overrides =
         command_line_setting_overrides(options, surface);
@@ -751,8 +756,8 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
         "an explicit lcd subpixel order leaves the stored order alone");
     ok &= check(appearance.row_timestamp_tooltip.has_value() && !*appearance.row_timestamp_tooltip,
         "an explicit row timestamp flag leaves the stored toggle alone");
-    ok &= check(appearance.scrollback_limit.value_or(-1) == 25000,
-        "an explicit scrollback limit leaves the stored limit alone");
+    ok &= check(appearance.scrollback_buffer_size_mib.value_or(-1) == 32,
+        "an explicit scrollback buffer size leaves the stored size alone");
     ok &= check_optional_font_size(window.font_size, 14.0,
         "stored font size under an explicit font size");
     ok &= check_optional_size(window.size, QSize(1024, 720),
@@ -773,7 +778,7 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     surface.set_row_timestamp_tooltip_enabled(false);
     surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::AUTO);
     surface.set_lcd_subpixel_order(VNM_TerminalSurface::Lcd_subpixel_order::BGR);
-    surface.set_scrollback_limit(9000);
+    surface.set_scrollback_buffer_size_mib(9);
 
     Persisted_terminal_window_state changed_window_state;
     changed_window_state.font_size = surface.font_size();
@@ -807,8 +812,8 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
         changed_appearance.lcd_subpixel_order.value_or(-1) ==
             static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::BGR),
         "a subpixel order chosen during the session replaces the stored order");
-    ok &= check(changed_appearance.scrollback_limit.value_or(-1) == 9000,
-        "a scrollback limit chosen during the session replaces the stored limit");
+    ok &= check(changed_appearance.scrollback_buffer_size_mib.value_or(-1) == 9,
+        "a scrollback buffer size chosen during the session replaces the stored size");
     ok &= check(
         changed_appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
         "changing one setting does not release the other forced values");
@@ -822,7 +827,7 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     surface.set_row_timestamp_tooltip_enabled(true);
     surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::GLYPH);
     surface.set_lcd_subpixel_order(VNM_TerminalSurface::Lcd_subpixel_order::RGB);
-    surface.set_scrollback_limit(4000);
+    surface.set_scrollback_buffer_size_mib(4);
 
     Persisted_terminal_window_state restored_window_state;
     restored_window_state.font_size = surface.font_size();
@@ -859,8 +864,8 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
         restored_appearance.lcd_subpixel_order.value_or(-1) ==
             static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::RGB),
         "returning to the forced subpixel order stores it");
-    ok &= check(restored_appearance.scrollback_limit.value_or(-1) == 4000,
-        "returning to the forced scrollback limit stores it");
+    ok &= check(restored_appearance.scrollback_buffer_size_mib.value_or(-1) == 4,
+        "returning to the forced scrollback buffer size stores it");
     // Maximizing during the run released the forced state, so unmaximizing
     // afterwards is an ordinary choice and reaches the stored preference.
     ok &= check(!restored_window.maximized,

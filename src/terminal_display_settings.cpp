@@ -67,8 +67,14 @@ bool settings_values_valid(const QVariantMap& changes, bool snapshot)
                 maximum = static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::VBGR);
             }
             else
-            if (key == QStringLiteral("scrollback_limit")) {
-                maximum = 1'000'000;
+            if (key == QStringLiteral("scrollback_buffer_size_mib")) {
+                minimum = static_cast<double>(
+                    (VNM_TerminalSurface::minimum_retained_history_capacity_bytes() +
+                        1024U * 1024U - 1U) /
+                    (1024U * 1024U));
+                maximum = static_cast<double>(
+                    VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
+                    (1024U * 1024U));
             }
             else {
                 return false;
@@ -107,8 +113,9 @@ Terminal_settings_snapshot settings_snapshot(
     read("text_renderer_mode",            base.text_renderer_mode);
     read("lcd_subpixel_order",            base.lcd_subpixel_order);
     read("row_timestamp_tooltip_enabled",  base.row_timestamp_tooltip_enabled);
-    if (values.contains(QStringLiteral("scrollback_limit"))) {
-        base.scrollback_limit = values.value(QStringLiteral("scrollback_limit")).toInt();
+    if (values.contains(QStringLiteral("scrollback_buffer_size_mib"))) {
+        base.scrollback_buffer_size_mib = values.value(
+            QStringLiteral("scrollback_buffer_size_mib")).toInt();
     }
     return base;
 }
@@ -147,8 +154,10 @@ QVariantMap terminal_settings_payload(const Terminal_settings_snapshot& settings
         {QStringLiteral("lcd_subpixel_order"), settings.lcd_subpixel_order},
         {QStringLiteral("row_timestamp_tooltip_enabled"), settings.row_timestamp_tooltip_enabled},
     };
-    if (settings.scrollback_limit) {
-        result.insert(QStringLiteral("scrollback_limit"), *settings.scrollback_limit);
+    if (settings.scrollback_buffer_size_mib) {
+        result.insert(
+            QStringLiteral("scrollback_buffer_size_mib"),
+            *settings.scrollback_buffer_size_mib);
     }
     return result;
 }

@@ -19,6 +19,8 @@ namespace vnm_terminal::terminal_app {
 
 namespace {
 
+constexpr std::size_t k_bytes_per_mib = 1024U * 1024U;
+
 template <typename Value_t>
 bool command_line_override_still_holds(
     std::optional<Value_t>& forced_value,
@@ -61,8 +63,9 @@ Command_line_setting_overrides command_line_setting_overrides(
     if (options.row_timestamp_tooltip_explicit) {
         overrides.row_timestamp_tooltip = surface.row_timestamp_tooltip_enabled();
     }
-    if (options.scrollback_limit_explicit) {
-        overrides.scrollback_limit = surface.scrollback_limit();
+    if (options.retained_history_capacity_explicit) {
+        overrides.retained_history_capacity_bytes =
+            surface.retained_history_capacity_bytes();
     }
 
     // Geometry settles only after the window system has granted the requested
@@ -116,11 +119,22 @@ void apply_persisted_appearance_settings(
     if (!options->row_timestamp_tooltip_explicit && state.row_timestamp_tooltip.has_value()) {
         options->row_timestamp_tooltip_enabled = *state.row_timestamp_tooltip;
     }
-    if (!options->scrollback_limit_explicit &&
-        state.scrollback_limit.has_value()  &&
-        *state.scrollback_limit >= 0)
-    {
-        options->scrollback_limit = *state.scrollback_limit;
+    if (!options->retained_history_capacity_explicit) {
+        const std::optional<int> size_mib = state.scrollback_buffer_size_mib;
+        const int minimum_mib = static_cast<int>(
+            (VNM_TerminalSurface::minimum_retained_history_capacity_bytes() +
+                k_bytes_per_mib - 1U) /
+            k_bytes_per_mib);
+        const int maximum_mib = static_cast<int>(
+            VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
+            k_bytes_per_mib);
+        if (size_mib.has_value() &&
+            *size_mib >= minimum_mib &&
+            *size_mib <= maximum_mib)
+        {
+            options->retained_history_capacity_bytes =
+                static_cast<std::size_t>(*size_mib) * k_bytes_per_mib;
+        }
     }
 }
 
@@ -258,6 +272,29 @@ bool settle_command_line_window_geometry(
     return true;
 }
 
+std::optional<int> settings_scrollback_buffer_size_mib(QSettings& settings)
+{
+    const std::optional<int> size_mib = settings_int_value(
+        settings,
+        k_appearance_scrollback_buffer_size_mib);
+    if (!size_mib.has_value()) {
+        return std::nullopt;
+    }
+
+    const int minimum_mib = static_cast<int>(
+        (VNM_TerminalSurface::minimum_retained_history_capacity_bytes() +
+            k_bytes_per_mib - 1U) /
+        k_bytes_per_mib);
+    const int maximum_mib = static_cast<int>(
+        VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
+        k_bytes_per_mib);
+    if (*size_mib < minimum_mib || *size_mib > maximum_mib) {
+        return std::nullopt;
+    }
+
+    return size_mib;
+}
+
 void save_persisted_terminal_window_state(
     QSettings&                             settings,
     const Persisted_terminal_window_state& state,
@@ -323,8 +360,8 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
         settings_int_value(settings, k_appearance_lcd_subpixel_order);
     state.row_timestamp_tooltip =
         settings_bool_value(settings, k_appearance_row_timestamp_tooltip);
-    state.scrollback_limit =
-        settings_int_value(settings, k_appearance_scrollback_limit);
+    state.scrollback_buffer_size_mib =
+        settings_scrollback_buffer_size_mib(settings);
     state.chrome_focused_background =
         settings_color_value(settings, k_appearance_chrome_focused_background);
     state.chrome_unfocused_background =
@@ -389,10 +426,17 @@ void save_persisted_appearance_settings(
             row_timestamp_tooltip);
     }
 
-    const int scrollback_limit = surface.scrollback_limit();
-    if (!command_line_override_still_holds(overrides.scrollback_limit, scrollback_limit)) {
-        settings.setValue(QLatin1String(k_appearance_scrollback_limit), scrollback_limit);
+    const std::size_t retained_history_capacity_bytes =
+        surface.retained_history_capacity_bytes();
+    if (!command_line_override_still_holds(
+            overrides.retained_history_capacity_bytes,
+            retained_history_capacity_bytes))
+    {
+        settings.setValue(
+            QLatin1String(k_appearance_scrollback_buffer_size_mib),
+            surface.scrollback_buffer_size_mib());
     }
+    settings.remove(QLatin1String(k_appearance_scrollback_limit));
 
     settings.endGroup();
     settings.sync();

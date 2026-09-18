@@ -13,6 +13,8 @@ namespace vnm_terminal::terminal_app {
 
 namespace {
 
+constexpr std::size_t k_bytes_per_mib = 1024U * 1024U;
+
 std::optional<int> settings_int_value(QSettings& settings, const char* key)
 {
     if (!settings.contains(QLatin1String(key))) {
@@ -22,6 +24,29 @@ std::optional<int> settings_int_value(QSettings& settings, const char* key)
     bool      ok    = false;
     const int value = settings.value(QLatin1String(key)).toInt(&ok);
     return ok ? std::optional<int>(value) : std::nullopt;
+}
+
+std::optional<int> settings_scrollback_buffer_size_mib(QSettings& settings)
+{
+    const std::optional<int> size_mib = settings_int_value(
+        settings,
+        k_appearance_scrollback_buffer_size_mib);
+    if (!size_mib.has_value()) {
+        return std::nullopt;
+    }
+
+    const int minimum_mib = static_cast<int>(
+        (VNM_TerminalSurface::minimum_retained_history_capacity_bytes() +
+            k_bytes_per_mib - 1U) /
+        k_bytes_per_mib);
+    const int maximum_mib = static_cast<int>(
+        VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
+        k_bytes_per_mib);
+    if (*size_mib < minimum_mib || *size_mib > maximum_mib) {
+        return std::nullopt;
+    }
+
+    return size_mib;
 }
 
 std::optional<qreal> settings_font_size(QSettings& settings)
@@ -109,12 +134,8 @@ Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
             QLatin1String(k_appearance_row_timestamp_tooltip)).toBool();
     }
 
-    if (const std::optional<int> scrollback_limit =
-            settings_int_value(settings, k_appearance_scrollback_limit);
-        scrollback_limit.has_value() && *scrollback_limit >= 0)
-    {
-        snapshot.scrollback_limit = scrollback_limit;
-    }
+    snapshot.scrollback_buffer_size_mib =
+        settings_scrollback_buffer_size_mib(settings);
     settings.endGroup();
     return snapshot;
 }
@@ -131,7 +152,7 @@ Terminal_settings_snapshot terminal_settings_snapshot(
     snapshot.lcd_subpixel_order = static_cast<int>(surface.lcd_subpixel_order());
     snapshot.row_timestamp_tooltip_enabled =
         surface.row_timestamp_tooltip_enabled();
-    snapshot.scrollback_limit = surface.scrollback_limit();
+    snapshot.scrollback_buffer_size_mib = surface.scrollback_buffer_size_mib();
     return snapshot;
 }
 
@@ -205,13 +226,14 @@ void save_terminal_settings_snapshot(
     settings.setValue(
         QLatin1String(k_appearance_row_timestamp_tooltip),
         snapshot.row_timestamp_tooltip_enabled);
-    if (snapshot.scrollback_limit.has_value() && *snapshot.scrollback_limit >= 0) {
+    if (snapshot.scrollback_buffer_size_mib.has_value()) {
         settings.setValue(
-            QLatin1String(k_appearance_scrollback_limit),
-            *snapshot.scrollback_limit);
+            QLatin1String(k_appearance_scrollback_buffer_size_mib),
+            *snapshot.scrollback_buffer_size_mib);
     } else {
-        settings.remove(QLatin1String(k_appearance_scrollback_limit));
+        settings.remove(QLatin1String(k_appearance_scrollback_buffer_size_mib));
     }
+    settings.remove(QLatin1String(k_appearance_scrollback_limit));
     settings.endGroup();
     settings.sync();
 }
@@ -263,8 +285,8 @@ void apply_terminal_settings_snapshot(
 
     surface.set_row_timestamp_tooltip_enabled(
         snapshot.row_timestamp_tooltip_enabled);
-    if (snapshot.scrollback_limit.has_value() && *snapshot.scrollback_limit >= 0) {
-        surface.set_scrollback_limit(*snapshot.scrollback_limit);
+    if (snapshot.scrollback_buffer_size_mib.has_value()) {
+        surface.set_scrollback_buffer_size_mib(*snapshot.scrollback_buffer_size_mib);
     }
 }
 

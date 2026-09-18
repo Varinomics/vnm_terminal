@@ -118,7 +118,7 @@ using chrome::k_appearance_font_family;
 using chrome::k_appearance_font_advance_policy;
 using chrome::k_appearance_lcd_subpixel_order;
 using chrome::k_appearance_row_timestamp_tooltip;
-using chrome::k_appearance_scrollback_limit;
+using chrome::k_appearance_scrollback_buffer_size_mib;
 using chrome::k_appearance_settings_group;
 using chrome::k_appearance_text_renderer_mode;
 using chrome::k_window_settings_font_size;
@@ -934,6 +934,11 @@ int main(int argc, char** argv)
     QObject::connect(
         surface,
         &VNM_TerminalSurface::scrollback_limit_changed,
+        surface,
+        persist_appearance);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::scrollback_buffer_size_mib_changed,
         surface,
         persist_appearance);
 

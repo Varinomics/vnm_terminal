@@ -36,7 +36,7 @@ private slots:
             {QStringLiteral("lcd_subpixel_order"),
                 static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::BGR)},
             {QStringLiteral("row_timestamp_tooltip_enabled"), false},
-            {QStringLiteral("scrollback_limit"), 12'345},
+            {QStringLiteral("scrollback_buffer_size_mib"), 32},
         };
         QVERIFY(display.apply_changes(changes, true));
         QVERIFY(display.apply_changes({{QStringLiteral("color_scheme"), QStringLiteral("Campbell")}}, true));
@@ -95,7 +95,7 @@ private slots:
         const QString advance   = QStringLiteral("font_advance_policy");
         const QString renderer  = QStringLiteral("text_renderer_mode");
         const QString lcd       = QStringLiteral("lcd_subpixel_order");
-        const QString scrollback = QStringLiteral("scrollback_limit");
+        const QString scrollback = QStringLiteral("scrollback_buffer_size_mib");
 
         QTest::newRow("font")          << font << QVariant("Cascadia Mono") << true << true;
         QTest::newRow("empty-font")    << font << QVariant("")              << false << true;
@@ -134,9 +134,9 @@ private slots:
         QTest::newRow("lcd-max")       << lcd << QVariant(5) << true << true;
         QTest::newRow("lcd-low")       << lcd << QVariant(-1) << false << false;
         QTest::newRow("lcd-high")      << lcd << QVariant(6) << false << false;
-        QTest::newRow("scroll-min")    << scrollback << QVariant(0) << true << true;
-        QTest::newRow("scroll-max")    << scrollback << QVariant(1'000'000LL) << true << true;
-        QTest::newRow("scroll-high")   << scrollback << QVariant(1'000'001) << false << false;
+        QTest::newRow("scroll-min")    << scrollback << QVariant(1) << true << true;
+        QTest::newRow("scroll-max")    << scrollback << QVariant(64) << true << true;
+        QTest::newRow("scroll-high")   << scrollback << QVariant(65) << false << false;
         QTest::newRow("scroll-frac")   << scrollback << QVariant(1.5) << false << false;
     }
 
@@ -160,17 +160,17 @@ private slots:
         const auto defaults = terminal_app::terminal_settings_from_json(QJsonValue::Undefined, base);
         QVERIFY(defaults);
         QCOMPARE(defaults->font_size, base.font_size);
-        QVERIFY(!defaults->scrollback_limit);
+        QVERIFY(!defaults->scrollback_buffer_size_mib);
         const auto empty = terminal_app::terminal_settings_from_json(QJsonObject{}, base);
         QVERIFY(empty);
         QCOMPARE(empty->font_family, base.font_family);
-        QVERIFY(!empty->scrollback_limit);
-        base.scrollback_limit = 12'345;
+        QVERIFY(!empty->scrollback_buffer_size_mib);
+        base.scrollback_buffer_size_mib = 32;
         const auto partial = terminal_app::terminal_settings_from_json(
             QJsonObject{{QStringLiteral("font_size"), 28}}, base);
         QVERIFY(partial);
         QCOMPARE(partial->font_size, 28.0);
-        QCOMPARE(partial->scrollback_limit, base.scrollback_limit);
+        QCOMPARE(partial->scrollback_buffer_size_mib, base.scrollback_buffer_size_mib);
         for (const QJsonValue value : {QJsonValue(), QJsonValue(false), QJsonValue(17), QJsonValue("font")}) {
             QVERIFY(!terminal_app::terminal_settings_from_json(value, base));
         }
@@ -189,8 +189,8 @@ private slots:
         expected.lcd_subpixel_order = 5;
         expected.row_timestamp_tooltip_enabled = false;
         const auto without_scrollback = terminal_app::terminal_settings_payload(expected);
-        QVERIFY(!without_scrollback.contains(QStringLiteral("scrollback_limit")));
-        expected.scrollback_limit = 12'345;
+        QVERIFY(!without_scrollback.contains(QStringLiteral("scrollback_buffer_size_mib")));
+        expected.scrollback_buffer_size_mib = 32;
         const auto payload = terminal_app::terminal_settings_payload(expected);
         const auto actual = terminal_app::terminal_settings_from_json(QJsonObject::fromVariantMap(payload), {});
         QVERIFY(actual);
@@ -232,7 +232,7 @@ private slots:
         expected.lcd_subpixel_order =
             static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::BGR);
         expected.row_timestamp_tooltip_enabled = false;
-        expected.scrollback_limit = 12'345;
+        expected.scrollback_buffer_size_mib = 32;
 
         terminal_app::save_terminal_settings_snapshot(settings, expected);
         const terminal_app::Terminal_settings_snapshot actual =
@@ -247,7 +247,7 @@ private slots:
         QCOMPARE(
             actual.row_timestamp_tooltip_enabled,
             expected.row_timestamp_tooltip_enabled);
-        QCOMPARE(actual.scrollback_limit, expected.scrollback_limit);
+        QCOMPARE(actual.scrollback_buffer_size_mib, expected.scrollback_buffer_size_mib);
     }
 
     void invalid_settings_keep_neutral_defaults()
@@ -264,7 +264,7 @@ private slots:
         settings.setValue(QStringLiteral("appearance/text_renderer_mode"), 999);
         settings.setValue(QStringLiteral("appearance/font_advance_policy"), 999);
         settings.setValue(QStringLiteral("appearance/lcd_subpixel_order"), -1);
-        settings.setValue(QStringLiteral("appearance/scrollback_limit"), -2);
+        settings.setValue(QStringLiteral("appearance/scrollback_buffer_size_mib"), 0);
 
         const terminal_app::Terminal_settings_snapshot defaults;
         const terminal_app::Terminal_settings_snapshot actual =
@@ -275,7 +275,7 @@ private slots:
         QCOMPARE(actual.font_advance_policy, defaults.font_advance_policy);
         QCOMPARE(actual.text_renderer_mode, defaults.text_renderer_mode);
         QCOMPARE(actual.lcd_subpixel_order, defaults.lcd_subpixel_order);
-        QCOMPARE(actual.scrollback_limit, defaults.scrollback_limit);
+        QCOMPARE(actual.scrollback_buffer_size_mib, defaults.scrollback_buffer_size_mib);
     }
 
     void transient_msdf_does_not_replace_the_durable_renderer_on_save()
@@ -318,14 +318,14 @@ private slots:
         snapshot.font_size    = 20.0;
         snapshot.font_advance_policy =
             static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
-        snapshot.scrollback_limit = 512;
+        snapshot.scrollback_buffer_size_mib = 16;
 
         VNM_TerminalSurface surface;
         terminal_app::apply_terminal_settings_snapshot(snapshot, surface);
         QCOMPARE(surface.color_scheme(), snapshot.color_scheme);
         QCOMPARE(surface.font_size(), snapshot.font_size);
         QCOMPARE(surface.font_advance_policy_value(), snapshot.font_advance_policy);
-        QCOMPARE(surface.scrollback_limit(), *snapshot.scrollback_limit);
+        QCOMPARE(surface.scrollback_buffer_size_mib(), *snapshot.scrollback_buffer_size_mib);
     }
 
     void settings_controller_is_reusable()

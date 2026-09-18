@@ -9,6 +9,7 @@
 #include <QPoint>
 #include <QSize>
 
+#include <cstddef>
 #include <optional>
 
 class QSettings;
@@ -34,7 +35,7 @@ struct Persisted_appearance_settings
     std::optional<int>     text_renderer_mode;
     std::optional<int>     lcd_subpixel_order;
     std::optional<bool>    row_timestamp_tooltip;
-    std::optional<int>     scrollback_limit;
+    std::optional<int>     scrollback_buffer_size_mib;
     std::optional<QColor>  chrome_focused_background;
     std::optional<QColor>  chrome_unfocused_background;
     std::optional<QColor>  chrome_focused_frame_edge;
@@ -57,7 +58,7 @@ struct Command_line_setting_overrides
     std::optional<int>     text_renderer_mode;
     std::optional<int>     lcd_subpixel_order;
     std::optional<bool>    row_timestamp_tooltip;
-    std::optional<int>     scrollback_limit;
+    std::optional<std::size_t> retained_history_capacity_bytes;
     std::optional<QSize>   window_size;
     std::optional<QPoint>  window_position;
     std::optional<bool>    maximized;

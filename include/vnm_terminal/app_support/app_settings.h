@@ -27,7 +27,7 @@ struct Terminal_settings_snapshot
     int     lcd_subpixel_order =
         static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::AUTO);
     bool    row_timestamp_tooltip_enabled = true;
-    std::optional<int> scrollback_limit;
+    std::optional<int> scrollback_buffer_size_mib;
 };
 
 Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings);

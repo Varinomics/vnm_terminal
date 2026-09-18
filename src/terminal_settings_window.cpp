@@ -275,7 +275,7 @@ Window {
     objectName: "terminal_settings_window"
     property bool dark_mode: true
 
-    readonly property int preferred_width: 540
+    readonly property int preferred_width: 552
     readonly property int unconstrained_maximum_size: 16777215
     property int available_width_limit: 0
     property int available_height_limit: 0
@@ -1085,7 +1085,7 @@ R"qml(
                             S_SpinBox {
                                 objectName: "font_size_spin"
                                 implicitWidth: 76
-                                Layout.maximumWidth: 76
+                                Layout.maximumWidth: 68
                                 from: 6
                                 to: 72
                                 value: Math.round(surface.fontSize)
@@ -1294,37 +1294,51 @@ R"qml(
                         Layout.topMargin: 10
                     }
 
-                    RowLayout {
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 12
+                        spacing: 2
 
-                        S_Label {
-                            text: "Lines"
-                            Layout.alignment: Qt.AlignVCenter
-                        }
-
-                        Item {
+                        RowLayout {
                             Layout.fillWidth: true
+                            spacing: 8
+
+                            S_Label {
+                                text: "Buffer size (MiB)"
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.fillWidth: true
+                            }
+
+                            S_SpinBox {
+                                id: scrollback_buffer_size_spin
+                                objectName: "scrollback_buffer_size_spin"
+
+                                implicitWidth: 68
+                                Layout.preferredWidth: 68
+                                Layout.maximumWidth: 68
+                                from: surface.minimumScrollbackBufferSizeMiB
+                                to: surface.maximumScrollbackBufferSizeMiB
+                                stepSize: 1
+                                value: surface.scrollbackBufferSizeMiB
+                                onValueModified: surface.scrollbackBufferSizeMiB = value
+
+                                S_ToolTip {
+                                    text: "The line estimate assumes plain text at the current width."
+                                    visible: scrollback_buffer_size_spin.hovered
+                                }
+                            }
+
                         }
 
-                        S_SpinBox {
-                            id: scrollback_spin
-                            objectName: "scrollback_spin"
-
-                            // Narrowest width that still shows "1,000,000" in
-                            // full; this sets the right column's minimum, so every
-                            // pixel here is one the combo boxes do not get.
-                            implicitWidth: 104
-                            from: 0
-                            to: 1000000
-                            stepSize: 1000
-                            value: surface.scrollbackLimit
-                            onValueModified: surface.scrollbackLimit = value
-
-                            S_ToolTip {
-                                text: "0 keeps no history beyond the screen."
-                                visible: scrollback_spin.hovered
-                            }
+                        Text {
+                            Layout.fillWidth: true
+                            text: surface.estimatedScrollbackLines > 0
+                                ? "≈ " + surface.estimatedScrollbackLines.toLocaleString() +
+                                    " plain-text lines at this width"
+                                : "Estimate appears when the terminal size is known"
+                            color: win.label_color
+                            font.pixelSize: 10
+                            horizontalAlignment: Text.AlignLeft
+                            wrapMode: Text.Wrap
                         }
                     }
 
