@@ -6,7 +6,7 @@
       "branch": "master",
       "checkout_path": "vnm_terminal_surface",
       "output": "surface",
-      "commit": "87d0b43fe2858af0155ae4295aa014d53bcdabe6"
+      "commit": "fa79dbc504699746202526c588fe61ebbf29c4c4"
     },
     "vnm_qml_chrome": {
       "repository": "Varinomics/vnm_qml_chrome",
@@ -34,7 +34,7 @@
       "branch": "master",
       "checkout_path": "vnm_fonts",
       "output": "fonts",
-      "commit": "38020905710a65aa6470ff5305c6f90d87ca86cd"
+      "commit": "38245d29db2f38e6f77c9f418c54638cf1877d4b"
     }
   },
   "third_party": {
