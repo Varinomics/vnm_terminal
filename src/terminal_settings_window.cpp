@@ -836,6 +836,8 @@ R"qml(
 
             S_SectionHeader { text: "Terminal color preset" }
 
+)qml"
+R"qml(
             GridView {
                 id: scheme_grid
                 objectName: "scheme_list"
@@ -1231,6 +1233,8 @@ R"qml(
                                 }
                             }
                         }
+)qml"
+R"qml(
 
                         Item {
                             Layout.fillWidth: true
