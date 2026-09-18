@@ -1545,6 +1545,37 @@ bool test_terminal_scrollbar_tracks_surface_viewport(QGuiApplication& app)
     }
     const QColor top_gutter_color = painted_scrollbar.pixelColor(1, 0);
     const QColor bottom_gutter_color = painted_scrollbar.pixelColor(1, 199);
+    const QVariantMap color_preview =
+        surface.color_scheme_preview(surface.color_scheme());
+    const QColor scheme_background = color_preview.value(
+        QStringLiteral("background")).value<QColor>();
+    float hue        = 0.0F;
+    float saturation = 0.0F;
+    float value      = 0.0F;
+    float alpha      = 0.0F;
+    scheme_background.getHsvF(&hue, &saturation, &value, &alpha);
+    QColor inverted_scheme_background;
+    inverted_scheme_background.setHsvF(
+        hue,
+        saturation,
+        1.0 - value,
+        alpha);
+    ok &= check(
+        color_nearly_equal(top_gutter_color, scheme_background),
+        "scrollbar gutter matches the color scheme background");
+    surface.set_invert_brightness(true);
+    QImage inverted_scrollbar(12, 200, QImage::Format_ARGB32_Premultiplied);
+    inverted_scrollbar.fill(Qt::transparent);
+    {
+        QPainter painter(&inverted_scrollbar);
+        scrollbar.paint(&painter);
+    }
+    ok &= check(
+        color_nearly_equal(
+            inverted_scrollbar.pixelColor(1, 0),
+            inverted_scheme_background),
+        "scrollbar gutter follows inverted brightness");
+    surface.set_invert_brightness(false);
     int square_track_top_pixels = 0;
     int square_track_bottom_pixels = 0;
     for (int x = 2; x < painted_scrollbar.width(); ++x) {

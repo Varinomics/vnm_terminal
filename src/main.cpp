@@ -533,6 +533,7 @@ int main(int argc, char** argv)
     surface->set_alternate_screen_wheel_policy(options.alternate_screen_wheel_policy);
     surface->set_text_renderer_mode(options.text_renderer_mode);
     surface->set_lcd_subpixel_order(options.lcd_subpixel_order);
+    surface->set_invert_brightness(options.invert_brightness);
     surface->set_row_timestamp_tooltip_enabled(options.row_timestamp_tooltip_enabled);
     apply_synchronized_output_scroll_policy_option(*surface, options);
     apply_primary_repaint_recovery_option(*surface, options);
@@ -924,6 +925,11 @@ int main(int argc, char** argv)
     QObject::connect(
         surface,
         &VNM_TerminalSurface::lcd_subpixel_order_changed,
+        surface,
+        persist_appearance);
+    QObject::connect(
+        surface,
+        &VNM_TerminalSurface::invert_brightness_changed,
         surface,
         persist_appearance);
     QObject::connect(

@@ -35,6 +35,7 @@ private slots:
                 static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH)},
             {QStringLiteral("lcd_subpixel_order"),
                 static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::BGR)},
+            {QStringLiteral("invert_brightness"), true},
             {QStringLiteral("row_timestamp_tooltip_enabled"), false},
             {QStringLiteral("scrollback_buffer_size_mib"), 32},
         };
@@ -95,6 +96,7 @@ private slots:
         const QString advance   = QStringLiteral("font_advance_policy");
         const QString renderer  = QStringLiteral("text_renderer_mode");
         const QString lcd       = QStringLiteral("lcd_subpixel_order");
+        const QString invert    = QStringLiteral("invert_brightness");
         const QString scrollback = QStringLiteral("scrollback_buffer_size_mib");
 
         QTest::newRow("font")          << font << QVariant("Cascadia Mono") << true << true;
@@ -110,6 +112,8 @@ private slots:
             << QVariant(QStringLiteral("Classic") + QChar(u'\0')) << false << false;
         QTest::newRow("bool")          << tooltip << QVariant(false) << true << true;
         QTest::newRow("bool-number")   << tooltip << QVariant(1)     << false << false;
+        QTest::newRow("invert-bool")   << invert << QVariant(true)  << true << true;
+        QTest::newRow("invert-number") << invert << QVariant(1)     << false << false;
         QTest::newRow("unknown-key")   << QStringLiteral("unknown") << QVariant(1) << false << false;
         QTest::newRow("null")          << size << QVariant() << false << false;
         QTest::newRow("size-min")      << size << QVariant(6.0)  << true << true;
@@ -187,6 +191,7 @@ private slots:
             static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
         expected.text_renderer_mode = 2;
         expected.lcd_subpixel_order = 5;
+        expected.invert_brightness = true;
         expected.row_timestamp_tooltip_enabled = false;
         const auto without_scrollback = terminal_app::terminal_settings_payload(expected);
         QVERIFY(!without_scrollback.contains(QStringLiteral("scrollback_buffer_size_mib")));
@@ -231,6 +236,7 @@ private slots:
             static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH);
         expected.lcd_subpixel_order =
             static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::BGR);
+        expected.invert_brightness = true;
         expected.row_timestamp_tooltip_enabled = false;
         expected.scrollback_buffer_size_mib = 32;
 
@@ -244,6 +250,7 @@ private slots:
         QCOMPARE(actual.font_advance_policy, expected.font_advance_policy);
         QCOMPARE(actual.text_renderer_mode, expected.text_renderer_mode);
         QCOMPARE(actual.lcd_subpixel_order, expected.lcd_subpixel_order);
+        QCOMPARE(actual.invert_brightness, expected.invert_brightness);
         QCOMPARE(
             actual.row_timestamp_tooltip_enabled,
             expected.row_timestamp_tooltip_enabled);
@@ -318,6 +325,7 @@ private slots:
         snapshot.font_size    = 20.0;
         snapshot.font_advance_policy =
             static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
+        snapshot.invert_brightness = true;
         snapshot.scrollback_buffer_size_mib = 16;
 
         VNM_TerminalSurface surface;
@@ -325,6 +333,7 @@ private slots:
         QCOMPARE(surface.color_scheme(), snapshot.color_scheme);
         QCOMPARE(surface.font_size(), snapshot.font_size);
         QCOMPARE(surface.font_advance_policy_value(), snapshot.font_advance_policy);
+        QCOMPARE(surface.invert_brightness(), snapshot.invert_brightness);
         QCOMPARE(surface.scrollback_buffer_size_mib(), *snapshot.scrollback_buffer_size_mib);
     }
 

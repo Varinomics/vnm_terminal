@@ -129,6 +129,11 @@ Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
         }
     }
 
+    if (settings.contains(QLatin1String(k_appearance_invert_brightness))) {
+        snapshot.invert_brightness = settings.value(
+            QLatin1String(k_appearance_invert_brightness)).toBool();
+    }
+
     if (settings.contains(QLatin1String(k_appearance_row_timestamp_tooltip))) {
         snapshot.row_timestamp_tooltip_enabled = settings.value(
             QLatin1String(k_appearance_row_timestamp_tooltip)).toBool();
@@ -150,6 +155,7 @@ Terminal_settings_snapshot terminal_settings_snapshot(
     snapshot.font_advance_policy = surface.font_advance_policy_value();
     snapshot.text_renderer_mode = static_cast<int>(surface.text_renderer_mode());
     snapshot.lcd_subpixel_order = static_cast<int>(surface.lcd_subpixel_order());
+    snapshot.invert_brightness = surface.invert_brightness();
     snapshot.row_timestamp_tooltip_enabled =
         surface.row_timestamp_tooltip_enabled();
     snapshot.scrollback_buffer_size_mib = surface.scrollback_buffer_size_mib();
@@ -224,6 +230,10 @@ void save_terminal_settings_snapshot(
     }
 
     settings.setValue(
+        QLatin1String(k_appearance_invert_brightness),
+        snapshot.invert_brightness);
+
+    settings.setValue(
         QLatin1String(k_appearance_row_timestamp_tooltip),
         snapshot.row_timestamp_tooltip_enabled);
     if (snapshot.scrollback_buffer_size_mib.has_value()) {
@@ -282,6 +292,8 @@ void apply_terminal_settings_snapshot(
             static_cast<VNM_TerminalSurface::Lcd_subpixel_order>(
                 snapshot.lcd_subpixel_order));
     }
+
+    surface.set_invert_brightness(snapshot.invert_brightness);
 
     surface.set_row_timestamp_tooltip_enabled(
         snapshot.row_timestamp_tooltip_enabled);

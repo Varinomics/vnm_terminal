@@ -116,6 +116,9 @@ void apply_persisted_appearance_settings(
                 static_cast<VNM_TerminalSurface::Lcd_subpixel_order>(order);
         }
     }
+    if (state.invert_brightness.has_value()) {
+        options->invert_brightness = *state.invert_brightness;
+    }
     if (!options->row_timestamp_tooltip_explicit && state.row_timestamp_tooltip.has_value()) {
         options->row_timestamp_tooltip_enabled = *state.row_timestamp_tooltip;
     }
@@ -358,6 +361,8 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
         settings_int_value(settings, k_appearance_font_advance_policy);
     state.lcd_subpixel_order =
         settings_int_value(settings, k_appearance_lcd_subpixel_order);
+    state.invert_brightness =
+        settings_bool_value(settings, k_appearance_invert_brightness);
     state.row_timestamp_tooltip =
         settings_bool_value(settings, k_appearance_row_timestamp_tooltip);
     state.scrollback_buffer_size_mib =
@@ -415,6 +420,10 @@ void save_persisted_appearance_settings(
     if (!command_line_override_still_holds(overrides.lcd_subpixel_order, lcd_subpixel_order)) {
         settings.setValue(QLatin1String(k_appearance_lcd_subpixel_order), lcd_subpixel_order);
     }
+
+    settings.setValue(
+        QLatin1String(k_appearance_invert_brightness),
+        surface.invert_brightness());
 
     const bool row_timestamp_tooltip = surface.row_timestamp_tooltip_enabled();
     if (!command_line_override_still_holds(

@@ -56,6 +56,7 @@ struct App_options
         vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE;
     VNM_TerminalSurface::Lcd_subpixel_order lcd_subpixel_order =
         VNM_TerminalSurface::Lcd_subpixel_order::AUTO;
+    bool               invert_brightness                 = false;
     Osc52_clipboard_policy osc52_clipboard_policy = Osc52_clipboard_policy::DENY;
     Paste_shortcut_policy paste_shortcut_policy = Paste_shortcut_policy::PLATFORM_DEFAULT;
     std::optional<int>         timeout_ms;

@@ -107,6 +107,7 @@ private:
     QMetaObject::Connection        m_viewport_connection;
     QMetaObject::Connection        m_grid_connection;
     QMetaObject::Connection        m_theme_connection;
+    QMetaObject::Connection        m_invert_brightness_connection;
     QMetaObject::Connection        m_destroyed_connection;
     int                            m_scrollback_rows              = 0;
     int                            m_visible_rows                 = 0;

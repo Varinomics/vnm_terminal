@@ -1206,7 +1206,7 @@ R"qml(
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 24
+                        spacing: 10
 
                         S_Label {
                             text: "LCD subpixel"
@@ -1218,11 +1218,39 @@ R"qml(
 
                         S_Switch {
                             objectName: "lcd_subpixel_switch"
+                            Layout.leftMargin: 14
                             // lcdSubpixelOrder: AUTO=0 (on, auto-detected order), NONE=1
                             // (off, grayscale). RGB/BGR/etc. chosen via the CLI also
                             // read as on here.
-                            checked: surface.lcdSubpixelOrder !== 1
-                            onToggled: surface.lcdSubpixelOrder = checked ? 0 : 1
+                            checked: !surface.invertBrightness
+                                && surface.lcdSubpixelOrder !== 1
+                            onToggled: {
+                                surface.lcdSubpixelOrder = checked ? 0 : 1
+                                if (checked && surface.invertBrightness) {
+                                    surface.invertBrightness = false
+                                }
+                            }
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        S_Label {
+                            text: "Invert brightness"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        S_Switch {
+                            id: invert_brightness_switch
+                            objectName: "invert_brightness_switch"
+                            checked: surface.invertBrightness
+                            onToggled: surface.invertBrightness = checked
+
+                            S_ToolTip {
+                                text: "Inverts the HSV value (V) of rendered colors."
+                                visible: invert_brightness_switch.hovered
+                            }
                         }
                     }
                 }

@@ -34,6 +34,7 @@ struct Persisted_appearance_settings
     std::optional<int>     font_advance_policy;
     std::optional<int>     text_renderer_mode;
     std::optional<int>     lcd_subpixel_order;
+    std::optional<bool>    invert_brightness;
     std::optional<bool>    row_timestamp_tooltip;
     std::optional<int>     scrollback_buffer_size_mib;
     std::optional<QColor>  chrome_focused_background;

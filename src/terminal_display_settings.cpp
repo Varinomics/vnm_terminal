@@ -46,6 +46,12 @@ bool settings_values_valid(const QVariantMap& changes, bool snapshot)
                 return false;
             }
         }
+        else
+        if (key == QStringLiteral("invert_brightness")) {
+            if (value.metaType().id() != QMetaType::Bool) {
+                return false;
+            }
+        }
         else {
             double minimum = 0.0;
             double maximum = 0.0;
@@ -112,6 +118,7 @@ Terminal_settings_snapshot settings_snapshot(
     read("font_advance_policy",           base.font_advance_policy);
     read("text_renderer_mode",            base.text_renderer_mode);
     read("lcd_subpixel_order",            base.lcd_subpixel_order);
+    read("invert_brightness",              base.invert_brightness);
     read("row_timestamp_tooltip_enabled",  base.row_timestamp_tooltip_enabled);
     if (values.contains(QStringLiteral("scrollback_buffer_size_mib"))) {
         base.scrollback_buffer_size_mib = values.value(
@@ -152,6 +159,7 @@ QVariantMap terminal_settings_payload(const Terminal_settings_snapshot& settings
         {QStringLiteral("font_advance_policy"), settings.font_advance_policy},
         {QStringLiteral("text_renderer_mode"), settings.text_renderer_mode},
         {QStringLiteral("lcd_subpixel_order"), settings.lcd_subpixel_order},
+        {QStringLiteral("invert_brightness"), settings.invert_brightness},
         {QStringLiteral("row_timestamp_tooltip_enabled"), settings.row_timestamp_tooltip_enabled},
     };
     if (settings.scrollback_buffer_size_mib) {

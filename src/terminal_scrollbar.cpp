@@ -35,6 +35,24 @@ QColor thumb_color(bool active)
         : QColor(132, 143, 158, 170);
 }
 
+QColor invert_hsv_value(QColor color)
+{
+    const qreal red   = color.redF();
+    const qreal green = color.greenF();
+    const qreal blue  = color.blueF();
+    const qreal value = std::max({red, green, blue});
+    if (value <= 0.0) {
+        return QColor::fromRgbF(1.0, 1.0, 1.0, color.alphaF());
+    }
+
+    const qreal scale = (1.0 - value) / value;
+    return QColor::fromRgbF(
+        red * scale,
+        green * scale,
+        blue * scale,
+        color.alphaF());
+}
+
 } // namespace
 
 scrollbar::Terminal_scrollbar::Terminal_scrollbar(QQuickItem* parent)
@@ -60,6 +78,7 @@ void scrollbar::Terminal_scrollbar::set_surface(VNM_TerminalSurface* surface)
     QObject::disconnect(m_viewport_connection);
     QObject::disconnect(m_grid_connection);
     QObject::disconnect(m_theme_connection);
+    QObject::disconnect(m_invert_brightness_connection);
     QObject::disconnect(m_destroyed_connection);
     m_surface                      = surface;
     m_wheel_scroll_angle_remainder = 0.0;
@@ -85,6 +104,13 @@ void scrollbar::Terminal_scrollbar::set_surface(VNM_TerminalSurface* surface)
         m_theme_connection = QObject::connect(
             m_surface,
             &VNM_TerminalSurface::color_scheme_changed,
+            this,
+            [this] {
+                sync_background_color();
+            });
+        m_invert_brightness_connection = QObject::connect(
+            m_surface,
+            &VNM_TerminalSurface::invert_brightness_changed,
             this,
             [this] {
                 sync_background_color();
@@ -627,6 +653,9 @@ void scrollbar::Terminal_scrollbar::sync_background_color()
         const QVariant value = preview.value(QStringLiteral("background"));
         if (value.canConvert<QColor>()) {
             background = value.value<QColor>();
+        }
+        if (m_surface->invert_brightness()) {
+            background = invert_hsv_value(background);
         }
     }
 

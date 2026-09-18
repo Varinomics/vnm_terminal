@@ -18,6 +18,7 @@ constexpr char k_appearance_font_family[]           = "font_family";
 constexpr char k_appearance_font_advance_policy[]   = "font_advance_policy";
 constexpr char k_appearance_text_renderer_mode[]    = "text_renderer_mode";
 constexpr char k_appearance_lcd_subpixel_order[]    = "lcd_subpixel_order";
+constexpr char k_appearance_invert_brightness[]     = "invert_brightness";
 constexpr char k_appearance_row_timestamp_tooltip[] = "row_timestamp_tooltip";
 constexpr char k_appearance_scrollback_buffer_size_mib[] =
     "scrollback_buffer_size_mib";

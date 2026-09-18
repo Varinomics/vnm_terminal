@@ -26,6 +26,7 @@ struct Terminal_settings_snapshot
         static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO);
     int     lcd_subpixel_order =
         static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::AUTO);
+    bool    invert_brightness = false;
     bool    row_timestamp_tooltip_enabled = true;
     std::optional<int> scrollback_buffer_size_mib;
 };
