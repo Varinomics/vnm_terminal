@@ -703,6 +703,8 @@ R"qml(
 
     Shortcut {
         sequences: [StandardKey.Cancel]
+        // A hidden tool window can still be active through its transient parent.
+        enabled: win.visible
         onActivated: win.close_requested()
     }
 

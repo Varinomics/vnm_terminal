@@ -38,6 +38,7 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QTemporaryDir>
+#include <QTest>
 #include <QThread>
 #include <QVariant>
 #include <QWheelEvent>
@@ -3768,6 +3769,85 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     return ok;
 }
 
+bool test_hidden_settings_preserve_escape_delivery(QGuiApplication& app)
+{
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(480, 280);
+    VNM_TerminalSurface surface(window.contentItem());
+    chrome_test::Terminal_settings_controller controller;
+    chrome_test::Terminal_settings_window settings(engine, surface, controller);
+    chrome_test::Terminal_search_bar search(engine, window, surface);
+    bool ok = check(settings.is_valid() && search.is_valid(),
+        "Escape routing fixture creates the real settings and search components");
+    if (!ok) {
+        return false;
+    }
+
+    settings.set_transient_parent(&window);
+    Recording_event_filter key_filter(QEvent::KeyPress);
+    Terminal_shortcut_filter shortcut_filter(&surface);
+    shortcut_filter.set_search_ui_root(search.root_item());
+    window.installEventFilter(&key_filter);
+    window.installEventFilter(&shortcut_filter);
+    QObject::connect(&shortcut_filter, &Terminal_shortcut_filter::search_requested,
+        &search, &chrome_test::Terminal_search_bar::show_search);
+    QObject::connect(&shortcut_filter, &Terminal_shortcut_filter::search_dismiss_requested,
+        &search, &chrome_test::Terminal_search_bar::dismiss_search);
+    QObject::connect(&search, &chrome_test::Terminal_search_bar::visibility_changed,
+        &shortcut_filter, &Terminal_shortcut_filter::set_search_ui_visible);
+
+    QQuickWindow* settings_window = nullptr;
+    for (QWindow* candidate : QGuiApplication::topLevelWindows()) {
+        if (candidate->objectName() == QStringLiteral("terminal_settings_window")) {
+            settings_window = qobject_cast<QQuickWindow*>(candidate);
+            break;
+        }
+    }
+    if (!check(settings_window != nullptr, "Escape routing fixture finds the settings window")) {
+        return false;
+    }
+
+    const auto activate_terminal = [&] {
+        window.requestActivate();
+        surface.forceActiveFocus();
+        pump_events(app);
+    };
+    window.show();
+    activate_terminal();
+    QTest::keyClick(&window, Qt::Key_Escape);
+    ok &= check(key_filter.recorded_count == 1,
+        "Escape reaches the terminal before settings have been shown");
+
+    for (int cycle = 0; cycle < 2; ++cycle) {
+        settings.show_window();
+        settings_window->requestActivate();
+        pump_events(app);
+        ok &= check(settings_window->isVisible(), "settings can be shown and reopened");
+        QTest::keyClick(settings_window, Qt::Key_Escape);
+        pump_events(app);
+        ok &= check(!settings_window->isVisible(), "Escape closes visible settings");
+
+        activate_terminal();
+        const int previous_key_count = key_filter.recorded_count;
+        QTest::keyClick(&window, Qt::Key_Escape);
+        QTest::keyClick(&window, Qt::Key_Escape);
+        ok &= check(key_filter.recorded_count == previous_key_count + 2,
+            "hidden settings leave repeated Escape presses available to the terminal");
+
+        QTest::keyClick(&window, Qt::Key_F, Qt::ControlModifier);
+        pump_events(app);
+        ok &= check(search.is_visible(), "terminal search opens after settings close");
+        QTest::keyClick(&window, Qt::Key_Escape);
+        pump_events(app);
+        ok &= check(!search.is_visible(), "Escape dismisses search after settings close");
+        if (search.is_visible()) {
+            search.dismiss_search();
+        }
+    }
+    return ok;
+}
+
 bool test_settings_shortcut_requests_settings(QGuiApplication& app)
 {
     QQuickWindow window;
@@ -4042,6 +4122,7 @@ int main(int argc, char** argv)
     ok &= test_text_area_resize_request_respects_window_state();
     ok &= test_text_area_resize_policy_tracks_window_state(app);
     ok &= test_settings_gear_button_and_window(app);
+    ok &= test_hidden_settings_preserve_escape_delivery(app);
     ok &= test_settings_shortcut_requests_settings(app);
     ok &= test_host_shortcuts_preserve_title_editor_keys(app);
     ok &= test_renderer_mode_enum_assignment_from_qml(app);

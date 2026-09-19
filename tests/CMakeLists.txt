@@ -447,6 +447,7 @@ target_link_libraries(vnm_terminal_custom_titlebar_integration PRIVATE
     Qt6::Quick
     Qt6::QuickLayouts
     Qt6::QuickControls2
+    Qt6::Test
 )
 
 target_compile_definitions(vnm_terminal_custom_titlebar_integration PRIVATE
