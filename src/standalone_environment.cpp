@@ -1,12 +1,6 @@
 #include "standalone_environment.h"
 
-#if !defined(VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK)
-    #error "The selected environment-policy target must define its provider"
-#elif VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK
-    #include <environment_policy/vnm_environment_policy.h>
-#else
-    #include "local_environment_policy.h"
-#endif
+#include "local_environment_policy.h"
 
 #include <QByteArray>
 #include <QProcessEnvironment>
@@ -20,11 +14,7 @@
 namespace vnm_terminal::terminal_app {
 namespace {
 
-#if VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK
-namespace selected_policy = vnm::environment_policy;
-#else
 namespace selected_policy = vnm_terminal::local_environment_policy;
-#endif
 
 selected_policy::Environment_platform environment_platform()
 {
@@ -59,28 +49,14 @@ selected_policy::Environment_sanitization_result sanitize_selected_environment(
     Sanitizer_kind sanitizer_kind)
 {
     if (sanitizer_kind == Sanitizer_kind::EXPLICIT) {
-#if VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK
-        return selected_policy::sanitize_explicit_base_environment(
-            entries,
-            environment_platform(),
-            {});
-#else
         return selected_policy::sanitize_explicit_base_environment(
             entries,
             environment_platform());
-#endif
     }
 
-#if VNM_TERMINAL_ENVIRONMENT_POLICY_USE_FRAMEWORK
-    return selected_policy::sanitize_ambient_environment(
-        entries,
-        environment_platform(),
-        {});
-#else
     return selected_policy::sanitize_ambient_environment(
         entries,
         environment_platform());
-#endif
 }
 
 std::optional<std::vector<Terminal_environment_entry>> sanitize_environment(

@@ -254,12 +254,6 @@ vnm_terminal_add_environment_policy_test(
     vnm_terminal_standalone_environment_policy
     vnm_terminal::vnm_terminal_environment_policy)
 
-if(TARGET vnm_framework::vnm_environment_policy)
-    vnm_terminal_add_environment_policy_test(
-        vnm_terminal_standalone_environment_policy_local_conformance
-        vnm_terminal_local_environment_policy)
-endif()
-
 add_executable(vnm_terminal_portable_launcher_text
     terminal_app/portable_launcher_text_tests.cpp
 )
