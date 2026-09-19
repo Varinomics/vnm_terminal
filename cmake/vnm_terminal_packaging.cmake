@@ -19,6 +19,12 @@ install(TARGETS vnm_terminal
         COMPONENT "${vnm_terminal_runtime_component}"
 )
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    vnm_process_custody_install_owner(
+        DESTINATION "${vnm_terminal_executable_destination}"
+        COMPONENT "${vnm_terminal_runtime_component}")
+endif()
+
 if(WIN32)
     vnm_terminal_install_conpty(
         DESTINATION "${vnm_terminal_executable_destination}"

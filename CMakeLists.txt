@@ -342,6 +342,10 @@ if(APPLE)
     endif()
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    vnm_process_custody_deploy_owner(vnm_terminal)
+endif()
+
 if(WIN32)
     vnm_terminal_deploy_conpty(vnm_terminal)
 
