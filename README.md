@@ -17,7 +17,7 @@ The application is built on
 which owns terminal parsing, ConPTY/PTY process hosting, screen state, and
 GPU-accelerated rendering.
 
-![An interactive vnm_terminal session, including appearance and behavior settings.](https://github.com/user-attachments/assets/4566c183-7102-4f09-9918-c2f71ffac5e5)
+https://github.com/user-attachments/assets/8a4119c3-555b-4c23-a9bc-f19f6c928434
 
 *An interactive vnm_terminal session, including appearance and behavior settings.*
 
