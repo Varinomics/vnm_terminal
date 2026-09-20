@@ -18,14 +18,7 @@ which owns terminal parsing, ConPTY/PTY process hosting, screen state, and
 GPU-accelerated rendering.
 
 <p align="center">
-  <video
-    src="docs/videos/vnm_terminal_demo.mp4"
-    controls
-    muted
-    playsinline
-    width="80%">
-    <a href="docs/videos/vnm_terminal_demo.mp4">Watch the vnm_terminal demo video.</a>
-  </video>
+  <a href="docs/videos/vnm_terminal_demo.mp4">▶ Watch the vnm_terminal demo video</a>
 </p>
 
 *An interactive vnm_terminal session, including appearance and behavior settings.*
