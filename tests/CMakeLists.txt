@@ -415,6 +415,20 @@ set_target_properties(vnm_terminal_backend_output_capture_probe PROPERTIES
 
 vnm_terminal_configure_test_process(vnm_terminal_backend_output_capture_probe)
 
+add_executable(vnm_terminal_app_clipboard_reader
+    terminal_app/app_clipboard_reader_tests.cpp
+)
+
+target_include_directories(vnm_terminal_app_clipboard_reader PRIVATE
+    "${PROJECT_SOURCE_DIR}/include"
+)
+target_link_libraries(vnm_terminal_app_clipboard_reader PRIVATE Qt6::Core Qt6::Gui)
+set_target_properties(vnm_terminal_app_clipboard_reader PROPERTIES AUTOMOC OFF)
+vnm_terminal_configure_test_process(vnm_terminal_app_clipboard_reader)
+vnm_terminal_add_target_test(vnm_terminal_app_clipboard_reader
+    ENVIRONMENT ${vnm_terminal_qt_offscreen_environment}
+)
+
 add_executable(vnm_terminal_custom_titlebar_integration
     terminal_app/custom_titlebar_integration_tests.cpp
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_reader.cpp"

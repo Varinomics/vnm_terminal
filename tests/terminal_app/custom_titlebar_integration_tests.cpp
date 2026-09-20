@@ -32,6 +32,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPointF>
+#include <QPointer>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
@@ -40,6 +41,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QThread>
+#include <QTimer>
 #include <QVariant>
 #include <QWheelEvent>
 #include <QWindow>
@@ -3152,8 +3154,12 @@ bool test_paste_shortcut_consumes_null_clipboard_reader(QGuiApplication& app)
     QQuickWindow window;
     window.resize(360, 240);
     VNM_TerminalSurface surface(window.contentItem());
-    surface.set_clipboard_text_reader([]() -> std::optional<QString> {
-        return std::nullopt;
+    surface.set_clipboard_text_reader([](QObject* context, chrome_test::Clipboard_completion completion) {
+        const QPointer<QObject> request = new QObject(context);
+        QTimer::singleShot(0, request.data(), [completion = std::move(completion)] {
+            completion(std::nullopt);
+        });
+        return chrome_test::Clipboard_cancel([request] { delete request.data(); });
     });
 
     Recording_event_filter key_filter(QEvent::KeyPress);
