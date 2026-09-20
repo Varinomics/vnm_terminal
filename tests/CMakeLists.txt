@@ -709,6 +709,8 @@ if(TARGET vnm_terminal_canvas_fixture)
     add_test(
         NAME vnm_terminal_capture_output
         COMMAND
+            "${CMAKE_COMMAND}" -E env
+            "${vnm_terminal_qt_runtime_path}"
             "${CMAKE_COMMAND}"
             "-Dcapture_probe=$<TARGET_FILE:vnm_terminal_backend_output_capture_probe>"
             "-Dcapture_base_path=${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_output_$<CONFIG>"
@@ -718,7 +720,6 @@ if(TARGET vnm_terminal_canvas_fixture)
             "${CMAKE_COMMAND}" -E env
             ${vnm_terminal_qt_offscreen_environment}
             ${vnm_terminal_qt_unscaled_environment}
-            "${vnm_terminal_qt_runtime_path}"
             "$<TARGET_FILE:vnm_terminal>"
             "--window-size" "800x480"
             "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal_capture_output_$<CONFIG>"
