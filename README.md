@@ -17,9 +17,18 @@ The application is built on
 which owns terminal parsing, ConPTY/PTY process hosting, screen state, and
 GPU-accelerated rendering.
 
-![vnm_terminal hosting an interactive child process](docs/images/terminal_session.png)
+<p align="center">
+  <video
+    src="docs/videos/vnm_terminal_demo.mp4"
+    controls
+    muted
+    playsinline
+    width="80%">
+    <a href="docs/videos/vnm_terminal_demo.mp4">Watch the vnm_terminal demo video.</a>
+  </video>
+</p>
 
-*An interactive child process with a row-change timestamp at the right.*
+*An interactive vnm_terminal session, including appearance and behavior settings.*
 
 ## Highlights
 
@@ -37,15 +46,6 @@ GPU-accelerated rendering.
   scheme validation.
 - Safe clipboard defaults: terminal-originated OSC 52 writes remain denied
   unless the application policy explicitly allows them.
-
-<p align="center">
-  <img
-    src="docs/images/settings.png"
-    alt="vnm_terminal appearance and behavior settings"
-    width="60%">
-</p>
-
-<p align="center"><em>Built-in appearance and behavior settings.</em></p>
 
 ## Release packages
 
