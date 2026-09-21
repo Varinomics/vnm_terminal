@@ -150,14 +150,14 @@ const PROBE_WORKFLOW = [
     "    runs-on: ubuntu-24.04",
     "    steps:",
     "      - name: Checkout surface",
-    "        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4",
+    "        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5",
     "        with:",
     "          repository: Varinomics/vnm_terminal_surface",
     "          path: vnm_terminal_surface",
     "          ref: master",
     "",
     "      - name: Upload probe artifact",
-    "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4",
+    "        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6",
     "        with:",
     "          name: vnm-terminal-probe-artifact",
     "          path: dist/probe.txt",
@@ -177,13 +177,13 @@ const UNNAMED_PROBE_WORKFLOW = [
     "  probe:",
     "    runs-on: ubuntu-24.04",
     "    steps:",
-    "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4",
+    "      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5",
     "        with:",
     "          repository: Varinomics/vnm_terminal_surface",
     "          path: vnm_terminal_surface",
     "          ref: master",
     "",
-    "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4",
+    "      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6",
     "        with:",
     "          name: vnm-terminal-unnamed-probe",
     "          path: dist/probe.txt",
@@ -196,7 +196,7 @@ const UNNAMED_PROBE_WORKFLOW = [
 const QUOTED_CHECKOUT_PROBE_WORKFLOW = PROBE_WORKFLOW.replace(
     "uses: actions/checkout@",
     "uses: 'actions/checkout@").replace(
-        " # v4\n        with:", "' # v4\n        with:");
+        " # v5\n        with:", "' # v5\n        with:");
 
 const QUOTED_ARTIFACT_PROBE_WORKFLOW = [
     "name: Quoted artifact probe",
@@ -210,7 +210,7 @@ const QUOTED_ARTIFACT_PROBE_WORKFLOW = [
     "    steps:",
     "      - run: echo normalized unnamed run",
     "",
-    "      - uses: \"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\" # v4",
+    "      - uses: \"actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f\" # v6",
     "        with:",
     "          name: vnm-terminal-quoted-probe",
     "          path: dist/probe.txt",
@@ -224,7 +224,7 @@ const FLOW_STEP_PROBE_WORKFLOW = [
     "  probe:",
     "    runs-on: ubuntu-24.04",
     "    steps:",
-    "      - { uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 }",
+    "      - { uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f }",
     ""
 ].join("\n");
 
@@ -236,7 +236,7 @@ const ANCHORED_STEP_PROBE_WORKFLOW = [
     "    runs-on: ubuntu-24.04",
     "    steps:",
     "      - &upload",
-    "        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f",
     "        with:",
     "          name: vnm-terminal-anchor-probe",
     "          path: dist/probe.txt",
@@ -246,7 +246,7 @@ const ANCHORED_STEP_PROBE_WORKFLOW = [
 const ALIASED_STEP_PROBE_WORKFLOW = [
     "name: Aliased step probe",
     "x-upload: &upload",
-    "  uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+    "  uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f",
     "  with:",
     "    name: vnm-terminal-alias-probe",
     "    path: dist/probe.txt",

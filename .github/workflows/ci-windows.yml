@@ -64,7 +64,7 @@ jobs:
       # rather than from the workflow ref, for the same reason the signing job
       # checks the release source out by tag.
       - name: Checkout app
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           ref: >-
             ${{ github.event_name == 'release' &&
@@ -109,14 +109,14 @@ jobs:
       # CMake and scripts from several repositories. Nothing here authenticates
       # to a remote - the only git use is local - so no checkout needs it.
       - name: Checkout app
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           path: vnm_terminal
           ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
@@ -125,7 +125,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout chrome
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_qml_chrome
           path: vnm_qml_chrome
@@ -133,7 +133,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout MSDF text
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_msdf_text
           path: vnm_msdf_text
@@ -141,7 +141,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout Qt dispatch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_qt_dispatch
           path: vnm_qt_dispatch
@@ -149,7 +149,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout fonts
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_fonts
           path: vnm_fonts
@@ -249,7 +249,7 @@ jobs:
           }
 
       - name: Upload source archive artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: vnm-terminal-source
           path: vnm_terminal/dist/vnm_terminal_v*_source.zip
@@ -283,14 +283,14 @@ jobs:
               -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Checkout app
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           path: vnm_terminal
           ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Checkout surface
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_terminal_surface
           path: vnm_terminal_surface
@@ -299,7 +299,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout chrome
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_qml_chrome
           path: vnm_qml_chrome
@@ -307,7 +307,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout MSDF text
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_msdf_text
           path: vnm_msdf_text
@@ -315,7 +315,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout Qt dispatch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_qt_dispatch
           path: vnm_qt_dispatch
@@ -323,7 +323,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout fonts
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: Varinomics/vnm_fonts
           path: vnm_fonts
@@ -342,7 +342,7 @@ jobs:
 
       - name: Restore verified Qt IFW archive
         id: ifw-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ${{ env.IFW_ARCHIVE_PATH }}
           key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
@@ -363,7 +363,7 @@ jobs:
 
       - name: Save verified Qt IFW archive
         if: steps.ifw-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ${{ env.IFW_ARCHIVE_PATH }}
           key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
@@ -514,7 +514,7 @@ jobs:
             dist/portable_candidate
 
       - name: Upload unsigned Windows package artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: vnm-terminal-windows-x64-unsigned
           path: |
@@ -526,7 +526,7 @@ jobs:
 
       - name: Upload the release signing payload
         if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: vnm-terminal-windows-x64-signing-payload
           path: |
@@ -620,14 +620,14 @@ jobs:
               -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Checkout the release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           path: vnm_terminal
           ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Download the release signing payload
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: vnm-terminal-windows-x64-signing-payload
           path: vnm_terminal/dist
@@ -727,7 +727,7 @@ jobs:
           "SIGNING_METADATA_PATH=$metadataPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Authenticate to Azure for signing
-        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3
         with:
           client-id: ${{ vars.TRUSTED_SIGNING_CLIENT_ID }}
           tenant-id: ${{ vars.TRUSTED_SIGNING_TENANT_ID }}
@@ -809,7 +809,7 @@ jobs:
           Write-Host "Timestamped by: $($signature.TimeStamperCertificate.Subject)"
 
       - name: Upload signed Windows package artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: vnm-terminal-windows-x64-signed
           path: |
@@ -839,14 +839,14 @@ jobs:
 
     steps:
       - name: Checkout the release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           path: vnm_terminal
           ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
       - name: Download signed Windows package artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: vnm-terminal-windows-x64-signed
           path: vnm_terminal/dist
@@ -890,7 +890,7 @@ jobs:
 
     steps:
       - name: Download source archive artifact
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: vnm-terminal-source
           path: dist
@@ -919,7 +919,7 @@ jobs:
 
     steps:
       - name: Download signed Windows package artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: vnm-terminal-windows-x64-signed
           path: dist
