@@ -22,7 +22,6 @@ multi-step feature, read:
 If the addendum conflicts with the guideline, the addendum wins. If you are
 unsure which standard applies, read all four before proceeding.
 
-Local path: `C:\plms\varinomics\varinomics-standards\`
 Canonical repo: `https://github.com/Varinomics/varinomics-standards`
 
 ## Review and Plan Artifacts
@@ -46,9 +45,3 @@ apply to them, but the compiler-invoking outer script still runs through the
 build queue: use `queued-build --slots all -- cmd.exe /c build_portable.bat` or
 `queued-build --slots all -- cmd.exe /c build_windows_packages.bat`.
 
-## Codex Claude Review Helper
-
-Codex agents may invoke Claude review-only sessions through
-`C:\plms\invoking_claude_from_codex` when a task calls for Claude review.
-This instruction is for Codex only: Claude must not use this helper to invoke
-Claude.
