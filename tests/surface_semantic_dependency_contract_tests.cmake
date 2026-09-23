@@ -99,6 +99,7 @@ add_library(
 file(WRITE "${preexisting_chrome_dir}/CMakeLists.txt" [=[
 add_library(vnm_qml_chrome INTERFACE)
 add_library(vnm_qml_chrome::vnm_qml_chrome ALIAS vnm_qml_chrome)
+set_target_properties(vnm_qml_chrome PROPERTIES VNM_QML_CHROME_VERSION 1.10.0)
 ]=])
 string(CONCAT preexisting_consumer_contents
     "cmake_minimum_required(VERSION 3.21)\n"
@@ -150,6 +151,7 @@ string(CONCAT imported_consumer_contents
     "set(VNM_QML_CHROME_SOURCE_DIR \"stale-chrome-normal\")\n"
     "add_library(vnm_terminal_surface::vnm_terminal_surface INTERFACE IMPORTED)\n"
     "add_library(vnm_qml_chrome::vnm_qml_chrome INTERFACE IMPORTED)\n"
+    "set_target_properties(vnm_qml_chrome::vnm_qml_chrome PROPERTIES VNM_QML_CHROME_VERSION 1.10.0)\n"
     "include(\"${VNM_TERMINAL_SOURCE_ROOT}/cmake/vnm_terminal_surface_dependency.cmake\")\n"
     "include(\"${VNM_TERMINAL_SOURCE_ROOT}/cmake/vnm_qml_chrome_dependency.cmake\")\n"
     "if(NOT \"\${VNM_TERMINAL_SURFACE_SOURCE_DIR}\" STREQUAL \"\")\n"

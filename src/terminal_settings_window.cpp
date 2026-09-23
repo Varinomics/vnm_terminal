@@ -8,6 +8,8 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <vnm_font_namespace.h>
+
 #include <QPoint>
 #include <QQmlComponent>
 #include <QQmlContext>
@@ -454,14 +456,15 @@ Window {
         property bool use_row_font: false
 
         implicitHeight: 30
+        rightPadding: 4
         font.pixelSize: 12
         hoverEnabled: true
 
-        background: Rectangle {
+        background: VNM_Snapped_rectangle {
             radius: 4
             color: combo.hovered || combo.down ? win.field_hover_color : win.field_color
-            border.width: 1
-            border.color: combo.activeFocus || combo.down
+            border_width: 1
+            border_color: combo.activeFocus || combo.down
                 ? win.field_focus_color : win.field_border_color
 
             Behavior on color { ColorAnimation { duration: 100 } }
@@ -469,7 +472,7 @@ Window {
 
         contentItem: Text {
             leftPadding: 10
-            rightPadding: 24
+            rightPadding: combo.rightPadding + combo.indicator.width + 5
             text: combo.displayText
             font: combo.font
             color: win.value_color
@@ -478,10 +481,10 @@ Window {
         }
 
         indicator: Text {
-            x: combo.width - width - 9
-            y: (combo.height - height) / 2
-            text: "\u25BE"
-            font.pixelSize: 10
+            x: combo.width - width - combo.rightPadding
+            y: (combo.height - height) / 2 - font.pixelSize / 32
+            text: "\uf107"
+            font { family: settingsIconFontFamily; pixelSize: combo.font.pixelSize; }
             color: win.label_color
         }
 
@@ -508,7 +511,7 @@ Window {
                 elide: Text.ElideRight
             }
 
-            background: Rectangle {
+            background: VNM_Snapped_rectangle {
                 radius: 3
                 color: combo_row.highlighted ? win.row_hover_color : "transparent"
             }
@@ -521,11 +524,11 @@ Window {
             implicitHeight: Math.min(
                 contentItem.implicitHeight + topPadding + bottomPadding, 280)
 
-            background: Rectangle {
+            background: VNM_Snapped_rectangle {
                 radius: 6
                 color: win.popup_color
-                border.width: 1
-                border.color: win.field_border_color
+                border_width: 1
+                border_color: win.field_border_color
             }
 
             contentItem: ListView {
@@ -554,11 +557,11 @@ R"qml(
         leftPadding: 26
         rightPadding: 26
 
-        background: Rectangle {
+        background: VNM_Snapped_rectangle {
             radius: 4
             color: win.field_color
-            border.width: 1
-            border.color: spin.activeFocus ? win.field_focus_color : win.field_border_color
+            border_width: 1
+            border_color: spin.activeFocus ? win.field_focus_color : win.field_border_color
         }
 
         contentItem: TextInput {
@@ -575,7 +578,7 @@ R"qml(
             clip: true
         }
 
-        down.indicator: Rectangle {
+        down.indicator: VNM_Snapped_rectangle {
             x: 2
             y: 2
             width: 22
@@ -595,7 +598,7 @@ R"qml(
             }
         }
 
-        up.indicator: Rectangle {
+        up.indicator: VNM_Snapped_rectangle {
             x: spin.width - width - 2
             y: 2
             width: 22
@@ -1467,9 +1470,20 @@ settings::Terminal_settings_window::Terminal_settings_window(
         return;
     }
 
+    const vnm_fonts::Registered_font icon_font =
+        vnm_fonts::register_shipped_font(
+            vnm_fonts::Shipped_font::FONT_AWESOME_7_FREE_SOLID);
+    if (!icon_font.is_valid()) {
+        m_error_string = icon_font.error;
+        return;
+    }
+
     auto* context = new QQmlContext(engine.rootContext(), this);
     context->setContextProperty(QStringLiteral("surface"), &surface);
     context->setContextProperty(QStringLiteral("settings"), &controller);
+    context->setContextProperty(
+        QStringLiteral("settingsIconFontFamily"),
+        icon_font.family);
     context->setContextProperty(
         QStringLiteral("interactionDiagnosticsUnlocked"),
         interaction_diagnostics_unlocked);

@@ -15,6 +15,7 @@ direct_dependencies = [
     "Qt 6 Gui",
     "Qt 6 Qml",
     "Qt 6 Quick",
+    "Qt 6 Quick Shapes",
     "Qt 6 Quick Controls 2",
     "Qt 6 Quick Layouts"
 ]

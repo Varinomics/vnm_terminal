@@ -20,7 +20,9 @@ function(configure_with_chrome provider_version out_result out_log)
         "cmake_minimum_required(VERSION 3.21)\n"
         "project(vnm_qml_chrome LANGUAGES NONE VERSION ${provider_version})\n"
         "add_library(vnm_qml_chrome INTERFACE)\n"
-        "add_library(vnm_qml_chrome::vnm_qml_chrome ALIAS vnm_qml_chrome)\n")
+        "add_library(vnm_qml_chrome::vnm_qml_chrome ALIAS vnm_qml_chrome)\n"
+        "set_target_properties(vnm_qml_chrome PROPERTIES "
+        "VNM_QML_CHROME_VERSION \"${provider_version}\")\n")
 
     file(WRITE "${probe_dir}/CMakeLists.txt"
         "cmake_minimum_required(VERSION 3.21)\n"
@@ -43,15 +45,15 @@ if(older_provider_result EQUAL 0)
     message(FATAL_ERROR "vnm_terminal accepted vnm_qml_chrome 1.7.0")
 endif()
 string(REGEX REPLACE "[\r\n\t ]+" " " older_provider_log "${older_provider_log}")
-if(NOT older_provider_log MATCHES "older than the required minimum 1\\.8")
+if(NOT older_provider_log MATCHES "older than the required minimum 1\\.10\\.0")
     message(FATAL_ERROR
-        "Older-provider rejection did not name the required 1.8 floor:\n"
+        "Older-provider rejection did not name the required 1.10.0 floor:\n"
         "${older_provider_log}")
 endif()
 
-configure_with_chrome("1.8.0" minimum_provider_result minimum_provider_log)
+configure_with_chrome("1.10.0" minimum_provider_result minimum_provider_log)
 if(NOT minimum_provider_result EQUAL 0)
     message(FATAL_ERROR
-        "vnm_terminal rejected vnm_qml_chrome 1.8.0:\n"
+        "vnm_terminal rejected vnm_qml_chrome 1.10.0:\n"
         "${minimum_provider_log}")
 endif()
