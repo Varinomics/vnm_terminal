@@ -39,6 +39,8 @@ private:
     QVariantMap m_values;
     QString m_dark_scheme = QStringLiteral("Classic");
     QString m_light_scheme = QStringLiteral("Solarized Light");
+    bool m_dark_invert_brightness = false;
+    bool m_light_invert_brightness = false;
     bool m_dark_mode;
 };
 

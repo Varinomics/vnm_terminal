@@ -17,6 +17,25 @@ namespace vnm_terminal::terminal_app {
 
 namespace {
 
+constexpr char k_appearance_invert_brightness_dark[] =
+    "appearance/invert_brightness_dark";
+constexpr char k_appearance_invert_brightness_light[] =
+    "appearance/invert_brightness_light";
+
+bool load_or_seed_invert_brightness_preference(
+    QSettings& store,
+    const char* key,
+    bool legacy_value)
+{
+    const QLatin1String setting_key(key);
+    if (store.contains(setting_key)) {
+        return store.value(setting_key).toBool();
+    }
+
+    store.setValue(setting_key, legacy_value);
+    return legacy_value;
+}
+
 bool settings_values_valid(const QVariantMap& changes, bool snapshot)
 {
     for (auto it = changes.cbegin(); it != changes.cend(); ++it) {
@@ -177,7 +196,15 @@ Terminal_display_settings::Terminal_display_settings(bool dark_mode, QSettings* 
         store ? load_terminal_settings_snapshot(*store) : Terminal_settings_snapshot{})),
     m_dark_mode(dark_mode)
 {
+    const bool legacy_invert_brightness =
+        m_values.value(QStringLiteral("invert_brightness")).toBool();
+    m_dark_invert_brightness = legacy_invert_brightness;
+    m_light_invert_brightness = legacy_invert_brightness;
     if (store) {
+        m_dark_invert_brightness = load_or_seed_invert_brightness_preference(
+            *store, k_appearance_invert_brightness_dark, legacy_invert_brightness);
+        m_light_invert_brightness = load_or_seed_invert_brightness_preference(
+            *store, k_appearance_invert_brightness_light, legacy_invert_brightness);
         // The unscoped palette predates mode binding. Its background identifies
         // which mode can inherit it without turning a light terminal dark.
         const auto* previous = vnm_terminal::internal::find_color_scheme(
@@ -201,6 +228,8 @@ Terminal_display_settings::Terminal_display_settings(bool dark_mode, QSettings* 
         load_scheme(QStringLiteral("appearance/color_scheme_light"), m_light_scheme);
     }
     m_values.insert(QStringLiteral("color_scheme"), m_dark_mode ? m_dark_scheme : m_light_scheme);
+    m_values.insert(QStringLiteral("invert_brightness"),
+        m_dark_mode ? m_dark_invert_brightness : m_light_invert_brightness);
 }
 
 const QVariantMap& Terminal_display_settings::values() const
@@ -215,6 +244,8 @@ bool Terminal_display_settings::set_dark_mode(bool dark_mode)
     }
     m_dark_mode = dark_mode;
     m_values.insert(QStringLiteral("color_scheme"), dark_mode ? m_dark_scheme : m_light_scheme);
+    m_values.insert(QStringLiteral("invert_brightness"),
+        dark_mode ? m_dark_invert_brightness : m_light_invert_brightness);
     return true;
 }
 
@@ -226,19 +257,42 @@ bool Terminal_display_settings::apply_changes(const QVariantMap& changes, bool s
     const QVariantMap previous    = m_values;
     const QString previous_dark  = m_dark_scheme;
     const QString previous_light = m_light_scheme;
+    const bool previous_dark_invert_brightness = m_dark_invert_brightness;
+    const bool previous_light_invert_brightness = m_light_invert_brightness;
     for (auto it = changes.cbegin(); it != changes.cend(); ++it) {
         if (it.key() == QStringLiteral("color_scheme")) {
             (source_dark_mode ? m_dark_scheme : m_light_scheme) = it.value().toString();
+        }
+        else
+        if (it.key() == QStringLiteral("invert_brightness")) {
+            (source_dark_mode ? m_dark_invert_brightness : m_light_invert_brightness) =
+                it.value().toBool();
         }
         else {
             m_values.insert(it.key(), it.value());
         }
     }
     m_values.insert(QStringLiteral("color_scheme"), m_dark_mode ? m_dark_scheme : m_light_scheme);
-    if (previous == m_values && previous_dark == m_dark_scheme && previous_light == m_light_scheme) {
+    m_values.insert(QStringLiteral("invert_brightness"),
+        m_dark_mode ? m_dark_invert_brightness : m_light_invert_brightness);
+    if (previous == m_values && previous_dark == m_dark_scheme &&
+        previous_light == m_light_scheme &&
+        previous_dark_invert_brightness == m_dark_invert_brightness &&
+        previous_light_invert_brightness == m_light_invert_brightness)
+    {
         return false;
     }
     if (m_store) {
+        if (previous_dark_invert_brightness != m_dark_invert_brightness) {
+            m_store->setValue(
+                QLatin1String(k_appearance_invert_brightness_dark),
+                m_dark_invert_brightness);
+        }
+        if (previous_light_invert_brightness != m_light_invert_brightness) {
+            m_store->setValue(
+                QLatin1String(k_appearance_invert_brightness_light),
+                m_light_invert_brightness);
+        }
         m_store->setValue(QStringLiteral("appearance/color_scheme_dark"), m_dark_scheme);
         m_store->setValue(QStringLiteral("appearance/color_scheme_light"), m_light_scheme);
         save_terminal_settings_snapshot(*m_store, settings_snapshot(m_values, {}));
