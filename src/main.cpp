@@ -8,6 +8,7 @@
 #include "app_options_settings_adapter.h"
 #include "app_profile_text.h"
 #include "standalone_environment.h"
+#include "terminal_file_drop.h"
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/app_shortcuts.h"
 #include "vnm_terminal/app_support/qml_chrome.h"
@@ -497,6 +498,7 @@ int main(int argc, char** argv)
     auto* titlebar_ptr = titlebar.get();
 
     auto* surface = new VNM_TerminalSurface(window.contentItem());
+    vnm_terminal::terminal_app::install_terminal_file_drop(*surface, options.command);
     surface->set_cursor_settle_delay_ms(80);
     surface->set_clipboard_text_reader(read_clipboard_text_with_broker);
     surface->set_selection_trace_enabled(options.selection_trace_enabled);

@@ -122,6 +122,8 @@ add_library(vnm_terminal_app_support STATIC
     include/vnm_terminal/app_support/terminal_scrollbar.h
     src/terminal_search_bar.cpp
     include/vnm_terminal/app_support/terminal_search_bar.h
+    src/terminal_file_drop.cpp
+    src/terminal_file_drop.h
     src/terminal_settings_controller.cpp
     include/vnm_terminal/app_support/terminal_settings_controller.h
     src/terminal_settings_window.cpp

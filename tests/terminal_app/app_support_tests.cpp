@@ -2,11 +2,16 @@
 #include "vnm_terminal/app_support/terminal_display_settings.h"
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
 
+#include "terminal_file_drop.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <QCoreApplication>
+#include <QDragEnterEvent>
 #include <QGuiApplication>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QMimeData>
+#include <QPoint>
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTest>
@@ -20,6 +25,127 @@ class App_support_tests final : public QObject
     Q_OBJECT
 
 private slots:
+    void terminal_drop_paths_are_quoted_for_known_shells()
+    {
+        const QStringList posix_command{QStringLiteral("/bin/bash")};
+        const std::optional<QString> posix_text = terminal_app::quote_terminal_paths(
+            {
+                QStringLiteral("/tmp/space name"),
+                QStringLiteral("/tmp/it's quoted"),
+            },
+            posix_command);
+        QVERIFY(posix_text.has_value());
+        QCOMPARE(
+            *posix_text,
+            QStringLiteral("'/tmp/space name' '/tmp/it'\\''s quoted'"));
+
+        const std::optional<QString> powershell_text = terminal_app::quote_terminal_paths(
+            {QStringLiteral("C:/Users/Ada's files/read me.txt")},
+            {QStringLiteral("C:/Program Files/PowerShell/7/pwsh.exe")});
+        QVERIFY(powershell_text.has_value());
+        QCOMPARE(
+            *powershell_text,
+            QStringLiteral("'C:/Users/Ada''s files/read me.txt'"));
+
+        const QString right_smart_quote_path =
+            QStringLiteral("C:/Users/Ada") + QChar(0x2019) + QStringLiteral("s file.txt");
+        const std::optional<QString> smart_quote_text = terminal_app::quote_terminal_paths(
+            {right_smart_quote_path},
+            {QStringLiteral("pwsh")});
+        QVERIFY(smart_quote_text.has_value());
+        QCOMPARE(
+            *smart_quote_text,
+            QStringLiteral("'C:/Users/Ada") + QChar(0x2019) + QChar(0x2019) +
+                QStringLiteral("s file.txt'"));
+
+        const std::optional<QString> cmd_text = terminal_app::quote_terminal_paths(
+            {QStringLiteral("C:/Program Files/notes.txt")},
+            {QStringLiteral("C:/Windows/System32/cmd.exe")});
+        QVERIFY(cmd_text.has_value());
+        QCOMPARE(*cmd_text, QStringLiteral("\"C:/Program Files/notes.txt\""));
+    }
+
+    void terminal_drop_paths_reject_unsafe_inputs()
+    {
+        const QStringList posix_command{QStringLiteral("/bin/sh")};
+        QVERIFY(!terminal_app::quote_terminal_paths({}, posix_command).has_value());
+        QVERIFY(!terminal_app::quote_terminal_paths(
+            {QStringLiteral("/tmp/line\nbreak")},
+            posix_command).has_value());
+        QVERIFY(!terminal_app::quote_terminal_paths(
+            {QStringLiteral("/tmp/paragraph") + QChar(0x2029)},
+            posix_command).has_value());
+        QVERIFY(!terminal_app::quote_terminal_paths(
+            {QStringLiteral("/tmp/file")},
+            {QStringLiteral("/usr/bin/custom-shell")}).has_value());
+        QVERIFY(!terminal_app::quote_terminal_paths(
+            {QStringLiteral("C:/Users/Ada/100% done.txt")},
+            {QStringLiteral("cmd.exe")}).has_value());
+        QVERIFY(!terminal_app::quote_terminal_paths(
+            {QStringLiteral("C:/Users/Ada/important! file.txt")},
+            {QStringLiteral("cmd.exe")}).has_value());
+        QVERIFY(!terminal_app::quote_terminal_paths(
+            {QStringLiteral("C:/Users/Ada/file.txt")},
+            {QStringLiteral("cmd.exe"), QStringLiteral("/v:on")}).has_value());
+    }
+
+    void terminal_drop_accepts_only_local_urls()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const QString local_path = directory.filePath(QStringLiteral("a file.txt"));
+        const QList<QUrl> local_urls{
+            QUrl::fromLocalFile(local_path),
+        };
+        const std::optional<QString> text =
+            terminal_app::terminal_drop_text_for_local_urls(
+                local_urls,
+                {QStringLiteral("/bin/sh")});
+        QVERIFY(text.has_value());
+        QVERIFY(text->startsWith(QLatin1Char('\'')));
+        QVERIFY(!text->contains(QLatin1Char('\n')));
+        QVERIFY(!text->contains(QLatin1Char('\r')));
+
+        const QList<QUrl> mixed_urls{
+            QUrl::fromLocalFile(local_path),
+            QUrl(QStringLiteral("https://example.com/file.txt")),
+        };
+        QVERIFY(!terminal_app::terminal_drop_text_for_local_urls(
+            mixed_urls,
+            {QStringLiteral("/bin/sh")}).has_value());
+
+        QVERIFY(!terminal_app::terminal_drop_text_for_local_urls(
+            {QUrl(QStringLiteral("file://server/share/file.txt"))},
+            {QStringLiteral("/bin/sh")}).has_value());
+        QVERIFY(!terminal_app::terminal_drop_text_for_local_urls(
+            {QUrl(QStringLiteral("file:relative.txt"))},
+            {QStringLiteral("/bin/sh")}).has_value());
+    }
+
+    void terminal_drop_drag_enter_is_routed_to_surface_filter()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        VNM_TerminalSurface surface;
+        terminal_app::install_terminal_file_drop(surface, {QStringLiteral("/bin/sh")});
+
+        QMimeData mime_data;
+        mime_data.setUrls({
+            QUrl::fromLocalFile(directory.filePath(QStringLiteral("file.txt"))),
+        });
+        QDragEnterEvent event(
+            QPoint(0, 0),
+            Qt::CopyAction,
+            &mime_data,
+            Qt::LeftButton,
+            Qt::NoModifier);
+        event.ignore();
+
+        QVERIFY(QCoreApplication::sendEvent(&surface, &event));
+        QVERIFY(event.isAccepted());
+        QCOMPARE(event.dropAction(), Qt::CopyAction);
+    }
+
     void shared_display_settings_preserve_font_across_modes_and_restart()
     {
         QTemporaryDir directory;
