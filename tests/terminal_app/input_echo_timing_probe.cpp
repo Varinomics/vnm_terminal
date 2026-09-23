@@ -30,6 +30,7 @@
 #include <QWindow>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -1126,6 +1127,81 @@ bool write_jsonl_record(QFile& file, const QJsonObject& object, QString* out_err
     return true;
 }
 
+#if defined(Q_OS_WIN)
+bool read_win32_input_record_integer(
+    const QByteArray& input,
+    qsizetype&        position,
+    std::uint32_t&    value)
+{
+    const qsizetype value_start = position;
+    while (position < input.size() &&
+        input.at(position) >= '0' && input.at(position) <= '9')
+    {
+        ++position;
+    }
+    if (position == value_start) {
+        return false;
+    }
+
+    bool converted = false;
+    const uint parsed_value = input.mid(value_start, position - value_start).toUInt(&converted);
+    if (!converted) {
+        return false;
+    }
+
+    value = static_cast<std::uint32_t>(parsed_value);
+    return true;
+}
+
+std::optional<QByteArray> decode_win32_input_records_to_terminal_echo(
+    const QByteArray& input)
+{
+    QString  echo_text;
+    qsizetype position = 0;
+    while (position < input.size()) {
+        if (position + 2 > input.size() ||
+            input.at(position) != '\x1b' ||
+            input.at(position + 1) != '[')
+        {
+            return std::nullopt;
+        }
+        position += 2;
+
+        std::array<std::uint32_t, 6> parameters{};
+        for (std::size_t index = 0U; index < parameters.size(); ++index) {
+            if (!read_win32_input_record_integer(input, position, parameters[index]) ||
+                position >= input.size())
+            {
+                return std::nullopt;
+            }
+
+            const char delimiter = index + 1U == parameters.size() ? '_' : ';';
+            if (input.at(position) != delimiter) {
+                return std::nullopt;
+            }
+            ++position;
+        }
+
+        const std::uint32_t unicode_character = parameters[2];
+        const std::uint32_t key_down = parameters[3];
+        const std::uint32_t repeat_count = parameters[5];
+        if (key_down > 1U || repeat_count == 0U || unicode_character > 0xffffU) {
+            return std::nullopt;
+        }
+        if (key_down == 0U || unicode_character == 0U) {
+            continue;
+        }
+
+        const QChar character(static_cast<ushort>(unicode_character));
+        for (std::uint32_t repeat = 0U; repeat < repeat_count; ++repeat) {
+            echo_text.append(character);
+        }
+    }
+
+    return echo_text.toUtf8();
+}
+#endif
+
 class Echo_backend final : public term::Terminal_backend
 {
 public:
@@ -1166,7 +1242,21 @@ public:
         });
 
         QByteArray output;
-        for (char byte : bytes) {
+#if defined(Q_OS_WIN)
+        // A Windows console input record is not terminal output; echo its
+        // logical key text so the probe measures the resulting terminal row.
+        const std::optional<QByteArray> logical_text =
+            decode_win32_input_records_to_terminal_echo(bytes);
+        if (!logical_text.has_value()) {
+            return term::backend_reject(
+                term::Terminal_backend_error_code::WRITE_FAILED,
+                QStringLiteral("input echo probe received invalid Win32 key records"));
+        }
+        const QByteArray& echo_input = *logical_text;
+#else
+        const QByteArray& echo_input = bytes;
+#endif
+        for (char byte : echo_input) {
             if (byte == '\r') {
                 output += QByteArrayLiteral("\r\n");
             }

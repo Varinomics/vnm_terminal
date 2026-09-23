@@ -92,7 +92,7 @@ function Assert-Warning
         throw "$CaseName should identify '$ExpectedWarning'"
     }
     if ($output -match "Current terminal columns:" -or
-        $output -match "Estimated full-width prefix-plain-ASCII retained-row capacity:")
+        $output -match "Estimated upper bound:")
     {
         throw "$CaseName must not print a confident retained-history summary"
     }
@@ -107,9 +107,24 @@ Invoke-MetricsFixture -Write {
         Write-RetainedHistoryEstimateSummary -MetricsPath $Path 6>&1
     ) -join [Environment]::NewLine
     if ($summary -notmatch "Current terminal columns: 160" -or
-        $summary -notmatch "777777 rows at 316 bytes per row")
+        $summary -notmatch [regex]::Escape(
+            "Estimated upper bound: 777777 full-width prefix-plain-ASCII rows " +
+            "at 316 bytes per row. Reflow may retain fewer."))
     {
         throw "summary must report producer values without recomputing byte-budget arithmetic"
+    }
+}
+
+Invoke-MetricsFixture -Write {
+    param($Path)
+    Write-MetricsFixture -Path $Path -ContractVersion "3"
+} -Validate {
+    param($Path)
+    $summary = @(
+        Write-RetainedHistoryEstimateSummary -MetricsPath $Path 6>&1
+    ) -join [Environment]::NewLine
+    if ($summary -notmatch "Estimated upper bound: 777777 full-width prefix-plain-ASCII rows") {
+        throw "contract version 3 must produce the upper-bound summary"
     }
 }
 
@@ -119,7 +134,7 @@ Invoke-MetricsFixture -Write {
 } -Validate {
     param($Path)
     Assert-Warning -MetricsPath $Path -CaseName "unexpected estimate contract" `
-        -ExpectedWarning "contract_version must be 2"
+        -ExpectedWarning "contract_version must be 2 or 3"
 }
 
 Invoke-MetricsFixture -Write {
@@ -240,12 +255,12 @@ function Invoke-LauncherFixture
 
 $validMetrics = (
     '{"schema":"vnm_terminal_runtime_metrics_v3","retained_history":{"byte_budget":"10",' +
-    '"prefix_plain_ascii_estimate":{"contract_version":"2","source_width_columns":"160",' +
+    '"prefix_plain_ascii_estimate":{"contract_version":"3","source_width_columns":"160",' +
     '"record_bytes":"316","retained_rows":"777777","target_rows":"205000",' +
     '"max_columns_at_target_rows":"187"}}}')
 Invoke-LauncherFixture -CaseName "sampler-free producer estimate" -MetricsJson $validMetrics -Validate {
     param($Output, $ArtifactRoot, $RunDirectory)
-    if ($Output -notmatch "777777 rows at 316 bytes per row" -or
+    if ($Output -notmatch "Estimated upper bound: 777777 full-width prefix-plain-ASCII rows" -or
         $Output -notmatch "App metrics final:")
     {
         throw "launcher should report the current run's producer-owned estimate"

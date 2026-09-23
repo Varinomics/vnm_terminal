@@ -386,9 +386,10 @@ endforeach()
 vnm_terminal_read_json_field(retained_history_estimate_contract_version
     "${metrics_text}" "${metrics_path}"
     retained_history prefix_plain_ascii_estimate contract_version)
-if(NOT retained_history_estimate_contract_version STREQUAL "2")
+if(NOT retained_history_estimate_contract_version STREQUAL "2" AND
+    NOT retained_history_estimate_contract_version STREQUAL "3")
     message(FATAL_ERROR
-        "retained_history.prefix_plain_ascii_estimate.contract_version should be 2, got "
+        "retained_history.prefix_plain_ascii_estimate.contract_version should be 2 or 3, got "
         "${retained_history_estimate_contract_version}")
 endif()
 

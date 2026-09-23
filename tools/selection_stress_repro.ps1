@@ -310,10 +310,10 @@ function Write-RetainedHistoryEstimateSummary
     [uint64] $targetRows      = $counters["target_rows"]
     [uint64] $maxColumns      = $counters["max_columns_at_target_rows"]
 
-    if ($contractVersion -ne 2) {
+    if ($contractVersion -ne 2 -and $contractVersion -ne 3) {
         Write-Warning (
             "Final app metrics retained_history.prefix_plain_ascii_estimate.contract_version " +
-            "must be 2: $MetricsPath")
+            "must be 2 or 3: $MetricsPath")
         return
     }
     if ($columns -eq 0 -or $columns -gt 4096) {
@@ -349,8 +349,8 @@ function Write-RetainedHistoryEstimateSummary
 
     Write-Host "Current terminal columns: $columns"
     Write-Host (
-        ("Estimated full-width prefix-plain-ASCII retained-row capacity: {0} rows " +
-        "at {1} bytes per row.") -f @(
+        ("Estimated upper bound: {0} full-width prefix-plain-ASCII rows " +
+        "at {1} bytes per row. Reflow may retain fewer.") -f @(
             $estimatedRows,
             $recordBytes))
 }

@@ -1359,7 +1359,7 @@ R"qml(
                                 onValueModified: surface.scrollbackBufferSizeMiB = value
 
                                 S_ToolTip {
-                                    text: "The line estimate assumes plain text at the current width."
+                                    text: "Plain-text estimate at this width; reflow may retain fewer lines."
                                     visible: scrollback_buffer_size_spin.hovered
                                 }
                             }
@@ -1369,7 +1369,7 @@ R"qml(
                         Text {
                             Layout.fillWidth: true
                             text: surface.estimatedScrollbackLines > 0
-                                ? "≈ " + surface.estimatedScrollbackLines.toLocaleString() +
+                                ? "Up to " + surface.estimatedScrollbackLines.toLocaleString() +
                                     " plain-text lines at this width"
                                 : "Estimate appears when the terminal size is known"
                             color: win.label_color
