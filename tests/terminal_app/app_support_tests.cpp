@@ -170,6 +170,11 @@ private slots:
         const QVariantMap dark_values = display.values();
         QVERIFY(display.set_dark_mode(false));
         for (auto it = changes.cbegin(); it != changes.cend(); ++it) {
+            // Inversion is stored independently for each lighting mode.
+            if (it.key() == QStringLiteral("invert_brightness")) {
+                QCOMPARE(display.values().value(it.key()), QVariant(false));
+                continue;
+            }
             QCOMPARE(display.values().value(it.key()), it.value());
         }
         QVERIFY(display.values().value(QStringLiteral("color_scheme")) !=
