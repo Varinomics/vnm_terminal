@@ -21,7 +21,7 @@ runs them on every host.
 
    This is not optional and it is not a formality. A `release: published` run
    resolves the dependency commits from the lock and then resolves each branch
-   head again, and it fails when the two disagree. If any of the four owned
+   head again, and it fails when the two disagree. If any of the five owned
    repositories has moved since the lock was last refreshed, all three release
    workflows stop at their first job. Refreshing also re-reads the commit each
    third-party tag currently names, so an upstream tag that moved shows up in
