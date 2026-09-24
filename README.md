@@ -86,6 +86,9 @@ successfully signed as Varinomics Ltd and timestamped.
 ## Command line
 
 Without an explicit command after `--`, the platform's default shell starts.
+On Linux, a nonblank `$SHELL` is used as one executable argument; when it is
+unset or empty, `vnm_terminal` uses the current account's login shell and falls
+back to `/bin/sh` if no login shell is available.
 
 ```text
 vnm_terminal [application options] [-- command [arguments...]]
