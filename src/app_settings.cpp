@@ -1,6 +1,7 @@
 #include "vnm_terminal/app_support/app_settings.h"
 
 #include "app_settings_keys.h"
+#include "app_settings_internal.h"
 
 #include "vnm_terminal/internal/terminal_color_scheme.h"
 
@@ -11,9 +12,7 @@
 
 namespace vnm_terminal::terminal_app {
 
-namespace {
-
-constexpr std::size_t k_bytes_per_mib = 1024U * 1024U;
+namespace detail {
 
 std::optional<int> settings_int_value(QSettings& settings, const char* key)
 {
@@ -64,14 +63,14 @@ std::optional<qreal> settings_font_size(QSettings& settings)
     return static_cast<qreal>(font_size);
 }
 
-} // namespace
+} // namespace detail
 
 Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
 {
     Terminal_settings_snapshot snapshot;
 
     settings.beginGroup(QLatin1String(k_window_settings_group));
-    if (const std::optional<qreal> font_size = settings_font_size(settings)) {
+    if (const std::optional<qreal> font_size = detail::settings_font_size(settings)) {
         snapshot.font_size = *font_size;
     }
     settings.endGroup();
@@ -92,7 +91,7 @@ Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
     }
 
     if (const std::optional<int> mode =
-            settings_int_value(settings, k_appearance_text_renderer_mode))
+            detail::settings_int_value(settings, k_appearance_text_renderer_mode))
     {
         const int minimum =
             static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO);
@@ -106,7 +105,7 @@ Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
     }
 
     if (const std::optional<int> policy =
-            settings_int_value(settings, k_appearance_font_advance_policy))
+            detail::settings_int_value(settings, k_appearance_font_advance_policy))
     {
         const int minimum =
             static_cast<int>(vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE);
@@ -118,7 +117,7 @@ Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
     }
 
     if (const std::optional<int> order =
-            settings_int_value(settings, k_appearance_lcd_subpixel_order))
+            detail::settings_int_value(settings, k_appearance_lcd_subpixel_order))
     {
         const int minimum =
             static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::AUTO);
@@ -140,7 +139,7 @@ Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
     }
 
     snapshot.scrollback_buffer_size_mib =
-        settings_scrollback_buffer_size_mib(settings);
+        detail::settings_scrollback_buffer_size_mib(settings);
     settings.endGroup();
     return snapshot;
 }

@@ -1,16 +1,15 @@
 #include "app_profile_text.h"
 
 #if VNM_TERMINAL_PROFILING_ENABLED
+#include "app_common.h"
 
 #include "vnm_terminal/diagnostics/profile_text.h"
 #include "vnm_terminal/internal/profile_text_writers.h"
 
 #include <QByteArray>
-#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QIODevice>
-#include <QString>
 #include <QTextStream>
 
 namespace vnm_terminal::terminal_app {
@@ -22,25 +21,9 @@ bool prepare_profile_text_file(
     const QString& path,
     QString*       out_error)
 {
-    if (path.trimmed().isEmpty()) {
-        *out_error = QStringLiteral("--profile-text requires a non-empty path");
-        return false;
-    }
-
-    const QFileInfo file_info(path);
-    const QDir parent_dir = file_info.absoluteDir();
-    if (!parent_dir.exists()) {
-        *out_error = QStringLiteral("--profile-text parent directory does not exist: %1")
-            .arg(parent_dir.absolutePath());
-        return false;
-    }
-    if (file_info.exists() && file_info.isDir()) {
-        *out_error = QStringLiteral("--profile-text points to a directory: %1")
-            .arg(file_info.absoluteFilePath());
-        return false;
-    }
-
-    return true;
+    QString absolute_path;
+    return validate_output_path(
+        QStringLiteral("--profile-text"), path, &absolute_path, out_error);
 }
 
 bool write_profile_text(

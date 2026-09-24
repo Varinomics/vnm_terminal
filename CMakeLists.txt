@@ -111,12 +111,14 @@ set(vnm_terminal_app_support_headers
 
 add_library(vnm_terminal_app_support STATIC
     src/app_settings.cpp
+    src/app_settings_internal.h
     src/terminal_display_settings.cpp
     include/vnm_terminal/app_support/app_settings.h
     include/vnm_terminal/app_support/terminal_display_settings.h
     src/app_shortcuts.cpp
     include/vnm_terminal/app_support/app_shortcuts.h
     src/qml_chrome.cpp
+    src/qml_component_error_string.h
     include/vnm_terminal/app_support/qml_chrome.h
     src/terminal_scrollbar.cpp
     include/vnm_terminal/app_support/terminal_scrollbar.h

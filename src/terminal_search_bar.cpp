@@ -2,6 +2,8 @@
 
 #include "vnm_terminal/app_support/qml_chrome.h"
 
+#include "qml_component_error_string.h"
+
 #include "vnm_terminal/vnm_terminal_surface.h"
 
 #include <vnm_font_namespace.h>
@@ -13,26 +15,14 @@
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
-#include <QQmlError>
 #include <QQuickItem>
 #include <QQuickWindow>
-#include <QStringList>
 #include <QUrl>
 #include <QVariant>
 
 namespace vnm_terminal::terminal_app {
 
 namespace {
-
-QString component_error_string(const QQmlComponent& component)
-{
-    QStringList output;
-    const auto errors = component.errors();
-    for (const QQmlError& error : errors) {
-        output.push_back(error.toString());
-    }
-    return output.join(QStringLiteral("\n"));
-}
 
 constexpr const char* k_terminal_search_bar_qml = R"(
 import QtQuick
@@ -256,13 +246,13 @@ Terminal_search_bar::Terminal_search_bar(
         k_terminal_search_bar_qml,
         QUrl(QStringLiteral("qrc:/vnm_terminal/terminal_search_bar.qml")));
     if (!component.isReady()) {
-        m_error_string = component_error_string(component);
+        m_error_string = detail::qml_component_error_string(component);
         return;
     }
 
     m_root_object.reset(component.create(m_context.get()));
     if (m_root_object == nullptr) {
-        m_error_string = component_error_string(component);
+        m_error_string = detail::qml_component_error_string(component);
         return;
     }
 
@@ -417,24 +407,16 @@ void Terminal_search_bar::send_key_press(
     Qt::KeyboardModifiers modifiers,
     const QString&        text)
 {
-    if (m_query_item == nullptr) {
-        return;
-    }
-
     QKeyEvent event(QEvent::KeyPress, key, modifiers, text);
-    QCoreApplication::sendEvent(m_query_item, &event);
+    send_key_event(event);
 }
 
 void Terminal_search_bar::send_key_release(
     int                   key,
     Qt::KeyboardModifiers modifiers)
 {
-    if (m_query_item == nullptr) {
-        return;
-    }
-
     QKeyEvent event(QEvent::KeyRelease, key, modifiers, QString{});
-    QCoreApplication::sendEvent(m_query_item, &event);
+    send_key_event(event);
 }
 
 void Terminal_search_bar::show_search()

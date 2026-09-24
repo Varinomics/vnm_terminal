@@ -1,5 +1,6 @@
 #include "vnm_terminal/app_support/terminal_settings_window.h"
 
+#include "qml_component_error_string.h"
 #include "terminal_settings_native_window_owner.h"
 
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
@@ -14,12 +15,10 @@
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
-#include <QQmlError>
 #include <QGuiApplication>
 #include <QQuickWindow>
 #include <QRect>
 #include <QScreen>
-#include <QStringList>
 #include <QUrl>
 #include <QWindow>
 #include <Qt>
@@ -61,16 +60,6 @@ void set_terminal_settings_native_window_owner(
 #endif
 
 namespace {
-
-QString component_error_string(const QQmlComponent& component)
-{
-    QStringList out;
-    const auto errors = component.errors();
-    for (const QQmlError& error : errors) {
-        out.push_back(error.toString());
-    }
-    return out.join(QStringLiteral("\n"));
-}
 
 int clamp_axis(int value, int min_value, int max_value)
 {
@@ -278,6 +267,7 @@ Window {
     property bool dark_mode: true
 
     readonly property int preferred_width: 552
+    readonly property int settings_form_label_width: 72
     readonly property int unconstrained_maximum_size: 16777215
     property int available_width_limit: 0
     property int available_height_limit: 0
@@ -396,6 +386,13 @@ Window {
         color: win.label_color
         font.pixelSize: 12
         Layout.minimumWidth: implicitWidth
+    }
+
+    component S_Form_Label: S_Label {
+        Layout.alignment: Qt.AlignVCenter
+        Layout.minimumWidth: win.settings_form_label_width
+        Layout.preferredWidth: win.settings_form_label_width
+        Layout.maximumWidth: win.settings_form_label_width
     }
 
     // Carries the wording that used to sit beside a control as static text.
@@ -1040,8 +1037,6 @@ R"qml(
                     id: form_left_column
                     objectName: "settings_form_left_column"
 
-                    readonly property int left_column_label_width: 72
-
                     Layout.fillWidth: true
                     Layout.alignment: Qt.AlignTop
                     spacing: 10
@@ -1054,12 +1049,8 @@ R"qml(
                         Layout.fillWidth: true
                         spacing: 24
 
-                        S_Label {
+                        S_Form_Label {
                             text: "Family"
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.minimumWidth: form_left_column.left_column_label_width
-                            Layout.preferredWidth: form_left_column.left_column_label_width
-                            Layout.maximumWidth: form_left_column.left_column_label_width
                         }
 
                         S_Combo {
@@ -1076,12 +1067,8 @@ R"qml(
                         Layout.fillWidth: true
                         spacing: 24
 
-                        S_Label {
+                        S_Form_Label {
                             text: "Size"
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.minimumWidth: form_left_column.left_column_label_width
-                            Layout.preferredWidth: form_left_column.left_column_label_width
-                            Layout.maximumWidth: form_left_column.left_column_label_width
                         }
 
                         RowLayout {
@@ -1117,12 +1104,8 @@ R"qml(
                         Layout.fillWidth: true
                         spacing: 24
 
-                        S_Label {
+                        S_Form_Label {
                             text: "Cell width"
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.minimumWidth: form_left_column.left_column_label_width
-                            Layout.preferredWidth: form_left_column.left_column_label_width
-                            Layout.maximumWidth: form_left_column.left_column_label_width
                         }
 
                         S_Combo {
@@ -1147,12 +1130,8 @@ R"qml(
                         Layout.fillWidth: true
                         spacing: 24
 
-                        S_Label {
+                        S_Form_Label {
                             text: "Renderer"
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.minimumWidth: form_left_column.left_column_label_width
-                            Layout.preferredWidth: form_left_column.left_column_label_width
-                            Layout.maximumWidth: form_left_column.left_column_label_width
                         }
 
                         ColumnLayout {
@@ -1215,12 +1194,8 @@ R"qml(
                         Layout.fillWidth: true
                         spacing: 10
 
-                        S_Label {
+                        S_Form_Label {
                             text: "LCD subpixel"
-                            Layout.alignment: Qt.AlignVCenter
-                            Layout.minimumWidth: form_left_column.left_column_label_width
-                            Layout.preferredWidth: form_left_column.left_column_label_width
-                            Layout.maximumWidth: form_left_column.left_column_label_width
                         }
 
                         S_Switch {
@@ -1493,13 +1468,13 @@ settings::Terminal_settings_window::Terminal_settings_window(
         k_settings_window_qml,
         QUrl(QStringLiteral("qrc:/vnm_terminal/terminal_settings_window.qml")));
     if (!component.isReady()) {
-        m_error_string = component_error_string(component);
+        m_error_string = settings::detail::qml_component_error_string(component);
         return;
     }
 
     m_root_object.reset(component.create(context));
     if (m_root_object == nullptr) {
-        m_error_string = component_error_string(component);
+        m_error_string = settings::detail::qml_component_error_string(component);
         return;
     }
 

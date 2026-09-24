@@ -1,7 +1,5 @@
 #pragma once
 
-#include <QtGlobal>
-
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -9,23 +7,9 @@
 
 class QQuickWindow;
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 2, 0)
 #define VNM_TERMINAL_PRESENTATION_HAS_AFTER_SYNCHRONIZING 1
-#else
-#define VNM_TERMINAL_PRESENTATION_HAS_AFTER_SYNCHRONIZING 0
-#endif
-
-#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
 #define VNM_TERMINAL_PRESENTATION_HAS_RENDER_PASS_RECORDING 1
-#else
-#define VNM_TERMINAL_PRESENTATION_HAS_RENDER_PASS_RECORDING 0
-#endif
-
-#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
 #define VNM_TERMINAL_PRESENTATION_HAS_FRAME_BOUNDARIES 1
-#else
-#define VNM_TERMINAL_PRESENTATION_HAS_FRAME_BOUNDARIES 0
-#endif
 
 namespace vnm_terminal::terminal_app {
 

@@ -84,10 +84,8 @@ void apply_persisted_terminal_window_state(
 
 bool persisted_window_axis_is_valid(int value);
 
-std::optional<int>    settings_int_value(QSettings& settings, const char* key);
 std::optional<bool>   settings_bool_value(QSettings& settings, const char* key);
 std::optional<QColor> settings_color_value(QSettings& settings, const char* key);
-std::optional<qreal>  settings_font_size(QSettings& settings);
 std::optional<QSize>  settings_window_size(QSettings& settings);
 std::optional<QPoint> settings_window_position(QSettings& settings);
 

@@ -1,6 +1,7 @@
 #include "app_options_settings_adapter.h"
 
 #include "app_common.h"
+#include "app_settings_internal.h"
 #include "app_options.h"
 
 #include "vnm_terminal/internal/terminal_color_scheme.h"
@@ -18,8 +19,6 @@
 namespace vnm_terminal::terminal_app {
 
 namespace {
-
-constexpr std::size_t k_bytes_per_mib = 1024U * 1024U;
 
 template <typename Value_t>
 bool command_line_override_still_holds(
@@ -126,17 +125,17 @@ void apply_persisted_appearance_settings(
         const std::optional<int> size_mib = state.scrollback_buffer_size_mib;
         const int minimum_mib = static_cast<int>(
             (VNM_TerminalSurface::minimum_retained_history_capacity_bytes() +
-                k_bytes_per_mib - 1U) /
-            k_bytes_per_mib);
+                detail::k_bytes_per_mib - 1U) /
+            detail::k_bytes_per_mib);
         const int maximum_mib = static_cast<int>(
             VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
-            k_bytes_per_mib);
+            detail::k_bytes_per_mib);
         if (size_mib.has_value() &&
             *size_mib >= minimum_mib &&
             *size_mib <= maximum_mib)
         {
             options->retained_history_capacity_bytes =
-                static_cast<std::size_t>(*size_mib) * k_bytes_per_mib;
+                static_cast<std::size_t>(*size_mib) * detail::k_bytes_per_mib;
         }
     }
 }
@@ -176,17 +175,6 @@ bool persisted_window_axis_is_valid(int value)
         value <= static_cast<int>(k_text_area_resize_max_window_axis);
 }
 
-std::optional<int> settings_int_value(QSettings& settings, const char* key)
-{
-    if (!settings.contains(QLatin1String(key))) {
-        return std::nullopt;
-    }
-
-    bool      ok    = false;
-    const int value = settings.value(QLatin1String(key)).toInt(&ok);
-    return ok ? std::optional<int>(value) : std::nullopt;
-}
-
 std::optional<bool> settings_bool_value(QSettings& settings, const char* key)
 {
     if (!settings.contains(QLatin1String(key))) {
@@ -206,27 +194,12 @@ std::optional<QColor> settings_color_value(QSettings& settings, const char* key)
     return color.isValid() ? std::optional<QColor>(color) : std::nullopt;
 }
 
-std::optional<qreal> settings_font_size(QSettings& settings)
-{
-    if (!settings.contains(QLatin1String(k_window_settings_font_size))) {
-        return std::nullopt;
-    }
-
-    bool         ok        = false;
-    const double font_size =
-        settings.value(QLatin1String(k_window_settings_font_size)).toDouble(&ok);
-    if (!ok || !std::isfinite(font_size) || font_size <= 0.0) {
-        return std::nullopt;
-    }
-    return static_cast<qreal>(font_size);
-}
-
 std::optional<QSize> settings_window_size(QSettings& settings)
 {
     const std::optional<int> width =
-        settings_int_value(settings, k_window_settings_width);
+        detail::settings_int_value(settings, k_window_settings_width);
     const std::optional<int> height =
-        settings_int_value(settings, k_window_settings_height);
+        detail::settings_int_value(settings, k_window_settings_height);
     if (!width.has_value() || !height.has_value() ||
         !persisted_window_axis_is_valid(*width) ||
         !persisted_window_axis_is_valid(*height))
@@ -238,8 +211,8 @@ std::optional<QSize> settings_window_size(QSettings& settings)
 
 std::optional<QPoint> settings_window_position(QSettings& settings)
 {
-    const std::optional<int> x = settings_int_value(settings, k_window_settings_x);
-    const std::optional<int> y = settings_int_value(settings, k_window_settings_y);
+    const std::optional<int> x = detail::settings_int_value(settings, k_window_settings_x);
+    const std::optional<int> y = detail::settings_int_value(settings, k_window_settings_y);
     if (!x.has_value() || !y.has_value()) {
         return std::nullopt;
     }
@@ -251,7 +224,7 @@ Persisted_terminal_window_state load_persisted_terminal_window_state(
 {
     Persisted_terminal_window_state state;
     settings.beginGroup(QLatin1String(k_window_settings_group));
-    state.font_size = settings_font_size(settings);
+    state.font_size = detail::settings_font_size(settings);
     state.size      = settings_window_size(settings);
     state.position  = settings_window_position(settings);
     state.maximized =
@@ -273,29 +246,6 @@ bool settle_command_line_window_geometry(
     overrides.maximized       = state.maximized;
     overrides.window_geometry_settlement_pending = false;
     return true;
-}
-
-std::optional<int> settings_scrollback_buffer_size_mib(QSettings& settings)
-{
-    const std::optional<int> size_mib = settings_int_value(
-        settings,
-        k_appearance_scrollback_buffer_size_mib);
-    if (!size_mib.has_value()) {
-        return std::nullopt;
-    }
-
-    const int minimum_mib = static_cast<int>(
-        (VNM_TerminalSurface::minimum_retained_history_capacity_bytes() +
-            k_bytes_per_mib - 1U) /
-        k_bytes_per_mib);
-    const int maximum_mib = static_cast<int>(
-        VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
-        k_bytes_per_mib);
-    if (*size_mib < minimum_mib || *size_mib > maximum_mib) {
-        return std::nullopt;
-    }
-
-    return size_mib;
 }
 
 void save_persisted_terminal_window_state(
@@ -356,17 +306,17 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
     }
 
     state.text_renderer_mode =
-        settings_int_value(settings, k_appearance_text_renderer_mode);
+        detail::settings_int_value(settings, k_appearance_text_renderer_mode);
     state.font_advance_policy =
-        settings_int_value(settings, k_appearance_font_advance_policy);
+        detail::settings_int_value(settings, k_appearance_font_advance_policy);
     state.lcd_subpixel_order =
-        settings_int_value(settings, k_appearance_lcd_subpixel_order);
+        detail::settings_int_value(settings, k_appearance_lcd_subpixel_order);
     state.invert_brightness =
         settings_bool_value(settings, k_appearance_invert_brightness);
     state.row_timestamp_tooltip =
         settings_bool_value(settings, k_appearance_row_timestamp_tooltip);
     state.scrollback_buffer_size_mib =
-        settings_scrollback_buffer_size_mib(settings);
+        detail::settings_scrollback_buffer_size_mib(settings);
     state.chrome_focused_background =
         settings_color_value(settings, k_appearance_chrome_focused_background);
     state.chrome_unfocused_background =

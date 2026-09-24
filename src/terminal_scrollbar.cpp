@@ -91,30 +91,22 @@ void scrollbar::Terminal_scrollbar::set_surface(VNM_TerminalSurface* surface)
             m_surface,
             &VNM_TerminalSurface::viewport_changed,
             this,
-            [this] {
-                sync_from_surface();
-            });
+            &scrollbar::Terminal_scrollbar::sync_from_surface);
         m_grid_connection = QObject::connect(
             m_surface,
             &VNM_TerminalSurface::grid_geometry_changed,
             this,
-            [this] {
-                sync_from_surface();
-            });
+            &scrollbar::Terminal_scrollbar::sync_from_surface);
         m_theme_connection = QObject::connect(
             m_surface,
             &VNM_TerminalSurface::color_scheme_changed,
             this,
-            [this] {
-                sync_background_color();
-            });
+            &scrollbar::Terminal_scrollbar::sync_background_color);
         m_invert_brightness_connection = QObject::connect(
             m_surface,
             &VNM_TerminalSurface::invert_brightness_changed,
             this,
-            [this] {
-                sync_background_color();
-            });
+            &scrollbar::Terminal_scrollbar::sync_background_color);
         m_destroyed_connection = QObject::connect(
             m_surface,
             &QObject::destroyed,

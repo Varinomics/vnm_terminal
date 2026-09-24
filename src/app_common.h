@@ -38,6 +38,12 @@ struct metrics_timing_t
 
 void print_error(const QString& message);
 
+bool validate_output_path(
+    const QString& option_name,
+    const QString& path,
+    QString*       out_absolute_path,
+    QString*       out_error);
+
 template <typename T>
 QString enum_key(T value)
 {

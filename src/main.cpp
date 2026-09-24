@@ -57,6 +57,7 @@
 #include <QWindow>
 #include <QtGlobal>
 
+#include <array>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -154,8 +155,6 @@ using chrome::Runtime_state;
 using chrome::save_persisted_terminal_window_state;
 using chrome::settle_command_line_window_geometry;
 using chrome::set_terminal_chrome_palette;
-using chrome::settings_font_size;
-using chrome::settings_int_value;
 using chrome::settings_window_position;
 using chrome::settings_window_size;
 using chrome::split_terminal_area;
@@ -793,46 +792,32 @@ int main(int argc, char** argv)
         });
     connect_text_area_resize_policy(window, *surface);
 
+    const auto resize_shell_and_schedule_persistence = [
+        titlebar_ptr,
+        &window,
+        surface,
+        scrollbar,
+        custom_titlebar_enabled,
+        schedule_window_state_save
+    ] {
+        apply_terminal_shell_geometry(
+            window,
+            *surface,
+            *scrollbar,
+            titlebar_ptr,
+            custom_titlebar_enabled);
+        schedule_window_state_save();
+    };
     QObject::connect(
         &window,
         &QQuickWindow::widthChanged,
         surface,
-        [
-            titlebar_ptr,
-            &window,
-            surface,
-            scrollbar,
-            custom_titlebar_enabled,
-            schedule_window_state_save
-        ] {
-            apply_terminal_shell_geometry(
-                window,
-                *surface,
-                *scrollbar,
-                titlebar_ptr,
-                custom_titlebar_enabled);
-            schedule_window_state_save();
-        });
+        resize_shell_and_schedule_persistence);
     QObject::connect(
         &window,
         &QQuickWindow::heightChanged,
         surface,
-        [
-            titlebar_ptr,
-            &window,
-            surface,
-            scrollbar,
-            custom_titlebar_enabled,
-            schedule_window_state_save
-        ] {
-            apply_terminal_shell_geometry(
-                window,
-                *surface,
-                *scrollbar,
-                titlebar_ptr,
-                custom_titlebar_enabled);
-            schedule_window_state_save();
-        });
+        resize_shell_and_schedule_persistence);
     // A display scale change keeps the window's logical size and its screen, so
     // neither the size signals above nor screenChanged below report it. The
     // chrome lays the terminal out against physical pixels, so the interior has
@@ -904,51 +889,20 @@ int main(int argc, char** argv)
         &VNM_TerminalSurface::font_size_changed,
         surface,
         persist_window_state);
-    QObject::connect(
-        surface,
+    const std::array appearance_persistence_signals{
         &VNM_TerminalSurface::color_scheme_changed,
-        surface,
-        persist_appearance);
-    QObject::connect(
-        surface,
         &VNM_TerminalSurface::font_family_changed,
-        surface,
-        persist_appearance);
-    QObject::connect(
-        surface,
         &VNM_TerminalSurface::font_advance_policy_changed,
-        surface,
-        persist_appearance);
-    QObject::connect(
-        surface,
         &VNM_TerminalSurface::text_renderer_mode_changed,
-        surface,
-        persist_appearance);
-    QObject::connect(
-        surface,
         &VNM_TerminalSurface::lcd_subpixel_order_changed,
-        surface,
-        persist_appearance);
-    QObject::connect(
-        surface,
         &VNM_TerminalSurface::invert_brightness_changed,
-        surface,
-        persist_appearance);
-    QObject::connect(
-        surface,
         &VNM_TerminalSurface::row_timestamp_tooltip_enabled_changed,
-        surface,
-        persist_appearance);
-    QObject::connect(
-        surface,
         &VNM_TerminalSurface::scrollback_limit_changed,
-        surface,
-        persist_appearance);
-    QObject::connect(
-        surface,
         &VNM_TerminalSurface::scrollback_buffer_size_mib_changed,
-        surface,
-        persist_appearance);
+    };
+    for (const auto signal : appearance_persistence_signals) {
+        QObject::connect(surface, signal, surface, persist_appearance);
+    }
 
     if (titlebar_ptr != nullptr) {
         auto sync_titlebar_state = [titlebar_ptr, &window] {

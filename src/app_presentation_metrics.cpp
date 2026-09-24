@@ -14,6 +14,35 @@ constexpr std::size_t presentation_signal_index(Presentation_signal signal)
     return static_cast<std::size_t>(signal);
 }
 
+struct presentation_signal_metadata_t
+{
+    Presentation_signal signal;
+    const char*         json_key;
+};
+
+constexpr presentation_signal_metadata_t presentation_signal_metadata[] = {
+    {Presentation_signal::FRAME_SWAPPED, "frameSwapped"},
+    {Presentation_signal::BEFORE_FRAME_BEGIN, "beforeFrameBegin"},
+    {Presentation_signal::BEFORE_SYNCHRONIZING, "beforeSynchronizing"},
+    {Presentation_signal::AFTER_SYNCHRONIZING, "afterSynchronizing"},
+    {Presentation_signal::BEFORE_RENDERING, "beforeRendering"},
+    {Presentation_signal::AFTER_RENDERING, "afterRendering"},
+    {Presentation_signal::BEFORE_RENDER_PASS_RECORDING, "beforeRenderPassRecording"},
+    {Presentation_signal::AFTER_RENDER_PASS_RECORDING, "afterRenderPassRecording"},
+    {Presentation_signal::AFTER_FRAME_END, "afterFrameEnd"},
+};
+
+const presentation_signal_metadata_t* find_presentation_signal_metadata(
+    Presentation_signal signal)
+{
+    for (const presentation_signal_metadata_t& metadata : presentation_signal_metadata) {
+        if (metadata.signal == signal) {
+            return &metadata;
+        }
+    }
+    return nullptr;
+}
+
 template<typename Signal>
 void connect_presentation_signal(
     QQuickWindow&                   window,
@@ -79,53 +108,14 @@ void Presentation_metrics_recorder::record_at(
 
 bool presentation_signal_available(Presentation_signal signal)
 {
-    switch (signal) {
-        case Presentation_signal::FRAME_SWAPPED:
-        case Presentation_signal::BEFORE_SYNCHRONIZING:
-        case Presentation_signal::BEFORE_RENDERING:
-        case Presentation_signal::AFTER_RENDERING:
-            return true;
-        case Presentation_signal::AFTER_SYNCHRONIZING:
-            return VNM_TERMINAL_PRESENTATION_HAS_AFTER_SYNCHRONIZING;
-        case Presentation_signal::BEFORE_RENDER_PASS_RECORDING:
-        case Presentation_signal::AFTER_RENDER_PASS_RECORDING:
-            return VNM_TERMINAL_PRESENTATION_HAS_RENDER_PASS_RECORDING;
-        case Presentation_signal::BEFORE_FRAME_BEGIN:
-        case Presentation_signal::AFTER_FRAME_END:
-            return VNM_TERMINAL_PRESENTATION_HAS_FRAME_BOUNDARIES;
-        case Presentation_signal::COUNT:
-            return false;
-    }
-
-    return false;
+    return find_presentation_signal_metadata(signal) != nullptr;
 }
 
 const char* presentation_signal_json_key(Presentation_signal signal)
 {
-    switch (signal) {
-        case Presentation_signal::FRAME_SWAPPED:
-            return "frameSwapped";
-        case Presentation_signal::BEFORE_FRAME_BEGIN:
-            return "beforeFrameBegin";
-        case Presentation_signal::BEFORE_SYNCHRONIZING:
-            return "beforeSynchronizing";
-        case Presentation_signal::AFTER_SYNCHRONIZING:
-            return "afterSynchronizing";
-        case Presentation_signal::BEFORE_RENDERING:
-            return "beforeRendering";
-        case Presentation_signal::AFTER_RENDERING:
-            return "afterRendering";
-        case Presentation_signal::BEFORE_RENDER_PASS_RECORDING:
-            return "beforeRenderPassRecording";
-        case Presentation_signal::AFTER_RENDER_PASS_RECORDING:
-            return "afterRenderPassRecording";
-        case Presentation_signal::AFTER_FRAME_END:
-            return "afterFrameEnd";
-        case Presentation_signal::COUNT:
-            return "unknown";
-    }
-
-    return "unknown";
+    const presentation_signal_metadata_t* const metadata =
+        find_presentation_signal_metadata(signal);
+    return metadata != nullptr ? metadata->json_key : "unknown";
 }
 
 void connect_presentation_metrics_recorder(
@@ -138,13 +128,11 @@ void connect_presentation_metrics_recorder(
         &QQuickWindow::frameSwapped,
         Presentation_signal::FRAME_SWAPPED);
 
-#if VNM_TERMINAL_PRESENTATION_HAS_FRAME_BOUNDARIES
     connect_presentation_signal(
         window,
         recorder,
         &QQuickWindow::beforeFrameBegin,
         Presentation_signal::BEFORE_FRAME_BEGIN);
-#endif
 
     connect_presentation_signal(
         window,
@@ -152,13 +140,11 @@ void connect_presentation_metrics_recorder(
         &QQuickWindow::beforeSynchronizing,
         Presentation_signal::BEFORE_SYNCHRONIZING);
 
-#if VNM_TERMINAL_PRESENTATION_HAS_AFTER_SYNCHRONIZING
     connect_presentation_signal(
         window,
         recorder,
         &QQuickWindow::afterSynchronizing,
         Presentation_signal::AFTER_SYNCHRONIZING);
-#endif
 
     connect_presentation_signal(
         window,
@@ -171,7 +157,6 @@ void connect_presentation_metrics_recorder(
         &QQuickWindow::afterRendering,
         Presentation_signal::AFTER_RENDERING);
 
-#if VNM_TERMINAL_PRESENTATION_HAS_RENDER_PASS_RECORDING
     connect_presentation_signal(
         window,
         recorder,
@@ -182,15 +167,12 @@ void connect_presentation_metrics_recorder(
         recorder,
         &QQuickWindow::afterRenderPassRecording,
         Presentation_signal::AFTER_RENDER_PASS_RECORDING);
-#endif
 
-#if VNM_TERMINAL_PRESENTATION_HAS_FRAME_BOUNDARIES
     connect_presentation_signal(
         window,
         recorder,
         &QQuickWindow::afterFrameEnd,
         Presentation_signal::AFTER_FRAME_END);
-#endif
 }
 
 } // namespace vnm_terminal::terminal_app

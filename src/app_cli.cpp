@@ -322,44 +322,10 @@ QString comparable_capture_path(QString path)
     return path;
 }
 
-bool validate_capture_path(
-    const QString& option_name,
-    const QString& path,
-    QString*       out_absolute_path,
-    QString*       out_error)
-{
-    if (path.trimmed().isEmpty()) {
-        *out_error = QStringLiteral("%1 requires a non-empty path").arg(option_name);
-        return false;
-    }
-
-    const QFileInfo file_info(path);
-    const QDir parent_dir = file_info.absoluteDir();
-    if (!parent_dir.exists()) {
-        *out_error = QStringLiteral("%1 parent directory does not exist: %2")
-            .arg(option_name, parent_dir.absolutePath());
-        return false;
-    }
-    if (file_info.exists() && file_info.isDir()) {
-        *out_error = QStringLiteral("%1 points to a directory: %2")
-            .arg(option_name, file_info.absoluteFilePath());
-        return false;
-    }
-
-    *out_absolute_path = file_info.absoluteFilePath();
-    return true;
-}
-
 struct capture_path_option_t
 {
     const char* name;
     QString*    path;
-};
-
-struct capture_path_conflict_t
-{
-    std::size_t first;
-    std::size_t second;
 };
 
 bool validate_present_capture_path(
@@ -370,7 +336,7 @@ bool validate_present_capture_path(
         return true;
     }
 
-    return validate_capture_path(
+    return validate_output_path(
         QString::fromLatin1(option.name),
         *option.path,
         option.path,
@@ -385,7 +351,7 @@ bool validate_backend_output_capture_base_path(
         return true;
     }
 
-    if (!validate_capture_path(
+    if (!validate_output_path(
             QStringLiteral("--capture-output"),
             *out_base_path,
             out_base_path,
@@ -532,10 +498,11 @@ bool validate_capture_paths(App_options* options, QString* out_error)
 
     constexpr std::size_t capture_output_path         = 0;
     constexpr std::size_t capture_transcript_path     = 1;
-    constexpr std::size_t metrics_json_path           = 2;
-    constexpr std::size_t metrics_timeline_jsonl_path = 3;
 #if VNM_TERMINAL_PROFILING_ENABLED
     constexpr std::size_t profile_text_path           = 4;
+    constexpr std::size_t non_profile_path_count      = profile_text_path;
+#else
+    constexpr std::size_t non_profile_path_count      = capture_paths.size();
 #endif
 
     if (!validate_backend_output_capture_base_path(
@@ -551,38 +518,32 @@ bool validate_capture_paths(App_options* options, QString* out_error)
         }
     }
 
-#if VNM_TERMINAL_PROFILING_ENABLED
-    const std::array<capture_path_conflict_t, 10> conflicts{{
-        {capture_output_path,     capture_transcript_path},
-        {capture_output_path,     metrics_json_path},
-        {capture_output_path,     metrics_timeline_jsonl_path},
-        {capture_transcript_path, metrics_json_path},
-        {capture_transcript_path, metrics_timeline_jsonl_path},
-        {metrics_json_path,       metrics_timeline_jsonl_path},
-        {profile_text_path,       capture_output_path},
-        {profile_text_path,       capture_transcript_path},
-        {profile_text_path,       metrics_json_path},
-        {profile_text_path,       metrics_timeline_jsonl_path},
-    }};
-#else
-    const std::array<capture_path_conflict_t, 6> conflicts{{
-        {capture_output_path,     capture_transcript_path},
-        {capture_output_path,     metrics_json_path},
-        {capture_output_path,     metrics_timeline_jsonl_path},
-        {capture_transcript_path, metrics_json_path},
-        {capture_transcript_path, metrics_timeline_jsonl_path},
-        {metrics_json_path,       metrics_timeline_jsonl_path},
-    }};
-#endif
+    for (std::size_t first_index = 0; first_index < non_profile_path_count; ++first_index) {
+        for (std::size_t second_index = first_index + 1;
+             second_index < non_profile_path_count;
+             ++second_index)
+        {
+            const capture_path_option_t& first  = capture_paths[first_index];
+            const capture_path_option_t& second = capture_paths[second_index];
+            if (!capture_paths_conflict(first, second)) {
+                continue;
+            }
 
-    for (const capture_path_conflict_t& conflict : conflicts) {
-        const capture_path_option_t& first  = capture_paths[conflict.first];
-        const capture_path_option_t& second = capture_paths[conflict.second];
-        if (capture_paths_conflict(first, second)) {
             *out_error = capture_path_conflict_error(first, second);
             return false;
         }
     }
+
+#if VNM_TERMINAL_PROFILING_ENABLED
+    const capture_path_option_t& profile_path = capture_paths[profile_text_path];
+    for (std::size_t other_index = 0; other_index < non_profile_path_count; ++other_index) {
+        const capture_path_option_t& other_path = capture_paths[other_index];
+        if (capture_paths_conflict(profile_path, other_path)) {
+            *out_error = capture_path_conflict_error(profile_path, other_path);
+            return false;
+        }
+    }
+#endif
 
     return true;
 }

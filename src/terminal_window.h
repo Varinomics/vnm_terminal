@@ -54,10 +54,6 @@ void split_terminal_area(
     Terminal_content_geometry& geometry,
     const QRectF&            area);
 
-void snap_terminal_content_geometry(
-    Terminal_content_geometry& geometry,
-    qreal                    device_pixel_ratio);
-
 Terminal_content_geometry terminal_content_geometry(
     const QRectF& content_interior_rect,
     qreal         device_pixel_ratio);

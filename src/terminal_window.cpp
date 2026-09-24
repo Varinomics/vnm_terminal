@@ -77,10 +77,13 @@ void split_terminal_area(
         area.height());
 }
 
-void snap_terminal_content_geometry(
-    Terminal_content_geometry& geometry,
-    qreal                    device_pixel_ratio)
+Terminal_content_geometry terminal_content_geometry(
+    const QRectF& content_interior_rect,
+    qreal         device_pixel_ratio)
 {
+    Terminal_content_geometry geometry;
+    split_terminal_area(geometry, content_interior_rect);
+
     const qreal dpr =
         vnm_qml_chrome::normalized_device_pixel_ratio(device_pixel_ratio);
     geometry.content_interior_rect = vnm_qml_chrome::snapped_logical_rect(
@@ -92,15 +95,6 @@ void snap_terminal_content_geometry(
     geometry.scrollbar_rect = vnm_qml_chrome::snapped_logical_rect(
         geometry.scrollbar_rect,
         dpr);
-}
-
-Terminal_content_geometry terminal_content_geometry(
-    const QRectF& content_interior_rect,
-    qreal         device_pixel_ratio)
-{
-    Terminal_content_geometry geometry;
-    split_terminal_area(geometry, content_interior_rect);
-    snap_terminal_content_geometry(geometry, device_pixel_ratio);
     return geometry;
 }
 

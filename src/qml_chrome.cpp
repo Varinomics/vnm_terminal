@@ -1,5 +1,7 @@
 #include "vnm_terminal/app_support/qml_chrome.h"
 
+#include "qml_component_error_string.h"
+
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
 
 #include <QDateTime>
@@ -17,19 +19,23 @@
 
 namespace chrome = vnm_terminal::terminal_app;
 
+namespace vnm_terminal::terminal_app::detail {
+
+QString qml_component_error_string(const QQmlComponent& component)
+{
+    QStringList errors;
+    const auto component_errors = component.errors();
+    for (const QQmlError& error : component_errors) {
+        errors.push_back(error.toString());
+    }
+    return errors.join(QStringLiteral("\n"));
+}
+
+} // namespace vnm_terminal::terminal_app::detail
+
 namespace {
 
 constexpr int k_wheel_delivery_indicator_pulse_ms = 220;
-
-QString component_error_string(const QQmlComponent& component)
-{
-    QStringList out;
-    const auto errors = component.errors();
-    for (const QQmlError& error : errors) {
-        out.push_back(error.toString());
-    }
-    return out.join(QStringLiteral("\n"));
-}
 
 constexpr const char* k_terminal_chrome_qml = R"(
 import QtQuick
@@ -468,7 +474,7 @@ chrome::Terminal_qml_chrome::Terminal_qml_chrome(QQmlEngine& engine, QQuickWindo
         k_terminal_chrome_qml,
         QUrl(QStringLiteral("qrc:/vnm_terminal/terminal_qml_chrome.qml")));
     if (!component.isReady()) {
-        m_error_string = component_error_string(component);
+        m_error_string = chrome::detail::qml_component_error_string(component);
         return;
     }
 
@@ -484,7 +490,7 @@ chrome::Terminal_qml_chrome::Terminal_qml_chrome(QQmlEngine& engine, QQuickWindo
         {QStringLiteral("unfocused_titlebar_text_color"),    palette.unfocused_title},
     }));
     if (m_root_object == nullptr) {
-        m_error_string = component_error_string(component);
+        m_error_string = chrome::detail::qml_component_error_string(component);
         return;
     }
 
