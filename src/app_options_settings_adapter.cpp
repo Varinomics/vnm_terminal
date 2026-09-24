@@ -87,33 +87,18 @@ void apply_persisted_appearance_settings(
         options->font_family = *state.font_family;
     }
     if (state.font_advance_policy.has_value()) {
-        const int policy = *state.font_advance_policy;
-        const int minimum =
-            static_cast<int>(vnm_terminal::Font_advance_policy::ADJUST_FONT_SIZE);
-        const int maximum =
-            static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
-        if (policy >= minimum && policy <= maximum) {
-            options->font_advance_policy =
-                static_cast<vnm_terminal::Font_advance_policy>(policy);
-        }
+        options->font_advance_policy = static_cast<vnm_terminal::Font_advance_policy>(
+            *state.font_advance_policy);
     }
     if (!options->text_renderer_mode_explicit && state.text_renderer_mode.has_value()) {
-        const int mode = *state.text_renderer_mode;
-        if (mode >= static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO) &&
-            mode <= static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::GLYPH))
-        {
-            options->text_renderer_mode =
-                static_cast<VNM_TerminalSurface::Text_renderer_mode>(mode);
-        }
+        options->text_renderer_mode =
+            static_cast<VNM_TerminalSurface::Text_renderer_mode>(
+                *state.text_renderer_mode);
     }
     if (!options->lcd_subpixel_order_explicit && state.lcd_subpixel_order.has_value()) {
-        const int order = *state.lcd_subpixel_order;
-        if (order >= static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::AUTO) &&
-            order <= static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::VBGR))
-        {
-            options->lcd_subpixel_order =
-                static_cast<VNM_TerminalSurface::Lcd_subpixel_order>(order);
-        }
+        options->lcd_subpixel_order =
+            static_cast<VNM_TerminalSurface::Lcd_subpixel_order>(
+                *state.lcd_subpixel_order);
     }
     if (state.invert_brightness.has_value()) {
         options->invert_brightness = *state.invert_brightness;
@@ -122,20 +107,10 @@ void apply_persisted_appearance_settings(
         options->row_timestamp_tooltip_enabled = *state.row_timestamp_tooltip;
     }
     if (!options->retained_history_capacity_explicit) {
-        const std::optional<int> size_mib = state.scrollback_buffer_size_mib;
-        const int minimum_mib = static_cast<int>(
-            (VNM_TerminalSurface::minimum_retained_history_capacity_bytes() +
-                detail::k_bytes_per_mib - 1U) /
-            detail::k_bytes_per_mib);
-        const int maximum_mib = static_cast<int>(
-            VNM_TerminalSurface::maximum_retained_history_capacity_bytes() /
-            detail::k_bytes_per_mib);
-        if (size_mib.has_value() &&
-            *size_mib >= minimum_mib &&
-            *size_mib <= maximum_mib)
-        {
+        if (state.scrollback_buffer_size_mib.has_value()) {
             options->retained_history_capacity_bytes =
-                static_cast<std::size_t>(*size_mib) * detail::k_bytes_per_mib;
+                static_cast<std::size_t>(*state.scrollback_buffer_size_mib) *
+                detail::k_bytes_per_mib;
         }
     }
 }
@@ -173,25 +148,6 @@ bool persisted_window_axis_is_valid(int value)
     return
         value >= k_persisted_window_min_axis &&
         value <= static_cast<int>(k_text_area_resize_max_window_axis);
-}
-
-std::optional<bool> settings_bool_value(QSettings& settings, const char* key)
-{
-    if (!settings.contains(QLatin1String(key))) {
-        return std::nullopt;
-    }
-    return settings.value(QLatin1String(key)).toBool();
-}
-
-std::optional<QColor> settings_color_value(QSettings& settings, const char* key)
-{
-    const QString text = settings.value(QLatin1String(key)).toString().trimmed();
-    if (text.isEmpty()) {
-        return std::nullopt;
-    }
-
-    const QColor color = QColor::fromString(text);
-    return color.isValid() ? std::optional<QColor>(color) : std::nullopt;
 }
 
 std::optional<QSize> settings_window_size(QSettings& settings)
@@ -290,52 +246,7 @@ void save_persisted_terminal_window_state(
 
 Persisted_appearance_settings load_persisted_appearance_settings(QSettings& settings)
 {
-    Persisted_appearance_settings state;
-    settings.beginGroup(QLatin1String(k_appearance_settings_group));
-
-    const QString color_scheme =
-        settings.value(QLatin1String(k_appearance_color_scheme)).toString().trimmed();
-    if (!color_scheme.isEmpty()) {
-        state.color_scheme = color_scheme;
-    }
-
-    const QString font_family =
-        settings.value(QLatin1String(k_appearance_font_family)).toString().trimmed();
-    if (!font_family.isEmpty()) {
-        state.font_family = font_family;
-    }
-
-    state.text_renderer_mode =
-        detail::settings_int_value(settings, k_appearance_text_renderer_mode);
-    state.font_advance_policy =
-        detail::settings_int_value(settings, k_appearance_font_advance_policy);
-    state.lcd_subpixel_order =
-        detail::settings_int_value(settings, k_appearance_lcd_subpixel_order);
-    state.invert_brightness =
-        settings_bool_value(settings, k_appearance_invert_brightness);
-    state.row_timestamp_tooltip =
-        settings_bool_value(settings, k_appearance_row_timestamp_tooltip);
-    state.scrollback_buffer_size_mib =
-        detail::settings_scrollback_buffer_size_mib(settings);
-    state.chrome_focused_background =
-        settings_color_value(settings, k_appearance_chrome_focused_background);
-    state.chrome_unfocused_background =
-        settings_color_value(settings, k_appearance_chrome_unfocused_background);
-    state.chrome_focused_frame_edge =
-        settings_color_value(settings, k_appearance_chrome_focused_frame_edge);
-    state.chrome_unfocused_frame_edge =
-        settings_color_value(settings, k_appearance_chrome_unfocused_frame_edge);
-
-    if (state.text_renderer_mode.has_value() &&
-        *state.text_renderer_mode ==
-            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::MSDF))
-    {
-        state.text_renderer_mode =
-            static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO);
-    }
-
-    settings.endGroup();
-    return state;
+    return detail::load_persisted_appearance_settings(settings);
 }
 
 void save_persisted_appearance_settings(
@@ -343,46 +254,39 @@ void save_persisted_appearance_settings(
     const VNM_TerminalSurface&      surface,
     Command_line_setting_overrides& overrides)
 {
-    settings.beginGroup(QLatin1String(k_appearance_settings_group));
+    Persisted_appearance_settings appearance;
     const QString color_scheme = surface.color_scheme();
     if (!command_line_override_still_holds(overrides.color_scheme, color_scheme)) {
-        settings.setValue(QLatin1String(k_appearance_color_scheme), color_scheme);
+        appearance.color_scheme = color_scheme;
     }
 
     const QString font_family = surface.font_family();
     if (!command_line_override_still_holds(overrides.font_family, font_family)) {
-        settings.setValue(QLatin1String(k_appearance_font_family), font_family);
+        appearance.font_family = font_family;
     }
 
-    const int font_advance_policy = surface.font_advance_policy_value();
-    settings.setValue(
-        QLatin1String(k_appearance_font_advance_policy),
-        font_advance_policy);
+    appearance.font_advance_policy = surface.font_advance_policy_value();
 
     const int text_renderer_mode = static_cast<int>(surface.text_renderer_mode());
     if (surface.text_renderer_mode() != VNM_TerminalSurface::Text_renderer_mode::MSDF &&
         !command_line_override_still_holds(overrides.text_renderer_mode, text_renderer_mode))
     {
-        settings.setValue(QLatin1String(k_appearance_text_renderer_mode), text_renderer_mode);
+        appearance.text_renderer_mode = text_renderer_mode;
     }
 
     const int lcd_subpixel_order = static_cast<int>(surface.lcd_subpixel_order());
     if (!command_line_override_still_holds(overrides.lcd_subpixel_order, lcd_subpixel_order)) {
-        settings.setValue(QLatin1String(k_appearance_lcd_subpixel_order), lcd_subpixel_order);
+        appearance.lcd_subpixel_order = lcd_subpixel_order;
     }
 
-    settings.setValue(
-        QLatin1String(k_appearance_invert_brightness),
-        surface.invert_brightness());
+    appearance.invert_brightness = surface.invert_brightness();
 
     const bool row_timestamp_tooltip = surface.row_timestamp_tooltip_enabled();
     if (!command_line_override_still_holds(
             overrides.row_timestamp_tooltip,
             row_timestamp_tooltip))
     {
-        settings.setValue(
-            QLatin1String(k_appearance_row_timestamp_tooltip),
-            row_timestamp_tooltip);
+        appearance.row_timestamp_tooltip = row_timestamp_tooltip;
     }
 
     const std::size_t retained_history_capacity_bytes =
@@ -391,14 +295,12 @@ void save_persisted_appearance_settings(
             overrides.retained_history_capacity_bytes,
             retained_history_capacity_bytes))
     {
-        settings.setValue(
-            QLatin1String(k_appearance_scrollback_buffer_size_mib),
-            surface.scrollback_buffer_size_mib());
+        appearance.scrollback_buffer_size_mib = surface.scrollback_buffer_size_mib();
     }
-    settings.remove(QLatin1String(k_appearance_scrollback_limit));
-
-    settings.endGroup();
-    settings.sync();
+    detail::save_persisted_appearance_settings(
+        settings,
+        appearance,
+        detail::Missing_scrollback_setting_policy::Leave_unchanged);
 }
 
 Terminal_chrome_palette persisted_terminal_chrome_palette(
@@ -424,7 +326,7 @@ Persisted_interaction_settings load_persisted_interaction_settings(QSettings& se
 {
     Persisted_interaction_settings state;
     settings.beginGroup(QLatin1String(k_interaction_settings_group));
-    state.copy_on_select = settings_bool_value(settings, k_interaction_copy_on_select);
+    state.copy_on_select = detail::settings_bool_value(settings, k_interaction_copy_on_select);
     settings.endGroup();
     return state;
 }

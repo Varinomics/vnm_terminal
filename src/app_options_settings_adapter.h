@@ -1,11 +1,11 @@
 #pragma once
 
 #include "app_settings_keys.h"
+#include "app_settings_internal.h"
 
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/qml_chrome.h"
 
-#include <QColor>
 #include <QPoint>
 #include <QSize>
 
@@ -25,22 +25,6 @@ struct Persisted_terminal_window_state
     std::optional<QSize>  size;
     std::optional<qreal>  font_size;
     bool                  maximized = false;
-};
-
-struct Persisted_appearance_settings
-{
-    std::optional<QString> color_scheme;
-    std::optional<QString> font_family;
-    std::optional<int>     font_advance_policy;
-    std::optional<int>     text_renderer_mode;
-    std::optional<int>     lcd_subpixel_order;
-    std::optional<bool>    invert_brightness;
-    std::optional<bool>    row_timestamp_tooltip;
-    std::optional<int>     scrollback_buffer_size_mib;
-    std::optional<QColor>  chrome_focused_background;
-    std::optional<QColor>  chrome_unfocused_background;
-    std::optional<QColor>  chrome_focused_frame_edge;
-    std::optional<QColor>  chrome_unfocused_frame_edge;
 };
 
 struct Persisted_interaction_settings
@@ -84,8 +68,6 @@ void apply_persisted_terminal_window_state(
 
 bool persisted_window_axis_is_valid(int value);
 
-std::optional<bool>   settings_bool_value(QSettings& settings, const char* key);
-std::optional<QColor> settings_color_value(QSettings& settings, const char* key);
 std::optional<QSize>  settings_window_size(QSettings& settings);
 std::optional<QPoint> settings_window_position(QSettings& settings);
 

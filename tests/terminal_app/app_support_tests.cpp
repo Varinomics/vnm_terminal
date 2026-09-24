@@ -65,6 +65,29 @@ private slots:
         QCOMPARE(*cmd_text, QStringLiteral("\"C:/Program Files/notes.txt\""));
     }
 
+    void terminal_drop_paths_escape_every_powershell_quote_delimiter()
+    {
+        const QString path =
+            QStringLiteral("C:/tmp/a") +
+            QChar(0x0027) +
+            QChar(0x2018) + QChar(0x2019) + QChar(0x201a) + QChar(0x201b) +
+            QStringLiteral(";Write-Output DROP_SENTINEL;#");
+        const std::optional<QString> text = terminal_app::quote_terminal_paths(
+            {path},
+            {QStringLiteral("pwsh")});
+
+        QVERIFY(text.has_value());
+        const QString expected =
+            QStringLiteral("'C:/tmp/a") +
+            QChar(0x0027) + QChar(0x0027) +
+            QChar(0x2018) + QChar(0x2018) +
+            QChar(0x2019) + QChar(0x2019) +
+            QChar(0x201a) + QChar(0x201a) +
+            QChar(0x201b) + QChar(0x201b) +
+            QStringLiteral(";Write-Output DROP_SENTINEL;#'");
+        QCOMPARE(*text, expected);
+    }
+
     void terminal_drop_paths_reject_unsafe_inputs()
     {
         const QStringList posix_command{QStringLiteral("/bin/sh")};
@@ -83,6 +106,9 @@ private slots:
             {QStringLiteral("cmd.exe")}).has_value());
         QVERIFY(!terminal_app::quote_terminal_paths(
             {QStringLiteral("C:/Users/Ada/important! file.txt")},
+            {QStringLiteral("cmd.exe")}).has_value());
+        QVERIFY(!terminal_app::quote_terminal_paths(
+            {QStringLiteral("C:/Users/Ada/x\" & echo DROP_SENTINEL & rem \".txt")},
             {QStringLiteral("cmd.exe")}).has_value());
         QVERIFY(!terminal_app::quote_terminal_paths(
             {QStringLiteral("C:/Users/Ada/file.txt")},
@@ -113,6 +139,16 @@ private slots:
         QVERIFY(!terminal_app::terminal_drop_text_for_local_urls(
             mixed_urls,
             {QStringLiteral("/bin/sh")}).has_value());
+
+        const QString crafted_local_path =
+            directory.filePath(QStringLiteral("x\" & echo DROP_SENTINEL & rem \".txt"));
+        const QUrl crafted_local_url = QUrl::fromLocalFile(crafted_local_path);
+        QVERIFY(crafted_local_url.isLocalFile());
+        QVERIFY(crafted_local_url.toString(QUrl::FullyEncoded).contains(QStringLiteral("%22")));
+        QCOMPARE(crafted_local_url.toLocalFile(), crafted_local_path);
+        QVERIFY(!terminal_app::terminal_drop_text_for_local_urls(
+            {crafted_local_url},
+            {QStringLiteral("cmd.exe")}).has_value());
 
         QVERIFY(!terminal_app::terminal_drop_text_for_local_urls(
             {QUrl(QStringLiteral("file://server/share/file.txt"))},
@@ -386,6 +422,13 @@ private slots:
             actual.row_timestamp_tooltip_enabled,
             expected.row_timestamp_tooltip_enabled);
         QCOMPARE(actual.scrollback_buffer_size_mib, expected.scrollback_buffer_size_mib);
+        expected.scrollback_buffer_size_mib.reset();
+        settings.setValue(QStringLiteral("appearance/scrollback_limit"), 200);
+        terminal_app::save_terminal_settings_snapshot(
+            settings,
+            expected);
+        QVERIFY(!settings.contains(QStringLiteral("appearance/scrollback_buffer_size_mib")));
+        QVERIFY(!settings.contains(QStringLiteral("appearance/scrollback_limit")));
     }
 
     void invalid_settings_keep_neutral_defaults()

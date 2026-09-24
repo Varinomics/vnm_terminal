@@ -101,18 +101,17 @@ std::optional<QString> quote_path(const QString& path, Shell_syntax syntax)
         }
         case Shell_syntax::POWERSHELL: {
             QString escaped_path = path;
-            escaped_path.replace(QStringLiteral("'"), QStringLiteral("''"));
-            escaped_path.replace(
-                QString(1, QChar(0x2018)),
-                QString(2, QChar(0x2018)));
-            escaped_path.replace(
-                QString(1, QChar(0x2019)),
-                QString(2, QChar(0x2019)));
+            for (const QChar quote : QStringLiteral("'\u2018\u2019\u201a\u201b")) {
+                escaped_path.replace(QString(1, quote), QString(2, quote));
+            }
             return QStringLiteral("'") + escaped_path + QStringLiteral("'");
         }
         case Shell_syntax::CMD:
-            // cmd expands %NAME% and, when delayed expansion is enabled, !NAME!.
-            if (path.contains(QLatin1Char('%')) || path.contains(QLatin1Char('!'))) {
+            // cmd expands %NAME% and, with delayed expansion, !NAME!; quotes end the wrapper.
+            if (path.contains(QLatin1Char('%')) ||
+                path.contains(QLatin1Char('!')) ||
+                path.contains(QLatin1Char('"')))
+            {
                 return std::nullopt;
             }
 
