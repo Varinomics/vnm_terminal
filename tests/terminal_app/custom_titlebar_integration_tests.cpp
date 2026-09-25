@@ -3854,6 +3854,34 @@ bool test_hidden_settings_preserve_escape_delivery(QGuiApplication& app)
     return ok;
 }
 
+bool test_hidden_settings_window_releases_graphics()
+{
+    QQmlEngine engine;
+    QQuickWindow window;
+    VNM_TerminalSurface surface(window.contentItem());
+    chrome_test::Terminal_settings_controller controller;
+    chrome_test::Terminal_settings_window settings(engine, surface, controller);
+    if (!check(settings.is_valid(), "graphics release fixture creates the settings window")) {
+        return false;
+    }
+
+    QQuickWindow* settings_window = nullptr;
+    for (QWindow* candidate : QGuiApplication::topLevelWindows()) {
+        if (candidate->objectName() == QStringLiteral("terminal_settings_window")) {
+            settings_window = qobject_cast<QQuickWindow*>(candidate);
+            break;
+        }
+    }
+    if (!check(settings_window != nullptr, "graphics release fixture finds the settings window")) {
+        return false;
+    }
+
+    return check(
+        !settings_window->isPersistentGraphics() &&
+            !settings_window->isPersistentSceneGraph(),
+        "settings window does not persist its scene graph or graphics device while hidden");
+}
+
 bool test_settings_shortcut_requests_settings(QGuiApplication& app)
 {
     QQuickWindow window;
@@ -4129,6 +4157,7 @@ int main(int argc, char** argv)
     ok &= test_text_area_resize_policy_tracks_window_state(app);
     ok &= test_settings_gear_button_and_window(app);
     ok &= test_hidden_settings_preserve_escape_delivery(app);
+    ok &= test_hidden_settings_window_releases_graphics();
     ok &= test_settings_shortcut_requests_settings(app);
     ok &= test_host_shortcuts_preserve_title_editor_keys(app);
     ok &= test_renderer_mode_enum_assignment_from_qml(app);

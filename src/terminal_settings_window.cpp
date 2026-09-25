@@ -1485,6 +1485,13 @@ settings::Terminal_settings_window::Terminal_settings_window(
         return;
     }
 
+    // Closing only hides the window. Qt keeps a hidden window's graphics device
+    // and swapchain by default, and nothing presents on them while hidden, so a
+    // GPU reset would go unnoticed until reopening resizes a lost swapchain.
+    // Releasing both on hide makes every reopen start from a fresh device.
+    m_window->setPersistentGraphics(false);
+    m_window->setPersistentSceneGraph(false);
+
     QObject::connect(
         m_root_object.get(),
         SIGNAL(close_requested()),
