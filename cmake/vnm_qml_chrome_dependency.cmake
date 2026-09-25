@@ -1,7 +1,7 @@
 set(VNM_QML_CHROME_SOURCE_DIR "" CACHE PATH
     "Path to a source checkout of vnm_qml_chrome.")
 
-set(VNM_QML_CHROME_MIN_VERSION "1.10.0")
+set(VNM_QML_CHROME_MIN_VERSION "1.10.1")
 
 function(vnm_terminal_require_qml_chrome_version)
     set(vnm_terminal_qml_chrome_target "")
