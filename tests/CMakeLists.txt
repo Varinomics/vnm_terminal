@@ -644,6 +644,7 @@ if(TARGET vnm_terminal_canvas_fixture)
             "--window-size" "800x480"
             "--timeout-ms" "10000"
             "--require-output"
+            "--metrics-json" "${CMAKE_CURRENT_BINARY_DIR}/terminal-smoke-metrics.json"
             "--"
             "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
             "--list"
