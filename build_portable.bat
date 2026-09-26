@@ -281,7 +281,7 @@ REM clone of master. A packaging run names the checkout the run resolved, so
 REM the fonts compiled into the package are the ones its provenance describes.
 set VNM_FONTS_CMAKE_ARG=
 if not "%VNM_FONTS_SOURCE_DIR%"=="" (
-    set VNM_FONTS_CMAKE_ARG=-DVNM_FONTS_SOURCE_DIR="%VNM_FONTS_SOURCE_DIR%"
+    set VNM_FONTS_CMAKE_ARG=-DFETCHCONTENT_SOURCE_DIR_VNM_FONTS="%VNM_FONTS_SOURCE_DIR%"
 )
 
 echo.

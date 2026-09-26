@@ -159,7 +159,7 @@ the pet selector when its graphics requirements are met.
 The release dependency layout places `vnm_terminal_surface`, `vnm_qml_chrome`
 and `vnm_fonts` beside this repository. Custom locations are supported through
 `VNM_TERMINAL_SURFACE_SOURCE_DIR`, `VNM_QML_CHROME_SOURCE_DIR` and
-`VNM_FONTS_SOURCE_DIR`; `vnm_fonts` is cloned from its `master` branch when no
+`FETCHCONTENT_SOURCE_DIR_VNM_FONTS`; `vnm_fonts` is cloned from its `master` branch when no
 checkout is found.
 
 `vnm_terminal_surface` must provide the
