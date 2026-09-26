@@ -58,6 +58,14 @@ QString quote_literal(QString value)
     return "'" + value + "'";
 }
 
+bool same_existing_directory(const QString& actual, const QString& expected)
+{
+    const QString canonical_expected = QDir(expected).canonicalPath();
+    return !canonical_expected.isEmpty() &&
+        QFileInfo(actual).isDir() && QFileInfo(expected).isDir() &&
+        QDir(actual).canonicalPath() == canonical_expected;
+}
+
 int run_fixture(QStringList arguments)
 {
 #if defined(Q_OS_WIN)
@@ -121,7 +129,7 @@ void check_launch(
         "-c", "shell_environment_policy.set.TERM='xterm-256color'",
     } + arguments;
     require(result.value("arguments").toArray() == QJsonArray::fromStringList(expected), diagnostic);
-    require(result.value("cwd").toString() == QDir(working_directory).absolutePath(), diagnostic);
+    require(same_existing_directory(result.value("cwd").toString(), working_directory), diagnostic);
     require(result.value("input").toString() == expected_input, diagnostic);
     const QJsonObject fields = result.value("environment").toObject();
     require(fields.value("TERM").toString() == "vnm-terminal-sixel", diagnostic);
@@ -148,6 +156,12 @@ void run_tests()
     const QProcessEnvironment parent = QProcessEnvironment::systemEnvironment();
     QTemporaryDir fixture;
     require(fixture.isValid(), fixture.errorString());
+    QTemporaryDir other_directory;
+    require(other_directory.isValid(), other_directory.errorString());
+    require(same_existing_directory(fixture.path(), fixture.path()), "existing cwd identity rejected");
+    require(!same_existing_directory(fixture.path(), other_directory.path()), "different cwd accepted");
+    const QString missing_directory = fixture.filePath("missing");
+    require(!same_existing_directory(missing_directory, missing_directory), "missing cwd accepted");
     const QString executable = QCoreApplication::applicationFilePath();
     const QString original_path = fixture.path() + QDir::listSeparator() + parent.value("PATH");
     QProcessEnvironment environment = parent;
@@ -192,6 +206,13 @@ void run_tests()
         require(environment.value("TERM_PROGRAM") == "inherited-terminal", "ordinary terminal hint changed");
         require(QProcessEnvironment::systemEnvironment() == parent, "parent environment changed");
         check_launch(direct, environment, fixture.path(), arguments, original_path, expected_wrapper);
+#if !defined(Q_OS_WIN)
+        const QString linked_directory = other_directory.filePath("linked-cwd");
+        require(QFile::link(fixture.path(), linked_directory), "could not create cwd symlink");
+        require(same_existing_directory(linked_directory, fixture.path()), "cwd symlink identity rejected");
+        // POSIX getcwd reports the physical directory, not the spelling passed to chdir.
+        check_launch(direct, environment, linked_directory, arguments, original_path, expected_wrapper);
+#endif
 
         const QProcessEnvironment shell_environment = environment;
         QStringList shell_command = shell;
