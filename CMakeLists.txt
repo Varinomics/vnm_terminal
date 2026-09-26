@@ -244,9 +244,14 @@ find_package(Qt6Svg 6.11 REQUIRED COMPONENTS
 qt_add_resources(vnm_terminal_codex_resource_sources
     resources/codex_commands.qrc
 )
+add_library(vnm_terminal_codex_resources OBJECT
+    ${vnm_terminal_codex_resource_sources}
+)
+target_link_libraries(vnm_terminal_codex_resources PRIVATE Qt6::Core)
+set_target_properties(vnm_terminal_codex_resources PROPERTIES AUTOMOC OFF)
 
 set(vnm_terminal_sources
-    ${vnm_terminal_codex_resource_sources}
+    $<TARGET_OBJECTS:vnm_terminal_codex_resources>
     src/main.cpp
     src/codex_command_environment.cpp
     src/codex_command_environment.h
