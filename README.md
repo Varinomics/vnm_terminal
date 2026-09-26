@@ -111,6 +111,39 @@ Example:
 .\build\Release\vnm_terminal.exe --window-size 1000x640 -- cmd.exe
 ```
 
+### Codex SIXEL graphics
+
+Inside a SIXEL-enabled `vnm_terminal`, launch Codex through the helper in this
+checkout. PowerShell 7.3 or newer:
+
+```powershell
+pwsh -NoProfile -File C:\path\to\vnm_terminal\tools\codex_sixel.ps1
+```
+
+Linux and macOS:
+
+```sh
+sh /path/to/vnm_terminal/tools/codex_sixel.sh
+```
+
+Append normal Codex arguments, such as `resume` or `--cd /path/to/project`.
+The helpers preserve arguments and the Codex exit status. They set
+`TERM=vnm-terminal-sixel` only for Codex and remove inherited terminal identity
+hints that can mask SIXEL support. The parent shell and terminal defaults stay
+unchanged; no shell profile or Codex configuration file is edited.
+
+Each invocation also passes
+`-c 'shell_environment_policy.set.TERM="xterm-256color"'`, so commands launched
+through Codex's shell tools use an existing terminfo profile. Codex environment
+allowlists can still remove that value, and an explicit later command-line
+override can replace it. This policy does not configure external MCP servers.
+See the [Codex shell environment policy](https://learn.chatgpt.com/docs/config-file/config-advanced#shell-environment-policy).
+
+Use these helpers only inside `vnm_terminal`: they declare SIXEL support rather
+than probing another terminal. They preserve tmux and Zellij indicators, so
+Codex's multiplexer graphics restrictions still apply. In Codex, `/pets` opens
+the pet selector when its graphics requirements are met.
+
 ## Source build
 
 The release dependency layout places `vnm_terminal_surface`, `vnm_qml_chrome`
