@@ -1,3 +1,6 @@
+include("${PROJECT_SOURCE_DIR}/cmake/vnm_cmake_dependency.cmake")
+vnm_write_toolchain_context("${CMAKE_CURRENT_BINARY_DIR}/nested-toolchain.cmake")
+
 add_executable(vnm_portable_launcher_atomic_text terminal_app/portable_launcher_atomic_text_tests.c)
 target_link_libraries(vnm_portable_launcher_atomic_text PRIVATE vnm_terminal::portable_launcher_text)
 set_target_properties(vnm_portable_launcher_atomic_text PROPERTIES AUTOMOC OFF)
@@ -51,8 +54,7 @@ add_test(
         "${CMAKE_COMMAND}"
         "-DVNM_TERMINAL_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
         "-DVNM_TERMINAL_TEST_ROOT=${PROJECT_BINARY_DIR}/tests/environment_policy_provider_contract"
-        "-DVNM_TERMINAL_TEST_GENERATOR=${CMAKE_GENERATOR}"
-        "-DVNM_TERMINAL_TEST_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DVNM_TOOLCHAIN_CONTEXT=${CMAKE_CURRENT_BINARY_DIR}/nested-toolchain.cmake"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/environment_policy_provider_contract_tests.cmake"
 )
 

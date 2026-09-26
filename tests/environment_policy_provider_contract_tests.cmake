@@ -1,5 +1,6 @@
+include("${VNM_TOOLCHAIN_CONTEXT}")
 if(NOT VNM_TERMINAL_SOURCE_ROOT OR NOT VNM_TERMINAL_TEST_ROOT OR
-   NOT VNM_TERMINAL_TEST_GENERATOR OR NOT VNM_TERMINAL_TEST_MAKE_PROGRAM)
+   NOT VNM_TOOLCHAIN_CONTEXT)
     message(FATAL_ERROR
         "Environment-policy provider test roots and generator are required")
 endif()
@@ -27,13 +28,11 @@ function(configure_fixture fixture_name fixture_contents)
     file(MAKE_DIRECTORY "${fixture_root}")
     file(WRITE "${fixture_root}/CMakeLists.txt" "${fixture_contents}")
 
+    set(configure_command "${CMAKE_COMMAND}"
+        -S "${fixture_root}" -B "${fixture_root}/build")
+    vnm_append_toolchain_args(configure_command LANGUAGES NONE)
     execute_process(
-        COMMAND
-            "${CMAKE_COMMAND}"
-            -S "${fixture_root}"
-            -B "${fixture_root}/build"
-            -G "${VNM_TERMINAL_TEST_GENERATOR}"
-            "-DCMAKE_MAKE_PROGRAM=${VNM_TERMINAL_TEST_MAKE_PROGRAM}"
+        COMMAND ${configure_command}
         RESULT_VARIABLE result
         OUTPUT_VARIABLE output
         ERROR_VARIABLE error)
