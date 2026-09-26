@@ -569,10 +569,7 @@ add_test(
     NAME vnm_terminal_public_target_consumer_builds
     COMMAND
         "${CMAKE_COMMAND}"
-        "-Dgenerator=${CMAKE_GENERATOR}"
-        "-Dgenerator_platform=${CMAKE_GENERATOR_PLATFORM}"
-        "-Dgenerator_toolset=${CMAKE_GENERATOR_TOOLSET}"
-        "-Dmake_program=${CMAKE_MAKE_PROGRAM}"
+        "-DVNM_TOOLCHAIN_CONTEXT=${CMAKE_CURRENT_BINARY_DIR}/nested-toolchain.cmake"
         "-Dpackage_binary_dir=${CMAKE_BINARY_DIR}"
         "-Dinstall_config=$<CONFIG>"
         "-Dinstall_dir=${CMAKE_CURRENT_BINARY_DIR}/public_target_consumer/install"
