@@ -241,8 +241,15 @@ find_package(Qt6Svg 6.11 REQUIRED COMPONENTS
     QSvgPlugin
 )
 
+qt_add_resources(vnm_terminal_codex_resource_sources
+    resources/codex_commands.qrc
+)
+
 set(vnm_terminal_sources
+    ${vnm_terminal_codex_resource_sources}
     src/main.cpp
+    src/codex_command_environment.cpp
+    src/codex_command_environment.h
     src/app_cli.cpp
     src/app_cli.h
     src/app_clipboard_reader.cpp
@@ -352,6 +359,7 @@ endif()
 
 if(WIN32)
     vnm_terminal_deploy_conpty(vnm_terminal)
+    target_link_libraries(vnm_terminal PRIVATE version)
 
     set_target_properties(vnm_terminal PROPERTIES
         WIN32_EXECUTABLE TRUE

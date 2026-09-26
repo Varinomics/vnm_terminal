@@ -8,6 +8,7 @@
 #include "app_options_settings_adapter.h"
 #include "app_profile_text.h"
 #include "standalone_environment.h"
+#include "codex_command_environment.h"
 #include "terminal_file_drop.h"
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/app_shortcuts.h"
@@ -43,6 +44,7 @@
 #include <QObject>
 #include <QPoint>
 #include <QPointF>
+#include <QProcessEnvironment>
 #include <QQmlEngine>
 #include <QQuickWindow>
 #include <QRect>
@@ -1106,6 +1108,20 @@ int main(int argc, char** argv)
     if (!sanitized_environment.has_value()) {
         print_error(QStringLiteral("failed to sanitize the captured child environment"));
         return k_exit_start_failed;
+    }
+    QProcessEnvironment launch_environment;
+    for (const auto& entry : *sanitized_environment) {
+        launch_environment.insert(entry.name, entry.value);
+    }
+    chrome::Codex_command_environment codex_commands;
+    QString codex_error;
+    if (!codex_commands.prepare(options.command, launch_environment, codex_error)) {
+        print_error(codex_error);
+        return k_exit_start_failed;
+    }
+    sanitized_environment->clear();
+    for (const QString& name : launch_environment.keys()) {
+        sanitized_environment->push_back({name, launch_environment.value(name)});
     }
     const QString terminal_working_directory =
         options.working_directory.isEmpty()

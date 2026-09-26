@@ -1,0 +1,10 @@
+<RCC>
+  <qresource prefix="/vnm_terminal/codex">
+    <file alias="codex">codex/codex</file>
+    <file alias="codex.ps1">codex/codex.ps1</file>
+    <file alias="codex.cmd">codex/codex.cmd</file>
+    <file alias="launch_codex.ps1">codex/launch_codex.ps1</file>
+    <file alias="start_codex.ps1">codex/start_codex.ps1</file>
+    <file alias="launch_codex.sh">codex/launch_codex.sh</file>
+  </qresource>
+</RCC>

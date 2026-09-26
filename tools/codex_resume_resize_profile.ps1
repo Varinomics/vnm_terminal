@@ -27,8 +27,9 @@ come from a compiled profiling build, observe output, and report a scripted
 child interruption (process_exit_reason INTERRUPTED and process_exit_code 130)
 with no backend errors.
 
-The driver also requires the resolved Codex executable to appear as a direct
-child of vnm_terminal.exe. It records that PID and path, waits on that child
+The driver requires the resolved Codex executable beneath vnm_terminal.exe,
+either directly or through its PowerShell compatibility bridge. It records
+that PID, creation time and path, waits on that exact process
 after each Ctrl+C, and closes the keep-open terminal only after the child exits.
 
 The optional -KernelTrace switch requires the invoking PowerShell process to
@@ -150,7 +151,7 @@ Common options:
                               default codex.
   -CodexAccountHome <path>    Existing Codex account-home directory; default:
                               C:\Users\imak\.codex-dev. Its resolved path is passed
-                              as CODEX_HOME to the direct Codex child.
+                              as CODEX_HOME to the owned Codex process.
   -WorkingDirectory <path>    App and child working directory; default:
                               C:\plms\varinomics\logonomic
   -OutputDirectory <path>     New or empty directory for all run artifacts.
@@ -171,7 +172,7 @@ Common options:
 Bounded timing:
   -WindowDiscoveryTimeoutMs   Window discovery deadline; default 30000.
   -CodexChildDiscoveryTimeoutMs
-                              Direct Codex-child discovery deadline; default 30000.
+                              Owned Codex-process discovery deadline; default 30000.
   Codex CIM operation timeout   Fixed Get-CimInstance bound; 5 seconds (not configurable).
   -TransitionTimeoutMs        Per-transition state/rect deadline; default 15000.
   -PollIntervalMs             Window observation interval; default 50.
@@ -612,6 +613,7 @@ $manifest = [ordered]@{
         pid                  = $null
         path                 = $null
         parent_pid           = $null
+        created_at_utc       = $null
         discovered_at_utc    = $null
         exited               = $false
         exit_observed_at_utc = $null
@@ -1844,7 +1846,7 @@ function Get-NormalizedExecutablePath
     }
 }
 
-function Find-DirectCodexProcess
+function Find-TerminalCodexProcess
 {
     param(
         [Parameter(Mandatory = $true)]
@@ -1861,17 +1863,34 @@ function Find-DirectCodexProcess
         -Filter ("ParentProcessId = {0}" -f $TerminalProcessId) `
         -OperationTimeoutSec $codexCimOperationTimeoutSec `
         -ErrorAction Stop)
+    $candidates = New-Object System.Collections.ArrayList
+    foreach ($child in $children) {
+        [void] $candidates.Add($child)
+        if ([string] $child.Name -ine "pwsh.exe") {
+            continue
+        }
+        $bridgeChildren = @(Get-CimInstance `
+            -ClassName Win32_Process `
+            -Filter ("ParentProcessId = {0}" -f $child.ProcessId) `
+            -OperationTimeoutSec $codexCimOperationTimeoutSec `
+            -ErrorAction Stop)
+        foreach ($bridgeChild in $bridgeChildren) {
+            if ($bridgeChild.CreationDate -ge $child.CreationDate) {
+                [void] $candidates.Add($bridgeChild)
+            }
+        }
+    }
     $matches = New-Object System.Collections.ArrayList
 
-    foreach ($child in $children) {
+    foreach ($child in $candidates) {
         $childName = [string] $child.Name
         $nameMatches = $childName -ieq $expectedName
         $childPath = [string] $child.ExecutablePath
         if ([string]::IsNullOrWhiteSpace($childPath)) {
             if ($nameMatches) {
                 throw (
-                    "Cannot establish the executable path for direct Codex " +
-                    "child PID {0}." -f @($child.ProcessId))
+                    "Cannot establish the executable path for owned Codex " +
+                    "PID {0}." -f @($child.ProcessId))
             }
             continue
         }
@@ -1880,7 +1899,7 @@ function Find-DirectCodexProcess
         $pathMatches = $normalizedChildPath -ieq $expectedPath
         if ($nameMatches -and !$pathMatches) {
             throw (
-                "Direct child PID {0} is named '{1}' but its executable path " +
+                "Owned process PID {0} is named '{1}' but its executable path " +
                 "does not match the resolved Codex executable: {2}" -f @(
                     $child.ProcessId,
                     $childName,
@@ -1896,13 +1915,13 @@ function Find-DirectCodexProcess
     }
     if ($matches.Count -ne 1) {
         throw (
-            "Expected exactly one direct Codex child of vnm_terminal PID {0}; " +
+            "Expected exactly one owned Codex process beneath vnm_terminal PID {0}; " +
             "found {1}." -f @($TerminalProcessId, $matches.Count))
     }
     return $matches[0]
 }
 
-function Get-KnownDirectCodexProcess
+function Get-KnownTerminalCodexProcess
 {
     param(
         [Parameter(Mandatory = $true)]
@@ -1910,6 +1929,9 @@ function Get-KnownDirectCodexProcess
 
         [Parameter(Mandatory = $true)]
         [int] $CodexProcessId,
+
+        [Parameter(Mandatory = $true)]
+        [DateTime] $ExpectedCreationTime,
 
         [Parameter(Mandatory = $true)]
         [string] $ExpectedExecutablePath
@@ -1928,13 +1950,22 @@ function Get-KnownDirectCodexProcess
     }
 
     $record = $records[0]
+    if ($record.CreationDate.ToUniversalTime() -ne $ExpectedCreationTime.ToUniversalTime()) {
+        throw "Codex PID $CodexProcessId was reused by a different process incarnation."
+    }
     if ([int] $record.ParentProcessId -ne $TerminalProcessId) {
-        throw (
-            "Codex PID {0} no longer has the launched vnm_terminal PID {1} as " +
-            "its direct parent (actual parent PID {2})." -f @(
-                $CodexProcessId,
-                $TerminalProcessId,
-                $record.ParentProcessId))
+        $parents = @(Get-CimInstance `
+            -ClassName Win32_Process `
+            -Filter ("ProcessId = {0}" -f $record.ParentProcessId) `
+            -OperationTimeoutSec $codexCimOperationTimeoutSec `
+            -ErrorAction Stop)
+        if ($parents.Count -ne 1 -or
+            [string] $parents[0].Name -ine "pwsh.exe" -or
+            [int] $parents[0].ParentProcessId -ne $TerminalProcessId -or
+            $parents[0].CreationDate -gt $record.CreationDate)
+        {
+            throw "Codex PID $CodexProcessId is no longer owned by vnm_terminal PID $TerminalProcessId."
+        }
     }
     if ([string]::IsNullOrWhiteSpace([string] $record.ExecutablePath)) {
         throw "Cannot establish the executable path for Codex PID $CodexProcessId."
@@ -1953,7 +1984,7 @@ function Get-KnownDirectCodexProcess
     return $record
 }
 
-function Wait-ForDirectCodexChild
+function Wait-ForTerminalCodexProcess
 {
     param(
         [Parameter(Mandatory = $true)]
@@ -1970,11 +2001,11 @@ function Wait-ForDirectCodexChild
     while ($deadline.ElapsedMilliseconds -le $TimeoutMs) {
         if ($TerminalProcess.HasExited) {
             throw (
-                "vnm_terminal exited before its direct Codex child could be " +
+                "vnm_terminal exited before its owned Codex process could be " +
                 "discovered (exit code $($TerminalProcess.ExitCode)).")
         }
 
-        $child = Find-DirectCodexProcess `
+        $child = Find-TerminalCodexProcess `
             -TerminalProcessId $TerminalProcess.Id `
             -ExpectedExecutablePath $ExpectedExecutablePath
         if ($null -ne $child) {
@@ -1984,11 +2015,11 @@ function Wait-ForDirectCodexChild
     }
 
     throw (
-        "Could not establish a direct Codex child of vnm_terminal PID {0} " +
+        "Could not establish an owned Codex process beneath vnm_terminal PID {0} " +
         "within {1} ms." -f @($TerminalProcess.Id, $TimeoutMs))
 }
 
-function Wait-ForDirectCodexChildExit
+function Wait-ForTerminalCodexExit
 {
     param(
         [Parameter(Mandatory = $true)]
@@ -2022,17 +2053,18 @@ function Wait-ForDirectCodexChildExit
         while ($deadline.ElapsedMilliseconds -le $TimeoutMs) {
             if ($TerminalProcess.HasExited) {
                 throw (
-                    "vnm_terminal exited before disappearance of direct Codex " +
+                    "vnm_terminal exited before disappearance of owned Codex " +
                     "child PID $CodexProcessId could be proven.")
             }
-            $child = Get-KnownDirectCodexProcess `
+            $child = Get-KnownTerminalCodexProcess `
                 -TerminalProcessId $TerminalProcess.Id `
                 -CodexProcessId $CodexProcessId `
+                -ExpectedCreationTime ([DateTime] $manifest["codex_process"]["created_at_utc"]) `
                 -ExpectedExecutablePath $ExpectedExecutablePath
             if ($null -eq $child) {
                 if ($TerminalProcess.HasExited) {
                     throw (
-                        "vnm_terminal exited before disappearance of direct Codex " +
+                        "vnm_terminal exited before disappearance of owned Codex " +
                         "child PID $CodexProcessId could be proven.")
                 }
                 $childExited = $true
@@ -2042,7 +2074,7 @@ function Wait-ForDirectCodexChildExit
             }
             if ($TerminalProcess.HasExited) {
                 throw (
-                    "vnm_terminal exited while the direct Codex child PID " +
+                    "vnm_terminal exited while the owned Codex process PID " +
                     "$CodexProcessId was still present.")
             }
             Start-Sleep -Milliseconds $PollIntervalMs
@@ -2228,13 +2260,14 @@ function Send-AutomatedCtrlC
             throw "vnm_terminal exited before scripted Ctrl+C attempt $attempt."
         }
 
-        $codexBeforeAttempt = Get-KnownDirectCodexProcess `
+        $codexBeforeAttempt = Get-KnownTerminalCodexProcess `
             -TerminalProcessId $Process.Id `
             -CodexProcessId $CodexProcessId `
+            -ExpectedCreationTime ([DateTime] $manifest["codex_process"]["created_at_utc"]) `
             -ExpectedExecutablePath $ExpectedExecutablePath
         if ($null -eq $codexBeforeAttempt) {
             if ($attempt -eq 1) {
-                throw "The direct Codex child exited before the scripted Ctrl+C sequence."
+                throw "The owned Codex process exited before the scripted Ctrl+C sequence."
             }
             $codexExited = $true
             $manifest["codex_process"]["exited"] = $true
@@ -2277,7 +2310,7 @@ function Send-AutomatedCtrlC
             throw "The automated Ctrl+C input could not be sent on attempt $attempt."
         }
 
-        $codexExited = Wait-ForDirectCodexChildExit `
+        $codexExited = Wait-ForTerminalCodexExit `
             -TerminalProcess $Process `
             -CodexProcessId $CodexProcessId `
             -ExpectedExecutablePath $ExpectedExecutablePath `
@@ -2289,7 +2322,7 @@ function Send-AutomatedCtrlC
     }
 
     if (!$codexExited) {
-        $codexExited = Wait-ForDirectCodexChildExit `
+        $codexExited = Wait-ForTerminalCodexExit `
             -TerminalProcess $Process `
             -CodexProcessId $CodexProcessId `
             -ExpectedExecutablePath $ExpectedExecutablePath `
@@ -2298,7 +2331,7 @@ function Send-AutomatedCtrlC
     }
     if (!$codexExited) {
         throw (
-            "The direct Codex child PID {0} remained alive after the scripted " +
+            "The owned Codex process PID {0} remained alive after the scripted " +
             "Ctrl+C attempts and the {1} ms exit deadline; the keep-open " +
             "terminal will not be closed." -f @($CodexProcessId, $ExitTimeoutMs))
     }
@@ -2780,7 +2813,7 @@ try {
     $manifest["status"] = "running"
     Write-RunManifest
 
-    $codexChild = Wait-ForDirectCodexChild `
+    $codexChild = Wait-ForTerminalCodexProcess `
         -TerminalProcess $terminalProcess `
         -ExpectedExecutablePath $inputPaths.codex_exe `
         -TimeoutMs $CodexChildDiscoveryTimeoutMs
@@ -2788,6 +2821,7 @@ try {
     $manifest["codex_process"]["pid"] = $codexProcessId
     $manifest["codex_process"]["path"] = [string] $codexChild.ExecutablePath
     $manifest["codex_process"]["parent_pid"] = [int] $codexChild.ParentProcessId
+    $manifest["codex_process"]["created_at_utc"] = $codexChild.CreationDate.ToUniversalTime().ToString("o")
     $manifest["codex_process"]["discovered_at_utc"] = Get-UtcTimestamp
     $manifest["status"] = "codex-child-ready"
     Write-RunManifest
@@ -2866,7 +2900,7 @@ finally {
                 $manifest["shutdown_sequence_attempted"] = $true
                 Write-RunManifest
                 if ($null -eq $codexProcessId) {
-                    throw "Cannot send automated Ctrl+C because the direct Codex child was never established."
+                    throw "Cannot send automated Ctrl+C because the owned Codex process was never established."
                 }
                 Send-AutomatedCtrlC `
                     -Process $terminalProcess `

@@ -113,24 +113,35 @@ Example:
 
 ### Codex SIXEL graphics
 
-Inside a SIXEL-enabled `vnm_terminal`, launch Codex through the helper in this
-checkout. PowerShell 7.3 or newer:
+Inside a SIXEL-enabled `vnm_terminal`, run Codex normally:
 
 ```powershell
-pwsh -NoProfile -File C:\path\to\vnm_terminal\tools\codex_sixel.ps1
+codex
+codex resume
 ```
 
-Linux and macOS:
+Direct launches work too:
 
 ```sh
-sh /path/to/vnm_terminal/tools/codex_sixel.sh
+vnm_terminal -- codex
 ```
 
-Append normal Codex arguments, such as `resume` or `--cd /path/to/project`.
-The helpers preserve arguments and the Codex exit status. They set
-`TERM=vnm-terminal-sixel` only for Codex and remove inherited terminal identity
-hints that can mask SIXEL support. The parent shell and terminal defaults stay
-unchanged; no shell profile or Codex configuration file is edited.
+The application adds a private command directory to that terminal session's
+`PATH`. Its Codex adapter resolves the original command after removing that
+directory, preserving npm and other PATH-based wrappers. It sets
+`TERM=vnm-terminal-sixel` only while launching Codex and removes inherited
+identity hints that can mask SIXEL support. Arguments, working directory,
+standard streams, and exit status are preserved. Other commands keep the normal
+terminal type; no shell profile or Codex configuration file is edited.
+
+Windows integration requires PowerShell 7.3 or newer on `PATH` and supports
+PowerShell and cmd. Without it, or if the private command directory cannot be
+prepared, ordinary shells still start without the adapter; direct Codex launches
+report the setup problem. Linux and macOS use `/bin/sh` and
+ordinary shell PATH lookup. Shell aliases/functions and commands invoked by an
+explicit path inside a shell retain their usual resolution; they can bypass
+the adapter. Direct application launches also adapt explicit paths named
+`codex` and, on Windows, `codex.exe`, `codex.cmd`, or `codex.ps1`.
 
 Each invocation also passes
 `-c 'shell_environment_policy.set.TERM="xterm-256color"'`, so commands launched
@@ -139,9 +150,8 @@ allowlists can still remove that value, and an explicit later command-line
 override can replace it. This policy does not configure external MCP servers.
 See the [Codex shell environment policy](https://learn.chatgpt.com/docs/config-file/config-advanced#shell-environment-policy).
 
-Use these helpers only inside `vnm_terminal`: they declare SIXEL support rather
-than probing another terminal. They preserve tmux and Zellij indicators, so
-Codex's multiplexer graphics restrictions still apply. In Codex, `/pets` opens
+The adapter preserves tmux and Zellij indicators, so Codex's multiplexer
+graphics restrictions still apply. In Codex, `/pets` opens
 the pet selector when its graphics requirements are met.
 
 ## Source build
