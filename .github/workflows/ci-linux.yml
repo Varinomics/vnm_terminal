@@ -435,6 +435,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="${msdf_package_prefix}" \
             -DBUILD_SHARED_LIBS=OFF \
             -DVNM_MSDF_TEXT_FETCH_DEPS=OFF \
+            -DVNM_MSDF_TEXT_BUILD_QT_LCD=ON \
             -DVNM_MSDF_TEXT_BUILD_TESTS=OFF
           cmake --build "${msdf_package_build_dir}/vnm_msdf_text" --target install --parallel
 

@@ -1,4 +1,5 @@
 include("${VNM_TOOLCHAIN_CONTEXT}")
+include("${VNM_PACKAGE_DEPENDENCY_CONTEXT}")
 
 foreach(required_var IN ITEMS
     package_binary_dir
@@ -84,7 +85,7 @@ resolve_package_dir(
 resolve_package_dir(
     vnm_fonts-config.cmake "${vnm_fonts_dir}" vnm_fonts_package_dir)
 
-set(configure_args)
+set(configure_args -C "${VNM_PACKAGE_DEPENDENCY_CONTEXT}")
 vnm_append_toolchain_args(configure_args)
 
 set(single_config_generator ON)
@@ -100,10 +101,6 @@ endif()
 if(DEFINED qt6_dir AND NOT "${qt6_dir}" STREQUAL "")
     list(APPEND configure_args "-DQt6_DIR=${qt6_dir}")
 endif()
-if(DEFINED vnm_msdf_text_dir AND NOT "${vnm_msdf_text_dir}" STREQUAL "")
-    list(APPEND configure_args "-Dvnm_msdf_text_DIR:PATH=${vnm_msdf_text_dir}")
-endif()
-
 set(consumer_prefix_paths "${install_dir}")
 if(DEFINED vnm_msdf_text_dependency_prefixes AND
     NOT "${vnm_msdf_text_dependency_prefixes}" STREQUAL "")

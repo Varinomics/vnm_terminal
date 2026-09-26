@@ -1,6 +1,46 @@
 include("${PROJECT_SOURCE_DIR}/cmake/vnm_cmake_dependency.cmake")
 vnm_write_toolchain_context("${CMAKE_CURRENT_BINARY_DIR}/nested-toolchain.cmake")
 
+set(vnm_package_dependency_context "${CMAKE_CURRENT_BINARY_DIR}/package-dependencies.cmake")
+file(WRITE "${vnm_package_dependency_context}"
+    "set(CMAKE_PREFIX_PATH [==[${CMAKE_PREFIX_PATH}]==] CACHE STRING \"\" FORCE)\n")
+foreach(package IN ITEMS Qt6 vnm_msdf_text Freetype msdfgen vnm_process_custody)
+    if(${package}_DIR AND NOT "${${package}_DIR}" MATCHES "-NOTFOUND$")
+        file(APPEND "${vnm_package_dependency_context}"
+            "set(${package}_DIR [==[${${package}_DIR}]==] CACHE PATH \"\" FORCE)\n")
+    endif()
+endforeach()
+foreach(source_variable IN ITEMS VNM_TERMINAL_SURFACE_SOURCE_DIR VNM_QML_CHROME_SOURCE_DIR
+        VNM_QT_DISPATCH_SOURCE_DIR FETCHCONTENT_SOURCE_DIR_VNM_FONTS FETCHCONTENT_SOURCE_DIR_VNM_CMAKE)
+    if(NOT "${${source_variable}}" STREQUAL "")
+        file(APPEND "${vnm_package_dependency_context}"
+            "set(${source_variable} [==[${${source_variable}}]==] CACHE PATH \"\" FORCE)\n")
+    endif()
+endforeach()
+
+set(vnm_package_binary_dir "${CMAKE_BINARY_DIR}")
+get_target_property(vnm_package_msdf_imported vnm_msdf_text::qt_lcd IMPORTED)
+if(NOT vnm_package_msdf_imported)
+    get_target_property(vnm_package_msdf_source vnm_msdf_text::lcd_contract SOURCE_DIR)
+    set(vnm_source_package_root "${CMAKE_BINARY_DIR}/package_smoke/source_package")
+    set(vnm_package_binary_dir "${vnm_source_package_root}/terminal-build")
+    set(vnm_prepared_package_context "${vnm_source_package_root}/dependencies.cmake")
+    add_test(NAME vnm_terminal_prepare_source_package
+        COMMAND "${CMAKE_COMMAND}"
+            "-DVNM_TOOLCHAIN_CONTEXT=${CMAKE_CURRENT_BINARY_DIR}/nested-toolchain.cmake"
+            "-DVNM_PACKAGE_DEPENDENCY_CONTEXT=${vnm_package_dependency_context}"
+            "-Dmsdf_source_dir=${vnm_package_msdf_source}"
+            "-Dproducer_source_dir=${PROJECT_SOURCE_DIR}"
+            "-Dpackage_root=${vnm_source_package_root}"
+            "-Dpackage_binary_dir=${vnm_package_binary_dir}"
+            "-Dpackage_context=${vnm_prepared_package_context}"
+            "-Dinstall_config=$<CONFIG>"
+            -P "${VNM_TERMINAL_SURFACE_SOURCE_DIR}/cmake/prepare_source_package.cmake")
+    set_tests_properties(vnm_terminal_prepare_source_package PROPERTIES
+        FIXTURES_SETUP vnm_terminal_package LABELS "package;posture" TIMEOUT 600)
+    set(vnm_package_dependency_context "${vnm_prepared_package_context}")
+endif()
+
 add_executable(vnm_portable_launcher_atomic_text terminal_app/portable_launcher_atomic_text_tests.c)
 target_link_libraries(vnm_portable_launcher_atomic_text PRIVATE vnm_terminal::portable_launcher_text)
 set_target_properties(vnm_portable_launcher_atomic_text PROPERTIES AUTOMOC OFF)
@@ -570,13 +610,13 @@ add_test(
     COMMAND
         "${CMAKE_COMMAND}"
         "-DVNM_TOOLCHAIN_CONTEXT=${CMAKE_CURRENT_BINARY_DIR}/nested-toolchain.cmake"
-        "-Dpackage_binary_dir=${CMAKE_BINARY_DIR}"
+        "-DVNM_PACKAGE_DEPENDENCY_CONTEXT=${vnm_package_dependency_context}"
+        "-Dpackage_binary_dir=${vnm_package_binary_dir}"
         "-Dinstall_config=$<CONFIG>"
         "-Dinstall_dir=${CMAKE_CURRENT_BINARY_DIR}/public_target_consumer/install"
         "-Dconsumer_source_dir=${PROJECT_SOURCE_DIR}/tests/public_target_consumer"
         "-Dconsumer_binary_dir=${CMAKE_CURRENT_BINARY_DIR}/public_target_consumer/consumer_build"
         "-Dqt6_dir=${Qt6_DIR}"
-        "-Dvnm_msdf_text_dir=${vnm_msdf_text_DIR}"
         "-Dvnm_msdf_text_dependency_prefixes=${CMAKE_PREFIX_PATH}"
         "-Dvnm_terminal_surface_dir=${vnm_terminal_surface_DIR}"
         "-Dvnm_qt_dispatch_dir=${vnm_qt_dispatch_DIR}"
@@ -586,51 +626,9 @@ add_test(
 
 set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
     LABELS "package;posture"
+    FIXTURES_REQUIRED vnm_terminal_package
     TIMEOUT 180
 )
-
-if(VNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER)
-    if(NOT TARGET vnm_terminal_surface::vnm_terminal_surface)
-        message(FATAL_ERROR
-            "Cannot classify the vnm_terminal_surface MSDF dependency because "
-            "vnm_terminal_surface::vnm_terminal_surface is unavailable")
-    endif()
-
-    get_target_property(
-        vnm_terminal_surface_package_dependency
-        vnm_terminal_surface::vnm_terminal_surface
-        IMPORTED)
-    if(vnm_terminal_surface_package_dependency STREQUAL "FALSE")
-        get_target_property(
-            vnm_terminal_surface_binary_dir
-            vnm_terminal_surface::vnm_terminal_surface
-            BINARY_DIR)
-        if(NOT vnm_terminal_surface_binary_dir OR
-           vnm_terminal_surface_binary_dir MATCHES "-NOTFOUND$")
-            message(FATAL_ERROR
-                "Cannot classify the source-built vnm_terminal_surface MSDF dependency "
-                "because its binary directory is unavailable")
-        endif()
-
-        get_directory_property(
-            vnm_terminal_surface_msdf_text_package_dependency
-            DIRECTORY "${vnm_terminal_surface_binary_dir}"
-            DEFINITION vnm_terminal_msdf_text_package_dependency)
-        if(vnm_terminal_surface_msdf_text_package_dependency STREQUAL "FALSE")
-            set_tests_properties(vnm_terminal_public_target_consumer_builds PROPERTIES
-                SKIP_REGULAR_EXPRESSION
-                    "Installing vnm_terminal_surface with MSDF requires packaged vnm_msdf_text"
-            )
-        elseif(NOT vnm_terminal_surface_msdf_text_package_dependency STREQUAL "TRUE")
-            message(FATAL_ERROR
-                "Cannot classify the source-built vnm_terminal_surface MSDF dependency "
-                "from its owning build directory")
-        endif()
-    elseif(NOT vnm_terminal_surface_package_dependency STREQUAL "TRUE")
-        message(FATAL_ERROR
-            "Cannot classify whether vnm_terminal_surface is source-built or installed")
-    endif()
-endif()
 
 if(TARGET vnm_terminal_canvas_fixture)
     add_test(
