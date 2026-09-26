@@ -19,7 +19,18 @@ foreach(source_variable IN ITEMS VNM_TERMINAL_SURFACE_SOURCE_DIR VNM_QML_CHROME_
 endforeach()
 
 set(vnm_package_binary_dir "${CMAKE_BINARY_DIR}")
-get_target_property(vnm_package_msdf_imported vnm_msdf_text::qt_lcd IMPORTED)
+get_target_property(vnm_package_msdf_imported vnm_terminal_surface::vnm_terminal_surface IMPORTED)
+if(NOT vnm_package_msdf_imported)
+    # Imported provider targets belong to the surface's directory scope. Ask
+    # their source owner instead of assuming they are visible in this sibling.
+    get_target_property(vnm_package_surface_binary vnm_terminal_surface::vnm_terminal_surface BINARY_DIR)
+    get_directory_property(vnm_package_msdf_imported
+        DIRECTORY "${vnm_package_surface_binary}"
+        DEFINITION vnm_terminal_msdf_text_package_dependency)
+    if(NOT vnm_package_msdf_imported MATCHES "^(TRUE|FALSE)$")
+        message(FATAL_ERROR "The surface did not report its LCD package ownership")
+    endif()
+endif()
 if(NOT vnm_package_msdf_imported)
     get_target_property(vnm_package_msdf_source vnm_msdf_text::lcd_contract SOURCE_DIR)
     set(vnm_source_package_root "${CMAKE_BINARY_DIR}/package_smoke/source_package")
