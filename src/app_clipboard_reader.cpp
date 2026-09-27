@@ -21,7 +21,6 @@
 #endif
 
 #include <cstdio>
-#include <mutex>
 #include <optional>
 #include <utility>
 
@@ -32,68 +31,6 @@ namespace {
 constexpr int k_clipboard_broker_timeout_ms = 2000;
 constexpr qsizetype k_clipboard_broker_maximum_bytes = 8 * 1024 * 1024;
 constexpr qsizetype k_clipboard_broker_maximum_error_bytes = 64 * 1024;
-
-std::mutex& diagnostic_sink_mutex()
-{
-    static std::mutex mutex;
-    return mutex;
-}
-
-Diagnostic_sink& configured_diagnostic_sink()
-{
-    static Diagnostic_sink sink;
-    return sink;
-}
-
-const char* diagnostic_level_name(Diagnostic_level level)
-{
-    switch (level) {
-        case Diagnostic_level::WARNING: return "warning";
-        case Diagnostic_level::ERROR:   return "error";
-    }
-    return "error";
-}
-
-} // namespace
-
-void set_diagnostic_sink(Diagnostic_sink sink)
-{
-    const std::lock_guard<std::mutex> lock(diagnostic_sink_mutex());
-    configured_diagnostic_sink() = std::move(sink);
-}
-
-void clear_diagnostic_sink()
-{
-    set_diagnostic_sink({});
-}
-
-void write_diagnostic(Diagnostic_level level, QStringView message)
-{
-    Diagnostic_sink sink;
-    {
-        const std::lock_guard<std::mutex> lock(diagnostic_sink_mutex());
-        sink = configured_diagnostic_sink();
-    }
-
-    if (sink) {
-        try {
-            sink(level, message);
-            return;
-        }
-        catch (...) {
-        }
-    }
-
-    const QByteArray utf8 = message.toString().toUtf8();
-    std::fprintf(
-        stderr,
-        "[vnm_terminal][%s] %s\n",
-        diagnostic_level_name(level),
-        utf8.constData());
-    std::fflush(stderr);
-}
-
-namespace {
 
 QString internal_clipboard_read_argument()
 {

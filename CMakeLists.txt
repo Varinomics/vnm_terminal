@@ -110,6 +110,8 @@ set(vnm_terminal_app_support_headers
 )
 
 add_library(vnm_terminal_app_support STATIC
+    src/app_diagnostic_sink.cpp
+    include/vnm_terminal/app_support/diagnostic_sink.h
     src/app_settings.cpp
     src/app_settings_internal.h
     src/terminal_display_settings.cpp

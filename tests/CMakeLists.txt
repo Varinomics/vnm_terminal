@@ -488,7 +488,11 @@ add_executable(vnm_terminal_app_clipboard_reader
 target_include_directories(vnm_terminal_app_clipboard_reader PRIVATE
     "${PROJECT_SOURCE_DIR}/include"
 )
-target_link_libraries(vnm_terminal_app_clipboard_reader PRIVATE Qt6::Core Qt6::Gui)
+target_link_libraries(vnm_terminal_app_clipboard_reader PRIVATE
+    vnm_terminal::vnm_terminal_app_support
+    Qt6::Core
+    Qt6::Gui
+)
 set_target_properties(vnm_terminal_app_clipboard_reader PROPERTIES AUTOMOC OFF)
 vnm_terminal_configure_test_process(vnm_terminal_app_clipboard_reader)
 vnm_terminal_add_target_test(vnm_terminal_app_clipboard_reader
