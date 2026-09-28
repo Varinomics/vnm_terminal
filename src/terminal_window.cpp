@@ -404,8 +404,18 @@ void connect_terminal_metadata_to_chrome(
             titlebar,
             &Terminal_qml_chrome::title_edit_accepted,
             &window,
-            [user_title, sync_metadata](const QString& title) {
+            [titlebar, user_title, sync_metadata](const QString& title) {
                 *user_title = title;
+                titlebar->set_title_reset_available(true);
+                sync_metadata();
+            });
+        QObject::connect(
+            titlebar,
+            &Terminal_qml_chrome::title_reset_requested,
+            &window,
+            [titlebar, user_title, sync_metadata] {
+                user_title->reset();
+                titlebar->set_title_reset_available(false);
                 sync_metadata();
             });
     }

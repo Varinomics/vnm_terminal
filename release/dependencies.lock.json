@@ -13,7 +13,7 @@
       "branch": "master",
       "checkout_path": "vnm_qml_chrome",
       "output": "chrome",
-      "commit": "6884c7e23179bea5e6b66db5353747ed39fa6e02"
+      "commit": "c85b6ed0398975899bf38c7e69889c5844e2d0d8"
     },
     "vnm_msdf_text": {
       "repository": "Varinomics/vnm_msdf_text",

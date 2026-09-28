@@ -2101,6 +2101,9 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
     ok &= check(
         shared_titlebar->property("title_editing_enabled").toBool(),
         "terminal chrome enables shared user-title editing");
+    ok &= check(
+        !shared_titlebar->property("title_reset_available").toBool(),
+        "terminal titles offer no reset before a user title is accepted");
     const QString user_title = QStringLiteral("deployment shell");
     const bool title_edit_emitted = QMetaObject::invokeMethod(
         titlebar.root_item(),
@@ -2148,6 +2151,29 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
     pump_events(app);
     ok &= check(window.title().isEmpty(),
         "terminal metadata preserves an accepted empty user title");
+    ok &= check(
+        shared_titlebar->property("title_reset_available").toBool(),
+        "an accepted user title offers the shared title reset");
+
+    const QString terminal_title = QStringLiteral("metadata after empty user title");
+    const bool title_reset_emitted = QMetaObject::invokeMethod(
+        shared_titlebar,
+        "title_reset_requested");
+    ok &= check(title_reset_emitted,
+        "shared titlebar emits a title reset request");
+    ok &= check(window.title() == terminal_title,
+        "a title reset restores the terminal title as the native window title");
+    ok &= check(shared_title_label->property("text").toString() == terminal_title,
+        "a title reset restores the terminal title in the shared titlebar");
+    ok &= check(
+        !shared_titlebar->property("title_reset_available").toBool(),
+        "a title reset withdraws the shared title reset");
+
+    backend_ptr->emit_output(osc2_title_sequence(QStringLiteral("metadata after reset")));
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    pump_events(app);
+    ok &= check(window.title() == QStringLiteral("metadata after reset"),
+        "terminal metadata drives the title again after a title reset");
 
     return ok;
 }

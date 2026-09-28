@@ -48,6 +48,7 @@ Item {
 
     property string title: ""
     property bool title_editing_enabled: true
+    property bool title_reset_available: false
     property string activity_marker_text: ""
     property bool active: true
     property bool maximized: false
@@ -136,6 +137,7 @@ Item {
     signal close_requested()
     signal settings_requested()
     signal title_edit_accepted(string title)
+    signal title_reset_requested()
 
     VNM_ChromeTheme {
         id: terminal_chrome_theme
@@ -190,6 +192,7 @@ Item {
         titlebar_content_left_inset: frame_shell.content_interior_x
         title: root.title
         title_editing_enabled: root.title_editing_enabled
+        title_reset_available: root.title_reset_available
         active: root.active
         maximized: root.maximized
         resize_enabled: root.resize_enabled
@@ -214,6 +217,7 @@ Item {
         onMaximize_toggle_requested: root.maximize_toggle_requested()
         onClose_requested: root.close_requested()
         onTitle_edit_accepted: (title) => root.title_edit_accepted(title)
+        onTitle_reset_requested: root.title_reset_requested()
     }
 )"
 // MSVC C2026 caps one literal at ~16 KB; adjacent raw strings concatenate.
@@ -593,6 +597,11 @@ void chrome::Terminal_qml_chrome::set_title_editing_enabled(bool enabled)
     set_property("title_editing_enabled", enabled);
 }
 
+void chrome::Terminal_qml_chrome::set_title_reset_available(bool available)
+{
+    set_property("title_reset_available", available);
+}
+
 void chrome::Terminal_qml_chrome::set_activity_marker_text(const QString& marker_text)
 {
     set_property("activity_marker_text", marker_text);
@@ -711,6 +720,11 @@ void chrome::Terminal_qml_chrome::connect_window_commands()
         SIGNAL(title_edit_accepted(QString)),
         this,
         SLOT(handle_title_edit_accepted(QString)));
+    QObject::connect(
+        m_root_object.get(),
+        SIGNAL(title_reset_requested()),
+        this,
+        SLOT(handle_title_reset_requested()));
 }
 
 void chrome::Terminal_qml_chrome::handle_move_requested()
@@ -754,6 +768,11 @@ void chrome::Terminal_qml_chrome::handle_settings_requested()
 void chrome::Terminal_qml_chrome::handle_title_edit_accepted(const QString& title)
 {
     emit title_edit_accepted(title);
+}
+
+void chrome::Terminal_qml_chrome::handle_title_reset_requested()
+{
+    emit title_reset_requested();
 }
 
 void chrome::Terminal_qml_chrome::set_property(

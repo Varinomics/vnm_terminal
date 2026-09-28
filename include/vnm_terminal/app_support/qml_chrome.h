@@ -77,6 +77,8 @@ public:
     qreal device_pixel_ratio() const;
     void set_title(const QString& title);
     void set_title_editing_enabled(bool enabled);
+    // Shows the title editor's reset badge while a user title is in effect.
+    void set_title_reset_available(bool available);
     void set_activity_marker_text(const QString& marker_text);
     void set_settings_button_visible(bool visible);
     // Non-owning. The component must belong to this chrome's QQmlEngine and
@@ -99,6 +101,7 @@ public:
 signals:
     void settings_requested();
     void title_edit_accepted(const QString& title);
+    void title_reset_requested();
 
 private slots:
     void handle_move_requested();
@@ -108,6 +111,7 @@ private slots:
     void handle_close_requested();
     void handle_settings_requested();
     void handle_title_edit_accepted(const QString& title);
+    void handle_title_reset_requested();
 
 private:
     void connect_window_commands();
