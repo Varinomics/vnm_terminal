@@ -1,5 +1,6 @@
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/app_shortcuts.h"
+#include "vnm_terminal/app_support/backend_output_capture_json.h"
 #include "vnm_terminal/app_support/qml_chrome.h"
 #include "vnm_terminal/app_support/terminal_scrollbar.h"
 #include "vnm_terminal/app_support/terminal_search_bar.h"

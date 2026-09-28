@@ -99,6 +99,7 @@ add_custom_target(vnm_terminal_build_info ALL
 
 set(vnm_terminal_app_support_headers
     include/vnm_terminal/app_support/app_settings.h
+    include/vnm_terminal/app_support/backend_output_capture_json.h
     include/vnm_terminal/app_support/terminal_display_settings.h
     include/vnm_terminal/app_support/terminal_settings_reconciler.h
     include/vnm_terminal/app_support/diagnostic_sink.h
@@ -111,6 +112,8 @@ set(vnm_terminal_app_support_headers
 )
 
 add_library(vnm_terminal_app_support STATIC
+    src/backend_output_capture_json.cpp
+    include/vnm_terminal/app_support/backend_output_capture_json.h
     src/app_diagnostic_sink.cpp
     include/vnm_terminal/app_support/diagnostic_sink.h
     src/app_settings.cpp

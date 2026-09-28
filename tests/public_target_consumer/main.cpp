@@ -1,5 +1,6 @@
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/app_shortcuts.h"
+#include "vnm_terminal/app_support/backend_output_capture_json.h"
 #include "vnm_terminal/app_support/qml_chrome.h"
 #include "vnm_terminal/app_support/terminal_scrollbar.h"
 #include "vnm_terminal/app_support/terminal_search_bar.h"
@@ -26,6 +27,14 @@ int main()
     static_assert(std::is_base_of_v<QObject, Terminal_settings_reconciler>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_controller>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_window>);
+
+    const vnm_terminal::Backend_output_capture_config capture_config{
+        QStringLiteral("capture/session"), 4096U};
+    const auto decoded_capture_config = backend_output_capture_config_from_json(
+        backend_output_capture_config_to_json(capture_config));
+    if (!decoded_capture_config || *decoded_capture_config != capture_config) {
+        return 1;
+    }
 
     // Keep this build-only branch opaque so the final link pulls app support's
     // packaged qml-chrome runtime dependency without running any GUI code.

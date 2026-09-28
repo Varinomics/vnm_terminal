@@ -1,4 +1,5 @@
 #include "vnm_terminal/app_support/app_settings.h"
+#include "vnm_terminal/app_support/backend_output_capture_json.h"
 #include "vnm_terminal/app_support/terminal_display_settings.h"
 #include "vnm_terminal/app_support/terminal_settings_reconciler.h"
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
@@ -11,6 +12,7 @@
 #include <QGuiApplication>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QList>
 #include <QMimeData>
 #include <QMetaType>
 #include <QPoint>
@@ -18,6 +20,7 @@
 #include <QTemporaryDir>
 #include <QTest>
 
+#include <cstddef>
 #include <limits>
 
 namespace terminal_app = vnm_terminal::terminal_app;
@@ -27,6 +30,76 @@ class App_support_tests final : public QObject
     Q_OBJECT
 
 private slots:
+    void backend_output_capture_json_preserves_integer_precision()
+    {
+        const vnm_terminal::Backend_output_capture_config config{
+            QStringLiteral("C:/diagnostics/session"), 8192U};
+        const QJsonObject encoded =
+            terminal_app::backend_output_capture_config_to_json(config);
+        QCOMPARE(encoded.size(), 2);
+        QCOMPARE(encoded.value(QStringLiteral("base_path")).toString(), config.base_path);
+        QCOMPARE(encoded.value(QStringLiteral("max_bytes")).toString(),
+                 QStringLiteral("8192"));
+        QVERIFY(terminal_app::backend_output_capture_config_from_json(encoded) == config);
+
+        if (sizeof(std::size_t) >= sizeof(quint64)) {
+            const vnm_terminal::Backend_output_capture_config large{
+                QStringLiteral("/var/log/terminal/session"),
+                static_cast<std::size_t>(9007199254740993ULL)};
+            const QJsonObject large_json =
+                terminal_app::backend_output_capture_config_to_json(large);
+            QCOMPARE(large_json.value(QStringLiteral("max_bytes")).toString(),
+                     QStringLiteral("9007199254740993"));
+            QVERIFY(terminal_app::backend_output_capture_config_from_json(large_json) ==
+                    large);
+        }
+    }
+
+    void backend_output_capture_json_rejects_noncanonical_values()
+    {
+        const QJsonObject canonical =
+            terminal_app::backend_output_capture_config_to_json(
+                {QStringLiteral("/var/log/terminal/session"), 8192U});
+        QList<QJsonObject> invalid;
+        invalid.append(QJsonObject{});
+        invalid.append(QJsonObject{{QStringLiteral("base_path"), QStringLiteral("x")}});
+        invalid.append(QJsonObject{{QStringLiteral("max_bytes"), QStringLiteral("8192")}});
+
+        auto with_value = [&canonical](const QString& key, const QJsonValue& value) {
+            QJsonObject object = canonical;
+            object.insert(key, value);
+            return object;
+        };
+        invalid.append(with_value(QStringLiteral("base_path"),
+                                  QJsonValue(QJsonValue::Null)));
+        invalid.append(with_value(QStringLiteral("base_path"), 1));
+        invalid.append(with_value(QStringLiteral("base_path"), QString()));
+        invalid.append(with_value(QStringLiteral("base_path"),
+                                  QStringLiteral("before") + QChar(u'\0') +
+                                      QStringLiteral("after")));
+        invalid.append(with_value(QStringLiteral("max_bytes"),
+                                  QJsonValue(QJsonValue::Null)));
+        invalid.append(with_value(QStringLiteral("max_bytes"), 8192));
+        for (const QString& text : {
+                 QStringLiteral("0"), QStringLiteral("00"),
+                 QStringLiteral("08192"), QStringLiteral("+8192"),
+                 QStringLiteral("-8192"), QStringLiteral(" 8192"),
+                 QStringLiteral("8192 "), QStringLiteral("8.192"),
+                 QStringLiteral("18446744073709551616")})
+        {
+            invalid.append(with_value(QStringLiteral("max_bytes"), text));
+        }
+        invalid.append(with_value(QStringLiteral("unexpected"), true));
+        if (sizeof(std::size_t) < sizeof(quint64)) {
+            invalid.append(with_value(QStringLiteral("max_bytes"),
+                                      QStringLiteral("4294967296")));
+        }
+
+        for (const QJsonObject& object : invalid) {
+            QVERIFY(!terminal_app::backend_output_capture_config_from_json(object));
+        }
+    }
+
     void terminal_drop_paths_are_quoted_for_known_shells()
     {
         const QStringList posix_command{QStringLiteral("/bin/bash")};

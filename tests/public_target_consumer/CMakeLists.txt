@@ -9,6 +9,7 @@ find_package(vnm_terminal CONFIG REQUIRED)
 set(vnm_terminal_public_headers
     vnm_terminal/app_support/app_settings.h
     vnm_terminal/app_support/app_shortcuts.h
+    vnm_terminal/app_support/backend_output_capture_json.h
     vnm_terminal/app_support/qml_chrome.h
     vnm_terminal/app_support/terminal_scrollbar.h
     vnm_terminal/app_support/terminal_search_bar.h
