@@ -7,7 +7,7 @@
 > The primary Windows package is
 > `vnm_terminal_v<version>_windows_x64.exe`.
 
-`vnm_terminal` is a focused, single-session terminal emulator for Windows,
+`vnm_terminal` is a terminal emulator for Windows,
 macOS, and Linux. Each window hosts the platform's default shell or one explicit
 command. Tabs, splits, and connection management are outside the application's
 scope.

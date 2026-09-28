@@ -150,7 +150,7 @@ Controller.prototype.IntroductionPageCallback = function()
         "<div class=\"BrandPresentation\" style=\"color:#E0E0E0;\">"
         + "<span style=\"color:#999999;\">vnm_terminal</span>"
         + "<br /><span style=\"font-size:20px; font-weight:600;\">"
-        + "A focused terminal for the desktop.</span>"
+        + "A terminal for the desktop.</span>"
         + "<br /><br /><span>This setup will install vnm_terminal "
         + "and its required runtime.</span></div>");
 }
