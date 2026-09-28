@@ -17,6 +17,8 @@ class VNM_TerminalSurface;
 
 namespace vnm_terminal::terminal_app {
 
+enum class Search_shortcut_action;
+
 class Terminal_search_bar final : public QObject
 {
     Q_OBJECT
@@ -62,6 +64,18 @@ public:
     void send_key_release(int key, Qt::KeyboardModifiers modifiers);
     void show_search();
     Q_INVOKABLE void dismiss_search();
+
+    // Maps a key press through terminal_search_shortcut_action() against this
+    // bar's visibility and the surface's query, then performs the action.
+    // Returns whether the key press was a search shortcut.
+    bool apply_shortcut(int key, Qt::KeyboardModifiers modifiers);
+    void apply_shortcut_action(Search_shortcut_action action);
+
+    // Input for the query while the bar is visible: focuses the query and
+    // delivers the input to it. A hidden bar consumes nothing and returns
+    // false, so the input stays with the terminal.
+    bool commit_visible_text(const QString& text);
+    bool send_visible_key_event(QKeyEvent& event);
 
 signals:
     void visibility_changed(bool visible);

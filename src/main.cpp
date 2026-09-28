@@ -687,24 +687,9 @@ int main(int argc, char** argv)
     shortcut_filter->set_search_ui_root(search_bar->root_item());
     QObject::connect(
         shortcut_filter,
-        &Terminal_shortcut_filter::search_requested,
+        &Terminal_shortcut_filter::search_shortcut_requested,
         search_bar.get(),
-        &chrome::Terminal_search_bar::show_search);
-    QObject::connect(
-        shortcut_filter,
-        &Terminal_shortcut_filter::search_next_requested,
-        surface,
-        [surface] { (void)surface->search_next(); });
-    QObject::connect(
-        shortcut_filter,
-        &Terminal_shortcut_filter::search_previous_requested,
-        surface,
-        [surface] { (void)surface->search_previous(); });
-    QObject::connect(
-        shortcut_filter,
-        &Terminal_shortcut_filter::search_dismiss_requested,
-        search_bar.get(),
-        &chrome::Terminal_search_bar::dismiss_search);
+        &chrome::Terminal_search_bar::apply_shortcut_action);
     QObject::connect(
         search_bar.get(),
         &chrome::Terminal_search_bar::visibility_changed,

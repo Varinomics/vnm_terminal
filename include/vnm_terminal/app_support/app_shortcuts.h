@@ -57,10 +57,7 @@ public:
 
 signals:
     void settings_requested();
-    void search_requested();
-    void search_next_requested();
-    void search_previous_requested();
-    void search_dismiss_requested();
+    void search_shortcut_requested(Search_shortcut_action action);
 
 protected:
     bool eventFilter(QObject*, QEvent* event) override;

@@ -649,6 +649,33 @@ private:
     QEvent::Type   m_recorded_type;
 };
 
+// Records the key press a target receives, so a test can tell whether the
+// caller's own event object reached it with its metadata intact.
+class Key_press_capture_filter final : public QObject
+{
+public:
+    const QKeyEvent* received_event   = nullptr;
+    QString          text;
+    bool             auto_repeat      = false;
+    quint64          timestamp        = 0;
+    quint32          native_scan_code = 0;
+
+protected:
+    bool eventFilter(QObject*, QEvent* event) override
+    {
+        if (event != nullptr && event->type() == QEvent::KeyPress) {
+            const auto* key_event = static_cast<const QKeyEvent*>(event);
+            received_event   = key_event;
+            text             = key_event->text();
+            auto_repeat      = key_event->isAutoRepeat();
+            timestamp        = key_event->timestamp();
+            native_scan_code = key_event->nativeScanCode();
+        }
+
+        return false;
+    }
+};
+
 class Metadata_seed_backend final : public term::Terminal_backend
 {
 public:
@@ -3147,6 +3174,139 @@ bool test_terminal_search_bar_lifecycle(QGuiApplication& app)
     return ok;
 }
 
+bool test_terminal_search_bar_routes_host_input(QGuiApplication& app)
+{
+    QQmlEngine engine;
+    QQuickWindow window;
+    window.resize(480, 280);
+    VNM_TerminalSurface surface(window.contentItem());
+    surface.setWidth(456);
+    surface.setHeight(264);
+
+    chrome_test::Terminal_search_bar search_bar(engine, window, surface);
+    if (!check(search_bar.is_valid(), "host input routing fixture creates the search bar")) {
+        std::cerr << search_bar.error_string().toStdString() << '\n';
+        return false;
+    }
+
+    window.show();
+    pump_events(app);
+    QQuickItem* const input = search_bar.root_item()->findChild<QQuickItem*>(
+        QStringLiteral("terminal_search_query_input"));
+    if (!check(input != nullptr, "host input routing fixture finds the query input")) {
+        return false;
+    }
+
+    const Qt::KeyboardModifiers ctrl = Qt::ControlModifier;
+
+    bool ok = true;
+    QKeyEvent hidden_press(QEvent::KeyPress, Qt::Key_X, Qt::NoModifier, QStringLiteral("x"));
+    ok &= check(
+        !search_bar.commit_visible_text(QStringLiteral("x")) &&
+        !search_bar.send_visible_key_event(hidden_press) &&
+        input->property("text").toString().isEmpty() &&
+        surface.search_query().isEmpty(),
+        "a hidden search bar leaves text and key input to the terminal");
+    ok &= check(
+        !search_bar.apply_shortcut(Qt::Key_F3,     Qt::NoModifier) &&
+        !search_bar.apply_shortcut(Qt::Key_Escape, Qt::NoModifier) &&
+        !search_bar.is_visible(),
+        "navigation without a query and Escape while hidden are not search shortcuts");
+
+    ok &= check(search_bar.apply_shortcut(Qt::Key_F, ctrl),
+        "Ctrl+F is consumed as a search shortcut");
+    pump_events(app);
+    ok &= check(search_bar.is_visible() && input->hasActiveFocus(),
+        "the show shortcut exposes the bar and focuses its query");
+
+    auto backend = std::make_unique<Metadata_seed_backend>(numbered_scroll_lines(80));
+    const bool started = term::VNM_TerminalSurface_render_bridge::start_backend_terminal(
+        surface,
+        std::move(backend),
+        {QStringLiteral("search-input-routing-seed")}).accepted;
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    pump_events(app);
+    ok &= check(started, "host input routing fixture starts a retained-output backend");
+
+    surface.forceActiveFocus(Qt::OtherFocusReason);
+    pump_events(app);
+    const bool committed = search_bar.commit_visible_text(QStringLiteral("row-"));
+    ok &= check(
+        committed &&
+        input->hasActiveFocus() &&
+        input->property("text").toString() == QStringLiteral("row-") &&
+        surface.search_query() == QStringLiteral("row-"),
+        "visible text input refocuses the query and commits through the TextInput");
+    ok &= check(
+        search_bar.commit_visible_text(QString{}) &&
+        surface.search_query() == QStringLiteral("row-"),
+        "empty visible text is consumed without editing the query");
+
+    QElapsedTimer search_deadline;
+    search_deadline.start();
+    while (surface.search_result_state() == VNM_TerminalSurface::Search_result_state::SEARCHING &&
+        search_deadline.elapsed() < 5000)
+    {
+        pump_events(app);
+        QThread::msleep(1);
+    }
+    pump_events(app);
+    ok &= check(
+        surface.search_result_state() == VNM_TerminalSurface::Search_result_state::MATCH &&
+        surface.search_match_count() > 1,
+        "host input routing fixture finds multiple matches");
+
+    const int first_match = surface.current_search_match();
+    ok &= check(
+        search_bar.apply_shortcut(Qt::Key_F3, Qt::NoModifier) &&
+        surface.current_search_match() != first_match,
+        "F3 with an active query navigates to the next match");
+    ok &= check(
+        search_bar.apply_shortcut(Qt::Key_F3, Qt::ShiftModifier) &&
+        surface.current_search_match() == first_match,
+        "Shift+F3 with an active query navigates back to the previous match");
+
+    Key_press_capture_filter capture;
+    input->installEventFilter(&capture);
+    QKeyEvent repeated_press(
+        QEvent::KeyPress,
+        Qt::Key_X,
+        Qt::NoModifier,
+        53U,
+        0x58U,
+        0U,
+        QStringLiteral("x"),
+        true);
+    repeated_press.setTimestamp(918273U);
+    surface.forceActiveFocus(Qt::OtherFocusReason);
+    pump_events(app);
+    const bool key_sent = search_bar.send_visible_key_event(repeated_press);
+    input->removeEventFilter(&capture);
+    ok &= check(
+        key_sent &&
+        input->hasActiveFocus() &&
+        capture.received_event   == &repeated_press &&
+        capture.text             == QStringLiteral("x") &&
+        capture.auto_repeat &&
+        capture.timestamp        == 918273U &&
+        capture.native_scan_code == 53U &&
+        surface.search_query() == QStringLiteral("row-x"),
+        "visible key input delivers the caller's event synchronously with its metadata");
+
+    ok &= check(search_bar.apply_shortcut(Qt::Key_Escape, Qt::NoModifier),
+        "Escape is consumed while the search bar is visible");
+    pump_events(app);
+    QKeyEvent dismissed_press(QEvent::KeyPress, Qt::Key_Y, Qt::NoModifier, QStringLiteral("y"));
+    ok &= check(
+        !search_bar.is_visible() &&
+        surface.search_query().isEmpty() &&
+        !search_bar.commit_visible_text(QStringLiteral("y")) &&
+        !search_bar.send_visible_key_event(dismissed_press) &&
+        surface.search_query().isEmpty(),
+        "dismissal clears the query and returns input to the terminal");
+    return ok;
+}
+
 bool test_clipboard_broker_mode_argument_detection()
 {
     using chrome_test::clipboard_broker_mode_requested;
@@ -3822,10 +3982,8 @@ bool test_hidden_settings_preserve_escape_delivery(QGuiApplication& app)
     shortcut_filter.set_search_ui_root(search.root_item());
     window.installEventFilter(&key_filter);
     window.installEventFilter(&shortcut_filter);
-    QObject::connect(&shortcut_filter, &Terminal_shortcut_filter::search_requested,
-        &search, &chrome_test::Terminal_search_bar::show_search);
-    QObject::connect(&shortcut_filter, &Terminal_shortcut_filter::search_dismiss_requested,
-        &search, &chrome_test::Terminal_search_bar::dismiss_search);
+    QObject::connect(&shortcut_filter, &Terminal_shortcut_filter::search_shortcut_requested,
+        &search, &chrome_test::Terminal_search_bar::apply_shortcut_action);
     QObject::connect(&search, &chrome_test::Terminal_search_bar::visibility_changed,
         &shortcut_filter, &Terminal_shortcut_filter::set_search_ui_visible);
 
@@ -3982,14 +4140,18 @@ bool test_host_shortcuts_preserve_title_editor_keys(QGuiApplication& app)
     int settings_requests = 0;
     QObject::connect(
         &shortcut_filter,
-        &Terminal_shortcut_filter::search_requested,
+        &Terminal_shortcut_filter::search_shortcut_requested,
         &shortcut_filter,
-        [&search_requests] { ++search_requests; });
-    QObject::connect(
-        &shortcut_filter,
-        &Terminal_shortcut_filter::search_dismiss_requested,
-        &shortcut_filter,
-        [&dismiss_requests] { ++dismiss_requests; });
+        [
+                &search_requests,
+                &dismiss_requests
+            ](
+                chrome_test::Search_shortcut_action action)
+            {
+                using chrome_test::Search_shortcut_action;
+                if (action == Search_shortcut_action::SHOW)    { ++search_requests;  }
+                if (action == Search_shortcut_action::DISMISS) { ++dismiss_requests; }
+            });
     QObject::connect(
         &shortcut_filter,
         &Terminal_shortcut_filter::settings_requested,
@@ -4175,6 +4337,7 @@ int main(int argc, char** argv)
     ok &= test_paste_shortcut_should_paste_predicate();
     ok &= test_search_shortcut_predicate();
     ok &= test_terminal_search_bar_lifecycle(app);
+    ok &= test_terminal_search_bar_routes_host_input(app);
     ok &= test_clipboard_broker_mode_argument_detection();
     ok &= test_paste_shortcut_consumes_null_clipboard_reader(app);
     ok &= test_copy_on_select_copies_completed_plain_text_selection(app);

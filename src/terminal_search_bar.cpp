@@ -1,5 +1,6 @@
 #include "vnm_terminal/app_support/terminal_search_bar.h"
 
+#include "vnm_terminal/app_support/app_shortcuts.h"
 #include "vnm_terminal/app_support/qml_chrome.h"
 
 #include "qml_component_error_string.h"
@@ -449,6 +450,70 @@ void Terminal_search_bar::dismiss_search()
         m_root_item->setVisible(false);
         emit visibility_changed(false);
     }
+}
+
+bool Terminal_search_bar::apply_shortcut(int key, Qt::KeyboardModifiers modifiers)
+{
+    if (m_surface == nullptr) {
+        return false;
+    }
+
+    const Search_shortcut_action action = terminal_search_shortcut_action(
+        key,
+        modifiers,
+        is_visible(),
+        !m_surface->search_query().isEmpty());
+    apply_shortcut_action(action);
+    return action != Search_shortcut_action::NONE;
+}
+
+void Terminal_search_bar::apply_shortcut_action(Search_shortcut_action action)
+{
+    switch (action) {
+        case Search_shortcut_action::SHOW:
+            show_search();
+            return;
+        case Search_shortcut_action::NEXT:
+            if (m_surface != nullptr) {
+                (void)m_surface->search_next();
+            }
+            return;
+        case Search_shortcut_action::PREVIOUS:
+            if (m_surface != nullptr) {
+                (void)m_surface->search_previous();
+            }
+            return;
+        case Search_shortcut_action::DISMISS:
+            dismiss_search();
+            return;
+        case Search_shortcut_action::NONE:
+        default:
+            return;
+    }
+}
+
+bool Terminal_search_bar::commit_visible_text(const QString& text)
+{
+    if (!is_visible()) {
+        return false;
+    }
+
+    (void)focus_query();
+    if (!text.isEmpty()) {
+        commit_text(text);
+    }
+    return true;
+}
+
+bool Terminal_search_bar::send_visible_key_event(QKeyEvent& event)
+{
+    if (!is_visible()) {
+        return false;
+    }
+
+    (void)focus_query();
+    send_key_event(event);
+    return true;
 }
 
 } // namespace vnm_terminal::terminal_app

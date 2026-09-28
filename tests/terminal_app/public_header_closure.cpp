@@ -36,6 +36,18 @@ int main()
     static_assert(std::is_same_v<
         decltype(&Terminal_search_bar::send_key_release),
         void (Terminal_search_bar::*)(int, Qt::KeyboardModifiers)>);
+    static_assert(std::is_same_v<
+        decltype(&Terminal_search_bar::apply_shortcut),
+        bool (Terminal_search_bar::*)(int, Qt::KeyboardModifiers)>);
+    static_assert(std::is_same_v<
+        decltype(&Terminal_search_bar::apply_shortcut_action),
+        void (Terminal_search_bar::*)(Search_shortcut_action)>);
+    static_assert(std::is_same_v<
+        decltype(&Terminal_search_bar::commit_visible_text),
+        bool (Terminal_search_bar::*)(const QString&)>);
+    static_assert(std::is_same_v<
+        decltype(&Terminal_search_bar::send_visible_key_event),
+        bool (Terminal_search_bar::*)(QKeyEvent&)>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_controller>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_window>);
     return vnm_terminal::default_shell_argv().isEmpty() ? 0 : 0;

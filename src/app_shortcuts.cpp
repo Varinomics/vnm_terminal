@@ -24,6 +24,18 @@ bool item_belongs_to(QQuickItem* item, const QQuickItem* root)
     return false;
 }
 
+QString search_shortcut_route(Search_shortcut_action action)
+{
+    switch (action) {
+        case Search_shortcut_action::SHOW:     return QStringLiteral("search");
+        case Search_shortcut_action::NEXT:     return QStringLiteral("search-next");
+        case Search_shortcut_action::PREVIOUS: return QStringLiteral("search-previous");
+        case Search_shortcut_action::DISMISS:  return QStringLiteral("search-dismiss");
+        case Search_shortcut_action::NONE:
+        default:                               return {};
+    }
+}
+
 } // namespace
 
 bool paste_shortcut_should_paste(
@@ -144,29 +156,11 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
         modifiers,
         m_search_ui_visible,
         !m_surface->search_query().isEmpty());
-    switch (search_action) {
-        case Search_shortcut_action::SHOW:
-            m_surface->record_interaction_diagnostic(
-                "app-shortcut", "routed", QStringLiteral("search"));
-            emit search_requested();
-            return true;
-        case Search_shortcut_action::NEXT:
-            m_surface->record_interaction_diagnostic(
-                "app-shortcut", "routed", QStringLiteral("search-next"));
-            emit search_next_requested();
-            return true;
-        case Search_shortcut_action::PREVIOUS:
-            m_surface->record_interaction_diagnostic(
-                "app-shortcut", "routed", QStringLiteral("search-previous"));
-            emit search_previous_requested();
-            return true;
-        case Search_shortcut_action::DISMISS:
-            m_surface->record_interaction_diagnostic(
-                "app-shortcut", "routed", QStringLiteral("search-dismiss"));
-            emit search_dismiss_requested();
-            return true;
-        case Search_shortcut_action::NONE:
-            break;
+    if (search_action != Search_shortcut_action::NONE) {
+        m_surface->record_interaction_diagnostic(
+            "app-shortcut", "routed", search_shortcut_route(search_action));
+        emit search_shortcut_requested(search_action);
+        return true;
     }
 
     if (key_event->key() == Qt::Key_Comma) {
