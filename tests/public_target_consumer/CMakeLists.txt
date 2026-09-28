@@ -12,6 +12,7 @@ set(vnm_terminal_public_headers
     vnm_terminal/app_support/qml_chrome.h
     vnm_terminal/app_support/terminal_scrollbar.h
     vnm_terminal/app_support/terminal_search_bar.h
+    vnm_terminal/app_support/terminal_settings_reconciler.h
     vnm_terminal/app_support/terminal_settings_controller.h
     vnm_terminal/app_support/terminal_settings_window.h
     vnm_terminal/default_shell.h

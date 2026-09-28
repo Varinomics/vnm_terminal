@@ -3,6 +3,7 @@
 #include "vnm_terminal/app_support/qml_chrome.h"
 #include "vnm_terminal/app_support/terminal_scrollbar.h"
 #include "vnm_terminal/app_support/terminal_search_bar.h"
+#include "vnm_terminal/app_support/terminal_settings_reconciler.h"
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
 #include "vnm_terminal/app_support/terminal_settings_window.h"
 #include "vnm_terminal/default_shell.h"
@@ -17,6 +18,7 @@ int main()
     static_assert(std::is_base_of_v<QObject, Terminal_qml_chrome>);
     static_assert(std::is_base_of_v<QQuickPaintedItem, Terminal_scrollbar>);
     static_assert(std::is_base_of_v<QObject, Terminal_search_bar>);
+    static_assert(std::is_base_of_v<QObject, Terminal_settings_reconciler>);
     static_assert(std::is_same_v<
         decltype(&Terminal_search_bar::set_text_font_family),
         void (Terminal_search_bar::*)(const QString&)>);

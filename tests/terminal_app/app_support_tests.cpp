@@ -1,5 +1,6 @@
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/terminal_display_settings.h"
+#include "vnm_terminal/app_support/terminal_settings_reconciler.h"
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
 
 #include "terminal_file_drop.h"
@@ -11,6 +12,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QMimeData>
+#include <QMetaType>
 #include <QPoint>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -238,6 +240,118 @@ private slots:
         QVERIFY(display.set_dark_mode(true));
         QCOMPARE(display.values().value(QStringLiteral("color_scheme")).toString(), QStringLiteral("Campbell"));
         QCOMPARE(display.values().value(QStringLiteral("font_size")).toInt(), 25);
+    }
+
+    void worker_reconciler_keeps_rapid_edits_over_an_old_snapshot()
+    {
+        VNM_TerminalSurface surface;
+        const auto old_snapshot = terminal_app::terminal_settings_snapshot(surface);
+        QList<terminal_app::Terminal_setting_delta> deltas;
+        terminal_app::Terminal_settings_reconciler reconciler(
+            surface, true, [&deltas](const auto& delta) { deltas.push_back(delta); });
+
+        surface.set_font_size(20.0);
+        surface.set_font_size(22.0);
+        QCOMPARE(deltas.size(), 2);
+        QCOMPARE(deltas[0].key, QStringLiteral("font_size"));
+        QCOMPARE(deltas[0].value.metaType().id(), QMetaType::Double);
+        QCOMPARE(deltas[0].value.toDouble(), 20.0);
+        QCOMPARE(deltas[0].sequence, quint64{1});
+        QCOMPARE(deltas[1].value.toDouble(), 22.0);
+        QCOMPARE(deltas[1].sequence, quint64{2});
+        QVERIFY(deltas[0].dark_mode && deltas[1].dark_mode);
+
+        const auto reconciled = reconciler.apply_manager_snapshot(
+            old_snapshot, true, 0);
+        QCOMPARE(reconciled.font_size, 22.0);
+        QCOMPARE(surface.font_size(), 22.0);
+        QCOMPARE(deltas.size(), 2);
+    }
+
+    void worker_reconciler_discards_only_acknowledged_edits()
+    {
+        VNM_TerminalSurface surface;
+        QList<terminal_app::Terminal_setting_delta> deltas;
+        terminal_app::Terminal_settings_reconciler reconciler(
+            surface, true, [&deltas](const auto& delta) { deltas.push_back(delta); });
+
+        surface.set_font_size(20.0);
+        surface.set_invert_brightness(true);
+        QCOMPARE(deltas.size(), 2);
+        QCOMPARE(deltas[1].value.metaType().id(), QMetaType::Bool);
+        QCOMPARE(deltas[1].sequence, quint64{2});
+
+        auto manager_snapshot = terminal_app::terminal_settings_snapshot(surface);
+        manager_snapshot.invert_brightness = false;
+        const auto partially_acknowledged = reconciler.apply_manager_snapshot(
+            manager_snapshot, true, 1);
+        QCOMPARE(partially_acknowledged.font_size, 20.0);
+        QVERIFY(partially_acknowledged.invert_brightness);
+        QVERIFY(surface.invert_brightness());
+
+        manager_snapshot.font_size = 18.0;
+        const auto fully_acknowledged = reconciler.apply_manager_snapshot(
+            manager_snapshot, true, 2);
+        QCOMPARE(fully_acknowledged.font_size, 18.0);
+        QVERIFY(!fully_acknowledged.invert_brightness);
+        QCOMPARE(surface.font_size(), 18.0);
+        QVERIFY(!surface.invert_brightness());
+        QCOMPARE(deltas.size(), 2);
+    }
+
+    void worker_reconciler_retains_mode_bound_edits_for_their_mode()
+    {
+        VNM_TerminalSurface surface;
+        const auto old_snapshot = terminal_app::terminal_settings_snapshot(surface);
+        QList<terminal_app::Terminal_setting_delta> deltas;
+        terminal_app::Terminal_settings_reconciler reconciler(
+            surface, true, [&deltas](const auto& delta) { deltas.push_back(delta); });
+
+        surface.set_color_scheme(QStringLiteral("Campbell"));
+        surface.set_invert_brightness(true);
+        QCOMPARE(deltas.size(), 2);
+
+        auto light_snapshot = old_snapshot;
+        light_snapshot.color_scheme = QStringLiteral("Solarized Light");
+        const auto light = reconciler.apply_manager_snapshot(
+            light_snapshot, false, 0);
+        QCOMPARE(light.color_scheme, QStringLiteral("Solarized Light"));
+        QVERIFY(!light.invert_brightness);
+        QCOMPARE(surface.color_scheme(), light.color_scheme);
+        QVERIFY(!surface.invert_brightness());
+
+        const auto dark = reconciler.apply_manager_snapshot(
+            old_snapshot, true, 0);
+        QCOMPARE(dark.color_scheme, QStringLiteral("Campbell"));
+        QVERIFY(dark.invert_brightness);
+        QCOMPARE(surface.color_scheme(), dark.color_scheme);
+        QVERIFY(surface.invert_brightness());
+        QCOMPARE(deltas.size(), 2);
+    }
+
+    void worker_reconciler_does_not_emit_reflected_manager_edits()
+    {
+        VNM_TerminalSurface surface;
+        QList<terminal_app::Terminal_setting_delta> deltas;
+        terminal_app::Terminal_settings_reconciler reconciler(
+            surface, true, [&deltas](const auto& delta) { deltas.push_back(delta); });
+
+        auto manager_snapshot = terminal_app::terminal_settings_snapshot(surface);
+        manager_snapshot.font_size = 24.0;
+        reconciler.apply_manager_snapshot(manager_snapshot, true, 0);
+        QCOMPARE(surface.font_size(), 24.0);
+        QVERIFY(deltas.isEmpty());
+
+        surface.set_font_size(25.0);
+        QCOMPARE(deltas.size(), 1);
+        QCOMPARE(deltas.front().sequence, quint64{1});
+        reconciler.apply_manager_snapshot(manager_snapshot, true, 0);
+        QCOMPARE(surface.font_size(), 25.0);
+        QCOMPARE(deltas.size(), 1);
+
+        surface.set_font_size(26.0);
+        QCOMPARE(deltas.size(), 2);
+        QCOMPARE(deltas.back().sequence, quint64{2});
     }
 
     void invalid_shared_delta_does_not_replace_valid_display_settings()
