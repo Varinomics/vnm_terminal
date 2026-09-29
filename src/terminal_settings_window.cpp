@@ -291,7 +291,7 @@ Window {
     visible: false
     flags: Qt.Tool | Qt.FramelessWindowHint
     color: dark_mode ? "#202020" : "#f4f4f4"
-    title: "vnm_terminal - Settings"
+    title: "Terminal settings"
 
     signal close_requested()
     signal move_requested()
