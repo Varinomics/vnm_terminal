@@ -1,6 +1,7 @@
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/app_shortcuts.h"
 #include "vnm_terminal/app_support/backend_output_capture_json.h"
+#include "vnm_terminal/app_support/codex_command_environment.h"
 #include "vnm_terminal/app_support/qml_chrome.h"
 #include "vnm_terminal/app_support/terminal_scrollbar.h"
 #include "vnm_terminal/app_support/terminal_search_bar.h"
@@ -20,6 +21,7 @@ int main()
 {
     using namespace vnm_terminal::terminal_app;
     static_assert(std::is_default_constructible_v<Terminal_settings_snapshot>);
+    static_assert(std::is_default_constructible_v<Codex_command_environment>);
     static_assert(std::is_base_of_v<QObject, Terminal_shortcut_filter>);
     static_assert(std::is_base_of_v<QObject, Terminal_qml_chrome>);
     static_assert(std::is_base_of_v<QQuickPaintedItem, Terminal_scrollbar>);

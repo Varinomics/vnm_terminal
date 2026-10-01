@@ -309,14 +309,10 @@ vnm_terminal_add_environment_policy_test(
 
 add_executable(vnm_terminal_codex_command_environment
     terminal_app/codex_command_environment_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/codex_command_environment.cpp"
-    $<TARGET_OBJECTS:vnm_terminal_codex_resources>
 )
 vnm_terminal_configure_test_process(vnm_terminal_codex_command_environment)
-target_link_libraries(vnm_terminal_codex_command_environment PRIVATE Qt6::Core)
-if(WIN32)
-    target_link_libraries(vnm_terminal_codex_command_environment PRIVATE version)
-endif()
+target_link_libraries(vnm_terminal_codex_command_environment PRIVATE
+    vnm_terminal::vnm_terminal_app_support)
 set_target_properties(vnm_terminal_codex_command_environment PROPERTIES AUTOMOC OFF)
 vnm_terminal_add_target_test(vnm_terminal_codex_command_environment)
 

@@ -135,7 +135,8 @@ standard streams, and exit status are preserved. Other commands keep the normal
 terminal type; no shell profile or Codex configuration file is edited.
 
 Windows integration requires PowerShell 7.3 or newer on `PATH` and supports
-PowerShell and cmd. Without it, or if the private command directory cannot be
+Windows PowerShell, PowerShell, and cmd. Windows PowerShell forwards Codex to
+the installed PowerShell 7.3+ host. Without it, or if the private command directory cannot be
 prepared, ordinary shells still start without the adapter; direct Codex launches
 report the setup problem. Linux and macOS use `/bin/sh` and
 ordinary shell PATH lookup. Shell aliases/functions and commands invoked by an
@@ -153,6 +154,12 @@ See the [Codex shell environment policy](https://learn.chatgpt.com/docs/config-f
 The adapter preserves tmux and Zellij indicators, so Codex's multiplexer
 graphics restrictions still apply. In Codex, `/pets` opens
 the pet selector when its graphics requirements are met.
+
+Embedding applications use `vnm_terminal::terminal_app::Codex_command_environment`
+from `<vnm_terminal/app_support/codex_command_environment.h>`, linked through
+`vnm_terminal::vnm_terminal_app_support`. Call `prepare()` on the final terminal
+command and environment before starting its backend, and retain the adapter for
+the terminal session's lifetime so its private commands remain available.
 
 ## Source build
 

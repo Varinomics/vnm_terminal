@@ -1,8 +1,9 @@
-#include "codex_command_environment.h"
+#include "vnm_terminal/app_support/codex_command_environment.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QResource>
 #include <QStandardPaths>
 
 #if defined(Q_OS_WIN)
@@ -12,6 +13,12 @@
 
 #include <string>
 #include <vector>
+
+static bool initialize_codex_resources()
+{
+    Q_INIT_RESOURCE(codex_commands);
+    return true;
+}
 
 namespace vnm_terminal::terminal_app {
 namespace {
@@ -61,6 +68,8 @@ bool supports_native_arguments(const QString& executable)
 bool Codex_command_environment::prepare(
     QStringList& command, QProcessEnvironment& environment, QString& error)
 {
+    static const bool resources_initialized = initialize_codex_resources();
+    Q_UNUSED(resources_initialized);
     const bool direct_codex = !command.isEmpty() && names_codex(command.front());
     const auto fail_setup = [&](const QString& detail) {
         error = direct_codex ? detail : QString();
@@ -98,6 +107,13 @@ bool Codex_command_environment::prepare(
             QString escaped_path = QDir::toNativeSeparators(powershell);
             escaped_path.replace(QLatin1Char('%'), QStringLiteral("%%"));
             content.replace("@POWERSHELL@", escaped_path.toUtf8());
+        }
+        if (name == QStringLiteral("codex.ps1")) {
+            QString escaped_path = QDir::toNativeSeparators(powershell);
+            escaped_path.replace(QLatin1Char('\''), QStringLiteral("''"));
+            content.replace("@POWERSHELL@", escaped_path.toUtf8());
+            // Windows PowerShell needs a BOM for non-ASCII installation paths.
+            content.prepend("\xEF\xBB\xBF");
         }
 #endif
         QFile output(m_directory.filePath(name));

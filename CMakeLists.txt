@@ -100,6 +100,7 @@ add_custom_target(vnm_terminal_build_info ALL
 set(vnm_terminal_app_support_headers
     include/vnm_terminal/app_support/app_settings.h
     include/vnm_terminal/app_support/backend_output_capture_json.h
+    include/vnm_terminal/app_support/codex_command_environment.h
     include/vnm_terminal/app_support/terminal_display_settings.h
     include/vnm_terminal/app_support/terminal_settings_reconciler.h
     include/vnm_terminal/app_support/diagnostic_sink.h
@@ -111,7 +112,14 @@ set(vnm_terminal_app_support_headers
     include/vnm_terminal/app_support/terminal_settings_window.h
 )
 
+qt_add_resources(vnm_terminal_codex_resource_sources
+    resources/codex_commands.qrc
+)
+
 add_library(vnm_terminal_app_support STATIC
+    ${vnm_terminal_codex_resource_sources}
+    src/codex_command_environment.cpp
+    include/vnm_terminal/app_support/codex_command_environment.h
     src/backend_output_capture_json.cpp
     include/vnm_terminal/app_support/backend_output_capture_json.h
     src/app_diagnostic_sink.cpp
@@ -166,6 +174,9 @@ target_link_libraries(vnm_terminal_app_support
 add_library(
     vnm_terminal::vnm_terminal_app_support
     ALIAS vnm_terminal_app_support)
+if(WIN32)
+    target_link_libraries(vnm_terminal_app_support PRIVATE version)
+endif()
 
 add_library(vnm_terminal_default_shell STATIC
     include/vnm_terminal/default_shell.h
@@ -249,20 +260,8 @@ find_package(Qt6Svg 6.11 REQUIRED COMPONENTS
     QSvgPlugin
 )
 
-qt_add_resources(vnm_terminal_codex_resource_sources
-    resources/codex_commands.qrc
-)
-add_library(vnm_terminal_codex_resources OBJECT
-    ${vnm_terminal_codex_resource_sources}
-)
-target_link_libraries(vnm_terminal_codex_resources PRIVATE Qt6::Core)
-set_target_properties(vnm_terminal_codex_resources PROPERTIES AUTOMOC OFF)
-
 set(vnm_terminal_sources
-    $<TARGET_OBJECTS:vnm_terminal_codex_resources>
     src/main.cpp
-    src/codex_command_environment.cpp
-    src/codex_command_environment.h
     src/app_cli.cpp
     src/app_cli.h
     src/app_clipboard_reader.cpp
@@ -372,7 +371,6 @@ endif()
 
 if(WIN32)
     vnm_terminal_deploy_conpty(vnm_terminal)
-    target_link_libraries(vnm_terminal PRIVATE version)
 
     set_target_properties(vnm_terminal PROPERTIES
         WIN32_EXECUTABLE TRUE

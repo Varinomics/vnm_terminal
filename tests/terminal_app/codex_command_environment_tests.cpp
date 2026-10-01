@@ -1,4 +1,4 @@
-#include "codex_command_environment.h"
+#include "vnm_terminal/app_support/codex_command_environment.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -193,7 +193,8 @@ void run_tests()
     const QString expected_wrapper = "posix";
     QStringList shell{"/bin/sh"};
 #endif
-    const QStringList arguments{"", "with spaces", "embedded\"quote", "--flag", "unicode-\u03bb"};
+    const QStringList arguments{
+        "", "with spaces", "embedded\"quote", "single'quote", "--flag", "unicode-\u03bb"};
     QStringList direct = QStringList{"codex"} + arguments;
     QString error;
     QString private_path;
@@ -229,6 +230,14 @@ void run_tests()
         shell_command += QStringList{"-c", "codex \"$@\"", "fixture"} + arguments;
 #endif
         check_launch(shell_command, shell_environment, fixture.path(), arguments, original_path, expected_wrapper);
+#if defined(Q_OS_WIN)
+        const QString windows_powershell = QDir(qEnvironmentVariable("SystemRoot")).filePath(
+            QStringLiteral("System32/WindowsPowerShell/v1.0/powershell.exe"));
+        QStringList windows_shell_command = shell_command;
+        windows_shell_command.front() = windows_powershell;
+        check_launch(windows_shell_command, shell_environment, fixture.path(), arguments,
+            original_path, expected_wrapper);
+#endif
 
         QProcessEnvironment explicit_environment = environment;
         explicit_environment.insert("PATH", original_path);
@@ -264,6 +273,9 @@ void run_tests()
         pipeline_invocation += "; exit $LASTEXITCODE";
         check_launch(shell + QStringList{"-Command", pipeline_invocation}, environment,
             fixture.path(), arguments, original_path, "powershell", "input from the terminal\r\n");
+        check_launch(
+            QStringList{windows_powershell, "-NoLogo", "-NoProfile", "-Command", pipeline_invocation},
+            environment, fixture.path(), arguments, original_path, "powershell", "input from the terminal\r\n");
 
         QProcessEnvironment unavailable_environment = parent;
         unavailable_environment.insert("PATH", fixture.path());

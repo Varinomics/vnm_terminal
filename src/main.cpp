@@ -8,7 +8,7 @@
 #include "app_options_settings_adapter.h"
 #include "app_profile_text.h"
 #include "standalone_environment.h"
-#include "codex_command_environment.h"
+#include "vnm_terminal/app_support/codex_command_environment.h"
 #include "terminal_file_drop.h"
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/app_shortcuts.h"
