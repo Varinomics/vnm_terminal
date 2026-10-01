@@ -4,6 +4,7 @@
 #include "terminal_settings_native_window_owner.h"
 
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
+#include "vnm_terminal/app_support/terminal_settings_model.h"
 
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
 
@@ -244,9 +245,8 @@ QRect foreground_anchor_geometry()
 }
 
 // A self-contained frameless QML Window styled with the shared VNM_Chrome
-// titlebar so it visually belongs to the terminal. Its controls bind directly
-// to the live surface (context property `surface`) for immediate apply; the
-// `settings` controller supplies the monospace font list.
+// titlebar so it visually belongs to the terminal. Its preference controls bind
+// to a live surface or settings model; the controller supplies the font list.
 //
 // The dialog styles every control itself (dialog-local inline `component`
 // definitions over QtQuick.Controls.Basic, carrying the S_ prefix) because the
@@ -329,12 +329,14 @@ Window {
     readonly property color card_border_color:  dark_mode ? "#383838" : "#b8b8b8"
     readonly property color selection_color:    dark_mode ? "#2f4a6b" : "#c4dfff"
 
-    readonly property bool msdf_unavailable: surface.textRendererMode !== 2
+    readonly property bool msdf_unavailable: hasLiveSurface && surface.textRendererMode !== 2
         && !surface.msdfTextChecking
         && !surface.msdfTextAvailable
     readonly property string renderer_status_text: {
         if (surface.textRendererMode === 2)
             return "Using glyph rendering only."
+        if (!hasLiveSurface)
+            return "Renderer availability is checked when a terminal opens."
         if (surface.msdfTextChecking)
             return "Checking MSDF availability for " + surface.fontFamily + "..."
         if (!surface.msdfTextAvailable)
@@ -1089,7 +1091,8 @@ R"qml(
                             S_Label {
                                 objectName: "font_effective_size_label"
                                 readonly property bool effective_size_differs:
-                                    Math.abs(surface.effectiveFontSize - surface.fontSize) > 0.005
+                                    hasLiveSurface
+                                    && Math.abs(surface.effectiveFontSize - surface.fontSize) > 0.005
                                 text: effective_size_differs
                                     ? "Using " + surface.effectiveFontSize.toFixed(2) + " px"
                                     : ""
@@ -1185,7 +1188,7 @@ R"qml(
                             S_ProgressBar {
                                 Layout.fillWidth: true
                                 indeterminate: true
-                                visible: surface.msdfTextChecking
+                                visible: hasLiveSurface && surface.msdfTextChecking
                             }
                         }
                     }
@@ -1288,7 +1291,8 @@ R"qml(
 
                         S_Switch {
                             objectName: "copy_on_select_switch"
-                            checked: surface.copyOnSelect
+                            enabled: hasLiveSurface
+                            checked: hasLiveSurface && surface.copyOnSelect
                             onToggled: surface.copyOnSelect = checked
                         }
                     }
@@ -1343,7 +1347,7 @@ R"qml(
 
                         Text {
                             Layout.fillWidth: true
-                            text: surface.estimatedScrollbackLines > 0
+                            text: hasLiveSurface && surface.estimatedScrollbackLines > 0
                                 ? "Up to " + surface.estimatedScrollbackLines.toLocaleString() +
                                     " plain-text lines at this width"
                                 : "Estimate appears when the terminal size is known"
@@ -1381,7 +1385,8 @@ R"qml(
                             objectName: "interaction_diagnostics_switch"
 
                             visible: interactionDiagnosticsUnlocked
-                            checked: surface.interactionDiagnosticsEnabled
+                            enabled: hasLiveSurface
+                            checked: hasLiveSurface && surface.interactionDiagnosticsEnabled
                             onToggled: {
                                 surface.interactionDiagnosticsEnabled = checked
                                 if (checked !== surface.interactionDiagnosticsEnabled)
@@ -1389,7 +1394,9 @@ R"qml(
                             }
 
                             S_ToolTip {
-                                text: surface.interactionDiagnosticsError.length > 0
+                                text: !hasLiveSurface
+                                    ? "Interaction trace is available when a terminal is open."
+                                    : surface.interactionDiagnosticsError.length > 0
                                     ? surface.interactionDiagnosticsError
                                     : "Bounded trace (records control keys and event timing): "
                                         + surface.interactionDiagnosticsPath
@@ -1440,6 +1447,28 @@ settings::Terminal_settings_window::Terminal_settings_window(
 :
     QObject(parent)
 {
+    initialize(engine, surface, controller, true, interaction_diagnostics_unlocked);
+}
+
+settings::Terminal_settings_window::Terminal_settings_window(
+    QQmlEngine&                   engine,
+    Terminal_settings_model&      model,
+    Terminal_settings_controller& controller,
+    bool                          interaction_diagnostics_unlocked,
+    QObject*                      parent)
+:
+    QObject(parent)
+{
+    initialize(engine, model, controller, false, interaction_diagnostics_unlocked);
+}
+
+void settings::Terminal_settings_window::initialize(
+    QQmlEngine&                   engine,
+    QObject&                      preferences,
+    Terminal_settings_controller& controller,
+    bool                          has_live_surface,
+    bool                          interaction_diagnostics_unlocked)
+{
     if (!vnm_init_qml_chrome_runtime(engine)) {
         m_error_string = QStringLiteral("failed to initialize vnm_qml_chrome runtime");
         return;
@@ -1454,7 +1483,8 @@ settings::Terminal_settings_window::Terminal_settings_window(
     }
 
     auto* context = new QQmlContext(engine.rootContext(), this);
-    context->setContextProperty(QStringLiteral("surface"), &surface);
+    context->setContextProperty(QStringLiteral("surface"), &preferences);
+    context->setContextProperty(QStringLiteral("hasLiveSurface"), has_live_surface);
     context->setContextProperty(QStringLiteral("settings"), &controller);
     context->setContextProperty(
         QStringLiteral("settingsIconFontFamily"),

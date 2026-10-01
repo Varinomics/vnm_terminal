@@ -8,6 +8,8 @@
 #include "vnm_terminal/app_support/terminal_settings_reconciler.h"
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
 #include "vnm_terminal/app_support/terminal_settings_window.h"
+#include "vnm_terminal/app_support/terminal_settings_model.h"
+#include "vnm_terminal/app_support/terminal_settings_dialog.h"
 #include "vnm_terminal/default_shell.h"
 
 #include <type_traits>
@@ -52,5 +54,7 @@ int main()
         bool (Terminal_search_bar::*)(QKeyEvent&)>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_controller>);
     static_assert(std::is_base_of_v<QObject, Terminal_settings_window>);
+    static_assert(std::is_base_of_v<QQmlPropertyMap, Terminal_settings_model>);
+    static_assert(std::is_base_of_v<QObject, Terminal_settings_dialog>);
     return vnm_terminal::default_shell_argv().isEmpty() ? 0 : 0;
 }

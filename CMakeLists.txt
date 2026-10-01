@@ -109,6 +109,8 @@ set(vnm_terminal_app_support_headers
     include/vnm_terminal/app_support/terminal_scrollbar.h
     include/vnm_terminal/app_support/terminal_search_bar.h
     include/vnm_terminal/app_support/terminal_settings_controller.h
+    include/vnm_terminal/app_support/terminal_settings_dialog.h
+    include/vnm_terminal/app_support/terminal_settings_model.h
     include/vnm_terminal/app_support/terminal_settings_window.h
 )
 
@@ -144,6 +146,10 @@ add_library(vnm_terminal_app_support STATIC
     src/terminal_file_drop.h
     src/terminal_settings_controller.cpp
     include/vnm_terminal/app_support/terminal_settings_controller.h
+    src/terminal_settings_dialog.cpp
+    include/vnm_terminal/app_support/terminal_settings_dialog.h
+    src/terminal_settings_model.cpp
+    include/vnm_terminal/app_support/terminal_settings_model.h
     src/terminal_settings_window.cpp
     src/terminal_settings_native_window_owner.h
     include/vnm_terminal/app_support/terminal_settings_window.h

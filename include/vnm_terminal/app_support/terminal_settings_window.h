@@ -19,13 +19,14 @@ class VNM_TerminalSurface;
 namespace vnm_terminal::terminal_app {
 
 class Terminal_settings_controller;
+class Terminal_settings_model;
 
 // Frameless, chrome-styled child window that hosts the terminal settings panel.
 // It owns a self-contained QML Window (its own VNM_ChromeTitleBar with drag,
 // resize, and close) created from the shared chrome runtime, and is shown on
 // demand when the user activates the titlebar settings (gear) button. The
-// panel binds its controls to the live surface and the settings controller,
-// which are exposed to the QML as context properties.
+// Preferences may be edited through a live surface or an application-owned
+// settings model; neither editor starts a terminal session.
 class Terminal_settings_window final : public QObject
 {
     Q_OBJECT
@@ -36,6 +37,12 @@ public:
     Terminal_settings_window(
         QQmlEngine&                   engine,
         VNM_TerminalSurface&          surface,
+        Terminal_settings_controller& controller,
+        bool                          interaction_diagnostics_unlocked = false,
+        QObject*                      parent = nullptr);
+    Terminal_settings_window(
+        QQmlEngine&                   engine,
+        Terminal_settings_model&      model,
         Terminal_settings_controller& controller,
         bool                          interaction_diagnostics_unlocked = false,
         QObject*                      parent = nullptr);
@@ -61,6 +68,12 @@ private slots:
     void handle_resize_requested(int edges);
 
 private:
+    void initialize(
+        QQmlEngine&                   engine,
+        QObject&                      preferences,
+        Terminal_settings_controller& controller,
+        bool                          has_live_surface,
+        bool                          interaction_diagnostics_unlocked);
     void apply_available_geometry(const QRect& available_geometry);
     void clamp_to_available_geometry(const QRect& available_geometry);
     void place_within_anchor(const QRect& native_anchor_geometry = {});

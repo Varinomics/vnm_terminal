@@ -3,6 +3,9 @@
 #include "vnm_terminal/app_support/terminal_display_settings.h"
 #include "vnm_terminal/app_support/terminal_settings_reconciler.h"
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
+#include "vnm_terminal/app_support/terminal_settings_dialog.h"
+#include "vnm_terminal/app_support/terminal_settings_model.h"
+#include "vnm_terminal/app_support/terminal_settings_window.h"
 
 #include "terminal_file_drop.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
@@ -16,18 +19,36 @@
 #include <QMimeData>
 #include <QMetaType>
 #include <QPoint>
+#include <QPointer>
+#include <QQmlApplicationEngine>
+#include <QQmlContext>
+#include <QQmlEngine>
+#include <QQmlExpression>
+#include <QQuickWindow>
 #include <QSettings>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 
 #include <cstddef>
 #include <limits>
+#include <memory>
 
 namespace terminal_app = vnm_terminal::terminal_app;
 
 class App_support_tests final : public QObject
 {
     Q_OBJECT
+
+    static QQuickWindow* settings_window()
+    {
+        for (QWindow* candidate : QGuiApplication::topLevelWindows()) {
+            if (candidate->objectName() == QStringLiteral("terminal_settings_window")) {
+                return qobject_cast<QQuickWindow*>(candidate);
+            }
+        }
+        return nullptr;
+    }
 
 private slots:
     void backend_output_capture_json_preserves_integer_precision()
@@ -702,6 +723,180 @@ private slots:
     {
         terminal_app::Terminal_settings_controller controller;
         QVERIFY(!controller.available_font_families().isEmpty());
+    }
+
+    void settings_model_edits_canonical_preferences_without_a_surface()
+    {
+        QTemporaryDir temporary_directory;
+        QVERIFY(temporary_directory.isValid());
+        QSettings store(temporary_directory.filePath(QStringLiteral("terminal.ini")), QSettings::IniFormat);
+        terminal_app::Terminal_display_settings preferences(true, &store);
+        terminal_app::Terminal_settings_model model;
+        model.set_values(preferences.values());
+        QSignalSpy changes(&model, &terminal_app::Terminal_settings_model::changes_requested);
+        QObject::connect(
+            &model,
+            &terminal_app::Terminal_settings_model::changes_requested,
+            &model,
+            [
+                &preferences,
+                &model
+            ](
+                const QVariantMap& delta)
+            {
+                preferences.apply_changes(delta, true);
+                model.set_values(preferences.values());
+            });
+
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("preferences"), &model);
+        const auto edit = [
+                &engine
+            ](
+                const QString& expression)
+            {
+                QQmlExpression edit_expression(engine.rootContext(), nullptr, expression);
+                edit_expression.evaluate();
+                return !edit_expression.hasError();
+            };
+        QVERIFY(edit(QStringLiteral("preferences.fontSize = 24")));
+        QCOMPARE(changes.size(), 1);
+        QCOMPARE(changes.at(0).at(0).toMap(),
+            QVariantMap({{QStringLiteral("font_size"), 24}}));
+        QCOMPARE(preferences.values().value(QStringLiteral("font_size")).toDouble(), 24.0);
+        QCOMPARE(terminal_app::load_terminal_settings_snapshot(store).font_size, 24.0);
+
+        QVERIFY(edit(QStringLiteral("preferences.fontSize = 24")));
+        QVERIFY(edit(QStringLiteral("preferences.fontSize = 3")));
+        QCOMPARE(changes.size(), 1);
+        QCOMPARE(model.value(QStringLiteral("fontSize")).toDouble(), 24.0);
+        QVERIFY(edit(QStringLiteral("preferences.colorScheme = 'Solarized Light'")));
+        QCOMPARE(changes.size(), 2);
+        QCOMPARE(terminal_app::load_terminal_settings_snapshot(store).color_scheme,
+            QStringLiteral("Solarized Light"));
+
+        QVERIFY(preferences.apply_changes({{QStringLiteral("font_size"), 18.0}}, true));
+        model.set_values(preferences.values());
+        QCOMPARE(changes.size(), 2);
+        QCOMPARE(model.value(QStringLiteral("fontSize")).toDouble(), 18.0);
+        QVERIFY(edit(QStringLiteral("preferences.invertBrightness = true")));
+        QCOMPARE(changes.size(), 3);
+        QCOMPARE(preferences.values().value(QStringLiteral("font_size")).toDouble(), 18.0);
+        QVERIFY(terminal_app::load_terminal_settings_snapshot(store).invert_brightness);
+    }
+
+    void settings_window_opens_and_edits_without_a_surface()
+    {
+        QQmlEngine engine;
+        QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+        terminal_app::Terminal_display_settings preferences(true);
+        terminal_app::Terminal_settings_model model;
+        model.set_values(preferences.values());
+        terminal_app::Terminal_settings_controller controller;
+        terminal_app::Terminal_settings_window settings(engine, model, controller);
+        QVERIFY2(settings.is_valid(), qPrintable(settings.error_string()));
+
+        QQuickWindow* window = settings_window();
+        QVERIFY(window != nullptr);
+        settings.show_window();
+        QCoreApplication::processEvents();
+        QVERIFY(window->isVisible());
+        QCOMPARE(window->title(), QStringLiteral("Terminal settings"));
+        QVERIFY(warnings.isEmpty());
+        QObject* font_size = window->findChild<QObject*>(QStringLiteral("font_size_spin"));
+        QVERIFY(font_size != nullptr);
+        QVERIFY(font_size->setProperty("value", 21));
+        QVERIFY(QMetaObject::invokeMethod(font_size, "valueModified"));
+        QCOMPARE(model.value(QStringLiteral("fontSize")).toInt(), 21);
+        QVERIFY(window->close());
+        settings.show_window();
+        QCoreApplication::processEvents();
+        QVERIFY(window->isVisible());
+        QVERIFY(warnings.isEmpty());
+    }
+
+    void application_settings_dialog_reuses_refreshes_and_releases_window()
+    {
+        QQmlApplicationEngine engine;
+        engine.loadData(R"qml(
+            import QtQuick
+            import QtQuick.Window
+            Window { visible: true; width: 640; height: 480 }
+        )qml");
+        QCOMPARE(engine.rootObjects().size(), 1);
+        auto* const anchor = qobject_cast<QWindow*>(engine.rootObjects().front());
+        QVERIFY(anchor != nullptr);
+        terminal_app::Terminal_display_settings preferences(true);
+        auto dialog = std::make_unique<terminal_app::Terminal_settings_dialog>(
+            &engine, QStringLiteral("Terminal host"));
+        QSignalSpy changes(dialog.get(), &terminal_app::Terminal_settings_dialog::changes_requested);
+        QObject::connect(
+            dialog.get(),
+            &terminal_app::Terminal_settings_dialog::changes_requested,
+            dialog.get(),
+            [
+                &preferences,
+                &dialog
+            ](
+                const QVariantMap& delta)
+            {
+                preferences.apply_changes(delta, true);
+                dialog->refresh(preferences.values(), true);
+            });
+        dialog->refresh(preferences.values(), true);
+        QVERIFY2(dialog->show_window(preferences.values(), true), qPrintable(dialog->error_string()));
+        QPointer<QQuickWindow> window = settings_window();
+        QVERIFY(window != nullptr);
+        QVERIFY(window->isVisible());
+        QCOMPARE(window->transientParent(), anchor);
+        QObject* const font_size = window->findChild<QObject*>(QStringLiteral("font_size_spin"));
+        QVERIFY(font_size != nullptr);
+        QVERIFY(font_size->setProperty("value", 21));
+        QVERIFY(QMetaObject::invokeMethod(font_size, "valueModified"));
+        QCOMPARE(changes.size(), 1);
+        QCOMPARE(preferences.values().value(QStringLiteral("font_size")).toInt(), 21);
+
+        QVERIFY(preferences.apply_changes({{QStringLiteral("font_size"), 18.0}}, true));
+        QVERIFY(preferences.set_dark_mode(false));
+        dialog->refresh(preferences.values(), false);
+        QCOMPARE(font_size->property("value").toInt(), 18);
+        QCOMPARE(window->property("dark_mode").toBool(), false);
+        QCOMPARE(changes.size(), 1);
+        QVERIFY(QMetaObject::invokeMethod(window, "close_requested"));
+        QVERIFY(!window->isVisible());
+        QVERIFY(dialog->show_window(preferences.values(), false));
+        QCOMPARE(settings_window(), window.data());
+        QVERIFY(window->isVisible());
+        dialog.reset();
+        QVERIFY(window.isNull());
+    }
+
+    void application_settings_dialog_releases_window_before_engine_is_gone()
+    {
+        auto engine = std::make_unique<QQmlApplicationEngine>();
+        terminal_app::Terminal_display_settings preferences(true);
+        terminal_app::Terminal_settings_dialog dialog(engine.get(), QStringLiteral("Terminal host"));
+        QVERIFY2(dialog.show_window(preferences.values(), true), qPrintable(dialog.error_string()));
+        QPointer<QQuickWindow> window = settings_window();
+        QVERIFY(window != nullptr);
+        engine.reset();
+        QVERIFY(window.isNull());
+        dialog.refresh(preferences.values(), false);
+        QVERIFY(!dialog.show_window(preferences.values(), false));
+        QVERIFY(!dialog.error_string().isEmpty());
+    }
+
+    void settings_model_and_surface_share_palette_previews()
+    {
+        terminal_app::Terminal_settings_model model;
+        VNM_TerminalSurface surface;
+        QCOMPARE(model.available_color_schemes(), surface.available_color_schemes());
+        for (const QString& scheme : model.available_color_schemes()) {
+            const QVariantMap preview = model.color_scheme_preview(scheme);
+            QCOMPARE(preview, surface.color_scheme_preview(scheme));
+            QCOMPARE(preview.value(QStringLiteral("name")).toString(), scheme);
+            QCOMPARE(preview.value(QStringLiteral("ansi")).toList().size(), 16);
+        }
     }
 };
 
