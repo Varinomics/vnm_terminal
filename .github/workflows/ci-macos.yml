@@ -339,6 +339,13 @@ jobs:
             vnm_terminal "${GITHUB_WORKSPACE}" \
             vnm_terminal/build/vnm_terminal.app/Contents/Resources/vnm_terminal_build_provenance.json
 
+      - name: Include bundled font notices
+        run: |
+          font_notices_dir="vnm_terminal/build/vnm_terminal.app/Contents/Resources/vnm_fonts"
+          mkdir -p "${font_notices_dir}/LICENSES"
+          cp vnm_fonts/THIRD_PARTY_NOTICES.md "${font_notices_dir}/"
+          cp vnm_fonts/LICENSES/*.txt "${font_notices_dir}/LICENSES/"
+
       - name: Sign and validate macOS app bundle
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
