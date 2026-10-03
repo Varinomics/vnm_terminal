@@ -118,31 +118,41 @@ Inside a SIXEL-enabled `vnm_terminal`, run Codex normally:
 ```powershell
 codex
 codex resume
+codex-pet
 ```
 
 Direct launches work too:
 
 ```sh
 vnm_terminal -- codex
+vnm_terminal -- codex-pet
 ```
 
 The application adds a private command directory to that terminal session's
-`PATH`. Its Codex adapter resolves the original command after removing that
-directory, preserving npm and other PATH-based wrappers. It sets
+`PATH`. Its adapter handles both `codex` and `codex-pet` and resolves the
+original command after removing that directory, preserving npm and other
+PATH-based wrappers. It sets
 `TERM=vnm-terminal-sixel` only while launching Codex and removes inherited
 identity hints that can mask SIXEL support. Arguments, working directory,
 standard streams, and exit status are preserved. Other commands keep the normal
 terminal type; no shell profile or Codex configuration file is edited.
 
-Windows integration requires PowerShell 7.3 or newer on `PATH` and supports
-Windows PowerShell, PowerShell, and cmd. Windows PowerShell forwards Codex to
-the installed PowerShell 7.3+ host. Without it, or if the private command directory cannot be
-prepared, ordinary shells still start without the adapter; direct Codex launches
-report the setup problem. Linux and macOS use `/bin/sh` and
+Windows integration supports the built-in Windows PowerShell 5.1, installed
+PowerShell, and cmd. Direct launches use an installed PowerShell on `PATH` when
+available and otherwise use Windows PowerShell. A PowerShell script wrapper
+executes in the caller's PowerShell host and receives its arguments exactly;
+any native command forwarding inside that wrapper follows the host's own
+argument rules. Native executables receive their arguments exactly, including
+empty arguments, quotes, and trailing backslashes. cmd retains its original
+working directory, `PATH`, and `PATHEXT` lookup and command parsing.
+If the private command directory cannot be prepared, ordinary shells still
+start without the adapter; direct Codex launches report the setup problem.
+Linux and macOS use `/bin/sh` and
 ordinary shell PATH lookup. Shell aliases/functions and commands invoked by an
 explicit path inside a shell retain their usual resolution; they can bypass
 the adapter. Direct application launches also adapt explicit paths named
-`codex` and, on Windows, `codex.exe`, `codex.cmd`, or `codex.ps1`.
+`codex` or `codex-pet` and, on Windows, their `.exe`, `.cmd`, `.bat`, or `.ps1`
+forms.
 
 Each invocation also passes
 `-c 'shell_environment_policy.set.TERM="xterm-256color"'`, so commands launched
@@ -160,6 +170,10 @@ from `<vnm_terminal/app_support/codex_command_environment.h>`, linked through
 `vnm_terminal::vnm_terminal_app_support`. Call `prepare()` on the final terminal
 command and environment before starting its backend, and retain the adapter for
 the terminal session's lifetime so its private commands remain available.
+The Windows child launcher is embedded in that library. Rebuild embedding
+applications, including Logonomic and Soter, with the updated app support
+dependency to include the adapter changes; no separate launcher deployment is
+required.
 
 ## Source build
 

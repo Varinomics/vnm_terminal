@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -20,6 +21,8 @@
 #endif
 
 namespace {
+
+using vnm_terminal::terminal_app::Codex_command_environment;
 
 const QStringList identity_hints = {
     "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "GHOSTTY_RESOURCES_DIR",
@@ -74,15 +77,30 @@ int run_fixture(QStringList arguments)
     if (!arguments.isEmpty() && arguments.front() == "--fixture") {
         arguments.removeFirst();
     }
+    else
+    if (!arguments.isEmpty() && arguments.front() == "--fixture-encoded") {
+        require(arguments.size() == 2, "fixture encoded argument count");
+        const QJsonDocument document = QJsonDocument::fromJson(
+            QByteArray::fromBase64(arguments.at(1).toLatin1()));
+        require(document.isArray(), "fixture encoded arguments must be an array");
+        arguments.clear();
+        for (const QJsonValue& argument : document.array()) {
+            require(argument.isString(), "fixture argument must be a string");
+            arguments.append(argument.toString());
+        }
+    }
     QFile input;
     require(input.open(stdin, QIODevice::ReadOnly), "fixture stdin");
     const QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     QJsonObject fields;
-    for (const QString& name : identity_hints + multiplexer_hints + QStringList{"TERM", "PATH", "VNM_WRAPPER"}) {
+    for (const QString& name : identity_hints + multiplexer_hints +
+        QStringList{"TERM", "PATH", "VNM_WRAPPER", "VNM_POWERSHELL_HOST"})
+    {
         if (environment.contains(name)) {
             fields.insert(name, environment.value(name));
         }
     }
+    fields.insert("VNM_WRAPPER", environment.value("VNM_WRAPPER", "native"));
     const QJsonObject result{
         {"arguments", QJsonArray::fromStringList(arguments)},
         {"environment", fields},
@@ -94,14 +112,10 @@ int run_fixture(QStringList arguments)
     return 37;
 }
 
-void check_launch(
+QJsonObject launch_fixture(
     const QStringList& command,
     const QProcessEnvironment& environment,
-    const QString& working_directory,
-    const QStringList& arguments,
-    const QString& original_path,
-    const QString& wrapper,
-    const QString& expected_input = QStringLiteral("input from the terminal\n"))
+    const QString& working_directory)
 {
     QProcess child;
     child.setProcessEnvironment(environment);
@@ -124,7 +138,23 @@ void check_launch(
     const QByteArray output = child.readAllStandardOutput();
     const QString diagnostic = QString::fromUtf8(child.readAllStandardError()) + QString::fromUtf8(output);
     require(child.exitStatus() == QProcess::NormalExit && child.exitCode() == 37, diagnostic);
-    const QJsonObject result = QJsonDocument::fromJson(output).object();
+    const QJsonDocument document = QJsonDocument::fromJson(output);
+    require(document.isObject(), diagnostic);
+    return document.object();
+}
+
+void check_launch(
+    const QStringList& command,
+    const QProcessEnvironment& environment,
+    const QString& working_directory,
+    const QStringList& arguments,
+    const QString& original_path,
+    const QString& wrapper,
+    const QString& expected_input = QStringLiteral("input from the terminal\n"),
+    const QString& expected_host = QString())
+{
+    const QJsonObject result = launch_fixture(command, environment, working_directory);
+    const QString diagnostic = QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact));
     const QStringList expected = QStringList{
         "-c", "shell_environment_policy.set.TERM='xterm-256color'",
     } + arguments;
@@ -136,13 +166,19 @@ void check_launch(
     const QString child_path = fields.value("PATH").toString();
 #if defined(Q_OS_WIN)
     // PowerShell itself adds PSHOME when it starts, before the adapter runs.
-    const QString powershell_directory = QDir::toNativeSeparators(
-        QFileInfo(QStandardPaths::findExecutable("pwsh.exe")).absolutePath());
-    require(child_path == original_path || child_path == powershell_directory + ';' + original_path, diagnostic);
+    const QString host_directory = child_path.section(';', 0, 0);
+    const bool host_prefix =
+        (QFileInfo::exists(QDir(host_directory).filePath("powershell.exe")) ||
+         QFileInfo::exists(QDir(host_directory).filePath("pwsh.exe"))) &&
+        child_path.section(';', 1) == original_path;
+    require(child_path == original_path || host_prefix, diagnostic);
 #else
     require(child_path == original_path, diagnostic);
 #endif
     require(fields.value("VNM_WRAPPER").toString() == wrapper, diagnostic);
+    if (!expected_host.isEmpty()) {
+        require(same_existing_directory(fields.value("VNM_POWERSHELL_HOST").toString(), expected_host), diagnostic);
+    }
     for (const QString& name : identity_hints) {
         require(!fields.contains(name), name + ": " + diagnostic);
     }
@@ -151,10 +187,70 @@ void check_launch(
     }
 }
 
+#if defined(Q_OS_WIN)
+QStringList original_cmd_arguments(
+    const QStringList& command, QProcessEnvironment environment,
+    const QString& working_directory, const QString& original_path)
+{
+    environment.insert("PATH", original_path);
+    const QJsonObject original = launch_fixture(command, environment, working_directory);
+    QStringList arguments;
+    for (const QJsonValue& argument : original.value("arguments").toArray()) {
+        arguments.append(argument.toString());
+    }
+    return arguments;
+}
+
+void write_powershell_fixture(const QString& path, const QString& executable)
+{
+    // Observe argv at the original script boundary, before the host's native argument forwarding.
+    const QString native_command = "& " + quote_literal(executable) + " --fixture-encoded $payload";
+    const QString script =
+        "$env:VNM_WRAPPER = 'powershell'\n"
+        "$env:VNM_POWERSHELL_HOST = $PSHOME\n"
+        "$arguments_json = ConvertTo-Json -Compress -InputObject @($args)\n"
+        "$payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($arguments_json))\n"
+        "if ($MyInvocation.ExpectingInput) { $input | " + native_command +
+        " } else { " + native_command + " }\nexit $LASTEXITCODE\n";
+    write_file(path, QByteArray("\xEF\xBB\xBF") + script.toUtf8());
+}
+
+QString powershell_invocation(const QString& command, const QStringList& arguments, bool pipeline = false)
+{
+    QString invocation = "$PSNativeCommandUseErrorActionPreference = $true; ";
+    if (pipeline) {
+        invocation += "'input from the terminal' | ";
+    }
+    invocation += "& " + quote_literal(command);
+    for (const QString& argument : arguments) {
+        invocation += ' ' + quote_literal(argument);
+    }
+    invocation += "; $code = $LASTEXITCODE; "
+        "if ($env:TERM -ne 'xterm-256color' -or $env:TERM_PROGRAM -ne 'inherited-terminal') { exit 92 }; "
+        "exit $code";
+    return invocation;
+}
+
+void check_powershell_launches(
+    const QString& host, const QString& command,
+    const QProcessEnvironment& environment, const QString& working_directory,
+    const QStringList& arguments, const QString& original_path,
+    const QString& wrapper)
+{
+    const QString host_directory = wrapper == "powershell" ? QFileInfo(host).absolutePath() : QString();
+    const QStringList shell{
+        host, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-OutputFormat", "Text", "-Command"};
+    check_launch(shell + QStringList{powershell_invocation(command, arguments)}, environment,
+        working_directory, arguments, original_path, wrapper, "input from the terminal\n", host_directory);
+    check_launch(shell + QStringList{powershell_invocation(command, arguments, true)}, environment,
+        working_directory, arguments, original_path, wrapper, "input from the terminal\r\n", host_directory);
+}
+#endif
+
 void run_tests()
 {
     const QProcessEnvironment parent = QProcessEnvironment::systemEnvironment();
-    QTemporaryDir fixture;
+    QTemporaryDir fixture(QDir::temp().filePath("vnm codex \u03bb-XXXXXX"));
     require(fixture.isValid(), fixture.errorString());
     QTemporaryDir other_directory;
     require(other_directory.isValid(), other_directory.errorString());
@@ -163,10 +259,27 @@ void run_tests()
     const QString missing_directory = fixture.filePath("missing");
     require(!same_existing_directory(missing_directory, missing_directory), "missing cwd accepted");
     const QString executable = QCoreApplication::applicationFilePath();
-    const QString original_path = fixture.path() + QDir::listSeparator() + parent.value("PATH");
+    QString system_path = parent.value("PATH");
+#if defined(Q_OS_WIN)
+    const QString windows_powershell = QDir(parent.value("SystemRoot")).filePath(
+        QStringLiteral("System32/WindowsPowerShell/v1.0/powershell.exe"));
+    require(QFileInfo::exists(windows_powershell), "stock Windows PowerShell is missing");
+    const QString optional_powershell = QStandardPaths::findExecutable("pwsh.exe");
+    QStringList stock_path;
+    for (const QString& entry : system_path.split(';', Qt::KeepEmptyParts)) {
+        if (!QFileInfo::exists(QDir(entry).filePath("pwsh.exe"))) {
+            stock_path.append(entry);
+        }
+    }
+    system_path = stock_path.join(';');
+    require(QStandardPaths::findExecutable("pwsh.exe", stock_path).isEmpty(), "stock PATH contains pwsh");
+#endif
+    const QString original_path = fixture.path() + QDir::listSeparator() + system_path;
     QProcessEnvironment environment = parent;
     environment.insert("PATH", original_path);
     environment.insert("TERM", "xterm-256color");
+    environment.remove("VNM_WRAPPER");
+    environment.remove("VNM_POWERSHELL_HOST");
     for (const QString& name : identity_hints) {
         environment.insert(name, "inherited-terminal");
     }
@@ -175,31 +288,35 @@ void run_tests()
     }
 
 #if defined(Q_OS_WIN)
-    const QString powershell = QStandardPaths::findExecutable("pwsh.exe");
-    require(!powershell.isEmpty(), "This Windows compatibility gate requires PowerShell 7.3 or newer.");
-    write_file(fixture.filePath("codex"), "#!/bin/sh\nexit 93\n");
-    write_file(fixture.filePath("codex.ps1"), (
-        "$env:VNM_WRAPPER = 'powershell'\n& " + quote_literal(executable) +
-        " --fixture @args\nexit $LASTEXITCODE\n").toUtf8());
-    write_file(fixture.filePath("codex.cmd"), (
-        "@set VNM_WRAPPER=cmd\r\n@\"" + QDir::toNativeSeparators(executable) +
-        "\" --fixture %*\r\n@exit /b %errorlevel%\r\n").toUtf8());
+    environment.insert("PATHEXT", ".COM;.EXE;.BAT;.CMD");
+    for (const QString& name : QStringList{"codex", "codex-pet"}) {
+        write_file(fixture.filePath(name), "#!/bin/sh\nexit 93\n");
+        write_powershell_fixture(fixture.filePath(name + ".ps1"), executable);
+        write_file(fixture.filePath(name + ".cmd"), (
+            "@set VNM_WRAPPER=cmd\r\n@\"" + QDir::toNativeSeparators(executable) +
+            "\" --fixture %*\r\n@exit /b %errorlevel%\r\n").toUtf8());
+    }
     const QString expected_wrapper = "powershell";
-    QStringList shell{powershell, "-NoLogo", "-NoProfile"};
+    const QStringList shell{windows_powershell, "-NoLogo", "-NoProfile"};
 #else
-    write_file(fixture.filePath("codex"), (
-        "#!/bin/sh\nVNM_WRAPPER=posix\nexport VNM_WRAPPER\nexec " + quote_literal(executable) +
-        " --fixture \"$@\"\n").toUtf8());
+    for (const QString& name : QStringList{"codex", "codex-pet"}) {
+        write_file(fixture.filePath(name), (
+            "#!/bin/sh\nVNM_WRAPPER=posix\nexport VNM_WRAPPER\nexec " + quote_literal(executable) +
+            " --fixture \"$@\"\n").toUtf8());
+    }
     const QString expected_wrapper = "posix";
     QStringList shell{"/bin/sh"};
 #endif
     const QStringList arguments{
-        "", "with spaces", "embedded\"quote", "single'quote", "--flag", "unicode-\u03bb"};
+        "", "with spaces", "embedded\"quote", "single'quote", "--flag", "unicode-\u03bb",
+        "C:\\working files\\", "backslashes\\\\before\\\"quote", "percent%value",
+        "amp&ersand", "pipe|value", "caret^value", "bang!value", "(parentheses)",
+        "dollar$value", "line\nbreak"};
     QStringList direct = QStringList{"codex"} + arguments;
     QString error;
     QString private_path;
     {
-        vnm_terminal::terminal_app::Codex_command_environment commands;
+        Codex_command_environment commands;
         require(commands.prepare(direct, environment, error), error);
         private_path = environment.value("PATH").section(QDir::listSeparator(), 0, 0);
         require(QDir(private_path).exists(), "private command directory missing");
@@ -216,76 +333,132 @@ void run_tests()
 #endif
 
         const QProcessEnvironment shell_environment = environment;
-        QStringList shell_command = shell;
 #if defined(Q_OS_WIN)
-        QString invocation = "$PSNativeCommandUseErrorActionPreference = $true; codex";
-        for (const QString& argument : arguments) {
-            invocation += ' ' + quote_literal(argument);
+        check_powershell_launches(windows_powershell, "codex", shell_environment,
+            fixture.path(), arguments, original_path, expected_wrapper);
+        if (!optional_powershell.isEmpty()) {
+            check_powershell_launches(optional_powershell, "codex", shell_environment,
+                fixture.path(), arguments, original_path, expected_wrapper);
         }
-        invocation += "; $code = $LASTEXITCODE; "
-            "if ($env:TERM -ne 'xterm-256color' -or $env:TERM_PROGRAM -ne 'inherited-terminal') { exit 92 }; "
-            "exit $code";
-        shell_command += QStringList{"-Command", invocation};
 #else
+        QStringList shell_command = shell;
         shell_command += QStringList{"-c", "codex \"$@\"", "fixture"} + arguments;
-#endif
         check_launch(shell_command, shell_environment, fixture.path(), arguments, original_path, expected_wrapper);
-#if defined(Q_OS_WIN)
-        const QString windows_powershell = QDir(qEnvironmentVariable("SystemRoot")).filePath(
-            QStringLiteral("System32/WindowsPowerShell/v1.0/powershell.exe"));
-        QStringList windows_shell_command = shell_command;
-        windows_shell_command.front() = windows_powershell;
-        check_launch(windows_shell_command, shell_environment, fixture.path(), arguments,
-            original_path, expected_wrapper);
 #endif
 
-        QProcessEnvironment explicit_environment = environment;
-        explicit_environment.insert("PATH", original_path);
+        for (const QString& name : QStringList{"codex", "codex-pet"}) {
+            QProcessEnvironment explicit_environment = environment;
+            explicit_environment.insert("PATH", original_path);
 #if defined(Q_OS_WIN)
-        QStringList explicit_command = QStringList{fixture.filePath("codex.ps1")} + arguments;
+            QStringList explicit_command = QStringList{fixture.filePath(name + ".ps1")} + arguments;
 #else
-        QStringList explicit_command = QStringList{fixture.filePath("codex")} + arguments;
+            QStringList explicit_command = QStringList{fixture.filePath(name)} + arguments;
 #endif
-        vnm_terminal::terminal_app::Codex_command_environment explicit_commands;
-        require(explicit_commands.prepare(explicit_command, explicit_environment, error), error);
-        check_launch(explicit_command, explicit_environment, fixture.path(), arguments, original_path, expected_wrapper);
+            Codex_command_environment explicit_commands;
+            require(explicit_commands.prepare(explicit_command, explicit_environment, error), error);
+            check_launch(explicit_command, explicit_environment,
+                fixture.path(), arguments, original_path, expected_wrapper);
+        }
 
 #if defined(Q_OS_WIN)
         // The default cmd shell must retain its own PATHEXT wrapper choice.
-        const QStringList cmd_arguments{"with spaces", "--flag"};
-        const QStringList cmd{
-            qEnvironmentVariable("COMSPEC"), "/d", "/c", "codex \"with spaces\" --flag",
-        };
-        QTemporaryDir working_directory;
-        require(working_directory.isValid(), working_directory.errorString());
-        check_launch(cmd, environment, working_directory.path(), cmd_arguments, original_path, "cmd");
+        const QString cmd_tail =
+            " \"\" \"with spaces\" --flag \"unicode-\u03bb\" \"C:\\working files\\\\\" "
+            "\"amp&ersand\" \"pipe|value\" \"caret^value\" \"bang!value\" \"(parentheses)\" "
+            "\"percent%value\" \"dollar$value\" percent%value dollar$value unquoted!value unquoted^^caret";
+        for (const QString& name : QStringList{"codex", "codex-pet"}) {
+            const QStringList cmd{parent.value("COMSPEC"), "/d", "/v:off", "/c", name + cmd_tail};
+            const QStringList cmd_arguments = original_cmd_arguments(
+                cmd, environment, other_directory.path(), original_path);
+            check_launch(cmd,
+                environment, other_directory.path(), cmd_arguments, original_path, "cmd");
 
-        // npm's PowerShell shim forwards object pipelines; raw process input must stay raw.
-        const QString native_command = "& " + quote_literal(executable) + " --fixture @args";
-        write_file(fixture.filePath("codex.ps1"), (
-            "$env:VNM_WRAPPER = 'powershell'\nif ($MyInvocation.ExpectingInput) { $input | " +
-            native_command + " } else { " + native_command + " }\nexit $LASTEXITCODE\n").toUtf8());
-        check_launch(direct, environment, fixture.path(), arguments, original_path, "powershell");
-        QString pipeline_invocation = "'input from the terminal' | codex";
-        for (const QString& argument : arguments) {
-            pipeline_invocation += ' ' + quote_literal(argument);
+            QProcessEnvironment explicit_cmd_environment = environment;
+            explicit_cmd_environment.insert("PATH", original_path);
+            const QStringList direct_cmd_arguments{"", "with spaces", "--flag", "amp&ersand", "unicode-\u03bb"};
+            QStringList explicit_cmd = QStringList{fixture.filePath(name + ".cmd")} + direct_cmd_arguments;
+            require(commands.prepare(explicit_cmd, explicit_cmd_environment, error), error);
+            check_launch(explicit_cmd, explicit_cmd_environment,
+                other_directory.path(), direct_cmd_arguments, original_path, "cmd");
         }
-        pipeline_invocation += "; exit $LASTEXITCODE";
-        check_launch(shell + QStringList{"-Command", pipeline_invocation}, environment,
-            fixture.path(), arguments, original_path, "powershell", "input from the terminal\r\n");
-        check_launch(
-            QStringList{windows_powershell, "-NoLogo", "-NoProfile", "-Command", pipeline_invocation},
-            environment, fixture.path(), arguments, original_path, "powershell", "input from the terminal\r\n");
+#endif
 
-        QProcessEnvironment unavailable_environment = parent;
-        unavailable_environment.insert("PATH", fixture.path());
-        const QProcessEnvironment unmodified = unavailable_environment;
-        QStringList ordinary{qEnvironmentVariable("COMSPEC")};
-        vnm_terminal::terminal_app::Codex_command_environment unavailable;
-        require(unavailable.prepare(ordinary, unavailable_environment, error), error);
-        require(unavailable_environment == unmodified, "missing PowerShell changed ordinary shell environment");
-        QStringList unsupported{"codex"};
-        require(!unavailable.prepare(unsupported, unavailable_environment, error), "missing prerequisite accepted");
+        QProcessEnvironment pet_environment = environment;
+        pet_environment.insert("PATH", original_path);
+        QStringList pet_command = QStringList{"codex-pet"} + arguments;
+        require(commands.prepare(pet_command, pet_environment, error), error);
+        check_launch(pet_command, pet_environment, fixture.path(), arguments, original_path, expected_wrapper);
+#if defined(Q_OS_WIN)
+        check_powershell_launches(windows_powershell, "codex-pet", pet_environment,
+            fixture.path(), arguments, original_path, expected_wrapper);
+        if (!optional_powershell.isEmpty()) {
+            check_powershell_launches(optional_powershell, "codex-pet", pet_environment,
+                fixture.path(), arguments, original_path, expected_wrapper);
+        }
+
+        // Native executables must receive every argument directly, without the fixture's encoded transport.
+        for (const QString& name : QStringList{"codex", "codex-pet"}) {
+            require(QFile::remove(fixture.filePath(name + ".ps1")), "remove PowerShell fixture");
+            require(QFile::copy(executable, fixture.filePath(name + ".exe")), "copy native fixture");
+            QProcessEnvironment native_environment = environment;
+            native_environment.insert("PATH", original_path);
+            QStringList native_command = QStringList{fixture.filePath(name + ".exe")} + arguments;
+            require(commands.prepare(native_command, native_environment, error), error);
+            check_launch(native_command, native_environment, fixture.path(), arguments, original_path, "native");
+            check_powershell_launches(windows_powershell, name, native_environment,
+                fixture.path(), arguments, original_path, "native");
+            if (!optional_powershell.isEmpty()) {
+                check_powershell_launches(optional_powershell, name, native_environment,
+                    fixture.path(), arguments, original_path, "native");
+            }
+
+            // A prompt can approach the native command-line limit without an encoded-command size penalty.
+            const QStringList long_arguments{"--prompt", QString(16000, QLatin1Char('p'))};
+            QStringList long_command = QStringList{fixture.filePath(name + ".exe")} + long_arguments;
+            QProcessEnvironment long_environment = environment;
+            long_environment.insert("PATH", original_path);
+            require(commands.prepare(long_command, long_environment, error), error);
+            check_launch(long_command, long_environment,
+                fixture.path(), long_arguments, original_path, "native");
+            const QStringList long_shell{
+                windows_powershell, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                powershell_invocation(name, long_arguments)};
+            check_launch(long_shell, long_environment,
+                fixture.path(), long_arguments, original_path, "native");
+            if (!optional_powershell.isEmpty()) {
+                QStringList optional_long_shell = long_shell;
+                optional_long_shell.front() = optional_powershell;
+                check_launch(optional_long_shell, long_environment,
+                    fixture.path(), long_arguments, original_path, "native");
+            }
+
+            const QString native_cmd_tail = cmd_tail +
+                " unquoted^&value unquoted^|value unquoted^^value ^(unquoted-parentheses^)";
+            const QStringList cmd{parent.value("COMSPEC"), "/d", "/v:off", "/c", name + native_cmd_tail};
+            const QStringList native_cmd_arguments = original_cmd_arguments(
+                cmd, native_environment, other_directory.path(), original_path);
+            check_launch(cmd,
+                native_environment, other_directory.path(), native_cmd_arguments, original_path, "native");
+
+            // cmd searches cwd before PATH and uses the caller's PATHEXT order for PATH matches.
+            QProcessEnvironment cmd_environment = native_environment;
+            cmd_environment.insert("PATHEXT", ".CMD;.EXE;.BAT;.COM");
+            const QStringList wrapper_cmd{parent.value("COMSPEC"), "/d", "/v:off", "/c", name + cmd_tail};
+            const QStringList cmd_arguments = original_cmd_arguments(
+                wrapper_cmd, cmd_environment, other_directory.path(), original_path);
+            check_launch(wrapper_cmd,
+                cmd_environment, other_directory.path(), cmd_arguments, original_path, "cmd");
+            require(QFile::copy(executable, other_directory.filePath(name + ".exe")), "copy cwd native fixture");
+            const QStringList cwd_cmd{
+                parent.value("COMSPEC"), "/d", "/v:off", "/s", "/c",
+                "\"\"" + QDir::toNativeSeparators(QDir(private_path).filePath(name + ".exe")) +
+                    "\"" + native_cmd_tail + "\""};
+            check_launch(cwd_cmd,
+                cmd_environment, other_directory.path(), native_cmd_arguments, original_path, "native");
+        }
+#else
+        check_launch(shell + QStringList{"-c", "codex-pet \"$@\"", "fixture"} + arguments,
+            pet_environment, fixture.path(), arguments, original_path, expected_wrapper);
 #endif
         // A failed optional shim write must not prevent an unrelated shell from starting.
 #if defined(Q_OS_WIN)
@@ -314,7 +487,10 @@ int main(int argc, char** argv)
     QCoreApplication application(argc, argv);
     try {
         const QStringList arguments = application.arguments().mid(1);
-        if (arguments.value(0) == "--fixture") {
+        const QString executable_name = QFileInfo(application.applicationFilePath()).completeBaseName();
+        if (arguments.value(0) == "--fixture" || arguments.value(0) == "--fixture-encoded" ||
+            executable_name == "codex" || executable_name == "codex-pet")
+        {
             return run_fixture(arguments);
         }
         run_tests();

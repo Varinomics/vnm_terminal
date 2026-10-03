@@ -6,17 +6,12 @@
 #include <QResource>
 #include <QStandardPaths>
 
-#if defined(Q_OS_WIN)
-#include <Windows.h>
-#include <winver.h>
-#endif
-
-#include <string>
-#include <vector>
-
 static bool initialize_codex_resources()
 {
     Q_INIT_RESOURCE(codex_commands);
+#if defined(Q_OS_WIN)
+    Q_INIT_RESOURCE(codex_launcher);
+#endif
     return true;
 }
 
@@ -25,41 +20,26 @@ namespace {
 
 bool names_codex(const QString& program)
 {
-    const QString name = QFileInfo(program).fileName();
+    QString name = QFileInfo(program).fileName();
 #if defined(Q_OS_WIN)
-    return
-        name.compare(QStringLiteral("codex"),     Qt::CaseInsensitive) == 0 ||
-        name.compare(QStringLiteral("codex.exe"), Qt::CaseInsensitive) == 0 ||
-        name.compare(QStringLiteral("codex.cmd"), Qt::CaseInsensitive) == 0 ||
-        name.compare(QStringLiteral("codex.ps1"), Qt::CaseInsensitive) == 0;
-#else
-    return name == QStringLiteral("codex");
+    name = name.toLower();
+    for (const QString& extension : {
+        QStringLiteral(".exe"), QStringLiteral(".cmd"), QStringLiteral(".bat"), QStringLiteral(".ps1")})
+    {
+        if (name.endsWith(extension)) {
+            name.chop(extension.size());
+            break;
+        }
+    }
 #endif
+    return name == QStringLiteral("codex") || name == QStringLiteral("codex-pet");
 }
 
 #if defined(Q_OS_WIN)
-bool supports_native_arguments(const QString& executable)
+QString powershell_literal(QString value)
 {
-    const std::wstring path = QDir::toNativeSeparators(executable).toStdWString();
-    DWORD unused = 0;
-    const DWORD size = GetFileVersionInfoSizeW(path.c_str(), &unused);
-    if (size == 0) {
-        return false;
-    }
-    std::vector<unsigned char> data(size);
-    if (!GetFileVersionInfoW(path.c_str(), 0, size, data.data())) {
-        return false;
-    }
-    VS_FIXEDFILEINFO* version = nullptr;
-    UINT version_size = 0;
-    if (!VerQueryValueW(data.data(), L"\\", reinterpret_cast<void**>(&version), &version_size) ||
-        version_size < sizeof(VS_FIXEDFILEINFO))
-    {
-        return false;
-    }
-    const unsigned major = HIWORD(version->dwFileVersionMS);
-    const unsigned minor = LOWORD(version->dwFileVersionMS);
-    return major > 7 || (major == 7 && minor >= 3);
+    value.replace(QLatin1Char('\''), QStringLiteral("''"));
+    return QLatin1Char('\'') + value + QLatin1Char('\'');
 }
 #endif
 
@@ -77,41 +57,50 @@ bool Codex_command_environment::prepare(
     };
     const QString path = environment.value(QStringLiteral("PATH"));
 #if defined(Q_OS_WIN)
-    const QString powershell = QStandardPaths::findExecutable(
+    QString powershell = QStandardPaths::findExecutable(
         QStringLiteral("pwsh.exe"), path.split(QDir::listSeparator(), Qt::KeepEmptyParts));
-    if (powershell.isEmpty() || !supports_native_arguments(powershell)) {
-        return fail_setup(QStringLiteral(
-            "Automatic Codex SIXEL support requires PowerShell 7.3 or newer on PATH."));
+    if (powershell.isEmpty()) {
+        powershell = QDir(environment.value(QStringLiteral("SystemRoot"))).filePath(
+            QStringLiteral("System32/WindowsPowerShell/v1.0/powershell.exe"));
+    }
+    if (!QFileInfo::exists(powershell)) {
+        return fail_setup(QStringLiteral("Could not find Windows PowerShell for the Codex adapter."));
     }
     const QStringList files = {
         QStringLiteral("codex.ps1"),
-        QStringLiteral("codex.cmd"),
+        QStringLiteral("codex.exe"),
+        QStringLiteral("codex-pet.ps1"),
+        QStringLiteral("codex-pet.exe"),
         QStringLiteral("launch_codex.ps1"),
-        QStringLiteral("start_codex.ps1"),
+        QStringLiteral("codex_launcher.exe"),
     };
 #else
-    const QStringList files = {QStringLiteral("codex"), QStringLiteral("launch_codex.sh")};
+    const QStringList files = {
+        QStringLiteral("codex"), QStringLiteral("codex-pet"), QStringLiteral("launch_codex.sh")};
 #endif
     if (!m_directory.isValid()) {
         return fail_setup(QStringLiteral("Could not prepare terminal-local Codex commands: %1")
             .arg(m_directory.errorString()));
     }
     for (const QString& name : files) {
-        QFile resource(QStringLiteral(":/vnm_terminal/codex/") + name);
+        QString source_name = name;
+        source_name.replace(QStringLiteral("codex-pet"), QStringLiteral("codex"));
+#if defined(Q_OS_WIN)
+        if (source_name == QStringLiteral("codex.exe")) {
+            source_name = QStringLiteral("codex_launcher.exe");
+        }
+#endif
+        QFile resource(QStringLiteral(":/vnm_terminal/codex/") + source_name);
         if (!resource.open(QIODevice::ReadOnly)) {
             return fail_setup(QStringLiteral("Could not read the bundled Codex command: %1").arg(name));
         }
         QByteArray content = resource.readAll();
-#if defined(Q_OS_WIN)
-        if (name == QStringLiteral("codex.cmd")) {
-            QString escaped_path = QDir::toNativeSeparators(powershell);
-            escaped_path.replace(QLatin1Char('%'), QStringLiteral("%%"));
-            content.replace("@POWERSHELL@", escaped_path.toUtf8());
+        if (source_name == QStringLiteral("codex") || source_name == QStringLiteral("codex.ps1"))
+        {
+            content.replace("@CODEX_COMMAND@", name.startsWith(QStringLiteral("codex-pet")) ? "codex-pet" : "codex");
         }
-        if (name == QStringLiteral("codex.ps1")) {
-            QString escaped_path = QDir::toNativeSeparators(powershell);
-            escaped_path.replace(QLatin1Char('\''), QStringLiteral("''"));
-            content.replace("@POWERSHELL@", escaped_path.toUtf8());
+#if defined(Q_OS_WIN)
+        if (name.endsWith(QStringLiteral(".ps1"))) {
             // Windows PowerShell needs a BOM for non-ASCII installation paths.
             content.prepend("\xEF\xBB\xBF");
         }
@@ -128,16 +117,31 @@ bool Codex_command_environment::prepare(
         }
 #endif
     }
-    environment.insert(QStringLiteral("PATH"), m_directory.path() + QDir::listSeparator() + path);
     if (direct_codex) {
 #if defined(Q_OS_WIN)
+        QString invocation = QStringLiteral("& ") + powershell_literal(
+            m_directory.filePath(QStringLiteral("launch_codex.ps1")));
+        for (const QString& argument : command) {
+            invocation += QLatin1Char(' ') + powershell_literal(argument);
+        }
+        invocation += QStringLiteral("; exit $LASTEXITCODE");
+        // Script literals preserve argv without -File's quoting losses or encoded command-line size overhead.
+        const QByteArray content = QByteArray("\xEF\xBB\xBF") + invocation.toUtf8() + '\n';
+        QFile direct_script(m_directory.filePath(QStringLiteral("direct_codex.ps1")));
+        if (!direct_script.open(QIODevice::WriteOnly) || direct_script.write(content) != content.size()) {
+            return fail_setup(QStringLiteral("Could not prepare the direct Codex invocation: %1")
+                .arg(direct_script.errorString()));
+        }
+        direct_script.close();
         command = QStringList{
             powershell,
             QStringLiteral("-NoLogo"),
             QStringLiteral("-NoProfile"),
+            QStringLiteral("-ExecutionPolicy"),
+            QStringLiteral("Bypass"),
             QStringLiteral("-File"),
-            m_directory.filePath(QStringLiteral("start_codex.ps1")),
-        } + command;
+            direct_script.fileName(),
+        };
 #else
         command = QStringList{
             QStringLiteral("/bin/sh"),
@@ -145,6 +149,7 @@ bool Codex_command_environment::prepare(
         } + command;
 #endif
     }
+    environment.insert(QStringLiteral("PATH"), m_directory.path() + QDir::listSeparator() + path);
     return true;
 }
 

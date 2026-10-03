@@ -118,6 +118,42 @@ qt_add_resources(vnm_terminal_codex_resource_sources
     resources/codex_commands.qrc
 )
 
+if(WIN32)
+    # Embed the launcher so consumers of app_support need no separately deployed executable.
+    add_executable(vnm_terminal_codex_launcher src/windows_codex_launcher.cpp)
+    set_target_properties(vnm_terminal_codex_launcher PROPERTIES
+        AUTOMOC OFF
+        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/codex_launcher/$<CONFIG>"
+    )
+    if(MINGW)
+        target_link_options(vnm_terminal_codex_launcher PRIVATE
+            -municode -static -static-libgcc -static-libstdc++)
+    endif()
+    set(vnm_terminal_codex_launcher_resource
+        "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>/codex_launcher_resource.cpp")
+    file(GENERATE
+        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/codex_launcher_$<CONFIG>.qrc"
+        CONTENT [=[
+<RCC>
+  <qresource prefix="/vnm_terminal/codex">
+    <file alias="codex_launcher.exe">../codex_launcher/$<CONFIG>/vnm_terminal_codex_launcher.exe</file>
+  </qresource>
+</RCC>
+]=])
+    add_custom_command(
+        OUTPUT "${vnm_terminal_codex_launcher_resource}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>"
+        COMMAND Qt6::rcc --name codex_launcher
+            --output "${vnm_terminal_codex_launcher_resource}"
+            "${CMAKE_CURRENT_BINARY_DIR}/generated/codex_launcher_$<CONFIG>.qrc"
+        DEPENDS vnm_terminal_codex_launcher "$<TARGET_FILE:vnm_terminal_codex_launcher>"
+        VERBATIM
+    )
+    list(APPEND vnm_terminal_codex_resource_sources "${vnm_terminal_codex_launcher_resource}")
+endif()
+
 add_library(vnm_terminal_app_support STATIC
     ${vnm_terminal_codex_resource_sources}
     src/codex_command_environment.cpp
@@ -180,10 +216,6 @@ target_link_libraries(vnm_terminal_app_support
 add_library(
     vnm_terminal::vnm_terminal_app_support
     ALIAS vnm_terminal_app_support)
-if(WIN32)
-    target_link_libraries(vnm_terminal_app_support PRIVATE version)
-endif()
-
 add_library(vnm_terminal_default_shell STATIC
     include/vnm_terminal/default_shell.h
     src/default_shell.cpp
