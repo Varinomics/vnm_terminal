@@ -60,7 +60,7 @@ try {
         -CommandType Application, ExternalScript -ErrorAction Stop | Select-Object -First 1
     # Parent-terminal hints otherwise hide TERM or select an unsupported protocol.
     foreach ($name in $identity_names) {
-        [Environment]::SetEnvironmentVariable($name, $null, 'Process')
+        [Environment]::SetEnvironmentVariable($name, [NullString]::Value, 'Process')
     }
     $env:TERM = 'vnm-terminal-sixel'
     $forwarded_arguments = @('-c', "shell_environment_policy.set.TERM='xterm-256color'") + $codex_arguments
@@ -103,10 +103,17 @@ try {
     }
 }
 finally {
+    # NullString passes an actual CLR null; PowerShell otherwise binds $null as an empty string.
+    if ($null -eq $saved_path) {
+        $saved_path = [NullString]::Value
+    }
     [Environment]::SetEnvironmentVariable('PATH', $saved_path, 'Process')
     foreach ($name in $identity_names) {
-        [Environment]::SetEnvironmentVariable(
-            $name, $saved_identity[$name], 'Process')
+        $saved_value = $saved_identity[$name]
+        if ($null -eq $saved_value) {
+            $saved_value = [NullString]::Value
+        }
+        [Environment]::SetEnvironmentVariable($name, $saved_value, 'Process')
     }
 }
 
