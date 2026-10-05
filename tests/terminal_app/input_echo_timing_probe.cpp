@@ -4,6 +4,7 @@
 #include "vnm_terminal/internal/backend_contract.h"
 #include "vnm_terminal/internal/render_snapshot.h"
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
+#include "vnm_terminal/terminal_renderer_surface_format.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
 
 #include <vnm_qt_dispatch/vnm_qt_dispatch.h>
@@ -1470,6 +1471,7 @@ bool open_output_file(QFile& file, const QString& path, QString* out_error)
 int main(int argc, char** argv)
 {
     QGuiApplication app(argc, argv);
+    vnm_terminal::apply_terminal_renderer_minimum_surface_format();
 
     const Parse_result parsed = parse_arguments(QCoreApplication::arguments());
     if (parsed.help_requested) {

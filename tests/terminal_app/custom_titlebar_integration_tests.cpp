@@ -10,6 +10,7 @@
 
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
 #include "vnm_terminal/internal/terminal_transcript.h"
+#include "vnm_terminal/terminal_renderer_surface_format.h"
 #include "helpers/test_check.h"
 
 #include <vnm_font_namespace.h>
@@ -4320,6 +4321,7 @@ bool test_settings_native_window_owner_reassignment()
 int main(int argc, char** argv)
 {
     QGuiApplication app(argc, argv);
+    vnm_terminal::apply_terminal_renderer_minimum_surface_format();
     if (QCoreApplication::arguments().contains(
             QStringLiteral("--native-outer-edge-pixels")))
     {
