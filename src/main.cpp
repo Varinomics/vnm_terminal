@@ -19,6 +19,7 @@
 #include "vnm_terminal/app_support/terminal_settings_window.h"
 #include "terminal_window.h"
 
+#include "vnm_terminal/terminal_renderer_surface_format.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
 
 #include <vnm_qt_dispatch/vnm_qt_dispatch.h>
@@ -394,6 +395,7 @@ int main(int argc, char** argv)
 
     Qt_arguments qt_arguments = make_qt_arguments(argc, argv);
     QGuiApplication app(qt_arguments.argc, qt_arguments.argv.data());
+    vnm_terminal::apply_terminal_renderer_minimum_surface_format();
     QCoreApplication::setOrganizationName(QStringLiteral("Varinomics"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("varinomics.com"));
     QCoreApplication::setApplicationName(QStringLiteral("vnm_terminal"));
