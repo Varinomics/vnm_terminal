@@ -296,6 +296,7 @@ Window {
     signal close_requested()
     signal move_requested()
     signal resize_requested(int edges)
+    signal font_family_selected(string family)
 
     readonly property int titlebar_height: 32
     readonly property int body_margin: 16
@@ -1060,8 +1061,13 @@ R"qml(
                             Layout.fillWidth: true
                             use_row_font: true
                             model: settings.available_font_families()
-                            currentIndex: Math.max(0, model.indexOf(surface.fontFamily))
-                            onActivated: surface.fontFamily = currentText
+                            currentIndex: model.indexOf(surface.fontFamily)
+                            onActivated: {
+                                win.font_family_selected(currentText)
+                                if (hasLiveSurface) {
+                                    surface.fontFamily = currentText
+                                }
+                            }
                         }
                     }
 
@@ -1460,6 +1466,8 @@ settings::Terminal_settings_window::Terminal_settings_window(
     QObject(parent)
 {
     initialize(engine, model, controller, false, interaction_diagnostics_unlocked);
+    QObject::connect(this, &Terminal_settings_window::font_family_selected,
+        &model, &Terminal_settings_model::request_font_family);
 }
 
 void settings::Terminal_settings_window::initialize(
@@ -1522,6 +1530,11 @@ void settings::Terminal_settings_window::initialize(
     m_window->setPersistentGraphics(false);
     m_window->setPersistentSceneGraph(false);
 
+    QObject::connect(
+        m_root_object.get(),
+        SIGNAL(font_family_selected(QString)),
+        this,
+        SIGNAL(font_family_selected(QString)));
     QObject::connect(
         m_root_object.get(),
         SIGNAL(close_requested()),

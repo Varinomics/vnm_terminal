@@ -6,6 +6,7 @@
 
 #include <QColor>
 #include <QGuiApplication>
+#include <QMetaObject>
 #include <QRect>
 #include <QScreen>
 #include <QSettings>
@@ -254,13 +255,14 @@ bool test_appearance_settings_round_trip()
     }
 
     const App_options default_options;
+    const QString font_family = vnm_terminal::default_monospace_font_family();
     ok &= check(default_options.color_scheme == QStringLiteral("Classic"),
         "app color scheme defaults to Classic");
 
     QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     writer.beginGroup(QLatin1String(k_appearance_settings_group));
     writer.setValue(QLatin1String(k_appearance_color_scheme), QStringLiteral("Solarized Dark"));
-    writer.setValue(QLatin1String(k_appearance_font_family),  QStringLiteral("Cascadia Mono"));
+    writer.setValue(QLatin1String(k_appearance_font_family),  font_family);
     writer.setValue(
         QLatin1String(k_appearance_font_advance_policy),
         static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST));
@@ -280,7 +282,7 @@ bool test_appearance_settings_round_trip()
 
     ok &= check(state.color_scheme.value_or(QString()) == QStringLiteral("Solarized Dark"),
         "persisted color scheme round-trips");
-    ok &= check(state.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
+    ok &= check(state.font_family.value_or(QString()) == font_family,
         "persisted font family round-trips");
     ok &= check(
         state.font_advance_policy.value_or(-1) ==
@@ -303,7 +305,7 @@ bool test_appearance_settings_round_trip()
     apply_persisted_appearance_settings(state, &options);
     ok &= check(options.color_scheme == QStringLiteral("Solarized Dark"),
         "persisted color scheme is applied without command-line override");
-    ok &= check(options.font_family == QStringLiteral("Cascadia Mono"),
+    ok &= check(options.font_family == font_family,
         "persisted font family is applied without command-line override");
     ok &= check(
         options.font_advance_policy == vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST,
@@ -415,7 +417,7 @@ bool test_save_appearance_settings_from_surface()
 
     Command_line_setting_overrides overrides;
     QSettings writer(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
-    save_persisted_appearance_settings(writer, surface, overrides);
+    save_persisted_appearance_settings(writer, surface, overrides, surface.font_family());
 
     QSettings reader(dir.filePath(QStringLiteral("settings.ini")), QSettings::IniFormat);
     const Persisted_appearance_settings state = load_persisted_appearance_settings(reader);
@@ -668,12 +670,13 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     }
 
     const QString path = dir.filePath(QStringLiteral("settings.ini"));
+    const QString font_family = vnm_terminal::default_monospace_font_family();
 
     // What the user chose in the settings panel on an earlier run.
     QSettings stored(path, QSettings::IniFormat);
     stored.beginGroup(QLatin1String(k_appearance_settings_group));
     stored.setValue(QLatin1String(k_appearance_color_scheme), QStringLiteral("Solarized Dark"));
-    stored.setValue(QLatin1String(k_appearance_font_family),  QStringLiteral("Cascadia Mono"));
+    stored.setValue(QLatin1String(k_appearance_font_family),  font_family);
     stored.setValue(
         QLatin1String(k_appearance_text_renderer_mode),
         static_cast<int>(VNM_TerminalSurface::Text_renderer_mode::AUTO));
@@ -740,7 +743,7 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
 
     ok &= check(appearance.color_scheme.value_or(QString()) == QStringLiteral("Solarized Dark"),
         "an explicit color scheme leaves the stored scheme alone");
-    ok &= check(appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
+    ok &= check(appearance.font_family.value_or(QString()) == font_family,
         "an explicit font family leaves the stored family alone");
     ok &= check(
         appearance.font_advance_policy.value_or(-1) ==
@@ -815,7 +818,7 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     ok &= check(changed_appearance.scrollback_buffer_size_mib.value_or(-1) == 9,
         "a scrollback buffer size chosen during the session replaces the stored size");
     ok &= check(
-        changed_appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
+        changed_appearance.font_family.value_or(QString()) == font_family,
         "changing one setting does not release the other forced values");
 
     // Returning a setting to the value the command line forced is still the
@@ -871,8 +874,116 @@ bool test_command_line_overrides_do_not_replace_stored_settings()
     ok &= check(!restored_window.maximized,
         "unmaximizing after maximizing during the session stores it");
     ok &= check(
-        restored_appearance.font_family.value_or(QString()) == QStringLiteral("Cascadia Mono"),
+        restored_appearance.font_family.value_or(QString()) == font_family,
         "a forced setting the user never moved is still not written back");
+    return ok;
+}
+
+bool test_unavailable_font_preference_survives_unrelated_saves()
+{
+    QTemporaryDir directory;
+    bool ok = check(directory.isValid(), "temporary unavailable-font settings directory is valid");
+    if (!ok) {
+        return false;
+    }
+
+    QSettings store(directory.filePath(QStringLiteral("unavailable-font.ini")), QSettings::IniFormat);
+    const QString font_key = QStringLiteral("appearance/font_family");
+    const QString requested = QStringLiteral("VNM Terminal Unavailable Standalone Test");
+    store.setValue(font_key, requested);
+    App_options options;
+    apply_persisted_appearance_settings(load_persisted_appearance_settings(store), &options);
+    VNM_TerminalSurface surface;
+    surface.set_font_family(options.font_family);
+    Command_line_setting_overrides overrides = command_line_setting_overrides(options, surface);
+    ok &= check(surface.font_family() == vnm_terminal::default_monospace_font_family(),
+        "an unavailable standalone preference uses the bundled font");
+    surface.set_color_scheme(QStringLiteral("Solarized Light"));
+    save_persisted_appearance_settings(store, surface, overrides);
+    ok &= check(store.value(font_key).toString() == requested,
+        "an unrelated palette save preserves the unavailable font preference");
+    surface.set_invert_brightness(true);
+    save_persisted_appearance_settings(store, surface, overrides);
+    ok &= check(store.value(font_key).toString() == requested,
+        "an unrelated inversion save preserves the unavailable font preference");
+    App_options restarted;
+    apply_persisted_appearance_settings(load_persisted_appearance_settings(store), &restarted);
+    ok &= check(restarted.font_family == vnm_terminal::default_monospace_font_family(),
+        "the unavailable preference continues to use the bundled font after restart");
+    ok &= check(restarted.color_scheme == QStringLiteral("Solarized Light") && restarted.invert_brightness,
+        "unrelated standalone appearance edits persist");
+    save_persisted_appearance_settings(store, surface, overrides, surface.font_family());
+    ok &= check(store.value(font_key).toString() == vnm_terminal::default_monospace_font_family(),
+        "explicitly selecting the effective fallback replaces the stored font preference");
+    save_persisted_appearance_settings(store, surface, overrides, QStringLiteral("monospace"));
+    ok &= check(load_persisted_appearance_settings(store).font_family == QStringLiteral("monospace"),
+        "an explicit generic font choice survives restart");
+    return ok;
+}
+
+bool test_standalone_picker_selection_replaces_the_requested_font()
+{
+    QTemporaryDir directory;
+    bool ok = check(directory.isValid(), "temporary standalone picker directory is valid");
+    if (!ok) {
+        return false;
+    }
+    QSettings store(directory.filePath(QStringLiteral("picker-font.ini")), QSettings::IniFormat);
+    const QString font_key = QStringLiteral("appearance/font_family");
+    const QString requested = QStringLiteral("VNM Terminal Unavailable Picker Test");
+    store.setValue(font_key, requested);
+    VNM_TerminalSurface surface;
+    Command_line_setting_overrides overrides;
+    surface.set_color_scheme(QStringLiteral("Solarized Light"));
+    save_persisted_appearance_settings(store, surface, overrides);
+    ok &= check(store.value(font_key).toString() == requested,
+        "an unrelated save preserves the requested font");
+
+    QQmlEngine engine;
+    chrome::Terminal_settings_controller controller;
+    chrome::Terminal_settings_window settings(engine, surface, controller);
+    ok &= check(settings.is_valid(), "standalone font picker is valid");
+    if (!settings.is_valid()) {
+        return false;
+    }
+    int choices = 0;
+    QObject::connect(
+        &settings, &chrome::Terminal_settings_window::font_family_selected,
+        &surface, [
+            &store,
+            &surface,
+            &overrides,
+            &choices
+        ](
+            const QString& family)
+        {
+            ++choices;
+            save_persisted_appearance_settings(store, surface, overrides, family);
+        });
+    QQuickWindow* window = nullptr;
+    for (QWindow* candidate : QGuiApplication::topLevelWindows()) {
+        if (candidate->objectName() == QStringLiteral("terminal_settings_window")) {
+            window = qobject_cast<QQuickWindow*>(candidate);
+            break;
+        }
+    }
+    ok &= check(window != nullptr, "standalone settings window exists");
+    if (window == nullptr) {
+        return false;
+    }
+    QObject* const picker = window->findChild<QObject*>(QStringLiteral("font_family_combo"));
+    ok &= check(picker != nullptr, "standalone font picker exists");
+    if (picker == nullptr) {
+        return false;
+    }
+    ok &= check(picker->property("currentIndex").toInt() == 0,
+        "the standalone picker presents the effective bundled fallback");
+    ok &= check(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 0)),
+        "the active fallback can be explicitly selected");
+    ok &= check(choices == 1,
+        "an explicit equal-value choice emits once");
+    ok &= check(store.value(font_key).toString() == surface.font_family(),
+        "the explicit standalone choice replaces the raw preference");
     return ok;
 }
 
@@ -988,6 +1099,8 @@ int main(int argc, char** argv)
     ok &= test_platform_adjusted_command_line_geometry_does_not_replace_stored_geometry();
     ok &= test_user_geometry_before_the_first_save_still_persists();
     ok &= test_command_line_overrides_do_not_replace_stored_settings();
+    ok &= test_unavailable_font_preference_survives_unrelated_saves();
+    ok &= test_standalone_picker_selection_replaces_the_requested_font();
     ok &= test_chrome_palette_settings();
     ok &= test_interaction_settings_round_trip();
     return ok ? 0 : 1;

@@ -92,6 +92,14 @@ void Terminal_settings_model::set_values(const QVariantMap& values)
     }
 }
 
+void Terminal_settings_model::request_font_family(const QString& family)
+{
+    const QVariantMap changes{{QStringLiteral("font_family"), family}};
+    if (terminal_settings_changes_valid(changes)) {
+        emit changes_requested(changes);
+    }
+}
+
 QVariant Terminal_settings_model::updateValue(const QString& property, const QVariant& input)
 {
     const QString key = setting_key(property);

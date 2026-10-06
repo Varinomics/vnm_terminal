@@ -1,5 +1,7 @@
 #include "vnm_terminal/app_support/terminal_settings_controller.h"
 
+#include "vnm_terminal/font_metrics.h"
+
 #if defined(VNM_TERMINAL_BUILD_PROVENANCE_HEADER)
 #include VNM_TERMINAL_BUILD_PROVENANCE_HEADER
 #endif
@@ -28,14 +30,16 @@ QString settings::Terminal_settings_controller::build_provenance_text() const
 
 QStringList settings::Terminal_settings_controller::available_font_families() const
 {
-    QStringList families;
+    const QString default_family = vnm_terminal::default_monospace_font_family();
+    QStringList families{default_family};
     const QStringList all_families = QFontDatabase::families();
     for (const QString& family : all_families) {
         // Monospace only, and scalable only: legacy bitmap fonts (Fixedsys,
         // Terminal, 8514oem, ...) have no outlines, so they cannot be MSDF-baked
         // and render poorly when zoomed. Excluding them also keeps the picker
         // free of fonts the user does not want.
-        if (QFontDatabase::isFixedPitch(family) &&
+        if (family != default_family &&
+            QFontDatabase::isFixedPitch(family) &&
             QFontDatabase::isSmoothlyScalable(family))
         {
             families.push_back(family);

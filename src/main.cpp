@@ -729,6 +729,23 @@ int main(int argc, char** argv)
     }
     else {
         settings_window->set_transient_parent(&window);
+        QObject::connect(
+            settings_window.get(),
+            &chrome::Terminal_settings_window::font_family_selected,
+            surface,
+            [
+                persistence_enabled,
+                surface,
+                command_line_overrides
+            ](
+                const QString& family)
+            {
+                if (persistence_enabled) {
+                    QSettings settings;
+                    save_persisted_appearance_settings(
+                        settings, *surface, *command_line_overrides, family);
+                }
+            });
         // Settings are reachable everywhere via Ctrl+, / Cmd+, and, when the
         // built-in chrome is active, via the titlebar gear button.
         QObject::connect(
@@ -880,7 +897,6 @@ int main(int argc, char** argv)
         persist_window_state);
     const std::array appearance_persistence_signals{
         &VNM_TerminalSurface::color_scheme_changed,
-        &VNM_TerminalSurface::font_family_changed,
         &VNM_TerminalSurface::font_advance_policy_changed,
         &VNM_TerminalSurface::text_renderer_mode_changed,
         &VNM_TerminalSurface::lcd_subpixel_order_changed,

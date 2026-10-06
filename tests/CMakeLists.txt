@@ -590,6 +590,7 @@ target_include_directories(vnm_terminal_app_support_tests PRIVATE
 )
 target_link_libraries(vnm_terminal_app_support_tests PRIVATE
     vnm_terminal::vnm_terminal_app_support
+    vnm::fonts
     Qt6::Test
 )
 vnm_terminal_add_target_test(vnm_terminal_app_support_tests

@@ -96,6 +96,13 @@ Terminal_settings_reconciler::Terminal_settings_reconciler(
         });
 }
 
+void Terminal_settings_reconciler::notify_font_family_selection(const QString& family)
+{
+    if (family == m_surface.font_family()) {
+        record_change(QStringLiteral("font_family"), family);
+    }
+}
+
 void Terminal_settings_reconciler::record_change(
     const QString& key, QVariant value)
 {

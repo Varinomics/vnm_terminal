@@ -36,6 +36,11 @@ public:
         bool                       dark_mode,
         quint64                    acknowledged_change);
 
+    // The picker reports intent before setting the surface. A different family
+    // is observed through the surface signal; an unchanged fallback still
+    // replaces the unavailable stored preference when explicitly selected.
+    void notify_font_family_selection(const QString& family);
+
 private:
     struct Pending_change
     {

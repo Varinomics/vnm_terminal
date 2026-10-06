@@ -50,9 +50,6 @@ Command_line_setting_overrides command_line_setting_overrides(
     if (options.color_scheme_explicit) {
         overrides.color_scheme = surface.color_scheme();
     }
-    if (options.font_family_explicit) {
-        overrides.font_family = surface.font_family();
-    }
     if (options.text_renderer_mode_explicit) {
         overrides.text_renderer_mode = static_cast<int>(surface.text_renderer_mode());
     }
@@ -252,7 +249,8 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
 void save_persisted_appearance_settings(
     QSettings&                      settings,
     const VNM_TerminalSurface&      surface,
-    Command_line_setting_overrides& overrides)
+    Command_line_setting_overrides& overrides,
+    const std::optional<QString>&   font_family_selection)
 {
     Persisted_appearance_settings appearance;
     const QString color_scheme = surface.color_scheme();
@@ -260,10 +258,7 @@ void save_persisted_appearance_settings(
         appearance.color_scheme = color_scheme;
     }
 
-    const QString font_family = surface.font_family();
-    if (!command_line_override_still_holds(overrides.font_family, font_family)) {
-        appearance.font_family = font_family;
-    }
+    appearance.font_family = font_family_selection;
 
     appearance.font_advance_policy = surface.font_advance_policy_value();
 

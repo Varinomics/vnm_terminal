@@ -62,6 +62,10 @@ public:
 public slots:
     void show_window();
 
+signals:
+    // Selection intent precedes a live surface update, including equal values.
+    void font_family_selected(const QString& family);
+
 private slots:
     void handle_close_requested();
     void handle_move_requested();

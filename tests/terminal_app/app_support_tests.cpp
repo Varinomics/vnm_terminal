@@ -10,8 +10,14 @@
 #include "terminal_file_drop.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <vnm_font_namespace.h>
+
 #include <QCoreApplication>
 #include <QDragEnterEvent>
+#include <QFile>
+#include <QFont>
+#include <QFontDatabase>
+#include <QFontInfo>
 #include <QGuiApplication>
 #include <QJsonObject>
 #include <QJsonValue>
@@ -25,6 +31,7 @@
 #include <QQmlEngine>
 #include <QQmlExpression>
 #include <QQuickWindow>
+#include <QScopeGuard>
 #include <QSettings>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -51,6 +58,19 @@ class App_support_tests final : public QObject
     }
 
 private slots:
+    void font_picker_initializes_and_prioritizes_the_shipped_default()
+    {
+        terminal_app::Terminal_settings_controller controller;
+        const QStringList families = controller.available_font_families();
+        const QString expected = QStringLiteral("Ubuntu Sans Mono derivative vnm");
+        QVERIFY(!families.isEmpty());
+        QCOMPARE(families.front(), expected);
+        QCOMPARE(families.count(expected), 1);
+        QCOMPARE(QFontInfo(QFont(expected)).family(), expected);
+        QVERIFY(QFontDatabase::isFixedPitch(expected));
+        QVERIFY(QFontDatabase::isSmoothlyScalable(expected));
+    }
+
     void backend_output_capture_json_preserves_integer_precision()
     {
         const vnm_terminal::Backend_output_capture_config config{
@@ -284,8 +304,9 @@ private slots:
         QVERIFY(directory.isValid());
         QSettings store(directory.filePath(QStringLiteral("shared-display.ini")), QSettings::IniFormat);
         terminal_app::Terminal_display_settings display(true, &store);
+        const QString font_family = QFontDatabase::families().constFirst();
         const QVariantMap changes{
-            {QStringLiteral("font_family"), QStringLiteral("Cascadia Mono")},
+            {QStringLiteral("font_family"), font_family},
             {QStringLiteral("font_size"), 27},
             {QStringLiteral("font_advance_policy"),
                 static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_UP)},
@@ -334,6 +355,61 @@ private slots:
         QVERIFY(display.set_dark_mode(true));
         QCOMPARE(display.values().value(QStringLiteral("color_scheme")).toString(), QStringLiteral("Campbell"));
         QCOMPARE(display.values().value(QStringLiteral("font_size")).toInt(), 25);
+    }
+
+    void unavailable_font_preference_survives_unrelated_edits_and_restart_data()
+    {
+        QTest::addColumn<QVariant>("requested");
+        QTest::newRow("missing") << QVariant();
+        QTest::newRow("empty") << QVariant(QString());
+        QTest::newRow("blank") << QVariant(QStringLiteral("  "));
+        QTest::newRow("unavailable") << QVariant(QStringLiteral("VNM Terminal Unavailable Preference Test"));
+    }
+
+    void unavailable_font_preference_survives_unrelated_edits_and_restart()
+    {
+        QFETCH(QVariant, requested);
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QSettings store(directory.filePath(QStringLiteral("unavailable-font.ini")), QSettings::IniFormat);
+        const QString font_key = QStringLiteral("appearance/font_family");
+        QVERIFY(!QFontDatabase::hasFamily(requested.toString()));
+        if (requested.isValid()) {
+            store.setValue(font_key, requested);
+        }
+        terminal_app::Terminal_display_settings display(true, &store);
+        const QString fallback = vnm_terminal::default_monospace_font_family();
+        QCOMPARE(display.values().value(QStringLiteral("font_family")).toString(), fallback);
+        QVERIFY(display.apply_changes({{QStringLiteral("font_size"), 22.5}}, true));
+        QCOMPARE(store.value(font_key), requested);
+        QVERIFY(display.apply_changes(
+            {{QStringLiteral("color_scheme"), QStringLiteral("Campbell")}}, true));
+        QCOMPARE(store.value(font_key), requested);
+        QVERIFY(display.set_dark_mode(false));
+        QVERIFY(display.apply_changes({{QStringLiteral("invert_brightness"), true}}, false));
+        terminal_app::Terminal_display_settings restarted(false, &store);
+        QCOMPARE(restarted.values().value(QStringLiteral("font_family")).toString(), fallback);
+        QCOMPARE(restarted.values().value(QStringLiteral("font_size")).toDouble(), 22.5);
+        QCOMPARE(store.value(font_key), requested);
+        QCOMPARE(store.contains(font_key), requested.isValid());
+    }
+
+    void selecting_effective_fallback_replaces_unavailable_preference()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QSettings store(directory.filePath(QStringLiteral("selected-font.ini")), QSettings::IniFormat);
+        const QString font_key = QStringLiteral("appearance/font_family");
+        store.setValue(font_key, QStringLiteral("VNM Terminal Unavailable Selection Test"));
+        terminal_app::Terminal_display_settings display(true, &store);
+        const QString fallback = vnm_terminal::default_monospace_font_family();
+        QCOMPARE(display.values().value(QStringLiteral("font_family")).toString(), fallback);
+        QVERIFY(display.apply_changes({{QStringLiteral("font_family"), fallback}}, true));
+        QCOMPARE(store.value(font_key).toString(), fallback);
+        QVERIFY(!display.apply_changes({{QStringLiteral("font_family"), fallback}}, true));
+        QVERIFY(display.apply_changes({{QStringLiteral("font_family"), QStringLiteral("monospace")}}, true));
+        terminal_app::Terminal_display_settings restarted(true, &store);
+        QCOMPARE(restarted.values().value(QStringLiteral("font_family")).toString(), QStringLiteral("monospace"));
     }
 
     void worker_reconciler_keeps_rapid_edits_over_an_old_snapshot()
@@ -603,7 +679,7 @@ private slots:
 
         terminal_app::Terminal_settings_snapshot expected;
         expected.color_scheme = QStringLiteral("Solarized Light");
-        expected.font_family  = QStringLiteral("Cascadia Mono");
+        expected.font_family  = QFontDatabase::families().constFirst();
         expected.font_size    = 18.0;
         expected.font_advance_policy =
             static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_UP);
@@ -665,6 +741,89 @@ private slots:
         QCOMPARE(actual.text_renderer_mode, defaults.text_renderer_mode);
         QCOMPARE(actual.lcd_subpixel_order, defaults.lcd_subpixel_order);
         QCOMPARE(actual.scrollback_buffer_size_mib, defaults.scrollback_buffer_size_mib);
+    }
+
+    void absent_or_unavailable_font_settings_use_the_shipped_default_data()
+    {
+        QTest::addColumn<QVariant>("saved_family");
+        QTest::newRow("missing")     << QVariant();
+        QTest::newRow("empty")       << QVariant(QString());
+        QTest::newRow("blank")       << QVariant(QStringLiteral("  "));
+        QTest::newRow("unavailable") << QVariant(QStringLiteral("Missing terminal test font"));
+    }
+
+    void absent_or_unavailable_font_settings_use_the_shipped_default()
+    {
+        QFETCH(QVariant, saved_family);
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QSettings store(directory.filePath(QStringLiteral("font.ini")), QSettings::IniFormat);
+        const QString key = QStringLiteral("appearance/font_family");
+        if (saved_family.isValid()) {
+            store.setValue(key, saved_family);
+        }
+        const QStringList original_keys = store.allKeys();
+        const auto snapshot = terminal_app::load_terminal_settings_snapshot(store);
+        QCOMPARE(snapshot.font_family, QStringLiteral("Ubuntu Sans Mono derivative vnm"));
+        QCOMPARE(QFontInfo(QFont(snapshot.font_family)).family(), snapshot.font_family);
+        terminal_app::Terminal_display_settings display(true, &store);
+        QCOMPARE(display.values().value(QStringLiteral("font_family")).toString(),
+            snapshot.font_family);
+        QCOMPARE(store.value(key), saved_family);
+        QCOMPARE(store.contains(key), original_keys.contains(key));
+    }
+
+    void saved_font_selection_is_preserved_after_late_registration()
+    {
+        vnm_fonts::initialize_resources();
+        QFile font_file(QStringLiteral(":/vnm_fonts/UbuntuSansMonoDerivativeVnm-Regular.ttf"));
+        QVERIFY(font_file.open(QIODevice::ReadOnly));
+        const QString test_family = QStringLiteral("VNM Terminal Saved Font Test");
+        const auto marked = vnm_fonts::mark_font_family(font_file.readAll(), {
+            {1, test_family}, {4, test_family}, {16, test_family},
+        });
+        QVERIFY2(marked.is_valid(), qPrintable(marked.error));
+        QVERIFY(!QFontDatabase::hasFamily(marked.family));
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QSettings store(directory.filePath(QStringLiteral("font.ini")), QSettings::IniFormat);
+        const QString key = QStringLiteral("appearance/font_family");
+        store.setValue(key, marked.family);
+        QCOMPARE(terminal_app::load_terminal_settings_snapshot(store).font_family,
+            QStringLiteral("Ubuntu Sans Mono derivative vnm"));
+        QCOMPARE(store.value(key).toString(), marked.family);
+        terminal_app::Terminal_display_settings display(true, &store);
+        QVERIFY(display.apply_changes({{QStringLiteral("font_size"), 23.0}}, true));
+        QCOMPARE(store.value(key).toString(), marked.family);
+        const int font_id = QFontDatabase::addApplicationFontFromData(marked.bytes);
+        QVERIFY(font_id >= 0);
+        QCOMPARE(terminal_app::load_terminal_settings_snapshot(store).font_family, marked.family);
+        terminal_app::Terminal_display_settings restarted(true, &store);
+        QCOMPARE(restarted.values().value(QStringLiteral("font_family")).toString(), marked.family);
+        QCOMPARE(QFontInfo(QFont(marked.family)).family(), marked.family);
+        QVERIFY(QFontDatabase::removeApplicationFont(font_id));
+    }
+
+    void saved_generic_monospace_selection_is_preserved_data()
+    {
+        QTest::addColumn<QString>("font_family");
+        QTest::newRow("lowercase") << QStringLiteral("monospace");
+        QTest::newRow("titlecase") << QStringLiteral("Monospace");
+    }
+
+    void saved_generic_monospace_selection_is_preserved()
+    {
+        QFETCH(QString, font_family);
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QSettings store(directory.filePath(QStringLiteral("generic-font.ini")), QSettings::IniFormat);
+        terminal_app::Terminal_settings_snapshot snapshot;
+        snapshot.font_family = font_family;
+        terminal_app::save_terminal_settings_snapshot(store, snapshot);
+        QCOMPARE(terminal_app::load_terminal_settings_snapshot(store).font_family, font_family);
+        terminal_app::Terminal_display_settings display(true, &store);
+        QCOMPARE(display.values().value(QStringLiteral("font_family")).toString(), font_family);
+        QCOMPARE(store.value(QStringLiteral("appearance/font_family")).toString(), font_family);
     }
 
     void transient_msdf_does_not_replace_the_durable_renderer_on_save()
@@ -813,6 +972,124 @@ private slots:
         QCoreApplication::processEvents();
         QVERIFY(window->isVisible());
         QVERIFY(warnings.isEmpty());
+    }
+
+    void settings_font_picker_tracks_the_selected_family()
+    {
+        QQmlEngine engine;
+        terminal_app::Terminal_settings_model model;
+        terminal_app::Terminal_settings_controller controller;
+        terminal_app::Terminal_settings_window settings(engine, model, controller);
+        QVERIFY2(settings.is_valid(), qPrintable(settings.error_string()));
+        QQuickWindow* const window = settings_window();
+        QVERIFY(window != nullptr);
+        QObject* const picker = window->findChild<QObject*>(QStringLiteral("font_family_combo"));
+        QVERIFY(picker != nullptr);
+        QSignalSpy changes(&model, &terminal_app::Terminal_settings_model::changes_requested);
+        settings.show_window();
+        QCoreApplication::processEvents();
+        QCOMPARE(picker->property("currentText").toString(),
+            QStringLiteral("Ubuntu Sans Mono derivative vnm"));
+        QCOMPARE(picker->property("currentIndex").toInt(), 0);
+        QVERIFY(changes.isEmpty());
+
+        const QString alternate = controller.available_font_families().constLast();
+        model.set_values({{QStringLiteral("font_family"), alternate}});
+        QCoreApplication::processEvents();
+        QCOMPARE(picker->property("currentText").toString(), alternate);
+        QVERIFY(changes.isEmpty());
+
+        const QString unavailable = QStringLiteral("Missing terminal picker test font");
+        model.set_values({{QStringLiteral("font_family"), unavailable}});
+        QCoreApplication::processEvents();
+        QCOMPARE(picker->property("currentIndex").toInt(), -1);
+        QCOMPARE(picker->property("currentText").toString(), QString());
+        QCOMPARE(model.value(QStringLiteral("fontFamily")).toString(), unavailable);
+        QVERIFY(changes.isEmpty());
+    }
+
+    void settings_font_picker_activation_reports_the_effective_fallback()
+    {
+        QQmlEngine engine;
+        terminal_app::Terminal_settings_model model;
+        terminal_app::Terminal_settings_controller controller;
+        terminal_app::Terminal_settings_window settings(engine, model, controller);
+        QVERIFY2(settings.is_valid(), qPrintable(settings.error_string()));
+        QQuickWindow* const window = settings_window();
+        QVERIFY(window != nullptr);
+        QObject* const picker = window->findChild<QObject*>(QStringLiteral("font_family_combo"));
+        QVERIFY(picker != nullptr);
+        QSignalSpy changes(&model, &terminal_app::Terminal_settings_model::changes_requested);
+        QCOMPARE(picker->property("currentIndex").toInt(), 0);
+        QVERIFY(changes.isEmpty());
+        QVERIFY(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 0)));
+        QCOMPARE(changes.size(), 1);
+        QCOMPARE(changes.at(0).at(0).toMap(), QVariantMap({
+            {QStringLiteral("font_family"), vnm_terminal::default_monospace_font_family()},
+        }));
+    }
+
+    void worker_font_picker_selection_reaches_the_preference_owner()
+    {
+        vnm_fonts::initialize_resources();
+        QFile font_file(QStringLiteral(":/vnm_fonts/UbuntuSansMonoDerivativeVnm-Regular.ttf"));
+        QVERIFY(font_file.open(QIODevice::ReadOnly));
+        const QString test_family = QStringLiteral("VNM Terminal Worker Font Test");
+        const auto marked = vnm_fonts::mark_font_family(font_file.readAll(), {
+            {1, test_family}, {4, test_family}, {16, test_family},
+        });
+        QVERIFY2(marked.is_valid(), qPrintable(marked.error));
+        const int font_id = QFontDatabase::addApplicationFontFromData(marked.bytes);
+        QVERIFY(font_id >= 0);
+        const auto remove_font = qScopeGuard([font_id] { QFontDatabase::removeApplicationFont(font_id); });
+
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QSettings store(directory.filePath(QStringLiteral("worker-font.ini")), QSettings::IniFormat);
+        const QString font_key = QStringLiteral("appearance/font_family");
+        store.setValue(font_key, QStringLiteral("VNM Terminal Unavailable Worker Test"));
+        terminal_app::Terminal_display_settings preferences(true, &store);
+        VNM_TerminalSurface surface;
+        terminal_app::apply_terminal_settings_snapshot(
+            terminal_app::load_terminal_settings_snapshot(store), surface);
+        QList<terminal_app::Terminal_setting_delta> deltas;
+        terminal_app::Terminal_settings_reconciler reconciler(
+            surface, true, [
+                &deltas,
+                &preferences
+            ](
+                const auto& delta)
+            {
+                deltas.push_back(delta);
+                preferences.apply_changes({{delta.key, delta.value}}, delta.dark_mode);
+            });
+        QQmlEngine engine;
+        terminal_app::Terminal_settings_controller controller;
+        terminal_app::Terminal_settings_window settings(engine, surface, controller);
+        QVERIFY2(settings.is_valid(), qPrintable(settings.error_string()));
+        QObject::connect(
+            &settings, &terminal_app::Terminal_settings_window::font_family_selected,
+            &reconciler, &terminal_app::Terminal_settings_reconciler::notify_font_family_selection);
+        QQuickWindow* const window = settings_window();
+        QVERIFY(window != nullptr);
+        QObject* const picker = window->findChild<QObject*>(QStringLiteral("font_family_combo"));
+        QVERIFY(picker != nullptr);
+        QVERIFY(deltas.isEmpty());
+        QCOMPARE(picker->property("currentIndex").toInt(), 0);
+        QVERIFY(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 0)));
+        QCOMPARE(deltas.size(), 1);
+        QCOMPARE(deltas.front().key, QStringLiteral("font_family"));
+        QCOMPARE(store.value(font_key).toString(), vnm_terminal::default_monospace_font_family());
+
+        const int alternate = controller.available_font_families().indexOf(marked.family);
+        QVERIFY(alternate > 0);
+        QVERIFY(picker->setProperty("currentIndex", alternate));
+        QVERIFY(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, alternate)));
+        QCOMPARE(deltas.size(), 2);
+        QCOMPARE(deltas.back().value.toString(), marked.family);
+        QCOMPARE(surface.font_family(), marked.family);
+        QCOMPARE(store.value(font_key).toString(), marked.family);
+        QCOMPARE(terminal_app::load_terminal_settings_snapshot(store).font_family, marked.family);
     }
 
     void application_settings_dialog_reuses_refreshes_and_releases_window()

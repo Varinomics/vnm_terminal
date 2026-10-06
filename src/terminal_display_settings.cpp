@@ -259,6 +259,9 @@ bool Terminal_display_settings::apply_changes(const QVariantMap& changes, bool s
     const QString previous_light = m_light_scheme;
     const bool previous_dark_invert_brightness = m_dark_invert_brightness;
     const bool previous_light_invert_brightness = m_light_invert_brightness;
+    const QString font_key = QStringLiteral("font_family");
+    const bool font_preference_changed = m_store && changes.contains(font_key) &&
+        m_store->value(QStringLiteral("appearance/font_family")) != changes.value(font_key);
     for (auto it = changes.cbegin(); it != changes.cend(); ++it) {
         if (it.key() == QStringLiteral("color_scheme")) {
             (source_dark_mode ? m_dark_scheme : m_light_scheme) = it.value().toString();
@@ -278,7 +281,8 @@ bool Terminal_display_settings::apply_changes(const QVariantMap& changes, bool s
     if (previous == m_values && previous_dark == m_dark_scheme &&
         previous_light == m_light_scheme &&
         previous_dark_invert_brightness == m_dark_invert_brightness &&
-        previous_light_invert_brightness == m_light_invert_brightness)
+        previous_light_invert_brightness == m_light_invert_brightness &&
+        !font_preference_changed)
     {
         return false;
     }
@@ -295,7 +299,12 @@ bool Terminal_display_settings::apply_changes(const QVariantMap& changes, bool s
         }
         m_store->setValue(QStringLiteral("appearance/color_scheme_dark"), m_dark_scheme);
         m_store->setValue(QStringLiteral("appearance/color_scheme_light"), m_light_scheme);
-        save_terminal_settings_snapshot(*m_store, settings_snapshot(m_values, {}));
+        auto persisted = settings_snapshot(m_values, {});
+        if (!changes.contains(font_key)) {
+            // A fallback is presentation state, not a replacement preference.
+            persisted.font_family.clear();
+        }
+        save_terminal_settings_snapshot(*m_store, persisted);
     }
     return true;
 }

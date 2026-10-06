@@ -20,6 +20,9 @@ public:
     Q_INVOKABLE QStringList available_color_schemes() const;
     Q_INVOKABLE QVariantMap color_scheme_preview(const QString& scheme_name) const;
 
+public slots:
+    void request_font_family(const QString& family);
+
 signals:
     void changes_requested(const QVariantMap& changes);
 

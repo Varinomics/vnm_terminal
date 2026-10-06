@@ -5,6 +5,7 @@
 
 #include "vnm_terminal/internal/terminal_color_scheme.h"
 
+#include <QFontDatabase>
 #include <QLatin1String>
 #include <QSettings>
 
@@ -108,6 +109,8 @@ void apply_if_present(const std::optional<Value_t>& value, Value_t& target)
 
 Persisted_appearance_settings load_persisted_appearance_settings(QSettings& settings)
 {
+    // The bundled family must be registered before checking saved font names.
+    vnm_terminal::default_monospace_font_family();
     Persisted_appearance_settings appearance;
     settings.beginGroup(QLatin1String(k_appearance_settings_group));
 
@@ -121,7 +124,11 @@ Persisted_appearance_settings load_persisted_appearance_settings(QSettings& sett
 
     const QString font_family =
         settings.value(QLatin1String(k_appearance_font_family)).toString().trimmed();
-    if (!font_family.isEmpty()) {
+    // The generic monospace request is valid without an installed family name.
+    if (!font_family.isEmpty() &&
+        (font_family.compare(QLatin1String("monospace"), Qt::CaseInsensitive) == 0 ||
+         QFontDatabase::hasFamily(font_family)))
+    {
         appearance.font_family = font_family;
     }
 

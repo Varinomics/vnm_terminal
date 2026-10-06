@@ -32,14 +32,13 @@ struct Persisted_interaction_settings
     std::optional<bool> copy_on_select;
 };
 
-// Standalone-only command-line provenance. Each forced setting suppresses its
+// Standalone-only command-line provenance. Each recorded setting suppresses its
 // own persistence while its normalized value still holds. Window geometry is
 // suppressed as one unit until the platform-granted geometry is observed.
 struct Command_line_setting_overrides
 {
     std::optional<qreal>   font_size;
     std::optional<QString> color_scheme;
-    std::optional<QString> font_family;
     std::optional<int>     text_renderer_mode;
     std::optional<int>     lcd_subpixel_order;
     std::optional<bool>    row_timestamp_tooltip;
@@ -86,10 +85,13 @@ void save_persisted_terminal_window_state(
 Persisted_appearance_settings load_persisted_appearance_settings(
     QSettings& settings);
 
+// Unrelated appearance saves preserve the requested font, which can differ
+// from the surface's fallback. Only an explicit selection replaces it.
 void save_persisted_appearance_settings(
     QSettings&                      settings,
     const VNM_TerminalSurface&      surface,
-    Command_line_setting_overrides& overrides);
+    Command_line_setting_overrides& overrides,
+    const std::optional<QString>&   font_family_selection = std::nullopt);
 
 Terminal_chrome_palette persisted_terminal_chrome_palette(
     const Persisted_appearance_settings& state);
