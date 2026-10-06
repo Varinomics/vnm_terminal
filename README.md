@@ -138,8 +138,9 @@ standard streams, and exit status are preserved. Other commands keep the normal
 terminal type; no shell profile or Codex configuration file is edited.
 
 Windows integration supports the built-in Windows PowerShell 5.1, installed
-PowerShell, and cmd. Direct launches use an installed PowerShell on `PATH` when
-available and otherwise use Windows PowerShell. A PowerShell script wrapper
+PowerShell, and cmd. Direct launches recognized by their executable name use
+an installed PowerShell on `PATH` when available and otherwise use Windows
+PowerShell. A PowerShell script wrapper
 executes in the caller's PowerShell host and receives its arguments exactly;
 any native command forwarding inside that wrapper follows the host's own
 argument rules. Native executables receive their arguments exactly, including
@@ -170,6 +171,15 @@ from `<vnm_terminal/app_support/codex_command_environment.h>`, linked through
 `vnm_terminal::vnm_terminal_app_support`. Call `prepare()` on the final terminal
 command and environment before starting its backend, and retain the adapter for
 the terminal session's lifetime so its private commands remain available.
+For a verified native executable or interpreter invocation, supply
+`Codex_invocation{argument_prefix_size}` as the final argument to `prepare()`.
+The prefix includes the absolute executable and fixed interpreter arguments:
+use one for a native Codex executable, or two for Node and its verified Codex
+entry point. The adapter inserts the shell environment option after that
+prefix and forwards the remaining arguments unchanged. Windows uses the
+bundled native launcher directly, preserving the verified installation without
+PowerShell or PATH rediscovery. An invocation without that record keeps the
+ordinary executable-name detection; unrelated Node commands are unaffected.
 The Windows child launcher is embedded in that library. Rebuild embedding
 applications, including Logonomic and Soter, with the updated app support
 dependency to include the adapter changes; no separate launcher deployment is

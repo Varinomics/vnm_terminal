@@ -4,8 +4,9 @@
 # while commands it launches must keep a terminal type available in terminfo.
 set -eu
 
-codex_command=$1
-shift
+argument_prefix_size=$1
+codex_command=$2
+shift 2
 shim_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 remaining_path=$PATH
 original_path=
@@ -31,4 +32,23 @@ unset TERM_PROGRAM TERM_PROGRAM_VERSION GHOSTTY_RESOURCES_DIR WEZTERM_VERSION WE
 TERM=vnm-terminal-sixel
 export TERM
 
-exec "$codex_command" -c "shell_environment_policy.set.TERM='xterm-256color'" "$@"
+if [ "$argument_prefix_size" -eq 1 ]; then
+    exec "$codex_command" -c "shell_environment_policy.set.TERM='xterm-256color'" "$@"
+fi
+
+# Rotate the fixed executable arguments around the CLI tail so options reach
+# Codex after its entry point, while preserving every original argument.
+prefix_remaining=$((argument_prefix_size - 1))
+suffix_remaining=$(($# - prefix_remaining))
+while [ "$prefix_remaining" -gt 0 ]; do
+    set -- "$@" "$1"
+    shift
+    prefix_remaining=$((prefix_remaining - 1))
+done
+set -- "$@" -c "shell_environment_policy.set.TERM='xterm-256color'"
+while [ "$suffix_remaining" -gt 0 ]; do
+    set -- "$@" "$1"
+    shift
+    suffix_remaining=$((suffix_remaining - 1))
+done
+exec "$codex_command" "$@"

@@ -23,6 +23,7 @@
 namespace {
 
 using vnm_terminal::terminal_app::Codex_command_environment;
+using vnm_terminal::terminal_app::Codex_invocation;
 
 const QStringList identity_hints = {
     "TERM_PROGRAM", "TERM_PROGRAM_VERSION", "GHOSTTY_RESOURCES_DIR",
@@ -64,16 +65,27 @@ QString quote_literal(QString value)
 bool same_existing_directory(const QString& actual, const QString& expected)
 {
     const QString canonical_expected = QDir(expected).canonicalPath();
+#if defined(Q_OS_WIN)
+    const Qt::CaseSensitivity path_case = Qt::CaseInsensitive;
+#else
+    const Qt::CaseSensitivity path_case = Qt::CaseSensitive;
+#endif
     return !canonical_expected.isEmpty() &&
         QFileInfo(actual).isDir() && QFileInfo(expected).isDir() &&
-        QDir(actual).canonicalPath() == canonical_expected;
+        QDir(actual).canonicalPath().compare(canonical_expected, path_case) == 0;
 }
 
-int run_fixture(QStringList arguments)
+int run_fixture(QStringList arguments, bool has_entry_point = false)
 {
 #if defined(Q_OS_WIN)
     require(_setmode(_fileno(stdin), _O_BINARY) != -1, "fixture binary stdin");
 #endif
+    QString entry_point;
+    if (has_entry_point) {
+        require(!arguments.isEmpty(), "fixture entry point missing");
+        entry_point = arguments.takeFirst();
+    }
+    else
     if (!arguments.isEmpty() && arguments.front() == "--fixture") {
         arguments.removeFirst();
     }
@@ -103,6 +115,7 @@ int run_fixture(QStringList arguments)
     fields.insert("VNM_WRAPPER", environment.value("VNM_WRAPPER", "native"));
     const QJsonObject result{
         {"arguments", QJsonArray::fromStringList(arguments)},
+        {"entry_point", entry_point},
         {"environment", fields},
         {"cwd", QDir::currentPath()},
         {"input", QString::fromUtf8(input.readAll())},
@@ -137,7 +150,8 @@ QJsonObject launch_fixture(
     require(child.waitForFinished(15000), "command timed out: " + command.join(' '));
     const QByteArray output = child.readAllStandardOutput();
     const QString diagnostic = QString::fromUtf8(child.readAllStandardError()) + QString::fromUtf8(output);
-    require(child.exitStatus() == QProcess::NormalExit && child.exitCode() == 37, diagnostic);
+    require(child.exitStatus() == QProcess::NormalExit && child.exitCode() == 37,
+        QStringLiteral("fixture exit status %1, code %2: ").arg(child.exitStatus()).arg(child.exitCode()) + diagnostic);
     const QJsonDocument document = QJsonDocument::fromJson(output);
     require(document.isObject(), diagnostic);
     return document.object();
@@ -151,18 +165,20 @@ void check_launch(
     const QString& original_path,
     const QString& wrapper,
     const QString& expected_input = QStringLiteral("input from the terminal\n"),
-    const QString& expected_host = QString())
+    const QString& expected_host = QString(),
+    const QString& expected_entry_point = QString())
 {
     const QJsonObject result = launch_fixture(command, environment, working_directory);
     const QString diagnostic = QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact));
     const QStringList expected = QStringList{
         "-c", "shell_environment_policy.set.TERM='xterm-256color'",
     } + arguments;
-    require(result.value("arguments").toArray() == QJsonArray::fromStringList(expected), diagnostic);
-    require(same_existing_directory(result.value("cwd").toString(), working_directory), diagnostic);
-    require(result.value("input").toString() == expected_input, diagnostic);
+    require(result.value("arguments").toArray() == QJsonArray::fromStringList(expected), "fixture argv: " + diagnostic);
+    require(result.value("entry_point").toString() == expected_entry_point, "fixture entry point: " + diagnostic);
+    require(same_existing_directory(result.value("cwd").toString(), working_directory), "fixture cwd: " + diagnostic);
+    require(result.value("input").toString() == expected_input, "fixture stdin: " + diagnostic);
     const QJsonObject fields = result.value("environment").toObject();
-    require(fields.value("TERM").toString() == "vnm-terminal-sixel", diagnostic);
+    require(fields.value("TERM").toString() == "vnm-terminal-sixel", "fixture TERM: " + diagnostic);
     const QString child_path = fields.value("PATH").toString();
 #if defined(Q_OS_WIN)
     // PowerShell itself adds PSHOME when it starts, before the adapter runs.
@@ -171,13 +187,14 @@ void check_launch(
         (QFileInfo::exists(QDir(host_directory).filePath("powershell.exe")) ||
          QFileInfo::exists(QDir(host_directory).filePath("pwsh.exe"))) &&
         child_path.section(';', 1) == original_path;
-    require(child_path == original_path || host_prefix, diagnostic);
+    require(child_path == original_path || host_prefix, "fixture PATH: " + diagnostic);
 #else
-    require(child_path == original_path, diagnostic);
+    require(child_path == original_path, "fixture PATH: " + diagnostic);
 #endif
-    require(fields.value("VNM_WRAPPER").toString() == wrapper, diagnostic);
+    require(fields.value("VNM_WRAPPER").toString() == wrapper, "fixture wrapper: " + diagnostic);
     if (!expected_host.isEmpty()) {
-        require(same_existing_directory(fields.value("VNM_POWERSHELL_HOST").toString(), expected_host), diagnostic);
+        require(same_existing_directory(fields.value("VNM_POWERSHELL_HOST").toString(), expected_host),
+            "fixture PowerShell host: " + diagnostic);
     }
     for (const QString& name : identity_hints) {
         require(!fields.contains(name), name + ": " + diagnostic);
@@ -247,6 +264,87 @@ void check_powershell_launches(
 }
 #endif
 
+void check_verified_invocations(
+    const QString& executable,
+    const QString& fixture_directory,
+    const QProcessEnvironment& environment,
+    const QString& original_path,
+    const QStringList& arguments)
+{
+#if defined(Q_OS_WIN)
+    const QString executable_extension = QStringLiteral(".exe");
+#else
+    const QString executable_extension;
+#endif
+    const QString node = QDir(fixture_directory).filePath("node" + executable_extension);
+    const QString native_codex = QDir(fixture_directory).filePath("verified-codex" + executable_extension);
+    require(QFile::copy(executable, node), "copy interpreter fixture");
+    require(QFile::copy(executable, native_codex), "copy verified native fixture");
+    const QString entry_point = QDir(fixture_directory).filePath("npm modules/@openai/codex/bin/codex.js");
+    require(QDir().mkpath(QFileInfo(entry_point).absolutePath()), "create npm entry point directory");
+    write_file(entry_point, "// The interpreter fixture records this entry point without evaluating it.\n");
+    const QStringList codex_arguments = QStringList{
+        "-c", "hooks.session_start='logonomic hook'",
+        "-c", "shell_environment_policy.set.TERM='user-override'",
+        "resume", "019bc485-d9e8-76ae-9fcb-bf375cef3501",
+    } + arguments;
+    const QStringList node_command = QStringList{node, entry_point} + codex_arguments;
+    QString error;
+    {
+        Codex_command_environment commands;
+        QProcessEnvironment launch_environment = environment;
+        launch_environment.insert("PATH", original_path);
+        for (const QStringList& cli_arguments : {
+            codex_arguments, QStringList{}, QStringList{"--prompt", QString(16000, QLatin1Char('p'))}})
+        {
+            launch_environment.insert("PATH", original_path);
+            QStringList command = QStringList{node, entry_point} + cli_arguments;
+            require(commands.prepare(command, launch_environment, error, Codex_invocation{2}), error);
+            check_launch(command, launch_environment, fixture_directory, cli_arguments, original_path, "native",
+                "input from the terminal\n", QString(), entry_point);
+        }
+    }
+    {
+        Codex_command_environment commands;
+        QProcessEnvironment launch_environment = environment;
+        launch_environment.insert("PATH", original_path);
+        QStringList command = QStringList{native_codex} + codex_arguments;
+        require(commands.prepare(command, launch_environment, error, Codex_invocation{1}), error);
+        check_launch(command, launch_environment, fixture_directory, codex_arguments, original_path, "native");
+    }
+    {
+        Codex_command_environment commands;
+        QProcessEnvironment launch_environment = environment;
+        launch_environment.insert("PATH", original_path);
+        QStringList command = node_command;
+        require(commands.prepare(command, launch_environment, error), error);
+        require(command == node_command, "ordinary Node command was adapted as Codex");
+        const QJsonObject result = launch_fixture(command, launch_environment, fixture_directory);
+        const QJsonObject fields = result.value("environment").toObject();
+        require(result.value("arguments").toArray() == QJsonArray::fromStringList(codex_arguments),
+            "ordinary Node arguments changed");
+        require(result.value("entry_point").toString() == entry_point, "ordinary Node entry point changed");
+        require(fields.value("TERM").toString() == "xterm-256color", "ordinary Node TERM changed");
+        require(fields.value("TERM_PROGRAM").toString() == "inherited-terminal", "ordinary Node hint changed");
+    }
+    for (const qsizetype prefix_size : {qsizetype(-1), qsizetype(0), node_command.size() + 1}) {
+        Codex_command_environment commands;
+        QProcessEnvironment launch_environment = environment;
+        QStringList command = node_command;
+        require(!commands.prepare(command, launch_environment, error, Codex_invocation{prefix_size}) &&
+            !error.isEmpty(), "invalid verified prefix was accepted");
+        require(command == node_command && launch_environment == environment,
+            "invalid verified prefix changed the launch");
+    }
+    {
+        Codex_command_environment commands;
+        QProcessEnvironment launch_environment = environment;
+        QStringList command{"node", entry_point};
+        require(!commands.prepare(command, launch_environment, error, Codex_invocation{2}) &&
+            !error.isEmpty(), "unverified relative executable was accepted");
+    }
+}
+
 void run_tests()
 {
     const QProcessEnvironment parent = QProcessEnvironment::systemEnvironment();
@@ -255,6 +353,9 @@ void run_tests()
     QTemporaryDir other_directory;
     require(other_directory.isValid(), other_directory.errorString());
     require(same_existing_directory(fixture.path(), fixture.path()), "existing cwd identity rejected");
+#if defined(Q_OS_WIN)
+    require(same_existing_directory(fixture.path().toUpper(), fixture.path()), "Windows cwd casing rejected");
+#endif
     require(!same_existing_directory(fixture.path(), other_directory.path()), "different cwd accepted");
     const QString missing_directory = fixture.filePath("missing");
     require(!same_existing_directory(missing_directory, missing_directory), "missing cwd accepted");
@@ -312,6 +413,7 @@ void run_tests()
         "C:\\working files\\", "backslashes\\\\before\\\"quote", "percent%value",
         "amp&ersand", "pipe|value", "caret^value", "bang!value", "(parentheses)",
         "dollar$value", "line\nbreak"};
+    check_verified_invocations(executable, fixture.path(), environment, original_path, arguments);
     QStringList direct = QStringList{"codex"} + arguments;
     QString error;
     QString private_path;
@@ -489,9 +591,10 @@ int main(int argc, char** argv)
         const QStringList arguments = application.arguments().mid(1);
         const QString executable_name = QFileInfo(application.applicationFilePath()).completeBaseName();
         if (arguments.value(0) == "--fixture" || arguments.value(0) == "--fixture-encoded" ||
-            executable_name == "codex" || executable_name == "codex-pet")
+            executable_name == "codex" || executable_name == "codex-pet" ||
+            executable_name == "verified-codex" || executable_name == "node")
         {
-            return run_fixture(arguments);
+            return run_fixture(arguments, executable_name == "node");
         }
         run_tests();
     }
