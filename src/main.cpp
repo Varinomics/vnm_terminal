@@ -2,7 +2,7 @@
 #include "app_clipboard_reader.h"
 #include "app_clipboard_policy.h"
 #include "app_common.h"
-#include "app_hyperlink_policy.h"
+#include "vnm_terminal/app_support/app_hyperlink_policy.h"
 #include "app_metrics.h"
 #include "app_options.h"
 #include "app_options_settings_adapter.h"

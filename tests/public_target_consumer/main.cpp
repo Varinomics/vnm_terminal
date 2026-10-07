@@ -1,3 +1,4 @@
+#include "vnm_terminal/app_support/app_hyperlink_policy.h"
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/app_shortcuts.h"
 #include "vnm_terminal/app_support/backend_output_capture_json.h"
@@ -11,6 +12,7 @@
 #include "vnm_terminal/default_shell.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include <QByteArray>
 #include <QQmlEngine>
 #include <QQuickWindow>
 #include <QtGlobal>
@@ -35,6 +37,10 @@ int main()
     const auto decoded_capture_config = backend_output_capture_config_from_json(
         backend_output_capture_config_to_json(capture_config));
     if (!decoded_capture_config || *decoded_capture_config != capture_config) {
+        return 1;
+    }
+
+    if (!validated_terminal_hyperlink_url(QByteArrayLiteral("https://example.test/terminal"))) {
         return 1;
     }
 

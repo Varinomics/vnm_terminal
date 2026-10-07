@@ -438,6 +438,65 @@ private slots:
         QCOMPARE(deltas.size(), 2);
     }
 
+    void worker_cell_width_change_survives_updates_and_becomes_shared_default()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QSettings store(directory.filePath(QStringLiteral("cell-width.ini")), QSettings::IniFormat);
+        terminal_app::Terminal_display_settings display(true, &store);
+        VNM_TerminalSurface surface;
+        VNM_TerminalSurface other_surface;
+        const auto old_snapshot = terminal_app::terminal_settings_snapshot(surface);
+        QList<terminal_app::Terminal_setting_delta> deltas;
+        terminal_app::Terminal_settings_reconciler reconciler(
+            surface, true, [&deltas](const auto& delta) { deltas.push_back(delta); });
+        const int policy = old_snapshot.font_advance_policy ==
+            (int)vnm_terminal::Font_advance_policy::SNAP_ADVANCE_UP
+            ? (int)vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST
+            : (int)vnm_terminal::Font_advance_policy::SNAP_ADVANCE_UP;
+
+        // The live settings window writes this property; the application owns persistence.
+        QVERIFY(surface.setProperty("fontAdvancePolicy", policy));
+        QCOMPARE(surface.font_advance_policy_value(), policy);
+
+        auto unrelated_snapshot = old_snapshot;
+        unrelated_snapshot.font_size = 23.0;
+        reconciler.apply_manager_snapshot(unrelated_snapshot, false, 0);
+        QCOMPARE(surface.font_advance_policy_value(), policy);
+        QCOMPARE(surface.font_size(), 23.0);
+        QCOMPARE(deltas.size(), 1);
+        QCOMPARE(deltas.front().key, QStringLiteral("font_advance_policy"));
+        QCOMPARE(deltas.front().value.toInt(), policy);
+        QCOMPARE(deltas.front().sequence, quint64{1});
+
+        QVERIFY(display.apply_changes({{deltas.front().key, deltas.front().value}}, true));
+        const auto shared = terminal_app::terminal_settings_from_json(
+            QJsonObject::fromVariantMap(display.values()), old_snapshot);
+        QVERIFY(shared.has_value());
+        reconciler.apply_manager_snapshot(*shared, false, 1);
+        terminal_app::apply_terminal_settings_snapshot(*shared, other_surface);
+        QCOMPARE(surface.font_advance_policy_value(), policy);
+        QCOMPARE(other_surface.font_advance_policy_value(), policy);
+        QCOMPARE(deltas.size(), 1);
+
+        QVERIFY(display.apply_changes({{QStringLiteral("font_size"), 24.0}}, false));
+        store.sync();
+        QCOMPARE(store.status(), QSettings::NoError);
+        QSettings reopened_store(store.fileName(), QSettings::IniFormat);
+        terminal_app::Terminal_display_settings restarted(false, &reopened_store);
+        const auto persisted = terminal_app::terminal_settings_from_json(
+            QJsonObject::fromVariantMap(restarted.values()), old_snapshot);
+        QVERIFY(persisted.has_value());
+        VNM_TerminalSurface new_surface;
+        terminal_app::apply_terminal_settings_snapshot(*persisted, new_surface);
+        QCOMPARE(new_surface.font_advance_policy_value(), policy);
+        QCOMPARE(new_surface.font_size(), 24.0);
+
+        reconciler.apply_manager_snapshot(old_snapshot, true, 1);
+        QCOMPARE(surface.font_advance_policy_value(), old_snapshot.font_advance_policy);
+        QCOMPARE(deltas.size(), 1);
+    }
+
     void worker_reconciler_discards_only_acknowledged_edits()
     {
         VNM_TerminalSurface surface;

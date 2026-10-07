@@ -448,11 +448,10 @@ vnm_terminal_add_target_test(vnm_terminal_app_cli
 
 add_executable(vnm_terminal_app_hyperlink_policy
     terminal_app/app_hyperlink_policy_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/app_hyperlink_policy.cpp"
 )
 
 target_link_libraries(vnm_terminal_app_hyperlink_policy PRIVATE
-    Qt6::Core
+    vnm_terminal::vnm_terminal_app_support
 )
 
 set_target_properties(vnm_terminal_app_hyperlink_policy PROPERTIES

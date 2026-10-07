@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(vnm_terminal CONFIG REQUIRED)
 
 set(vnm_terminal_public_headers
+    vnm_terminal/app_support/app_hyperlink_policy.h
     vnm_terminal/app_support/app_settings.h
     vnm_terminal/app_support/app_shortcuts.h
     vnm_terminal/app_support/backend_output_capture_json.h

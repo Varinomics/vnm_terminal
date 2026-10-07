@@ -1,3 +1,4 @@
+#include "vnm_terminal/app_support/app_hyperlink_policy.h"
 #include "vnm_terminal/app_support/app_settings.h"
 #include "vnm_terminal/app_support/app_shortcuts.h"
 #include "vnm_terminal/app_support/backend_output_capture_json.h"

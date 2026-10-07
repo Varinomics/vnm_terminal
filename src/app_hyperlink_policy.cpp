@@ -1,4 +1,4 @@
-#include "app_hyperlink_policy.h"
+#include "vnm_terminal/app_support/app_hyperlink_policy.h"
 
 #include <QString>
 

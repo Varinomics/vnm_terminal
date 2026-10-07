@@ -32,6 +32,10 @@ void apply_pending_change(
         settings.font_size = value.value<qreal>();
     }
     else
+    if (key == QStringLiteral("font_advance_policy")) {
+        settings.font_advance_policy = value.toInt();
+    }
+    else
     if (key == QStringLiteral("text_renderer_mode")) {
         settings.text_renderer_mode = value.toInt();
     }
@@ -77,6 +81,8 @@ Terminal_settings_reconciler::Terminal_settings_reconciler(
         "font_size", &Terminal_settings_snapshot::font_size);
     connect_setting(&VNM_TerminalSurface::font_family_changed,
         "font_family", &Terminal_settings_snapshot::font_family);
+    connect_setting(&VNM_TerminalSurface::font_advance_policy_changed,
+        "font_advance_policy", &Terminal_settings_snapshot::font_advance_policy);
     connect_setting(&VNM_TerminalSurface::color_scheme_changed,
         "color_scheme", &Terminal_settings_snapshot::color_scheme);
     connect_setting(&VNM_TerminalSurface::invert_brightness_changed,

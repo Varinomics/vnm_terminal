@@ -98,6 +98,7 @@ add_custom_target(vnm_terminal_build_info ALL
     VERBATIM)
 
 set(vnm_terminal_app_support_headers
+    include/vnm_terminal/app_support/app_hyperlink_policy.h
     include/vnm_terminal/app_support/app_settings.h
     include/vnm_terminal/app_support/backend_output_capture_json.h
     include/vnm_terminal/app_support/codex_command_environment.h
@@ -156,6 +157,8 @@ endif()
 
 add_library(vnm_terminal_app_support STATIC
     ${vnm_terminal_codex_resource_sources}
+    src/app_hyperlink_policy.cpp
+    include/vnm_terminal/app_support/app_hyperlink_policy.h
     src/codex_command_environment.cpp
     include/vnm_terminal/app_support/codex_command_environment.h
     src/backend_output_capture_json.cpp
@@ -308,8 +311,6 @@ set(vnm_terminal_sources
     src/app_clipboard_policy.h
     src/app_common.cpp
     src/app_common.h
-    src/app_hyperlink_policy.cpp
-    src/app_hyperlink_policy.h
     src/app_metrics.cpp
     src/app_metrics.h
     src/app_options.cpp
