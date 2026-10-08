@@ -9,6 +9,7 @@
 #include <QMimeData>
 #include <QObject>
 #include <QQuickItem>
+#include <QQuickWindow>
 #include <QString>
 #include <QStringList>
 #include <QtGlobal>
@@ -162,9 +163,16 @@ private:
             return true;
         }
 
-        if (event.type() == QEvent::Drop && !m_surface.paste_text(*text)) {
-            event.ignore();
-            return true;
+        if (event.type() == QEvent::Drop) {
+            if (!m_surface.paste_text(*text)) {
+                event.ignore();
+                return true;
+            }
+
+            m_surface.forceActiveFocus(Qt::OtherFocusReason);
+            if (QQuickWindow* window = m_surface.window()) {
+                window->requestActivate();
+            }
         }
 
         event.setDropAction(Qt::CopyAction);
