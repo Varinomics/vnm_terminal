@@ -475,6 +475,9 @@ if(WIN32)
         QuickControls2FusionStyleImpl
         QuickControls2Impl
         QuickControls2WindowsStyleImpl
+        OPTIONAL_COMPONENTS
+        QuickControls2Windows
+        QuickNativeStyle
     )
 
     vnm_terminal_copy_qt_plugin(Qt6::QWindowsIntegrationPlugin platforms)
@@ -488,6 +491,12 @@ if(WIN32)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2FusionStyleImpl)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Impl)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2WindowsStyleImpl)
+    # Some Qt kits separate these style backing libraries from their QML plugins.
+    foreach(style_library QuickControls2Windows QuickNativeStyle)
+        if(TARGET Qt6::${style_library})
+            vnm_terminal_copy_qt_runtime_library(Qt6::${style_library})
+        endif()
+    endforeach()
 
     add_custom_command(TARGET vnm_terminal POST_BUILD
         COMMAND

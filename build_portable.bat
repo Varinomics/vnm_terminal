@@ -509,6 +509,20 @@ for %%F in (
     )
 )
 
+REM Qt kits with split style modules need their backing DLLs alongside the plugins.
+for %%F in (
+    Qt6QuickControls2Windows.dll
+    Qt6QuickNativeStyle.dll
+) do (
+    if exist "%QT_PREFIX%\bin\%%F" (
+        copy /y "%QT_PREFIX%\bin\%%F" "%RUNTIME_DIR%\%%F" >nul
+        if errorlevel 1 (
+            echo ERROR: Failed to copy Qt runtime DLL %%F into the runtime.
+            exit /b 1
+        )
+    )
+)
+
 echo.
 echo [5/6] Writing build info ...
 
