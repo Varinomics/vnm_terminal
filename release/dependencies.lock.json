@@ -6,7 +6,7 @@
       "branch": "master",
       "checkout_path": "vnm_terminal_surface",
       "output": "surface",
-      "commit": "5dc7c53d0539c266284df5501d9b51428f274e91"
+      "commit": "a24c14ff0d1d1a1e87947ad98e235fbd65e2492d"
     },
     "vnm_qml_chrome": {
       "repository": "Varinomics/vnm_qml_chrome",
