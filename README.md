@@ -197,7 +197,7 @@ checkout is found.
 `vnm_terminal_surface::vnm_terminal_surface` embedded-surface API target; its
 release version is independent of the application version. `vnm_qml_chrome`
 requires the same major version and at least the 1.8 top-frame stacking and
-default PID-reveal titlebar contracts. Source builds require Qt 6.11 or newer.
+default PID-reveal titlebar contracts. Source builds require Qt 6.12 or newer.
 Release packages are built with Qt 6.12.0.
 
 ```powershell

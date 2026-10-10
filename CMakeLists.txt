@@ -41,7 +41,7 @@ endif()
 
 add_subdirectory(portable_launcher)
 
-find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2 QuickShapes)
+find_package(Qt6 6.12 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2 QuickShapes)
 # The one CPack component this build packages. It is named here rather than in
 # cmake/vnm_terminal_packaging.cmake, which is included at the end of this file,
 # because dependencies must know it before registering their install rules.
@@ -296,8 +296,8 @@ if(NOT VNM_TERMINAL_BUILD_STANDALONE_APP)
     return()
 endif()
 
-find_package(Qt6 6.11 REQUIRED COMPONENTS Svg)
-find_package(Qt6Svg 6.11 REQUIRED COMPONENTS
+find_package(Qt6 6.12 REQUIRED COMPONENTS Svg)
+find_package(Qt6Svg 6.12 REQUIRED COMPONENTS
     QSvgPlugin
 )
 
@@ -464,11 +464,11 @@ if(WIN32)
         )
     endfunction()
 
-    find_package(Qt6Gui 6.11 REQUIRED COMPONENTS
+    find_package(Qt6Gui 6.12 REQUIRED COMPONENTS
         QICOPlugin
         QWindowsIntegrationPlugin
     )
-    find_package(Qt6 6.11 REQUIRED COMPONENTS
+    find_package(Qt6 6.12 REQUIRED COMPONENTS
         QuickControls2Basic
         QuickControls2BasicStyleImpl
         QuickControls2Fusion
