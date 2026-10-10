@@ -169,7 +169,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
-          version: '6.11.1'
+          version: '6.12.0'
           arch: 'win64_msvc2022_64'
           archives: 'qtbase qtdeclarative qtsvg'
           modules: 'qtshadertools'
@@ -383,7 +383,7 @@ jobs:
       - name: Install Qt and MinGW
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
-          version: '6.11.1'
+          version: '6.12.0'
           arch: 'win64_mingw'
           archives: 'qtbase qtdeclarative qtsvg'
           modules: 'qtshadertools'
@@ -505,7 +505,7 @@ jobs:
           RELEASE_TAG: >-
             ${{ github.event_name == 'release' &&
                 github.event.release.tag_name || inputs.release_tag || '' }}
-          QT_VERSION: '6.11.1'
+          QT_VERSION: '6.12.0'
           QT_IFW_VERSION: '4.11.0'
         run: |
           node tools/dependencies_lock.js record-provenance `

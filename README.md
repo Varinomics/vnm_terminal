@@ -47,7 +47,7 @@ All published packages are available from the
 | --- | --- | --- |
 | Windows x64 | EXE, portable ZIP | The signed Qt Installer Framework EXE installs under `Program Files` and includes Start Menu integration. The portable ZIP contains a top-level launcher. |
 | Linux x64 | RUN, DEB, RPM, AppImage | The graphical RUN installer uses Qt Installer Framework. DEB and RPM integrate with native package managers; AppImage is the portable option. |
-| macOS x64 | Application ZIP | The application bundle is ad-hoc signed but not Apple-notarized. Gatekeeper may quarantine it on first launch. |
+| macOS x64 | Application ZIP | Requires macOS 14.4 or newer. The application bundle is ad-hoc signed but not Apple-notarized. Gatekeeper may quarantine it on first launch. |
 
 Windows and Linux packages include their private Qt runtime. Release source
 archives are available on the same page.
@@ -197,8 +197,8 @@ checkout is found.
 `vnm_terminal_surface::vnm_terminal_surface` embedded-surface API target; its
 release version is independent of the application version. `vnm_qml_chrome`
 requires the same major version and at least the 1.8 top-frame stacking and
-default PID-reveal titlebar contracts. The validated Qt baseline is Qt 6.11.1
-or newer.
+default PID-reveal titlebar contracts. Source builds require Qt 6.11 or newer.
+Release packages are built with Qt 6.12.0.
 
 ```powershell
 cmake -S . -B build -DBUILD_TESTING=ON
