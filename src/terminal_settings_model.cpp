@@ -27,6 +27,7 @@ constexpr setting_name_t k_setting_names[] = {
     {"lcdSubpixelOrder",           "lcd_subpixel_order"},
     {"invertBrightness",           "invert_brightness"},
     {"rowTimestampTooltipEnabled", "row_timestamp_tooltip_enabled"},
+    {"copyOnSelect",               "copy_on_select"},
     {"scrollbackBufferSizeMiB",     "scrollback_buffer_size_mib"},
 };
 

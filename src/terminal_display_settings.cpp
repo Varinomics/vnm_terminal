@@ -60,7 +60,9 @@ bool settings_values_valid(const QVariantMap& changes, bool snapshot)
             }
         }
         else
-        if (key == QStringLiteral("row_timestamp_tooltip_enabled")) {
+        if (key == QStringLiteral("row_timestamp_tooltip_enabled") ||
+            key == QStringLiteral("copy_on_select"))
+        {
             if (value.metaType().id() != QMetaType::Bool) {
                 return false;
             }
@@ -139,6 +141,7 @@ Terminal_settings_snapshot settings_snapshot(
     read("lcd_subpixel_order",            base.lcd_subpixel_order);
     read("invert_brightness",              base.invert_brightness);
     read("row_timestamp_tooltip_enabled",  base.row_timestamp_tooltip_enabled);
+    read("copy_on_select",                 base.copy_on_select);
     if (values.contains(QStringLiteral("scrollback_buffer_size_mib"))) {
         base.scrollback_buffer_size_mib = values.value(
             QStringLiteral("scrollback_buffer_size_mib")).toInt();
@@ -180,6 +183,7 @@ QVariantMap terminal_settings_payload(const Terminal_settings_snapshot& settings
         {QStringLiteral("lcd_subpixel_order"), settings.lcd_subpixel_order},
         {QStringLiteral("invert_brightness"), settings.invert_brightness},
         {QStringLiteral("row_timestamp_tooltip_enabled"), settings.row_timestamp_tooltip_enabled},
+        {QStringLiteral("copy_on_select"), settings.copy_on_select},
     };
     if (settings.scrollback_buffer_size_mib) {
         result.insert(

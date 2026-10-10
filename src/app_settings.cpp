@@ -260,6 +260,10 @@ Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
         appearance.row_timestamp_tooltip,
         snapshot.row_timestamp_tooltip_enabled);
     snapshot.scrollback_buffer_size_mib = appearance.scrollback_buffer_size_mib;
+    settings.beginGroup(QLatin1String(k_interaction_settings_group));
+    snapshot.copy_on_select = settings.value(
+        QLatin1String(k_interaction_copy_on_select), false).toBool();
+    settings.endGroup();
     return snapshot;
 }
 
@@ -277,6 +281,7 @@ Terminal_settings_snapshot terminal_settings_snapshot(
     snapshot.row_timestamp_tooltip_enabled =
         surface.row_timestamp_tooltip_enabled();
     snapshot.scrollback_buffer_size_mib = surface.scrollback_buffer_size_mib();
+    snapshot.copy_on_select = surface.copy_on_select();
     return snapshot;
 }
 
@@ -290,6 +295,10 @@ void save_terminal_settings_snapshot(
             QLatin1String(k_window_settings_font_size),
             snapshot.font_size);
     }
+    settings.endGroup();
+
+    settings.beginGroup(QLatin1String(k_interaction_settings_group));
+    settings.setValue(QLatin1String(k_interaction_copy_on_select), snapshot.copy_on_select);
     settings.endGroup();
 
     Persisted_appearance_settings appearance;
@@ -356,6 +365,7 @@ void apply_terminal_settings_snapshot(
 
     surface.set_row_timestamp_tooltip_enabled(
         snapshot.row_timestamp_tooltip_enabled);
+    surface.set_copy_on_select(snapshot.copy_on_select);
     if (snapshot.scrollback_buffer_size_mib.has_value()) {
         surface.set_scrollback_buffer_size_mib(*snapshot.scrollback_buffer_size_mib);
     }

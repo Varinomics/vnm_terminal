@@ -49,7 +49,7 @@ Item {
             ? terminalSurface.x + terminalSurface.width
             : root.width - terminalSurface.x
 
-        width: Math.min(360, Math.max(0, content_right - terminalSurface.x))
+        width: Math.min(460, Math.max(0, content_right - terminalSurface.x))
         height: 30
         x: content_right - width
         y: terminalSurface.y
@@ -123,7 +123,7 @@ Item {
         Text {
             id: result_label
             objectName: "terminal_search_result_text"
-            anchors.right: previous_button.left
+            anchors.right: match_case_button.left
             anchors.rightMargin: 8
             anchors.verticalCenter: parent.verticalCenter
             width: 72
@@ -132,6 +132,30 @@ Item {
             font.pixelSize: 12
             elide: Text.ElideRight
             text: searchBar.resultText
+        }
+
+        Rectangle {
+            id: match_case_button
+            objectName: "terminal_search_match_case_button"
+            anchors.right: previous_button.left
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            width: 100
+            color: match_case_mouse.pressed ? "#343d4a"
+                : match_case_mouse.containsMouse ? "#272f3a" : "transparent"
+
+            Text {
+                anchors.centerIn: parent
+                text: terminalSurface.searchCaseSensitive ? "\u2611 Match case" : "\u2610 Match case"
+                color: searchBar.chromeActive ? "#e2e8f0" : "#8e97a3"
+                font.pixelSize: 12
+            }
+            MouseArea {
+                id: match_case_mouse
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: terminalSurface.searchCaseSensitive = !terminalSurface.searchCaseSensitive
+            }
         }
 
         Rectangle {

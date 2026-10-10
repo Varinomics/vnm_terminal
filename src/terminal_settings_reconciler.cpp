@@ -95,6 +95,13 @@ Terminal_settings_reconciler::Terminal_settings_reconciler(
         "row_timestamp_tooltip_enabled",
         &Terminal_settings_snapshot::row_timestamp_tooltip_enabled);
     QObject::connect(
+        &m_surface, &VNM_TerminalSurface::copy_on_select_changed,
+        this, [this] {
+            if (!m_suppress_changes) {
+                m_copy_on_select_override = m_surface.copy_on_select();
+            }
+        });
+    QObject::connect(
         &m_surface, &VNM_TerminalSurface::scrollback_buffer_size_mib_changed,
         this, [this] {
             record_change(QStringLiteral("scrollback_buffer_size_mib"),
@@ -139,6 +146,9 @@ Terminal_settings_snapshot Terminal_settings_reconciler::apply_manager_snapshot(
     }
     QScopedValueRollback suppress_changes(m_suppress_changes, true);
     m_dark_mode = dark_mode;
+    if (m_copy_on_select_override.has_value()) {
+        settings.copy_on_select = *m_copy_on_select_override;
+    }
     apply_terminal_settings_snapshot(settings, m_surface);
     return settings;
 }

@@ -8,6 +8,7 @@
 #include <QVariant>
 
 #include <functional>
+#include <optional>
 
 namespace vnm_terminal::terminal_app {
 
@@ -54,6 +55,7 @@ private:
     VNM_TerminalSurface& m_surface;
     Changed              m_changed;
     QMap<QString, Pending_change> m_pending;
+    std::optional<bool> m_copy_on_select_override;
     quint64 m_sequence = 0;
     bool    m_dark_mode;
     bool    m_suppress_changes = false;

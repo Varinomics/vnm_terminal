@@ -14,7 +14,8 @@ namespace vnm_terminal::terminal_app {
 
 // Neutral embedded-terminal settings. Product settings scopes and command-line
 // provenance stay with their owners; this value contains only portable
-// appearance state that can be decoded, applied to a surface, and encoded.
+// appearance and interaction state that can be decoded, applied to a surface,
+// and encoded.
 struct Terminal_settings_snapshot
 {
     QString color_scheme = QStringLiteral("Classic");
@@ -28,6 +29,7 @@ struct Terminal_settings_snapshot
         static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::AUTO);
     bool    invert_brightness = false;
     bool    row_timestamp_tooltip_enabled = true;
+    bool    copy_on_select = false;
     std::optional<int> scrollback_buffer_size_mib;
 };
 

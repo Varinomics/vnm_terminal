@@ -6,6 +6,7 @@
 #include "vnm_terminal/app_support/terminal_settings_dialog.h"
 #include "vnm_terminal/app_support/terminal_settings_model.h"
 #include "vnm_terminal/app_support/terminal_settings_window.h"
+#include "vnm_terminal/app_support/terminal_search_bar.h"
 
 #include "terminal_file_drop.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
@@ -31,11 +32,13 @@
 #include <QQmlEngine>
 #include <QQmlExpression>
 #include <QQuickWindow>
+#include <QQuickItem>
 #include <QScopeGuard>
 #include <QSettings>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
+#include <qqml.h>
 
 #include <cstddef>
 #include <limits>
@@ -316,6 +319,7 @@ private slots:
                 static_cast<int>(VNM_TerminalSurface::Lcd_subpixel_order::BGR)},
             {QStringLiteral("invert_brightness"), true},
             {QStringLiteral("row_timestamp_tooltip_enabled"), false},
+            {QStringLiteral("copy_on_select"), true},
             {QStringLiteral("scrollback_buffer_size_mib"), 32},
         };
         QVERIFY(display.apply_changes(changes, true));
@@ -436,6 +440,43 @@ private slots:
         QCOMPARE(reconciled.font_size, 22.0);
         QCOMPARE(surface.font_size(), 22.0);
         QCOMPARE(deltas.size(), 2);
+    }
+
+    void copy_default_survives_restart_and_worker_override_stays_local()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        QSettings store(directory.filePath(QStringLiteral("copy.ini")), QSettings::IniFormat);
+        terminal_app::Terminal_display_settings preferences(true, &store);
+        QVERIFY(!preferences.values().value(QStringLiteral("copy_on_select")).toBool());
+        QVERIFY(preferences.apply_changes({{QStringLiteral("copy_on_select"), true}}, true));
+        terminal_app::Terminal_display_settings restarted(true, &store);
+        QVERIFY(restarted.values().value(QStringLiteral("copy_on_select")).toBool());
+        QVERIFY(store.value(QStringLiteral("interaction/copy_on_select")).toBool());
+
+        VNM_TerminalSurface surface;
+        terminal_app::apply_terminal_settings_snapshot(
+            terminal_app::load_terminal_settings_snapshot(store), surface);
+        QVERIFY(surface.copy_on_select());
+        QList<terminal_app::Terminal_setting_delta> deltas;
+        terminal_app::Terminal_settings_reconciler reconciler(
+            surface, true, [&deltas](const auto& delta) { deltas.push_back(delta); });
+        auto snapshot = terminal_app::load_terminal_settings_snapshot(store);
+        snapshot.copy_on_select = false;
+        reconciler.apply_manager_snapshot(snapshot, true, 0);
+        QVERIFY(!surface.copy_on_select());
+        snapshot.copy_on_select = true;
+        reconciler.apply_manager_snapshot(snapshot, false, 0);
+        QVERIFY(surface.copy_on_select());
+        QVERIFY(deltas.isEmpty());
+
+        surface.set_copy_on_select(false);
+        snapshot.font_size = 21.0;
+        reconciler.apply_manager_snapshot(snapshot, true, 0);
+        QVERIFY(!surface.copy_on_select());
+        QCOMPARE(surface.font_size(), 21.0);
+        QVERIFY(deltas.isEmpty());
+        QVERIFY(terminal_app::load_terminal_settings_snapshot(store).copy_on_select);
     }
 
     void worker_cell_width_change_survives_updates_and_becomes_shared_default()
@@ -703,6 +744,7 @@ private slots:
         expected.lcd_subpixel_order = 5;
         expected.invert_brightness = true;
         expected.row_timestamp_tooltip_enabled = false;
+        expected.copy_on_select = true;
         const auto without_scrollback = terminal_app::terminal_settings_payload(expected);
         QVERIFY(!without_scrollback.contains(QStringLiteral("scrollback_buffer_size_mib")));
         expected.scrollback_buffer_size_mib = 32;
@@ -750,6 +792,7 @@ private slots:
         expected.row_timestamp_tooltip_enabled = false;
         expected.scrollback_buffer_size_mib = 32;
 
+        expected.copy_on_select = true;
         terminal_app::save_terminal_settings_snapshot(settings, expected);
         const terminal_app::Terminal_settings_snapshot actual =
             terminal_app::load_terminal_settings_snapshot(settings);
@@ -765,6 +808,7 @@ private slots:
             actual.row_timestamp_tooltip_enabled,
             expected.row_timestamp_tooltip_enabled);
         QCOMPARE(actual.scrollback_buffer_size_mib, expected.scrollback_buffer_size_mib);
+        QCOMPARE(actual.copy_on_select, expected.copy_on_select);
         expected.scrollback_buffer_size_mib.reset();
         settings.setValue(QStringLiteral("appearance/scrollback_limit"), 200);
         terminal_app::save_terminal_settings_snapshot(
@@ -926,6 +970,7 @@ private slots:
         snapshot.font_advance_policy =
             static_cast<int>(vnm_terminal::Font_advance_policy::SNAP_ADVANCE_NEAREST);
         snapshot.invert_brightness = true;
+        snapshot.copy_on_select = true;
         snapshot.scrollback_buffer_size_mib = 16;
 
         VNM_TerminalSurface surface;
@@ -934,6 +979,7 @@ private slots:
         QCOMPARE(surface.font_size(), snapshot.font_size);
         QCOMPARE(surface.font_advance_policy_value(), snapshot.font_advance_policy);
         QCOMPARE(surface.invert_brightness(), snapshot.invert_brightness);
+        QCOMPARE(surface.copy_on_select(), snapshot.copy_on_select);
         QCOMPARE(surface.scrollback_buffer_size_mib(), *snapshot.scrollback_buffer_size_mib);
     }
 
@@ -1001,6 +1047,9 @@ private slots:
         QCOMPARE(changes.size(), 3);
         QCOMPARE(preferences.values().value(QStringLiteral("font_size")).toDouble(), 18.0);
         QVERIFY(terminal_app::load_terminal_settings_snapshot(store).invert_brightness);
+        QVERIFY(edit(QStringLiteral("preferences.copyOnSelect = true")));
+        QCOMPARE(changes.size(), 4);
+        QVERIFY(terminal_app::load_terminal_settings_snapshot(store).copy_on_select);
     }
 
     void settings_window_opens_and_edits_without_a_surface()
@@ -1026,10 +1075,44 @@ private slots:
         QVERIFY(font_size->setProperty("value", 21));
         QVERIFY(QMetaObject::invokeMethod(font_size, "valueModified"));
         QCOMPARE(model.value(QStringLiteral("fontSize")).toInt(), 21);
+        QObject* copy_on_select = window->findChild<QObject*>(QStringLiteral("copy_on_select_switch"));
+        QVERIFY(copy_on_select != nullptr);
+        QVERIFY(copy_on_select->property("enabled").toBool());
+        QSignalSpy changes(&model, &terminal_app::Terminal_settings_model::changes_requested);
+        QVERIFY(copy_on_select->setProperty("checked", true));
+        QVERIFY(QMetaObject::invokeMethod(copy_on_select, "toggled"));
+        QCOMPARE(model.value(QStringLiteral("copyOnSelect")).toBool(), true);
+        QCOMPARE(changes.size(), 1);
+        QCOMPARE(changes.at(0).at(0).toMap(), QVariantMap({{QStringLiteral("copy_on_select"), true}}));
         QVERIFY(window->close());
         settings.show_window();
         QCoreApplication::processEvents();
         QVERIFY(window->isVisible());
+        QVERIFY(warnings.isEmpty());
+    }
+
+    void terminal_search_bar_changes_matching_without_changing_query()
+    {
+        QQmlEngine engine;
+        QSignalSpy warnings(&engine, &QQmlEngine::warnings);
+        QQuickWindow window;
+        window.resize(600, 300);
+        VNM_TerminalSurface surface(window.contentItem());
+        surface.setSize(QSizeF(600, 300));
+        terminal_app::Terminal_search_bar search(engine, window, surface);
+        QVERIFY2(search.is_valid(), qPrintable(search.error_string()));
+        surface.set_search_query(QStringLiteral("project"));
+        QVERIFY(surface.search_case_sensitive());
+        QQuickItem* button = search.root_item()->findChild<QQuickItem*>(
+            QStringLiteral("terminal_search_match_case_button"));
+        QVERIFY(button != nullptr);
+        QQmlExpression toggle(qmlContext(button), button, QStringLiteral("match_case_mouse.clicked(null)"));
+        toggle.evaluate();
+        QVERIFY2(!toggle.hasError(), qPrintable(toggle.error().toString()));
+        QVERIFY(!surface.search_case_sensitive());
+        QCOMPARE(surface.search_query(), QStringLiteral("project"));
+        toggle.evaluate();
+        QVERIFY(surface.search_case_sensitive());
         QVERIFY(warnings.isEmpty());
     }
 

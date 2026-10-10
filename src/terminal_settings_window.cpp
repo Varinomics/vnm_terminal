@@ -1287,7 +1287,8 @@ R"qml(
                         spacing: 12
 
                         S_Label {
-                            text: "Copy on selection"
+                            text: hasLiveSurface ? "Copy on selection (this terminal)"
+                                : "Copy on selection (default)"
                             Layout.alignment: Qt.AlignVCenter
                         }
 
@@ -1297,8 +1298,7 @@ R"qml(
 
                         S_Switch {
                             objectName: "copy_on_select_switch"
-                            enabled: hasLiveSurface
-                            checked: hasLiveSurface && surface.copyOnSelect
+                            checked: surface.copyOnSelect
                             onToggled: surface.copyOnSelect = checked
                         }
                     }
