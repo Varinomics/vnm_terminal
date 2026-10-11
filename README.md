@@ -200,6 +200,31 @@ requires the same major version and at least the 1.8 top-frame stacking and
 default PID-reveal titlebar contracts. Source builds require Qt 6.12 or newer.
 Release packages are built with Qt 6.12.0.
 
+### QML build and runtime policy
+
+Application QML and `VNM_Chrome` use `qt_add_qml_module(QML_FILES ...
+DISCARD_QML_CONTENTS)` in every configuration. Qt embeds compiled QML units;
+the original QML source text is omitted from the resources. Keep
+`QT_QML_NO_CACHEGEN=OFF` (the default); configure rejects disabling generation.
+Qt compiles supported bindings to native code and retains compiled bytecode
+for the others. These units require the matching Qt build
+at runtime, so rebuild the application and its QML dependencies when changing
+Qt. There is no embedded source fallback, including in Debug builds, and QML
+debugging that disables compiled units cannot load these components.
+
+Before constructing Qt application or QML engine objects, the standalone
+application sets `QML_DISK_CACHE=aot` and removes `QML_FORCE_DISK_CACHE` and
+`QML_DISABLE_DISK_CACHE` from its own environment. This retains embedded units
+while disabling generated `.qmlc` disk-cache reads and writes. Child terminal
+processes retain the caller's original environment. Embedding applications
+must apply that runtime policy themselves; the libraries do not change their
+host's environment. Other projects can use the same build and runtime settings.
+
+Compiled QML can still contain strings, metadata, bytecode and native code;
+omitting source text is not encryption.
+
+### Build and test
+
 ```powershell
 cmake -S . -B build -DBUILD_TESTING=ON
 cmake --build build --config Release

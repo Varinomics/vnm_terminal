@@ -443,12 +443,9 @@ REM QML debugger/profiler and are not needed in a distribution build.
 if exist "%RUNTIME_DIR%\qmltooling" rmdir /s /q "%RUNTIME_DIR%\qmltooling"
 
 REM Deploy the QtQml and QtQuick QML module trees.
-REM windeployqt cannot discover the chrome's QML imports: the chrome QML is a
-REM C++ raw-string literal (see k_terminal_chrome_qml in src\qml_chrome.cpp),
-REM loaded via QQmlComponent with a synthetic qrc: URL, so there is no .qml file
-REM for windeployqt's import scanner to read, and it leaves qml\ empty. The chrome
-REM imports QtQuick, QtQuick.Window (which lives under the QtQuick module tree),
-REM and QtQuick.Shapes. Mirror the regular build's post-build step
+REM The application and chrome embed compiled QML without source contents.
+REM Keep the explicit runtime module deployment used by the regular build's
+REM post-build step
 REM (vnm_terminal_copy_qt_qml_module for QtQml and QtQuick in CMakeLists.txt) by
 REM copying those module trees from the Qt kit. Without them the portable app
 REM exits immediately with: module "QtQuick.Window" is not installed
@@ -473,9 +470,7 @@ if not exist "%RUNTIME_DIR%\qml\QtQuick\Window" (
 
 REM Deploy the QtQuick.Controls / Templates / Layouts runtime DLLs.
 REM The chrome QML and the VNM_Chrome module it loads import QtQuick.Controls,
-REM QtQuick.Controls.Basic, QtQuick.Layouts and QtQuick.Shapes. windeployqt cannot
-REM see these imports (the chrome QML is a C++ string and the VNM_Chrome QML is
-REM qrc-embedded in the vnm_qml_chrome library), so it does not deploy the C++
+REM QtQuick.Controls.Basic, QtQuick.Layouts and QtQuick.Shapes. Include the C++
 REM libraries that the QtQuick.Controls and QtQuick.Shapes QML plugins load
 REM dynamically. A local dev build resolves them from the Qt bin on PATH; a
 REM portable build has no such fallback. Mirror the regular build's explicit list

@@ -42,6 +42,9 @@ endif()
 add_subdirectory(portable_launcher)
 
 find_package(Qt6 6.12 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2 QuickShapes)
+if(QT_QML_NO_CACHEGEN)
+    message(FATAL_ERROR "vnm_terminal requires QML cache generation because QML source contents are discarded")
+endif()
 # The one CPack component this build packages. It is named here rather than in
 # cmake/vnm_terminal_packaging.cmake, which is included at the end of this file,
 # because dependencies must know it before registering their install rules.
@@ -194,6 +197,25 @@ add_library(vnm_terminal_app_support STATIC
     include/vnm_terminal/app_support/terminal_settings_window.h
 )
 add_dependencies(vnm_terminal_app_support vnm_terminal_build_info)
+set(vnm_terminal_qml_files
+    qml/terminal_qml_chrome.qml
+    qml/terminal_search_bar.qml
+    qml/terminal_settings_window.qml
+)
+foreach(qml_file IN LISTS vnm_terminal_qml_files)
+    get_filename_component(qml_name "${qml_file}" NAME)
+    set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")
+endforeach()
+qt_add_qml_module(vnm_terminal_app_support
+    URI vnm_terminal
+    VERSION 1.0
+    RESOURCE_PREFIX "/"
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal"
+    NO_PLUGIN
+    DISCARD_QML_CONTENTS
+    QML_FILES ${vnm_terminal_qml_files}
+    OUTPUT_TARGETS vnm_terminal_qml_output_targets
+)
 target_include_directories(vnm_terminal_app_support
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -254,6 +276,9 @@ if(PROJECT_IS_TOP_LEVEL)
         SOURCE_DIR)
     set_target_properties(vnm_qml_chrome PROPERTIES
         EXPORT_NAME vnm_terminal_qml_chrome_runtime)
+    get_directory_property(vnm_terminal_chrome_qml_output_targets
+        DIRECTORY "${vnm_terminal_qml_chrome_source_dir}"
+        DEFINITION vnm_qml_chrome_qml_output_targets)
 
     if(COMMAND vnm_fonts_install_package)
         vnm_fonts_install_package()
@@ -262,10 +287,13 @@ if(PROJECT_IS_TOP_LEVEL)
         vnm_terminal_app_support
         vnm_terminal_default_shell
         vnm_qml_chrome
+        ${vnm_terminal_qml_output_targets}
+        ${vnm_terminal_chrome_qml_output_targets}
         EXPORT vnm_terminalTargets
         ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        OBJECTS DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     )
     install(FILES ${vnm_terminal_app_support_headers}
         DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/vnm_terminal/app_support")

@@ -1,0 +1,1214 @@
+import QtQuick
+import QtQuick.Window
+import QtQuick.Layouts
+import QtQuick.Controls.Basic as Basic
+import VNM_Chrome
+
+Window {
+    id: win
+    objectName: "terminal_settings_window"
+    property bool dark_mode: true
+
+    readonly property int settings_font_pixel_size: Math.max(1, Math.round(
+        VNM_system_window.application_font.pixelSize))
+    readonly property int caption_font_pixel_size: Math.max(1, Math.round(settings_font_pixel_size * 10 / 12))
+    readonly property int hint_font_pixel_size: Math.max(1, Math.round(settings_font_pixel_size * 11 / 12))
+    readonly property int minimum_content_width: Math.ceil(Math.max(
+        form_left_column.implicitWidth, form_right_column.implicitWidth, 180))
+    readonly property int natural_width: Math.ceil(
+        2 * frame_border_width + 2 * body_margin + minimum_content_width + settings_body_scrollbar.implicitWidth)
+    readonly property int preferred_width: Math.max(552, Math.ceil(
+        2 * frame_border_width + 2 * body_margin + form_columns.natural_width + settings_body_scrollbar.implicitWidth))
+    readonly property int settings_form_label_width: Math.max(72, Math.ceil(Math.max(
+        family_label.implicitWidth, size_label.implicitWidth, cell_width_label.implicitWidth,
+        renderer_label.implicitWidth, lcd_subpixel_label.implicitWidth)))
+    readonly property int unconstrained_maximum_size: 16777215
+    property int available_width_limit: 0
+    property int available_height_limit: 0
+    readonly property int effective_width_limit: available_width_limit > 0
+        ? available_width_limit : unconstrained_maximum_size
+    readonly property int effective_height_limit: available_height_limit > 0
+        ? available_height_limit : unconstrained_maximum_size
+    readonly property int natural_height: Math.ceil(
+        2 * frame_border_width
+        + titlebar_height
+        + 2 * body_margin
+        + settings_body.implicitHeight)
+    readonly property int preferred_height: Math.max(600, natural_height)
+
+    width: Math.min(preferred_width, effective_width_limit)
+    height: Math.min(preferred_height, effective_height_limit)
+    minimumWidth: Math.min(natural_width, effective_width_limit)
+    minimumHeight: Math.min(natural_height, effective_height_limit)
+    maximumWidth: effective_width_limit
+    maximumHeight: effective_height_limit
+    visible: false
+    flags: Qt.Tool | Qt.FramelessWindowHint
+    color: dark_mode ? "#202020" : "#f4f4f4"
+    title: "Terminal settings"
+
+    signal close_requested()
+    signal move_requested()
+    signal resize_requested(int edges)
+    signal font_family_selected(string family)
+
+    readonly property int titlebar_height: settings_titlebar.implicitHeight
+    readonly property int body_margin: 16
+    readonly property real frame_border_width: 1
+    readonly property bool resize_enabled: visibility === Window.Windowed
+    readonly property real resize_outward_extent:
+        VNM_chrome_geometry.resize_outward_extent(
+            frame_border_width,
+            VNM_chrome_geometry.default_resize_target_extent)
+
+    readonly property color section_color:      dark_mode ? "#8d99a8" : "#465366"
+    readonly property color label_color:        dark_mode ? "#9aa4b2" : "#465366"
+    readonly property color value_color:        dark_mode ? "#dfe5ee" : "#202834"
+    readonly property color hint_color:         dark_mode ? "#6c7886" : "#596575"
+    readonly property color warning_color:      dark_mode ? "#d6b25a" : "#896315"
+    readonly property color accent_color:       dark_mode ? "#71b4ff" : "#1763ad"
+    readonly property color separator_color:    dark_mode ? "#343434" : "#d0d0d0"
+    readonly property color field_color:        dark_mode ? "#262626" : "#ffffff"
+    readonly property color field_hover_color:  dark_mode ? "#2e2e2e" : "#eaeaea"
+    readonly property color field_border_color: dark_mode ? "#3a3a3a" : "#b8b8b8"
+    readonly property color field_focus_color:  dark_mode ? "#5a5a5a" : "#1763ad"
+    readonly property color popup_color:        dark_mode ? "#242424" : "#ffffff"
+    readonly property color row_hover_color:    dark_mode ? "#303030" : "#e5e5e5"
+    readonly property color card_color:         dark_mode ? "#252525" : "#ffffff"
+    readonly property color card_hover_color:   dark_mode ? "#2d2d2d" : "#eaeaea"
+    readonly property color card_border_color:  dark_mode ? "#383838" : "#b8b8b8"
+    readonly property color selection_color:    dark_mode ? "#2f4a6b" : "#c4dfff"
+
+    readonly property bool msdf_unavailable: hasLiveSurface && surface.textRendererMode !== 2
+        && !surface.msdfTextChecking
+        && !surface.msdfTextAvailable
+    readonly property string renderer_status_text: {
+        if (surface.textRendererMode === 2)
+            return "Using glyph rendering only."
+        if (!hasLiveSurface)
+            return "Renderer availability is checked when a terminal opens."
+        if (surface.msdfTextChecking)
+            return "Checking MSDF availability for " + surface.fontFamily + "..."
+        if (!surface.msdfTextAvailable)
+            return "MSDF is unavailable for " + surface.fontFamily
+                + "; using glyph rendering."
+        return "MSDF preferred; unsupported text automatically uses glyph rendering."
+    }
+
+    function enforce_size_limits() {
+        const bounded_width = Math.max(minimumWidth, Math.min(width, maximumWidth))
+        const bounded_height = Math.max(minimumHeight, Math.min(height, maximumHeight))
+        if (width !== bounded_width)
+            width = bounded_width
+        if (height !== bounded_height)
+            height = bounded_height
+    }
+
+    onWidthChanged: enforce_size_limits()
+    onHeightChanged: enforce_size_limits()
+    onMinimumWidthChanged: enforce_size_limits()
+    onMinimumHeightChanged: enforce_size_limits()
+    onMaximumWidthChanged: enforce_size_limits()
+    onMaximumHeightChanged: enforce_size_limits()
+    Component.onCompleted: enforce_size_limits()
+
+    component S_SectionHeader: RowLayout {
+        property alias text: section_text.text
+
+        Layout.fillWidth: true
+        spacing: 10
+
+        Text {
+            id: section_text
+            color: win.section_color
+            font.pixelSize: win.caption_font_pixel_size
+            font.weight: Font.DemiBold
+            font.letterSpacing: 1.2
+            font.capitalization: Font.AllUppercase
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 1
+            color: win.separator_color
+        }
+    }
+
+    component S_Label: Text {
+        color: win.label_color
+        font.pixelSize: win.settings_font_pixel_size
+        Layout.minimumWidth: implicitWidth
+    }
+
+    component S_Form_Label: S_Label {
+        Layout.alignment: Qt.AlignVCenter
+        Layout.minimumWidth: win.settings_form_label_width
+        Layout.preferredWidth: win.settings_form_label_width
+        Layout.maximumWidth: win.settings_form_label_width
+    }
+
+    // Carries the wording that used to sit beside a control as static text.
+    // `content_object_name` names the inner label so the status text a control
+    // publishes stays reachable without exposing the popup itself.
+    component S_ToolTip: Basic.ToolTip {
+        id: tip
+
+        property alias content_object_name: tip_text.objectName
+
+        delay: 400
+        timeout: 12000
+        padding: 8
+
+        contentItem: Text {
+            id: tip_text
+
+            text: tip.text
+            color: win.value_color
+            font.pixelSize: win.hint_font_pixel_size
+            wrapMode: Text.Wrap
+        }
+
+        background: Rectangle {
+            radius: 4
+            color: win.popup_color
+            border.width: 1
+            border.color: win.field_border_color
+        }
+    }
+
+    component S_ScrollBar: Basic.ScrollBar {
+        id: bar
+
+        implicitWidth: 8
+        implicitHeight: 8
+        padding: 2
+        policy: Basic.ScrollBar.AsNeeded
+        visible: bar.size < 1.0
+
+        background: Rectangle {
+            color: "transparent"
+        }
+
+        contentItem: Rectangle {
+            implicitWidth: 4
+            radius: 2
+            color: bar.pressed ? win.label_color : win.hint_color
+        }
+    }
+
+    component S_Combo: Basic.ComboBox {
+        id: combo
+
+        // Per-row hooks for the popup list: `row_enabled` grays out rows that
+        // are not currently selectable, and `use_row_font` renders each row in
+        // the font family it names (for font pickers).
+        property var  row_enabled: (row) => true
+        property bool use_row_font: false
+
+        implicitHeight: 30
+        rightPadding: 4
+        font.pixelSize: win.settings_font_pixel_size
+        hoverEnabled: true
+
+        background: VNM_Snapped_rectangle {
+            radius: 4
+            color: combo.hovered || combo.down ? win.field_hover_color : win.field_color
+            border_width: 1
+            border_color: combo.activeFocus || combo.down
+                ? win.field_focus_color : win.field_border_color
+
+            Behavior on color { ColorAnimation { duration: 100 } }
+        }
+
+        contentItem: Text {
+            leftPadding: 10
+            rightPadding: combo.rightPadding + combo.indicator.width + 5
+            text: combo.displayText
+            font: combo.font
+            color: win.value_color
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+
+        indicator: Text {
+            x: combo.width - width - combo.rightPadding
+            y: (combo.height - height) / 2 - font.pixelSize / 32
+            text: "\uf107"
+            font { family: settingsIconFontFamily; pixelSize: combo.font.pixelSize; }
+            color: win.label_color
+        }
+
+        delegate: Basic.ItemDelegate {
+            id: combo_row
+
+            required property int index
+            required property var modelData
+
+            width: ListView.view ? ListView.view.width : 0
+            height: 28
+            enabled: combo.row_enabled(modelData)
+            highlighted: combo.highlightedIndex === index
+            hoverEnabled: true
+
+            contentItem: Text {
+                leftPadding: 4
+                text: combo.textRole ? combo_row.modelData[combo.textRole] : combo_row.modelData
+                font.pixelSize: win.settings_font_pixel_size
+                font.family: combo.use_row_font ? combo_row.modelData : combo.font.family
+                color: !combo_row.enabled ? win.hint_color
+                    : combo_row.index === combo.currentIndex ? win.accent_color : win.value_color
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+
+            background: VNM_Snapped_rectangle {
+                radius: 3
+                color: combo_row.highlighted ? win.row_hover_color : "transparent"
+            }
+        }
+
+        popup: Basic.Popup {
+            y: combo.height + 4
+            width: combo.width
+            padding: 6
+            implicitHeight: Math.min(
+                contentItem.implicitHeight + topPadding + bottomPadding, 280)
+
+            background: VNM_Snapped_rectangle {
+                radius: 6
+                color: win.popup_color
+                border_width: 1
+                border_color: win.field_border_color
+            }
+
+            contentItem: ListView {
+                implicitHeight: contentHeight
+                clip: true
+                model: combo.popup.visible ? combo.delegateModel : null
+                currentIndex: combo.highlightedIndex
+                boundsBehavior: Flickable.StopAtBounds
+
+                Basic.ScrollBar.vertical: S_ScrollBar {}
+            }
+        }
+    }
+
+    component S_SpinBox: Basic.SpinBox {
+        id: spin
+
+        implicitWidth: 110
+        implicitHeight: 30
+        editable: true
+        hoverEnabled: true
+        font.pixelSize: win.settings_font_pixel_size
+        Layout.minimumWidth: implicitWidth
+        leftPadding: 26
+        rightPadding: 26
+
+        background: VNM_Snapped_rectangle {
+            radius: 4
+            color: win.field_color
+            border_width: 1
+            border_color: spin.activeFocus ? win.field_focus_color : win.field_border_color
+        }
+
+        contentItem: TextInput {
+            text: spin.displayText
+            font: spin.font
+            color: win.value_color
+            selectionColor: win.selection_color
+            selectedTextColor: win.value_color
+            horizontalAlignment: Qt.AlignHCenter
+            verticalAlignment: Qt.AlignVCenter
+            readOnly: !spin.editable
+            validator: spin.validator
+            inputMethodHints: Qt.ImhDigitsOnly
+            clip: true
+        }
+
+        down.indicator: VNM_Snapped_rectangle {
+            x: 2
+            y: 2
+            width: 22
+            height: spin.height - 4
+            radius: 3
+            color: spin.down.pressed ? win.field_border_color
+                : down_hover.hovered ? win.row_hover_color : "transparent"
+
+            HoverHandler { id: down_hover }
+
+            Text {
+                anchors.centerIn: parent
+                text: "\u2212"
+                font.pixelSize: win.settings_font_pixel_size
+                color: win.label_color
+                opacity: spin.value > spin.from ? 1.0 : 0.35
+            }
+        }
+
+        up.indicator: VNM_Snapped_rectangle {
+            x: spin.width - width - 2
+            y: 2
+            width: 22
+            height: spin.height - 4
+            radius: 3
+            color: spin.up.pressed ? win.field_border_color
+                : up_hover.hovered ? win.row_hover_color : "transparent"
+
+            HoverHandler { id: up_hover }
+
+            Text {
+                anchors.centerIn: parent
+                text: "+"
+                font.pixelSize: win.settings_font_pixel_size
+                color: win.label_color
+                opacity: spin.value < spin.to ? 1.0 : 0.35
+            }
+        }
+    }
+
+    component S_Switch: Basic.Switch {
+        id: sw
+
+        implicitWidth: 38
+        implicitHeight: 30
+        hoverEnabled: true
+        leftPadding: 0
+        rightPadding: 0
+        topPadding: 0
+        bottomPadding: 0
+        Layout.minimumWidth: implicitWidth
+
+        indicator: Rectangle {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            implicitWidth: 38
+            implicitHeight: 20
+            radius: height / 2
+            color: win.dark_mode
+                ? (sw.checked ? "#33598a" : "#222a35")
+                : (sw.checked ? win.accent_color : win.field_hover_color)
+            border.width: 1
+            border.color: win.dark_mode
+                ? (sw.checked ? "#46719f" : "#36404e")
+                : (sw.checked ? win.accent_color : win.field_border_color)
+
+            Behavior on color { ColorAnimation { duration: 120 } }
+
+            Rectangle {
+                width: 14
+                height: 14
+                radius: 7
+                anchors.verticalCenter: parent.verticalCenter
+                x: sw.checked ? parent.width - width - 3 : 3
+                color: !win.dark_mode && !sw.checked
+                    ? (sw.pressed ? "#202834" : sw.hovered ? "#465366" : "#596575")
+                    : (sw.pressed ? "#c4d2e2" : sw.hovered ? "#eef4fb" : "#dfe9f5")
+
+                Behavior on x {
+                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+                }
+            }
+        }
+    }
+
+    component S_ProgressBar: Basic.ProgressBar {
+        id: progress
+
+        implicitHeight: 4
+
+        background: Rectangle {
+            radius: 2
+            color: win.field_color
+        }
+
+        contentItem: Item {
+            clip: true
+
+            Rectangle {
+                width: parent.width * progress.position
+                height: parent.height
+                radius: 2
+                color: win.accent_color
+                visible: !progress.indeterminate
+            }
+
+            Rectangle {
+                id: progress_sweep
+                width: parent.width * 0.3
+                height: parent.height
+                radius: 2
+                color: win.accent_color
+                visible: progress.indeterminate
+
+                NumberAnimation on x {
+                    running: progress.indeterminate && progress.visible
+                    loops: Animation.Infinite
+                    from: -progress_sweep.width
+                    to: progress.width
+                    duration: 1200
+                }
+            }
+        }
+    }
+
+    Shortcut {
+        sequences: [StandardKey.Cancel]
+        // A hidden tool window can still be active through its transient parent.
+        enabled: win.visible
+        onActivated: win.close_requested()
+    }
+
+    VNM_ChromeTheme {
+        id: settings_theme
+
+        titlebar: win.color
+        titlebar_text: win.value_color
+        titlebar_button_icon: win.value_color
+        titlebar_button_hover: win.row_hover_color
+        titlebar_button_pressed: win.field_border_color
+        titlebar_close_hover: win.dark_mode ? "#c6303a" : "#f3bdc1"
+        titlebar_close_pressed: win.dark_mode ? "#96222a" : "#e99ba2"
+        titlebar_content_border: win.separator_color
+        window_frame_border: win.separator_color
+    }
+
+    VNM_NativeWindowFrame {
+        window: win
+        frame_visible: false
+        resize_enabled: win.resize_enabled
+        resize_outward_margins.left: win.resize_outward_extent
+        resize_outward_margins.top: win.resize_outward_extent
+        resize_outward_margins.right: win.resize_outward_extent
+        resize_outward_margins.bottom: win.resize_outward_extent
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: settings_theme.window_frame_border
+        z: -100
+    }
+
+    VNM_ChromeSideResizeLayer {
+        anchors.fill: parent
+        resize_enabled: win.resize_enabled
+        left_frame_extent: win.frame_border_width
+        right_frame_extent: win.frame_border_width
+
+        onResize_requested: (edges) => win.resize_requested(edges)
+    }
+
+    VNM_ChromeBottomResizeLayer {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: implicitHeight
+        resize_enabled: win.resize_enabled
+        left_frame_extent: win.frame_border_width
+        right_frame_extent: win.frame_border_width
+        bottom_frame_extent: win.frame_border_width
+
+        onResize_requested: (edges) => win.resize_requested(edges)
+    }
+
+    Item {
+        id: content
+        anchors.fill: parent
+        anchors.margins: win.resize_enabled ? win.frame_border_width : 0
+
+        Rectangle {
+            anchors.fill: parent
+            color: win.color
+        }
+
+        VNM_ChromeTitleBar {
+            id: settings_titlebar
+            objectName: "settings_window_titlebar"
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: win.titlebar_height
+            theme: settings_theme
+            title: win.title
+            active: win.active
+            resize_enabled: win.resize_enabled
+            animated_mark_visible: false
+            minimize_button_visible: false
+            maximize_button_visible: false
+
+            onMove_requested: win.move_requested()
+            onResize_requested: (edges) => win.resize_requested(edges)
+            onClose_requested: win.close_requested()
+        }
+
+        Item {
+            id: settings_body_viewport
+            objectName: "settings_window_body_viewport"
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: settings_titlebar.bottom
+            anchors.bottom: parent.bottom
+            anchors.margins: win.body_margin
+            anchors.rightMargin: win.body_margin
+
+            Flickable {
+                id: settings_body_flickable
+                objectName: "settings_window_body_flickable"
+
+                anchors.fill: parent
+                contentWidth: settings_body.width
+                contentHeight: settings_body.height + (settings_body_horizontal_scrollbar.visible ? settings_body_horizontal_scrollbar.height : 0)
+                clip: true
+                flickableDirection: Flickable.HorizontalAndVerticalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                boundsMovement: Flickable.StopAtBounds
+                interactive: contentHeight > height || contentWidth > width
+
+                Basic.ScrollBar.vertical: S_ScrollBar {
+                    id: settings_body_scrollbar
+                    objectName: "settings_window_body_scrollbar"
+
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    z: 1
+                }
+                Basic.ScrollBar.horizontal: S_ScrollBar {
+                    id: settings_body_horizontal_scrollbar
+                    objectName: "settings_window_body_horizontal_scrollbar"
+                    z: 1
+                }
+            }
+        }
+
+        ColumnLayout {
+            id: settings_body
+            objectName: "settings_window_body"
+
+            parent: settings_body_flickable.contentItem
+            // Reserve the scrollbar gutter even while it is hidden: exposing
+            // either scroll direction must not change the form's width again.
+            width: Math.max(win.minimum_content_width,
+                settings_body_flickable.width - settings_body_scrollbar.implicitWidth)
+            height: Math.max(implicitHeight, settings_body_flickable.height)
+            spacing: 10
+
+            S_SectionHeader { text: "Terminal color preset" }
+
+
+            GridView {
+                id: scheme_grid
+                objectName: "scheme_list"
+
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.minimumHeight: 96
+                clip: true
+                readonly property int minimum_card_width: Math.ceil(
+                    28 + 84 + 2 * preview_text_metrics.width
+                        + Math.max(7, Math.round(preview_text_metrics.height * 0.55)) + 8)
+                readonly property int column_count: Math.max(1, Math.min(3,
+                    Math.floor(width / minimum_card_width)))
+                cellWidth: Math.floor(width / column_count)
+                cellHeight: 84
+                model: surface.available_color_schemes()
+                currentIndex: model.indexOf(surface.colorScheme)
+                boundsBehavior: Flickable.StopAtBounds
+
+                TextMetrics {
+                    id: preview_text_metrics
+                    text: "Aa"
+                    font.family: surface.fontFamily
+                    font.pixelSize: win.settings_font_pixel_size
+                }
+
+                Basic.ScrollBar.vertical: S_ScrollBar {}
+
+                Connections {
+                    target: win
+                    function onVisibleChanged() {
+                        if (win.visible && scheme_grid.currentIndex >= 0) {
+                            scheme_grid.positionViewAtIndex(
+                                scheme_grid.currentIndex, GridView.Contain)
+                        }
+                    }
+                }
+
+                delegate: Item {
+                    required property string modelData
+
+                    readonly property var preview: surface.color_scheme_preview(modelData)
+                    readonly property color preview_background: preview.background
+                    readonly property bool selected: modelData === surface.colorScheme
+
+                    // A swatch whose color nearly matches the scheme background
+                    // would otherwise disappear into it, so every swatch carries
+                    // a frame in this color: the background's own hue and
+                    // saturation, held half the value range away from it.
+                    readonly property color swatch_frame_color: Qt.hsva(
+                        Math.max(0, preview_background.hsvHue),
+                        preview_background.hsvSaturation,
+                        preview_background.hsvValue < 0.5
+                            ? preview_background.hsvValue + 0.5
+                            : preview_background.hsvValue - 0.5,
+                        1)
+
+                    width: scheme_grid.cellWidth
+                    height: scheme_grid.cellHeight
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.rightMargin: 10
+                        anchors.bottomMargin: 10
+                        radius: 5
+                        color: card_hover.hovered ? win.card_hover_color : win.card_color
+                        border.width: 1
+                        border.color: selected ? win.accent_color : win.card_border_color
+
+                        Behavior on color { ColorAnimation { duration: 100 } }
+
+                        HoverHandler {
+                            id: card_hover
+                            cursorShape: Qt.PointingHandCursor
+                        }
+
+                        TapHandler {
+                            onTapped: surface.colorScheme = modelData
+                        }
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 9
+                            spacing: 6
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                radius: 3
+                                color: preview_background
+                                border.width: 1
+                                border.color: Qt.rgba(1, 1, 1, 0.06)
+
+                                Grid {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    columns: 8
+                                    spacing: 2
+
+                                    Repeater {
+                                        model: 16
+
+                                        Rectangle {
+                                            required property int index
+                                            width: 7
+                                            height: 10
+                                            radius: 2
+                                            color: preview.ansi[index]
+                                            border.width: 1
+                                            border.color: swatch_frame_color
+                                        }
+                                    }
+                                }
+
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: 4
+
+                                    Text {
+                                        id: unselected_sample
+                                        text: "Aa"
+                                        color: preview.foreground
+                                        font.family: surface.fontFamily
+                                        font.pixelSize: win.settings_font_pixel_size
+                                    }
+
+                                    Rectangle {
+                                        width: Math.max(
+                                            7,
+                                            Math.round(unselected_sample.implicitHeight * 0.55))
+                                        height: unselected_sample.implicitHeight
+                                        color: preview.cursor
+                                    }
+
+                                    Rectangle {
+                                        width: selected_sample.implicitWidth + 6
+                                        height: selected_sample.implicitHeight
+                                        color: preview.selection
+
+                                        Text {
+                                            id: selected_sample
+                                            anchors.fill: parent
+                                            text: "Aa"
+                                            color: preview.selection_foreground
+                                            font.family: surface.fontFamily
+                                            font.pixelSize: win.settings_font_pixel_size
+                                            horizontalAlignment: Text.AlignHCenter
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: modelData
+                                    color: selected ? win.value_color : win.label_color
+                                    font.pixelSize: win.settings_font_pixel_size
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    visible: selected
+                                    text: "\u2713"
+                                    font.pixelSize: win.settings_font_pixel_size
+                                    color: win.accent_color
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Two independent section columns. Each column owns its label
+            // column, so Font/Rendering labels line up with each other and
+            // Behavior/Scrollback labels line up with each other, but not
+            // across the gap: the left column is deliberately wider because
+            // its combo boxes need the room. Font and Behavior account for the
+            // same vertical row heights, which is what puts the Rendering and
+            // Scrollback headers on a single line; the right column reserves
+            // the matching height for Font's Advance control below.
+            GridLayout {
+                id: form_columns
+                objectName: "settings_form_columns"
+
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+                columnSpacing: 24
+                rowSpacing: 20
+                readonly property real natural_width:
+                    form_left_column.implicitWidth + columnSpacing + form_right_column.implicitWidth
+                columns: settings_body.width >= natural_width ? 2 : 1
+
+                // Side-by-side columns retain their control minimums. Narrow
+                // windows stack them so a spin box never has to elide its value.
+                readonly property int right_column_width: Math.max(
+                    form_right_column.implicitWidth,
+                    Math.round((settings_body.width - columnSpacing) * 0.32))
+
+                ColumnLayout {
+                    id: form_left_column
+                    objectName: "settings_form_left_column"
+
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 10
+
+                    S_SectionHeader {
+                        text: "Font"
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 24
+
+                        S_Form_Label {
+                            id: family_label
+                            text: "Family"
+                        }
+
+                        S_Combo {
+                            objectName: "font_family_combo"
+                            Layout.fillWidth: true
+                            use_row_font: true
+                            model: settings.available_font_families()
+                            currentIndex: model.indexOf(surface.fontFamily)
+                            onActivated: {
+                                win.font_family_selected(currentText)
+                                if (hasLiveSurface) {
+                                    surface.fontFamily = currentText
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 24
+
+                        S_Form_Label {
+                            id: size_label
+                            text: "Size"
+                        }
+
+                        RowLayout {
+                            Layout.alignment: Qt.AlignVCenter
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            S_SpinBox {
+                                objectName: "font_size_spin"
+                                implicitWidth: 76
+                                Layout.maximumWidth: 68
+                                from: 6
+                                to: 72
+                                value: Math.round(surface.fontSize)
+                                onValueModified: surface.fontSize = value
+                            }
+
+                            S_Label {
+                                objectName: "font_effective_size_label"
+                                readonly property bool effective_size_differs:
+                                    hasLiveSurface
+                                    && Math.abs(surface.effectiveFontSize - surface.fontSize) > 0.005
+                                text: effective_size_differs
+                                    ? "Using " + surface.effectiveFontSize.toFixed(2) + " px"
+                                    : ""
+                                visible: effective_size_differs
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        id: font_advance_row
+                        Layout.fillWidth: true
+                        spacing: 24
+
+                        S_Form_Label {
+                            id: cell_width_label
+                            text: "Cell width"
+                        }
+
+                        S_Combo {
+                            objectName: "font_advance_policy_combo"
+                            Layout.fillWidth: true
+                            model: [
+                                "Adjust font size to device-pixel grid",
+                                "Snap upward (ceil)",
+                                "Snap to nearest (may overlap)"
+                            ]
+                            currentIndex: surface.fontAdvancePolicy
+                            onActivated: surface.fontAdvancePolicy = index
+                        }
+                    }
+
+                    S_SectionHeader {
+                        text: "Rendering"
+                        Layout.topMargin: 10
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 24
+
+                        S_Form_Label {
+                            id: renderer_label
+                            text: "Renderer"
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 6
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+
+                                S_Combo {
+                                    id: renderer_combo
+                                    objectName: "renderer_mode_combo"
+
+                                    Layout.fillWidth: true
+                                    // Automatic maps to Text_renderer_mode 0: it prefers MSDF
+                                    // and falls back to the glyph renderer wherever needed.
+                                    // Glyph only maps to Text_renderer_mode 2.
+                                    textRole: "label"
+                                    model: [
+                                        { label: "Automatic (MSDF preferred)" },
+                                        { label: "Glyph only" }
+                                    ]
+                                    // Show the selected policy. Automatic remains selected
+                                    // when it falls back, while the tooltip explains why.
+                                    currentIndex: surface.textRendererMode === 2 ? 1 : 0
+                                    onActivated: (index) =>
+                                        surface.textRendererMode = index === 1 ? 2 : 0
+
+                                    S_ToolTip {
+                                        content_object_name: "renderer_status_label"
+                                        text: win.renderer_status_text
+                                        visible: renderer_combo.hovered
+                                            && !renderer_combo.popup.visible
+                                    }
+                                }
+
+                                // The status itself lives in the picker's tooltip;
+                                // only its warning state needs to be visible without
+                                // hovering.
+                                Text {
+                                    objectName: "renderer_warning_glyph"
+
+                                    visible: win.msdf_unavailable
+                                    text: "\u26A0"
+                                    font.pixelSize: win.settings_font_pixel_size
+                                    color: win.warning_color
+                                }
+                            }
+
+                            S_ProgressBar {
+                                Layout.fillWidth: true
+                                indeterminate: true
+                                visible: hasLiveSurface && surface.msdfTextChecking
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        S_Form_Label {
+                            id: lcd_subpixel_label
+                            text: "LCD subpixel"
+                        }
+
+                        S_Switch {
+                            objectName: "lcd_subpixel_switch"
+                            Layout.leftMargin: 14
+                            // lcdSubpixelOrder: AUTO=0 (on, auto-detected order), NONE=1
+                            // (off, grayscale). RGB/BGR/etc. chosen via the CLI also
+                            // read as on here.
+                            checked: !surface.invertBrightness
+                                && surface.lcdSubpixelOrder !== 1
+                            onToggled: {
+                                surface.lcdSubpixelOrder = checked ? 0 : 1
+                                if (checked && surface.invertBrightness) {
+                                    surface.invertBrightness = false
+                                }
+                            }
+                        }
+
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        S_Label {
+                            text: "Invert brightness"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        S_Switch {
+                            id: invert_brightness_switch
+                            objectName: "invert_brightness_switch"
+                            checked: surface.invertBrightness
+                            onToggled: surface.invertBrightness = checked
+
+                            S_ToolTip {
+                                text: "Inverts the HSV value (V) of rendered colors."
+                                visible: invert_brightness_switch.hovered
+                            }
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    id: form_right_column
+                    objectName: "settings_form_right_column"
+
+                    Layout.alignment: Qt.AlignTop
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: implicitWidth
+                    Layout.preferredWidth: form_columns.columns === 2 ? form_columns.right_column_width : implicitWidth
+                    Layout.maximumWidth: form_columns.columns === 2 ? form_columns.right_column_width : win.unconstrained_maximum_size
+                    spacing: 10
+
+                    S_SectionHeader {
+                        text: "Behavior"
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+
+                        S_Label {
+                            text: "Row timestamps"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        S_Switch {
+                            objectName: "row_timestamp_switch"
+                            checked: surface.rowTimestampTooltipEnabled
+                            onToggled: surface.rowTimestampTooltipEnabled = checked
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 12
+
+                        S_Label {
+                            text: hasLiveSurface ? "Copy on selection (this terminal)"
+                                : "Copy on selection (default)"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        S_Switch {
+                            objectName: "copy_on_select_switch"
+                            checked: surface.copyOnSelect
+                            onToggled: surface.copyOnSelect = checked
+                        }
+                    }
+
+                    // Font has an Advance row which Behavior does not need.
+                    // Reserve its control height so the following section
+                    // header remains aligned with Rendering.
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: font_advance_row.implicitHeight
+                    }
+
+                    S_SectionHeader {
+                        text: "Scrollback"
+                        Layout.topMargin: 10
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            S_Label {
+                                text: "Buffer size (MiB)"
+                                Layout.alignment: Qt.AlignVCenter
+                                Layout.fillWidth: true
+                            }
+
+                            S_SpinBox {
+                                id: scrollback_buffer_size_spin
+                                objectName: "scrollback_buffer_size_spin"
+
+                                implicitWidth: 68
+                                Layout.preferredWidth: 68
+                                Layout.maximumWidth: 68
+                                from: surface.minimumScrollbackBufferSizeMiB
+                                to: surface.maximumScrollbackBufferSizeMiB
+                                stepSize: 1
+                                value: surface.scrollbackBufferSizeMiB
+                                onValueModified: surface.scrollbackBufferSizeMiB = value
+
+                                S_ToolTip {
+                                    text: "Plain-text estimate at this width; reflow may retain fewer lines."
+                                    visible: scrollback_buffer_size_spin.hovered
+                                }
+                            }
+
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: hasLiveSurface && surface.estimatedScrollbackLines > 0
+                                ? "Up to " + surface.estimatedScrollbackLines.toLocaleString() +
+                                    " plain-text lines at this width"
+                                : "Estimate appears when the terminal size is known"
+                            color: win.label_color
+                            font.pixelSize: win.caption_font_pixel_size
+                            horizontalAlignment: Text.AlignLeft
+                            wrapMode: Text.Wrap
+                        }
+                    }
+
+                    S_SectionHeader {
+                        visible: interactionDiagnosticsUnlocked
+                        text: "Diagnostics"
+                        Layout.topMargin: 10
+                    }
+
+                    RowLayout {
+                        visible: interactionDiagnosticsUnlocked
+                        Layout.fillWidth: true
+                        spacing: 12
+
+                        S_Label {
+                            visible: interactionDiagnosticsUnlocked
+                            text: "Interaction trace"
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+
+                        Item {
+                            visible: interactionDiagnosticsUnlocked
+                            Layout.fillWidth: true
+                        }
+
+                        S_Switch {
+                            id: interaction_diagnostics_switch
+                            objectName: "interaction_diagnostics_switch"
+
+                            visible: interactionDiagnosticsUnlocked
+                            enabled: hasLiveSurface
+                            checked: hasLiveSurface && surface.interactionDiagnosticsEnabled
+                            onToggled: {
+                                surface.interactionDiagnosticsEnabled = checked
+                                if (checked !== surface.interactionDiagnosticsEnabled)
+                                    checked = surface.interactionDiagnosticsEnabled
+                            }
+
+                            S_ToolTip {
+                                text: !hasLiveSurface
+                                    ? "Interaction trace is available when a terminal is open."
+                                    : surface.interactionDiagnosticsError.length > 0
+                                    ? surface.interactionDiagnosticsError
+                                    : "Bounded trace (records control keys and event timing): "
+                                        + surface.interactionDiagnosticsPath
+                                visible: interaction_diagnostics_switch.hovered
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: 2
+                implicitHeight: 1
+                color: win.separator_color
+            }
+
+            TextEdit {
+                objectName: "build_provenance_text"
+
+                Layout.fillWidth: true
+                Layout.preferredHeight: contentHeight
+
+                text: settings.buildProvenanceText
+                textFormat: TextEdit.PlainText
+                color: win.hint_color
+                selectedTextColor: win.value_color
+                selectionColor: win.selection_color
+                font.family: surface.fontFamily
+                font.pixelSize: win.caption_font_pixel_size
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.Wrap
+            }
+        }
+    }
+}

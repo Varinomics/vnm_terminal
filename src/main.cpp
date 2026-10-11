@@ -391,6 +391,18 @@ int main(int argc, char** argv)
         return chrome::run_clipboard_text_broker(argc, argv);
     }
 
+    // Child commands retain their inherited environment while Qt uses embedded
+    // compilation units without keeping external QML cache files mapped.
+    const std::vector<vnm_terminal::Terminal_environment_entry>
+        captured_environment = chrome::capture_standalone_ambient_environment();
+    if (!qputenv("QML_DISK_CACHE", QByteArrayLiteral("aot")) ||
+        !qunsetenv("QML_FORCE_DISK_CACHE")                  ||
+        !qunsetenv("QML_DISABLE_DISK_CACHE"))
+    {
+        print_error(QStringLiteral("failed to configure the QML cache policy"));
+        return k_exit_start_failed;
+    }
+
     request_vsync_surface_format();
 
     Qt_arguments qt_arguments = make_qt_arguments(argc, argv);
@@ -1102,8 +1114,6 @@ int main(int argc, char** argv)
 
     surface->forceActiveFocus();
 
-    const std::vector<vnm_terminal::Terminal_environment_entry>
-        captured_environment = chrome::capture_standalone_ambient_environment();
     std::optional<std::vector<vnm_terminal::Terminal_environment_entry>>
         sanitized_environment =
             chrome::sanitize_standalone_ambient_environment(

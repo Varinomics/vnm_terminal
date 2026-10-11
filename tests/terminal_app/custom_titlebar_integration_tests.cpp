@@ -4426,6 +4426,15 @@ int main(int argc, char** argv)
     }
 
     bool ok = true;
+    for (const QString& resource_path : {
+             QStringLiteral(":/vnm_terminal/terminal_qml_chrome.qml"),
+             QStringLiteral(":/vnm_terminal/terminal_search_bar.qml"),
+             QStringLiteral(":/vnm_terminal/terminal_settings_window.qml")})
+    {
+        QFile source(resource_path);
+        ok &= check(source.open(QIODevice::ReadOnly), "compiled QML resource exists");
+        ok &= check(source.readAll().isEmpty(), "compiled QML resource omits source text");
+    }
     ok &= test_custom_titlebar_geometry();
     ok &= test_terminal_scrollbar_tracks_surface_viewport(app);
     ok &= test_terminal_scrollbar_immediate_public_projection_routes(app);
