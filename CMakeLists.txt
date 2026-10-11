@@ -210,7 +210,7 @@ qt_add_qml_module(vnm_terminal_app_support
     URI vnm_terminal
     VERSION 1.0
     RESOURCE_PREFIX "/"
-    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal"
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/qml_modules/vnm_terminal"
     NO_PLUGIN
     DISCARD_QML_CONTENTS
     QML_FILES ${vnm_terminal_qml_files}
