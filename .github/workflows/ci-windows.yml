@@ -181,6 +181,7 @@ jobs:
           cmake -B vnm_terminal/build -S vnm_terminal \
             -G "Visual Studio 17 2022" \
             -A x64 \
+            -DCMAKE_CONFIGURATION_TYPES="${CMAKE_BUILD_TYPE}" \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
@@ -232,6 +233,7 @@ jobs:
           cmake -B $buildDir -S $sourceRoot `
             -G "Visual Studio 17 2022" `
             -A x64 `
+            -DCMAKE_CONFIGURATION_TYPES="$env:CMAKE_BUILD_TYPE" `
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="$surfaceDir" `
             -DVNM_QML_CHROME_SOURCE_DIR="$chromeDir" `
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="$msdfTextDir" `
