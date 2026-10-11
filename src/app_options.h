@@ -17,7 +17,7 @@
 
 namespace vnm_terminal::terminal_app {
 
-#if defined(_WIN32) || defined(__linux__)
+#if defined(_WIN32) || defined(__linux__) || defined(Q_OS_MACOS)
 constexpr bool k_custom_titlebar_supported_on_platform = true;
 #else
 constexpr bool k_custom_titlebar_supported_on_platform = false;

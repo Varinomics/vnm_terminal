@@ -424,7 +424,7 @@ void print_usage()
         << default_retained_history_mib
         << "\n"
         << "  --window-size <width>x<height>  window size in logical pixels\n"
-#if defined(_WIN32) || defined(__linux__)
+#if defined(_WIN32) || defined(__linux__) || defined(Q_OS_MACOS)
         << "  --native-titlebar               use the platform titlebar instead of built-in chrome\n"
 #endif
         << "  --alternate-wheel <mode>        alternate-screen wheel: mouse(default), cursor, or page\n"

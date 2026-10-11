@@ -16,6 +16,10 @@ class QScreen;
 class QWindow;
 class VNM_TerminalSurface;
 
+namespace vnm_qml_chrome {
+class System_window;
+}
+
 namespace vnm_terminal::terminal_app {
 
 class Terminal_settings_controller;
@@ -85,6 +89,7 @@ private:
 
     std::unique_ptr<QObject> m_root_object;
     QPointer<QQuickWindow>   m_window;
+    QPointer<vnm_qml_chrome::System_window> m_system_window;
     QPointer<QScreen>        m_available_geometry_screen;
     QMetaObject::Connection  m_available_geometry_connection;
     QMetaObject::Connection  m_transient_parent_screen_connection;

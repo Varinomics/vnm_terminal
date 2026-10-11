@@ -254,7 +254,7 @@ set(vnm_terminal_qt_unscaled_environment
 )
 
 set(vnm_terminal_custom_titlebar_supported OFF)
-if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL Linux)
+if(WIN32 OR CMAKE_SYSTEM_NAME STREQUAL Linux OR CMAKE_SYSTEM_NAME STREQUAL Darwin)
     set(vnm_terminal_custom_titlebar_supported ON)
 endif()
 
@@ -676,6 +676,12 @@ if(TARGET vnm_terminal_canvas_fixture)
             "QT_QPA_FONTDIR=$ENV{SystemRoot}/Fonts")
         list(APPEND vnm_terminal_native_titlebar_environment
             "QT_QPA_FONTDIR=$ENV{SystemRoot}/Fonts")
+    endif()
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        list(FILTER vnm_terminal_custom_titlebar_environment EXCLUDE REGEX "^QT_QPA_PLATFORM=")
+        list(FILTER vnm_terminal_native_titlebar_environment EXCLUDE REGEX "^QT_QPA_PLATFORM=")
+        list(APPEND vnm_terminal_custom_titlebar_environment "QT_QPA_PLATFORM=cocoa")
+        list(APPEND vnm_terminal_native_titlebar_environment "QT_QPA_PLATFORM=cocoa")
     endif()
 
     if(vnm_terminal_custom_titlebar_supported)

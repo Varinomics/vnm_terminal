@@ -3,11 +3,13 @@
 #include "qml_component_error_string.h"
 
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
+#include "vnm_qml_chrome/vnm_system_window.h"
 
 #include <QDateTime>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQmlError>
+#include <QQmlProperty>
 #include <QPointF>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -88,7 +90,7 @@ Item {
         reduced_chrome_width(
             base_resize_border_width,
             resize_border_physical_reduction)
-    readonly property real base_titlebar_height: 32
+    readonly property real base_titlebar_height: frame_shell.titlebar_item.implicitHeight
     readonly property real titlebar_physical_reduction: 2
     readonly property real reduced_titlebar_height:
         reduced_chrome_width(
@@ -472,6 +474,8 @@ chrome::Terminal_qml_chrome::Terminal_qml_chrome(QQmlEngine& engine, QQuickWindo
         m_error_string = QStringLiteral("failed to initialize vnm_qml_chrome runtime");
         return;
     }
+    m_system_window = engine.singletonInstance<vnm_qml_chrome::System_window*>(
+        "VNM_Chrome", "VNM_system_window");
 
     QQmlComponent component(&engine);
     component.setData(
@@ -632,7 +636,9 @@ void chrome::Terminal_qml_chrome::set_window_control_palette(
 
 void chrome::Terminal_qml_chrome::set_titlebar_height(qreal height)
 {
-    set_property("titlebar_height", height);
+    if (m_root_object != nullptr) {
+        QQmlProperty::write(m_root_object.get(), QStringLiteral("titlebar_height"), height);
+    }
 }
 
 void chrome::Terminal_qml_chrome::set_active(bool active)
@@ -729,15 +735,15 @@ void chrome::Terminal_qml_chrome::connect_window_commands()
 
 void chrome::Terminal_qml_chrome::handle_move_requested()
 {
-    if (m_window != nullptr) {
-        (void)m_window->startSystemMove();
+    if (m_window != nullptr && m_system_window != nullptr) {
+        (void)m_system_window->start_system_move(m_window);
     }
 }
 
 void chrome::Terminal_qml_chrome::handle_resize_requested(int edges)
 {
-    if (m_window != nullptr) {
-        (void)m_window->startSystemResize(Qt::Edges(QFlag(edges)));
+    if (m_window != nullptr && m_system_window != nullptr) {
+        (void)m_system_window->start_system_resize(m_window, edges);
     }
 }
 

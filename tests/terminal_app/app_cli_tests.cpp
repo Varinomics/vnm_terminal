@@ -112,7 +112,7 @@ bool test_parse_titlebar_options()
     bool ok = true;
     ok &= check(default_result.error.isEmpty(),
         "default titlebar mode parses");
-#if defined(_WIN32) || defined(__linux__)
+#if defined(_WIN32) || defined(__linux__) || defined(Q_OS_MACOS)
     ok &= check(default_result.options.custom_titlebar,
         "default titlebar mode enables custom titlebar on validated platforms");
 #else
@@ -136,7 +136,7 @@ bool test_parse_titlebar_options()
         "fixture-command",
     });
 
-#if defined(_WIN32) || defined(__linux__)
+#if defined(_WIN32) || defined(__linux__) || defined(Q_OS_MACOS)
     ok &= check(native_result.error.isEmpty(),
         "native-titlebar option parses on validated platform");
     ok &= check(!native_result.options.custom_titlebar,

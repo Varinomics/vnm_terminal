@@ -19,6 +19,10 @@ class QQuickItem;
 class QQuickWindow;
 class QVariant;
 
+namespace vnm_qml_chrome {
+class System_window;
+}
+
 namespace vnm_terminal::terminal_app {
 
 constexpr qreal k_default_frameless_resize_border_width      = 6.0;
@@ -120,6 +124,7 @@ private:
     void toggle_window_maximized();
 
     QPointer<QQuickWindow> m_window;
+    QPointer<vnm_qml_chrome::System_window> m_system_window;
     std::unique_ptr<QObject> m_root_object;
     QQuickItem* m_root_item     = nullptr;
     QQuickItem* m_titlebar_item = nullptr;

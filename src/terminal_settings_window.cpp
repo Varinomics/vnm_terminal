@@ -7,6 +7,7 @@
 #include "vnm_terminal/app_support/terminal_settings_model.h"
 
 #include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
+#include "vnm_qml_chrome/vnm_system_window.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
@@ -266,8 +267,19 @@ Window {
     objectName: "terminal_settings_window"
     property bool dark_mode: true
 
-    readonly property int preferred_width: 552
-    readonly property int settings_form_label_width: 72
+    readonly property int settings_font_pixel_size: Math.max(1, Math.round(
+        VNM_system_window.application_font.pixelSize))
+    readonly property int caption_font_pixel_size: Math.max(1, Math.round(settings_font_pixel_size * 10 / 12))
+    readonly property int hint_font_pixel_size: Math.max(1, Math.round(settings_font_pixel_size * 11 / 12))
+    readonly property int minimum_content_width: Math.ceil(Math.max(
+        form_left_column.implicitWidth, form_right_column.implicitWidth, 180))
+    readonly property int natural_width: Math.ceil(
+        2 * frame_border_width + 2 * body_margin + minimum_content_width + settings_body_scrollbar.implicitWidth)
+    readonly property int preferred_width: Math.max(552, Math.ceil(
+        2 * frame_border_width + 2 * body_margin + form_columns.natural_width + settings_body_scrollbar.implicitWidth))
+    readonly property int settings_form_label_width: Math.max(72, Math.ceil(Math.max(
+        family_label.implicitWidth, size_label.implicitWidth, cell_width_label.implicitWidth,
+        renderer_label.implicitWidth, lcd_subpixel_label.implicitWidth)))
     readonly property int unconstrained_maximum_size: 16777215
     property int available_width_limit: 0
     property int available_height_limit: 0
@@ -284,7 +296,7 @@ Window {
 
     width: Math.min(preferred_width, effective_width_limit)
     height: Math.min(preferred_height, effective_height_limit)
-    minimumWidth: Math.min(480, effective_width_limit)
+    minimumWidth: Math.min(natural_width, effective_width_limit)
     minimumHeight: Math.min(natural_height, effective_height_limit)
     maximumWidth: effective_width_limit
     maximumHeight: effective_height_limit
@@ -298,13 +310,8 @@ Window {
     signal resize_requested(int edges)
     signal font_family_selected(string family)
 
-    readonly property int titlebar_height: 32
+    readonly property int titlebar_height: settings_titlebar.implicitHeight
     readonly property int body_margin: 16
-    // The scheme grid hangs this far past the body's right edge. Its cards
-    // carry a trailing gutter each, and letting the last column's gutter fall
-    // outside is what puts the cards flush with the panel instead of leaving a
-    // dead strip. The grid's scrollbar rides out into the margin with it.
-    readonly property int scheme_grid_overhang: 10
     readonly property real frame_border_width: 1
     readonly property bool resize_enabled: visibility === Window.Windowed
     readonly property real resize_outward_extent:
@@ -372,7 +379,7 @@ Window {
         Text {
             id: section_text
             color: win.section_color
-            font.pixelSize: 10
+            font.pixelSize: win.caption_font_pixel_size
             font.weight: Font.DemiBold
             font.letterSpacing: 1.2
             font.capitalization: Font.AllUppercase
@@ -387,7 +394,7 @@ Window {
 
     component S_Label: Text {
         color: win.label_color
-        font.pixelSize: 12
+        font.pixelSize: win.settings_font_pixel_size
         Layout.minimumWidth: implicitWidth
     }
 
@@ -415,7 +422,7 @@ Window {
 
             text: tip.text
             color: win.value_color
-            font.pixelSize: 11
+            font.pixelSize: win.hint_font_pixel_size
             wrapMode: Text.Wrap
         }
 
@@ -431,6 +438,7 @@ Window {
         id: bar
 
         implicitWidth: 8
+        implicitHeight: 8
         padding: 2
         policy: Basic.ScrollBar.AsNeeded
         visible: bar.size < 1.0
@@ -457,7 +465,7 @@ Window {
 
         implicitHeight: 30
         rightPadding: 4
-        font.pixelSize: 12
+        font.pixelSize: win.settings_font_pixel_size
         hoverEnabled: true
 
         background: VNM_Snapped_rectangle {
@@ -503,7 +511,7 @@ Window {
             contentItem: Text {
                 leftPadding: 4
                 text: combo.textRole ? combo_row.modelData[combo.textRole] : combo_row.modelData
-                font.pixelSize: 12
+                font.pixelSize: win.settings_font_pixel_size
                 font.family: combo.use_row_font ? combo_row.modelData : combo.font.family
                 color: !combo_row.enabled ? win.hint_color
                     : combo_row.index === combo.currentIndex ? win.accent_color : win.value_color
@@ -552,7 +560,7 @@ R"qml(
         implicitHeight: 30
         editable: true
         hoverEnabled: true
-        font.pixelSize: 12
+        font.pixelSize: win.settings_font_pixel_size
         Layout.minimumWidth: implicitWidth
         leftPadding: 26
         rightPadding: 26
@@ -592,7 +600,7 @@ R"qml(
             Text {
                 anchors.centerIn: parent
                 text: "\u2212"
-                font.pixelSize: 13
+                font.pixelSize: win.settings_font_pixel_size
                 color: win.label_color
                 opacity: spin.value > spin.from ? 1.0 : 0.35
             }
@@ -612,7 +620,7 @@ R"qml(
             Text {
                 anchors.centerIn: parent
                 text: "+"
-                font.pixelSize: 13
+                font.pixelSize: win.settings_font_pixel_size
                 color: win.label_color
                 opacity: spin.value < spin.to ? 1.0 : 0.35
             }
@@ -802,7 +810,7 @@ R"qml(
             anchors.top: settings_titlebar.bottom
             anchors.bottom: parent.bottom
             anchors.margins: win.body_margin
-            anchors.rightMargin: win.body_margin - win.scheme_grid_overhang
+            anchors.rightMargin: win.body_margin
 
             Flickable {
                 id: settings_body_flickable
@@ -810,12 +818,12 @@ R"qml(
 
                 anchors.fill: parent
                 contentWidth: settings_body.width
-                contentHeight: settings_body.height
+                contentHeight: settings_body.height + (settings_body_horizontal_scrollbar.visible ? settings_body_horizontal_scrollbar.height : 0)
                 clip: true
-                flickableDirection: Flickable.VerticalFlick
+                flickableDirection: Flickable.HorizontalAndVerticalFlick
                 boundsBehavior: Flickable.StopAtBounds
                 boundsMovement: Flickable.StopAtBounds
-                interactive: contentHeight > height
+                interactive: contentHeight > height || contentWidth > width
 
                 Basic.ScrollBar.vertical: S_ScrollBar {
                     id: settings_body_scrollbar
@@ -826,6 +834,11 @@ R"qml(
                     anchors.bottom: parent.bottom
                     z: 1
                 }
+                Basic.ScrollBar.horizontal: S_ScrollBar {
+                    id: settings_body_horizontal_scrollbar
+                    objectName: "settings_window_body_horizontal_scrollbar"
+                    z: 1
+                }
             }
         }
 
@@ -834,8 +847,10 @@ R"qml(
             objectName: "settings_window_body"
 
             parent: settings_body_flickable.contentItem
-            width: settings_body_flickable.width - win.scheme_grid_overhang -
-                (settings_body_scrollbar.visible ? settings_body_scrollbar.width : 0)
+            // Reserve the scrollbar gutter even while it is hidden: exposing
+            // either scroll direction must not change the form's width again.
+            width: Math.max(win.minimum_content_width,
+                settings_body_flickable.width - settings_body_scrollbar.implicitWidth)
             height: Math.max(implicitHeight, settings_body_flickable.height)
             spacing: 10
 
@@ -850,13 +865,24 @@ R"qml(
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 96
-                Layout.rightMargin: -win.scheme_grid_overhang
                 clip: true
-                cellWidth: Math.floor(width / 3)
+                readonly property int minimum_card_width: Math.ceil(
+                    28 + 84 + 2 * preview_text_metrics.width
+                        + Math.max(7, Math.round(preview_text_metrics.height * 0.55)) + 8)
+                readonly property int column_count: Math.max(1, Math.min(3,
+                    Math.floor(width / minimum_card_width)))
+                cellWidth: Math.floor(width / column_count)
                 cellHeight: 84
                 model: surface.available_color_schemes()
                 currentIndex: model.indexOf(surface.colorScheme)
                 boundsBehavior: Flickable.StopAtBounds
+
+                TextMetrics {
+                    id: preview_text_metrics
+                    text: "Aa"
+                    font.family: surface.fontFamily
+                    font.pixelSize: win.settings_font_pixel_size
+                }
 
                 Basic.ScrollBar.vertical: S_ScrollBar {}
 
@@ -958,7 +984,7 @@ R"qml(
                                         text: "Aa"
                                         color: preview.foreground
                                         font.family: surface.fontFamily
-                                        font.pixelSize: 12
+                                        font.pixelSize: win.settings_font_pixel_size
                                     }
 
                                     Rectangle {
@@ -980,7 +1006,7 @@ R"qml(
                                             text: "Aa"
                                             color: preview.selection_foreground
                                             font.family: surface.fontFamily
-                                            font.pixelSize: 12
+                                            font.pixelSize: win.settings_font_pixel_size
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
@@ -996,14 +1022,14 @@ R"qml(
                                     Layout.fillWidth: true
                                     text: modelData
                                     color: selected ? win.value_color : win.label_color
-                                    font.pixelSize: 12
+                                    font.pixelSize: win.settings_font_pixel_size
                                     elide: Text.ElideRight
                                 }
 
                                 Text {
                                     visible: selected
                                     text: "\u2713"
-                                    font.pixelSize: 12
+                                    font.pixelSize: win.settings_font_pixel_size
                                     color: win.accent_color
                                 }
                             }
@@ -1021,20 +1047,23 @@ R"qml(
             // same vertical row heights, which is what puts the Rendering and
             // Scrollback headers on a single line; the right column reserves
             // the matching height for Font's Advance control below.
-            RowLayout {
+            GridLayout {
                 id: form_columns
+                objectName: "settings_form_columns"
 
                 Layout.fillWidth: true
                 Layout.topMargin: 6
-                spacing: 24
+                columnSpacing: 24
+                rowSpacing: 20
+                readonly property real natural_width:
+                    form_left_column.implicitWidth + columnSpacing + form_right_column.implicitWidth
+                columns: settings_body.width >= natural_width ? 2 : 1
 
-                // The right column holds a smaller fixed share of the form, except
-                // on a narrow window, where it keeps the width its own controls
-                // need and the left column gives up the difference: a combo box
-                // elides gracefully, a spin box does not.
+                // Side-by-side columns retain their control minimums. Narrow
+                // windows stack them so a spin box never has to elide its value.
                 readonly property int right_column_width: Math.max(
                     form_right_column.implicitWidth,
-                    Math.round((settings_body.width - spacing) * 0.32))
+                    Math.round((settings_body.width - columnSpacing) * 0.32))
 
                 ColumnLayout {
                     id: form_left_column
@@ -1053,6 +1082,7 @@ R"qml(
                         spacing: 24
 
                         S_Form_Label {
+                            id: family_label
                             text: "Family"
                         }
 
@@ -1076,6 +1106,7 @@ R"qml(
                         spacing: 24
 
                         S_Form_Label {
+                            id: size_label
                             text: "Size"
                         }
 
@@ -1114,6 +1145,7 @@ R"qml(
                         spacing: 24
 
                         S_Form_Label {
+                            id: cell_width_label
                             text: "Cell width"
                         }
 
@@ -1140,6 +1172,7 @@ R"qml(
                         spacing: 24
 
                         S_Form_Label {
+                            id: renderer_label
                             text: "Renderer"
                         }
 
@@ -1186,7 +1219,7 @@ R"qml(
 
                                     visible: win.msdf_unavailable
                                     text: "\u26A0"
-                                    font.pixelSize: 12
+                                    font.pixelSize: win.settings_font_pixel_size
                                     color: win.warning_color
                                 }
                             }
@@ -1204,6 +1237,7 @@ R"qml(
                         spacing: 10
 
                         S_Form_Label {
+                            id: lcd_subpixel_label
                             text: "LCD subpixel"
                         }
 
@@ -1253,9 +1287,10 @@ R"qml(
                     objectName: "settings_form_right_column"
 
                     Layout.alignment: Qt.AlignTop
-                    Layout.minimumWidth: form_columns.right_column_width
-                    Layout.preferredWidth: form_columns.right_column_width
-                    Layout.maximumWidth: form_columns.right_column_width
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: implicitWidth
+                    Layout.preferredWidth: form_columns.columns === 2 ? form_columns.right_column_width : implicitWidth
+                    Layout.maximumWidth: form_columns.columns === 2 ? form_columns.right_column_width : win.unconstrained_maximum_size
                     spacing: 10
 
                     S_SectionHeader {
@@ -1358,7 +1393,7 @@ R"qml(
                                     " plain-text lines at this width"
                                 : "Estimate appears when the terminal size is known"
                             color: win.label_color
-                            font.pixelSize: 10
+                            font.pixelSize: win.caption_font_pixel_size
                             horizontalAlignment: Text.AlignLeft
                             wrapMode: Text.Wrap
                         }
@@ -1432,7 +1467,7 @@ R"qml(
                 selectedTextColor: win.value_color
                 selectionColor: win.selection_color
                 font.family: surface.fontFamily
-                font.pixelSize: 10
+                font.pixelSize: win.caption_font_pixel_size
                 readOnly: true
                 selectByMouse: true
                 wrapMode: TextEdit.Wrap
@@ -1481,6 +1516,8 @@ void settings::Terminal_settings_window::initialize(
         m_error_string = QStringLiteral("failed to initialize vnm_qml_chrome runtime");
         return;
     }
+    m_system_window = engine.singletonInstance<vnm_qml_chrome::System_window*>(
+        "VNM_Chrome", "VNM_system_window");
 
     const vnm_fonts::Registered_font icon_font =
         vnm_fonts::register_shipped_font(
@@ -1786,14 +1823,14 @@ void settings::Terminal_settings_window::handle_close_requested()
 
 void settings::Terminal_settings_window::handle_move_requested()
 {
-    if (m_window != nullptr) {
-        (void)m_window->startSystemMove();
+    if (m_window != nullptr && m_system_window != nullptr) {
+        (void)m_system_window->start_system_move(m_window);
     }
 }
 
 void settings::Terminal_settings_window::handle_resize_requested(int edges)
 {
-    if (m_window != nullptr) {
-        (void)m_window->startSystemResize(Qt::Edges(QFlag(edges)));
+    if (m_window != nullptr && m_system_window != nullptr) {
+        (void)m_system_window->start_system_resize(m_window, edges);
     }
 }

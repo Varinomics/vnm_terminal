@@ -348,7 +348,9 @@ bool check_settings_window_screen_scrolling(
     window.setProperty("available_height_limit", preferred_height + 128);
     pump_events(app);
     ok &= check(window.width() == preferred_width && window.height() == preferred_height,
-        context + " keeps its full preferred extent when the screen can contain it");
+        context + " keeps its full preferred extent when the screen can contain it (actual " +
+            std::to_string(window.width()) + "x" + std::to_string(window.height()) +
+            ", preferred " + std::to_string(preferred_width) + "x" + std::to_string(preferred_height) + ")");
     ok &= check(!scrollbar->isVisible(),
         context + " hides its body scrollbar when the full body fits");
     ok &= check(
@@ -425,6 +427,65 @@ bool check_settings_window_screen_scrolling(
     ok &= check(std::abs(flickable->property("contentY").toReal()) <= 0.5,
         context + " returns the full body to its top bound when scrolling is no longer needed");
 
+    return ok;
+}
+
+bool check_settings_window_width_bounds(QGuiApplication& app, QQuickWindow& window)
+{
+    auto* body = find_quick_item_recursive(&window, QStringLiteral("settings_window_body"));
+    auto* flickable = find_quick_item_recursive(&window, QStringLiteral("settings_window_body_flickable"));
+    auto* form = find_quick_item_recursive(&window, QStringLiteral("settings_form_columns"));
+    auto* grid = find_quick_item_recursive(&window, QStringLiteral("scheme_list"));
+    auto* horizontal = find_quick_item_recursive(&window, QStringLiteral("settings_window_body_horizontal_scrollbar"));
+    if (!body || !flickable || !form || !grid || !horizontal) {
+        return check(false, "settings width fixture exposes its form, grid, and scroller");
+    }
+    bool ok = true;
+    const QRect original_geometry = window.geometry();
+    const int original_width_limit = window.property("available_width_limit").toInt();
+    const int preferred = window.property("preferred_width").toInt();
+    const int minimum = window.property("natural_width").toInt();
+    for (const int width : {preferred, minimum, 320}) {
+        window.setProperty("available_width_limit", width);
+        window.setWidth(width);
+        pump_events(app);
+        const QRectF content = scene_rect(*body);
+        for (const char* name : {"font_family_combo", "font_size_spin", "font_advance_policy_combo",
+                                "renderer_mode_combo", "row_timestamp_switch", "copy_on_select_switch",
+                                "scrollback_buffer_size_spin"})
+        {
+            auto* control = find_quick_item_recursive(&window, QString::fromUtf8(name));
+            ok &= check(control != nullptr, std::string(name) + " exists at bounded settings widths");
+            if (control) {
+                const QRectF bounds = scene_rect(*control);
+                ok &= check(bounds.left() >= content.left() - 0.5 && bounds.right() <= content.right() + 0.5,
+                    std::string(name) + " fits within the reachable settings content");
+            }
+        }
+        ok &= check(grid->width() <= body->width() + 0.5,
+            "scheme grid stays inside the settings body");
+        ok &= check(grid->property("cellWidth").toReal() + 0.5 >= grid->property("minimum_card_width").toReal(),
+            "scheme cards retain room for their measured previews");
+        if (width < preferred) {
+            ok &= check(form->property("columns").toInt() == 1,
+                "narrow settings stack their form sections");
+        }
+        const bool overflow = body->width() > flickable->width() + 0.5;
+        ok &= check(horizontal->isVisible() == overflow,
+            "screen widths below the control minimum expose horizontal scrolling");
+        if (overflow) {
+            const qreal maximum_x = flickable->property("contentWidth").toReal() - flickable->width();
+            flickable->setProperty("contentX", maximum_x);
+            pump_events(app);
+            auto* buffer = find_quick_item_recursive(&window, QStringLiteral("scrollback_buffer_size_spin"));
+            ok &= check(buffer && scene_rect(*buffer).right() <= scene_rect(*flickable).right() + 0.5,
+                "the complete buffer editor is reachable at the horizontal bound");
+        }
+    }
+    window.setProperty("available_width_limit", original_width_limit);
+    window.setGeometry(original_geometry);
+    flickable->setProperty("contentX", 0);
+    pump_events(app);
     return ok;
 }
 
@@ -3574,6 +3635,27 @@ bool test_macos_command_shortcuts_are_host_shortcuts(QGuiApplication& app)
 }
 #endif
 
+bool test_explicit_titlebar_height_survives_font_changes(QGuiApplication& app)
+{
+    QQmlEngine engine;
+    QQuickWindow window;
+    chrome_test::Terminal_qml_chrome titlebar(engine, window);
+    if (!titlebar.is_valid()) {
+        return check(false, "explicit titlebar height fixture initializes");
+    }
+    const QFont original_font = QGuiApplication::font();
+    titlebar.set_titlebar_height(44);
+    QFont larger_font = original_font;
+    larger_font.setPixelSize(26);
+    QGuiApplication::setFont(larger_font);
+    pump_events(app);
+    const qreal height = titlebar.root_item()->property("titlebar_height").toReal();
+    QGuiApplication::setFont(original_font);
+    pump_events(app);
+    return check(nearly_equal(height, 44),
+        "public titlebar height override survives UI font changes (actual " + std::to_string(height) + ")");
+}
+
 bool test_settings_gear_button_and_window(QGuiApplication& app)
 {
     QQmlEngine engine;
@@ -3720,6 +3802,8 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
     if (settings_qml_window != nullptr) {
         ok &= check(settings_qml_window->isVisible(),
             "settings window becomes visible when shown");
+        ok &= check(settings_qml_window->width() == settings_qml_window->property("preferred_width").toInt(),
+            "settings open at their content-derived preferred width");
         const QString terminal_scheme = surface.color_scheme();
         settings_window.set_dark_mode(false);
         pump_events(app);
@@ -3755,6 +3839,19 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
             "settings window");
         settings_window.show_window();
         pump_events(app);
+
+        ok &= check_settings_window_width_bounds(app, *settings_qml_window);
+        const QFont application_font = QGuiApplication::font();
+        QFont larger_font = application_font;
+        larger_font.setPixelSize(18);
+        QGuiApplication::setFont(larger_font);
+        pump_events(app);
+        ok &= check(settings_qml_window->property("settings_font_pixel_size").toInt() == 18,
+            "settings follow application font changes");
+        ok &= check_settings_window_width_bounds(app, *settings_qml_window);
+        QGuiApplication::setFont(application_font);
+        pump_events(app);
+        ok &= check_settings_window_width_bounds(app, *settings_qml_window);
 
         auto* scheme_list = settings_qml_window->findChild<QQuickItem*>(
             QStringLiteral("scheme_list"));
@@ -4346,6 +4443,7 @@ int main(int argc, char** argv)
     ok &= test_window_state_sync();
     ok &= test_text_area_resize_request_respects_window_state();
     ok &= test_text_area_resize_policy_tracks_window_state(app);
+    ok &= test_explicit_titlebar_height_survives_font_changes(app);
     ok &= test_settings_gear_button_and_window(app);
     ok &= test_hidden_settings_preserve_escape_delivery(app);
     ok &= test_hidden_settings_window_releases_graphics();
