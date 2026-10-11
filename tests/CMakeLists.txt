@@ -584,6 +584,8 @@ vnm_terminal_add_target_test(vnm_terminal_app_persistence
 add_executable(vnm_terminal_app_support_tests
     terminal_app/app_support_tests.cpp
 )
+target_compile_definitions(vnm_terminal_app_support_tests PRIVATE
+    VNM_QML_CONTENTS_DISCARDED=$<CONFIG:Release>)
 target_include_directories(vnm_terminal_app_support_tests PRIVATE
     "${PROJECT_SOURCE_DIR}/src"
 )

@@ -1063,6 +1063,10 @@ private slots:
         terminal_app::Terminal_settings_window settings(engine, model, controller);
         QVERIFY2(settings.is_valid(), qPrintable(settings.error_string()));
 
+        QFile source(QStringLiteral(":/vnm_terminal/terminal_settings_window.qml"));
+        QVERIFY(source.open(QIODevice::ReadOnly));
+        QCOMPARE(source.readAll().isEmpty(), bool(VNM_QML_CONTENTS_DISCARDED));
+
         QQuickWindow* window = settings_window();
         QVERIFY(window != nullptr);
         settings.show_window();
