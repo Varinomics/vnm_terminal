@@ -43,7 +43,7 @@ add_subdirectory(portable_launcher)
 
 find_package(Qt6 6.12 REQUIRED COMPONENTS Core Gui Qml Quick QuickLayouts QuickControls2 QuickShapes)
 if(QT_QML_NO_CACHEGEN)
-    message(FATAL_ERROR "vnm_terminal requires QML cache generation because QML source contents are discarded")
+    message(FATAL_ERROR "vnm_terminal requires QML cache generation")
 endif()
 # The one CPack component this build packages. It is named here rather than in
 # cmake/vnm_terminal_packaging.cmake, which is included at the end of this file,
@@ -206,16 +206,15 @@ foreach(qml_file IN LISTS vnm_terminal_qml_files)
     get_filename_component(qml_name "${qml_file}" NAME)
     set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")
 endforeach()
-qt_add_qml_module(vnm_terminal_app_support
+vnm_add_qml_resources(vnm_terminal_app_support
     URI vnm_terminal
     VERSION 1.0
     RESOURCE_PREFIX "/"
-    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vnm_terminal"
-    NO_PLUGIN
-    DISCARD_QML_CONTENTS
+    GENERATE_QMLDIR
     QML_FILES ${vnm_terminal_qml_files}
-    OUTPUT_TARGETS vnm_terminal_qml_output_targets
 )
+get_target_property(vnm_terminal_qml_output_targets
+    vnm_terminal_app_support VNM_QML_RESOURCE_TARGETS)
 target_include_directories(vnm_terminal_app_support
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -276,9 +275,8 @@ if(PROJECT_IS_TOP_LEVEL)
         SOURCE_DIR)
     set_target_properties(vnm_qml_chrome PROPERTIES
         EXPORT_NAME vnm_terminal_qml_chrome_runtime)
-    get_directory_property(vnm_terminal_chrome_qml_output_targets
-        DIRECTORY "${vnm_terminal_qml_chrome_source_dir}"
-        DEFINITION vnm_qml_chrome_qml_output_targets)
+    get_target_property(vnm_terminal_chrome_qml_output_targets
+        vnm_qml_chrome VNM_QML_RESOURCE_TARGETS)
 
     if(COMMAND vnm_fonts_install_package)
         vnm_fonts_install_package()

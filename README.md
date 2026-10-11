@@ -202,15 +202,15 @@ Release packages are built with Qt 6.12.0.
 
 ### QML build and runtime policy
 
-Application QML and `VNM_Chrome` use `qt_add_qml_module(QML_FILES ...
-DISCARD_QML_CONTENTS)` in every configuration. Qt embeds compiled QML units;
-the original QML source text is omitted from the resources. Keep
+Application QML and `VNM_Chrome` use `qt_add_qml_module(QML_FILES ...)`.
+Qt embeds compiled QML units; Release omits the original source text from
+resources, while other configurations retain it. Keep
 `QT_QML_NO_CACHEGEN=OFF` (the default); configure rejects disabling generation.
 Qt compiles supported bindings to native code and retains compiled bytecode
 for the others. These units require the matching Qt build
 at runtime, so rebuild the application and its QML dependencies when changing
-Qt. There is no embedded source fallback, including in Debug builds, and QML
-debugging that disables compiled units cannot load these components.
+Qt. Release has no embedded source fallback, so QML debugging that disables
+compiled units cannot load its components.
 
 Before constructing Qt application or QML engine objects, the standalone
 application sets `QML_DISK_CACHE=aot` and removes `QML_FORCE_DISK_CACHE` and
