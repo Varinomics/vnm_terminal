@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(vnm_terminal LANGUAGES C CXX VERSION 1.7.0)
+project(vnm_terminal LANGUAGES C CXX VERSION 1.7.1)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)

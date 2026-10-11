@@ -6,35 +6,35 @@
       "branch": "master",
       "checkout_path": "vnm_terminal_surface",
       "output": "surface",
-      "commit": "a24c14ff0d1d1a1e87947ad98e235fbd65e2492d"
+      "commit": "90adc21d7f5dc76352f1855ff9a78df6875a6b18"
     },
     "vnm_qml_chrome": {
       "repository": "Varinomics/vnm_qml_chrome",
       "branch": "master",
       "checkout_path": "vnm_qml_chrome",
       "output": "chrome",
-      "commit": "11b1a0b3e59e672195aac04d1230a71a6dd169a2"
+      "commit": "e0948392ca5e94ff220159200a6022bf313771a1"
     },
     "vnm_msdf_text": {
       "repository": "Varinomics/vnm_msdf_text",
       "branch": "master",
       "checkout_path": "vnm_msdf_text",
       "output": "msdf_text",
-      "commit": "dd55f66b97b1bd73fcd0657ec1e4a439a00e5187"
+      "commit": "75975d9444bb5fe22599f12ffc22fd6a191099b2"
     },
     "vnm_qt_dispatch": {
       "repository": "Varinomics/vnm_qt_dispatch",
       "branch": "master",
       "checkout_path": "vnm_qt_dispatch",
       "output": "qt_dispatch",
-      "commit": "0a6369d35613b33a65a898ee5344e651a38d18b8"
+      "commit": "fe6e56ecde5d9db6cb5317bc0cf0daecef66b7a9"
     },
     "vnm_fonts": {
       "repository": "Varinomics/vnm_fonts",
       "branch": "master",
       "checkout_path": "vnm_fonts",
       "output": "fonts",
-      "commit": "79ad059d86f94ea0d013376bb477094c568e8d80"
+      "commit": "a902a6d31ae2695fb5646fb4b93af41540c9c848"
     }
   },
   "third_party": {
