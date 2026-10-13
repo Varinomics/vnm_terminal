@@ -1,6 +1,12 @@
 name: CI macOS
 
 on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to receive the macOS bundle
+        required: false
+        type: string
   push:
     branches: [ master, main, dev ]
   pull_request:
@@ -9,8 +15,8 @@ on:
     types: [ published ]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' && inputs.release_tag == '' }}
 
 defaults:
   run:
@@ -53,7 +59,8 @@ jobs:
           ref: >-
             ${{ github.event_name == 'release' &&
                 format('refs/tags/{0}', github.event.release.tag_name) ||
-                github.sha }}
+                inputs.release_tag != '' &&
+                format('refs/tags/{0}', inputs.release_tag) || github.sha }}
           persist-credentials: false
 
       # The dependency checkouts below carry the repository-read token where one
@@ -153,9 +160,11 @@ jobs:
 
       - name: Derive package names
         id: package
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
-            package_version="${GITHUB_REF_NAME#v}"
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            package_version="${RELEASE_TAG#v}"
           else
             package_version="$(
               sed -nE 's/^project\(vnm_terminal .* VERSION ([^ )]+)\).*/\1/p' \
@@ -332,17 +341,19 @@ jobs:
         env:
           SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
           THIRD_PARTY_CHECKOUTS: '{"freetype":"_deps/freetype-src","msdfgen":"_deps/msdfgen-src"}'
-          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || '' }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag || '' }}
           QT_VERSION: '6.12.0'
         run: |
           node vnm_terminal/tools/dependencies_lock.js record-provenance \
             vnm_terminal "${GITHUB_WORKSPACE}" \
             vnm_terminal/build/vnm_terminal.app/Contents/Resources/vnm_terminal_build_provenance.json
 
-      - name: Include bundled font notices
+      - name: Include application and bundled font notices
         run: |
-          font_notices_dir="vnm_terminal/build/vnm_terminal.app/Contents/Resources/vnm_fonts"
+          resources_dir="vnm_terminal/build/vnm_terminal.app/Contents/Resources"
+          font_notices_dir="${resources_dir}/vnm_fonts"
           mkdir -p "${font_notices_dir}/LICENSES"
+          cp vnm_terminal/LICENSE vnm_terminal/THIRD_PARTY_NOTICES.md "${resources_dir}/"
           cp vnm_fonts/THIRD_PARTY_NOTICES.md "${font_notices_dir}/"
           cp vnm_fonts/LICENSES/*.txt "${font_notices_dir}/LICENSES/"
 
@@ -369,7 +380,9 @@ jobs:
 
   attach-release-asset:
     name: Attach macOS Bundle
-    if: github.event_name == 'release'
+    if: >-
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs: build-and-test
     runs-on: ubuntu-24.04
     permissions:
@@ -386,9 +399,10 @@ jobs:
       - name: Attach macOS bundle to GitHub release
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
           gh release upload \
-            "${GITHUB_REF_NAME}" \
+            "${RELEASE_TAG}" \
             "dist/${{ needs.build-and-test.outputs.zip_name }}" \
             --repo "${{ github.repository }}" \
             --clobber
