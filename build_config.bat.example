@@ -10,7 +10,9 @@ REM build_config.bat is gitignored and will not be committed.
 REM ========================================================================
 
 set QT_PREFIX=C:\Qt\6.12.0\mingw_64
-set MINGW_BIN=C:\Qt\Tools\mingw1510_64\bin
+REM GCC 15.1 x86_64/POSIX/SEH/MSVCRT: extract the pinned MinGW-Builds archive
+REM listed in .github/workflows/ci-windows.yml; Qt's tool repository omits it.
+set MINGW_BIN=C:\Toolchains\mingw64\bin
 set CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe
 set NINJA=C:\Qt\Tools\Ninja\ninja.exe
 set VNM_TERMINAL_SURFACE_SOURCE_DIR=C:\plms\varinomics\vnm_terminal_surface
