@@ -47,6 +47,7 @@
 #include <QPointF>
 #include <QProcessEnvironment>
 #include <QQmlEngine>
+#include <QtQuickControls2/QQuickStyle>
 #include <QQuickWindow>
 #include <QRect>
 #include <QScreen>
@@ -407,6 +408,9 @@ int main(int argc, char** argv)
 
     Qt_arguments qt_arguments = make_qt_arguments(argc, argv);
     QGuiApplication app(qt_arguments.argc, qt_arguments.argv.data());
+    // The chrome and settings controls are customized Basic controls. Keep
+    // generic Controls imports on the same style and deploy only that style.
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
     vnm_terminal::apply_terminal_renderer_minimum_surface_format();
     QCoreApplication::setOrganizationName(QStringLiteral("Varinomics"));
     QCoreApplication::setOrganizationDomain(QStringLiteral("varinomics.com"));

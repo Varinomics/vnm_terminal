@@ -7,7 +7,11 @@
     <ProductUrl>https://github.com/Varinomics/vnm_terminal</ProductUrl>
     <InstallerApplicationIcon>vnm_terminal</InstallerApplicationIcon>
     <WizardStyle>Modern</WizardStyle>
-    <Banner>varinomics_banner.png</Banner>
+    <Logo>varinomics_logo.png</Logo>
+    <WizardDefaultWidth>800</WizardDefaultWidth>
+    <WizardDefaultHeight>500</WizardDefaultHeight>
+    <WizardMinimumWidth>800</WizardMinimumWidth>
+    <WizardMinimumHeight>500</WizardMinimumHeight>
     <StyleSheet>style.qss</StyleSheet>
     <ControlScript>controller.qs</ControlScript>
     <TitleColor>#E0E0E0</TitleColor>

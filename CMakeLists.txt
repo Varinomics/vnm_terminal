@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(vnm_terminal LANGUAGES C CXX VERSION 1.7.1)
+project(vnm_terminal LANGUAGES C CXX VERSION 1.7.2)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
@@ -37,6 +37,35 @@ if(VNM_TERMINAL_BUILD_PACKAGES AND NOT VNM_TERMINAL_DISTRIBUTION_BUILD)
     message(FATAL_ERROR
         "VNM_TERMINAL_BUILD_PACKAGES=ON requires "
         "VNM_TERMINAL_DISTRIBUTION_BUILD=ON")
+endif()
+
+if(VNM_TERMINAL_DISTRIBUTION_BUILD)
+    if(CMAKE_CONFIGURATION_TYPES)
+        if(NOT CMAKE_CONFIGURATION_TYPES STREQUAL "Release")
+            message(FATAL_ERROR "Distribution builds require CMAKE_CONFIGURATION_TYPES=Release")
+        endif()
+    elseif(NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(FATAL_ERROR "Distribution builds require CMAKE_BUILD_TYPE=Release")
+    endif()
+
+    foreach(language C CXX)
+        foreach(flags CMAKE_${language}_FLAGS CMAKE_${language}_FLAGS_RELEASE)
+            if("${${flags}}" MATCHES "(^| )(-g([1-9a-zA-Z][^ ]*)?|/Z[iI7])($| )")
+                message(FATAL_ERROR "Distribution builds cannot enable debug information in ${flags}")
+            endif()
+        endforeach()
+    endforeach()
+    if(MSVC)
+        set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "")
+        add_link_options(/DEBUG:NONE)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        add_compile_options(-g0)
+        if(MINGW)
+            # MinGW's startup objects include DWARF and COFF symbols even in a
+            # Release link. Omit these before embedding helpers or signing.
+            add_link_options(LINKER:--strip-all)
+        endif()
+    endif()
 endif()
 
 add_subdirectory(portable_launcher)
@@ -398,6 +427,7 @@ target_link_libraries(vnm_terminal PRIVATE
     vnm_qt_dispatch::vnm_qt_dispatch
     vnm_qml_chrome::vnm_qml_chrome
     vnm_terminal::vnm_terminal_environment_policy
+    Qt6::QuickControls2
     Qt6::Svg
 )
 
@@ -497,13 +527,7 @@ if(WIN32)
     find_package(Qt6 6.12 REQUIRED COMPONENTS
         QuickControls2Basic
         QuickControls2BasicStyleImpl
-        QuickControls2Fusion
-        QuickControls2FusionStyleImpl
         QuickControls2Impl
-        QuickControls2WindowsStyleImpl
-        OPTIONAL_COMPONENTS
-        QuickControls2Windows
-        QuickNativeStyle
     )
 
     vnm_terminal_copy_qt_plugin(Qt6::QWindowsIntegrationPlugin platforms)
@@ -513,16 +537,7 @@ if(WIN32)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickShapes)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Basic)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2BasicStyleImpl)
-    vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Fusion)
-    vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2FusionStyleImpl)
     vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2Impl)
-    vnm_terminal_copy_qt_runtime_library(Qt6::QuickControls2WindowsStyleImpl)
-    # Some Qt kits separate these style backing libraries from their QML plugins.
-    foreach(style_library QuickControls2Windows QuickNativeStyle)
-        if(TARGET Qt6::${style_library})
-            vnm_terminal_copy_qt_runtime_library(Qt6::${style_library})
-        endif()
-    endforeach()
 
     add_custom_command(TARGET vnm_terminal POST_BUILD
         COMMAND

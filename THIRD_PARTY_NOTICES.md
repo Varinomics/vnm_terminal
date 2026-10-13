@@ -80,14 +80,23 @@ Installer Framework 4.11.0 under GPLv3 with The Qt Company GPL Exception 1.0.
 The exception text is installed as
 `QT_INSTALLER_FRAMEWORK_LICENSE_EXCEPTION.txt`.
 
-The complete corresponding upstream source is available without charge from:
+The engine uses static Qt 6.12.0 under GPLv3. Its responsive wizard layout,
+high-DPI logo, maintenance publication, and Qt 6.12 archive enumeration changes,
+source selection, and build scripts are in
+`packaging/windows/private-ifw` and `tools/build_windows_private_ifw.ps1`.
+Matching corresponding source and build material are supplied separately with
+the release:
+
+- https://github.com/Varinomics/vnm_terminal/releases
+
+The upstream source is also available without charge from:
 
 - https://download.qt.io/official_releases/qt-installer-framework/4.11.0/installer-framework-everywhere-src-4.11.0.zip
-- https://download.qt.io/archive/qt/6.9/6.9.3/single/qt-everywhere-src-6.9.3.zip
+- https://download.qt.io/archive/qt/6.12/6.12.0/single/qt-everywhere-src-6.12.0.zip
 
-No Varinomics modifications are made to Qt Installer Framework or its Qt
-runtime. The installer configuration and package scripts are included in this
-repository under `packaging/windows/ifw`.
+The installer configuration and package scripts are included in this repository
+under `packaging/windows/ifw`. The separate source material includes the exact
+Qt, xz and bzip2 sources and their license notices.
 
 ### libarchive 3.8.5
 

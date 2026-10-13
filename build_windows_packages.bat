@@ -15,11 +15,25 @@ call "%~dp0build_config.bat"
 
 if "%IFW_ROOT%"=="" (
     echo ERROR: IFW_ROOT is not set in build_config.bat.
-    echo Run tools\provision_windows_ifw.ps1, then set IFW_ROOT to its destination.
+    echo Build tools\build_windows_private_ifw.ps1, then set IFW_ROOT to its build directory.
     exit /b 1
 )
 if not exist "%IFW_ROOT%\bin\binarycreator.exe" (
     echo ERROR: Qt IFW binarycreator not found under IFW_ROOT: %IFW_ROOT%
+    exit /b 1
+)
+if not exist "%IFW_ROOT%\vnm-terminal-ifw-provenance.json" (
+    echo ERROR: IFW_ROOT must contain the vnm_terminal installer engine and its provenance.
+    echo Build it with tools\build_windows_private_ifw.ps1.
+    exit /b 1
+)
+if "%VNM_TERMINAL_CONPTY_PACKAGE_DIR%"=="" (
+    echo ERROR: VNM_TERMINAL_CONPTY_PACKAGE_DIR is not set in build_config.bat.
+    echo Prepare source-built ConPTY with tools\provision_windows_conpty.ps1.
+    exit /b 1
+)
+if not exist "%VNM_TERMINAL_CONPTY_PACKAGE_DIR%\conpty-source-build.json" (
+    echo ERROR: Windows packages require the source-built ConPTY package and its receipt.
     exit /b 1
 )
 

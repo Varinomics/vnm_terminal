@@ -10,6 +10,8 @@ REM containing the real Qt application and Qt/MinGW runtime dependencies.
 REM
 REM Requires a build_config.bat file with local tool paths.
 REM See build_config.bat.example for a template.
+REM Usage: build_portable.bat [build-directory] [parallel-width] [portable-directory]
+REM Run through queued-build with the same slot count as parallel-width (default 4).
 REM ========================================================================
 
 cd /d "%~dp0"
@@ -51,8 +53,18 @@ for %%I in ("%VNM_QML_CHROME_SOURCE_DIR%") do set VNM_QML_CHROME_SOURCE_DIR=%%~f
 set CONFIG=Release
 set WINDEPLOYQT=%QT_PREFIX%\bin\windeployqt.exe
 set BUILD_DIR=%~dp0build_portable
+if not "%~1"=="" set BUILD_DIR=%~f1
+set BUILD_PARALLEL=4
+if not "%~2"=="" set BUILD_PARALLEL=%~2
+set BUILD_PARALLEL_VALID=
+for %%N in (1 2 3 4) do if "%BUILD_PARALLEL%"=="%%N" set BUILD_PARALLEL_VALID=1
+if not defined BUILD_PARALLEL_VALID (
+    echo ERROR: parallel-width must be 1, 2, 3 or 4 and match queued-build slots.
+    exit /b 1
+)
 set DIST_DIR=%~dp0dist
 set PORTABLE_DIR=%DIST_DIR%\portable_candidate
+if not "%~3"=="" set PORTABLE_DIR=%~f3
 set RUNTIME_DIR=%PORTABLE_DIR%\vnm_terminal_runtime
 set MSDF_PACKAGE_PREFIX=%BUILD_DIR%\msdf_text_package
 set MSDF_PACKAGE_BUILD_DIR=%BUILD_DIR%\msdf_text_package_build
@@ -117,8 +129,8 @@ echo [1/6] Preparing packaged MSDF dependency ...
 if exist "%BUILD_DIR%\CMakeCache.txt" (
     findstr /c:"CMAKE_GENERATOR:INTERNAL=Ninja" "%BUILD_DIR%\CMakeCache.txt" >nul
     if errorlevel 1 (
-        echo Removing stale portable build configured with another CMake generator ...
-        rmdir /s /q "%BUILD_DIR%"
+        echo ERROR: Existing build directory uses another generator. Pass a fresh build-directory.
+        exit /b 1
     )
 )
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
@@ -207,7 +219,7 @@ if errorlevel 1 (
     echo ERROR: FreeType configuration failed.
     exit /b 1
 )
-"%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\freetype" --target install --parallel
+"%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\freetype" --target install --parallel %BUILD_PARALLEL%
 if errorlevel 1 (
     echo ERROR: FreeType build failed.
     exit /b 1
@@ -245,7 +257,7 @@ if errorlevel 1 (
     echo ERROR: msdfgen configuration failed.
     exit /b 1
 )
-"%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\msdfgen" --target install --parallel
+"%CMAKE%" --build "%MSDF_PACKAGE_BUILD_DIR%\msdfgen" --target install --parallel %BUILD_PARALLEL%
 if errorlevel 1 (
     echo ERROR: msdfgen build failed.
     exit /b 1
@@ -267,7 +279,7 @@ if errorlevel 1 (
     echo ERROR: vnm_msdf_text configuration failed.
     exit /b 1
 )
-"%CMAKE%" --build "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%" --target install --parallel
+"%CMAKE%" --build "%VNM_MSDF_TEXT_PACKAGE_BUILD_TREE%" --target install --parallel %BUILD_PARALLEL%
 if errorlevel 1 (
     echo ERROR: vnm_msdf_text build failed.
     exit /b 1
@@ -286,6 +298,11 @@ if not "%VNM_FONTS_SOURCE_DIR%"=="" (
     set VNM_FONTS_CMAKE_ARG=-DFETCHCONTENT_SOURCE_DIR_VNM_FONTS="%VNM_FONTS_SOURCE_DIR%"
 )
 
+set VNM_CONPTY_CMAKE_ARG=
+if not "%VNM_TERMINAL_CONPTY_PACKAGE_DIR%"=="" (
+    set VNM_CONPTY_CMAKE_ARG=-DVNM_TERMINAL_CONPTY_PACKAGE_DIR="%VNM_TERMINAL_CONPTY_PACKAGE_DIR%"
+)
+
 echo.
 echo [2/6] Configuring CMake ...
 "%CMAKE%" -G Ninja ^
@@ -300,6 +317,7 @@ echo [2/6] Configuring CMake ...
     -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="%VNM_MSDF_TEXT_SOURCE_DIR%" ^
     %VNM_QT_DISPATCH_CMAKE_ARG% ^
     %VNM_FONTS_CMAKE_ARG% ^
+    %VNM_CONPTY_CMAKE_ARG% ^
     -DVNM_TERMINAL_ENABLE_PROFILING=OFF ^
     -DVNM_TERMINAL_ENABLE_MSDF_TEXT_RENDERER=ON ^
     -DVNM_TERMINAL_MSDF_TEXT_RENDERER_USE_SYSTEM_LIBS=ON ^
@@ -351,7 +369,7 @@ set "VNM_FONTS_NOTICES_FILE=%VNM_FONTS_NOTICES_FILE:/=\%"
 
 echo.
 echo [3/6] Building ...
-"%CMAKE%" --build "%BUILD_DIR%" --config "%CONFIG%" --target vnm_terminal vnm_terminal_portable_launcher --parallel
+"%CMAKE%" --build "%BUILD_DIR%" --config "%CONFIG%" --target vnm_terminal vnm_terminal_portable_launcher --parallel %BUILD_PARALLEL%
 if errorlevel 1 (
     echo ERROR: Build failed.
     exit /b 1
@@ -360,6 +378,10 @@ if errorlevel 1 (
 echo.
 echo [4/6] Assembling portable distribution ...
 
+if not "%~3"=="" if exist "%PORTABLE_DIR%" (
+    echo ERROR: A custom portable-directory must not already exist. Choose a fresh output directory.
+    exit /b 1
+)
 if exist "%PORTABLE_DIR%" rmdir /s /q "%PORTABLE_DIR%"
 mkdir "%PORTABLE_DIR%"
 mkdir "%RUNTIME_DIR%"
@@ -404,7 +426,10 @@ if errorlevel 1 (
     exit /b 1
 )
 
-"%WINDEPLOYQT%" --release --no-translations --dir "%RUNTIME_DIR%" "%RUNTIME_DIR%\vnm_terminal.exe"
+REM The manifest covers compiled QML and dynamically loaded chrome imports.
+"%WINDEPLOYQT%" --release --no-translations --skip-plugin-types qmltooling ^
+    --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler ^
+    --qmldir "%~dp0packaging" --dir "%RUNTIME_DIR%" "%RUNTIME_DIR%\vnm_terminal.exe"
 if errorlevel 1 (
     echo ERROR: windeployqt failed.
     exit /b 1
@@ -438,84 +463,19 @@ if exist "%RUNTIME_DIR%\vc_redist.x64.exe" (
     exit /b 1
 )
 
-REM Strip the QML debug-tooling plugins (qmltooling\): they are only used by the
-REM QML debugger/profiler and are not needed in a distribution build.
-if exist "%RUNTIME_DIR%\qmltooling" rmdir /s /q "%RUNTIME_DIR%\qmltooling"
-
-REM Deploy the QtQml and QtQuick QML module trees.
-REM The application and chrome embed compiled QML without source contents.
-REM Keep the explicit runtime module deployment used by the regular build's
-REM post-build step
-REM (vnm_terminal_copy_qt_qml_module for QtQml and QtQuick in CMakeLists.txt) by
-REM copying those module trees from the Qt kit. Without them the portable app
-REM exits immediately with: module "QtQuick.Window" is not installed
-for %%M in (
-    QtQml
-    QtQuick
-) do (
-    if not exist "%QT_PREFIX%\qml\%%M" (
-        echo ERROR: Qt QML module %%M not found at "%QT_PREFIX%\qml\%%M".
-        exit /b 1
-    )
-    "%CMAKE%" -E copy_directory "%QT_PREFIX%\qml\%%M" "%RUNTIME_DIR%\qml\%%M"
-    if errorlevel 1 (
-        echo ERROR: Failed to deploy Qt QML module %%M into the runtime.
-        exit /b 1
-    )
-)
-if not exist "%RUNTIME_DIR%\qml\QtQuick\Window" (
-    echo ERROR: QtQuick.Window QML module missing after deployment.
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\prune_windows_runtime.ps1" ^
+    -RuntimePath "%RUNTIME_DIR%"
+if errorlevel 1 (
+    echo ERROR: Failed to prune deployment-only Qt content.
     exit /b 1
 )
 
-REM Deploy the QtQuick.Controls / Templates / Layouts runtime DLLs.
-REM The chrome QML and the VNM_Chrome module it loads import QtQuick.Controls,
-REM QtQuick.Controls.Basic, QtQuick.Layouts and QtQuick.Shapes. Include the C++
-REM libraries that the QtQuick.Controls and QtQuick.Shapes QML plugins load
-REM dynamically. A local dev build resolves them from the Qt bin on PATH; a
-REM portable build has no such fallback. Mirror the regular build's explicit list
-REM (vnm_terminal_copy_qt_runtime_library in CMakeLists.txt) and add the
-REM QuickControls2 / QuickTemplates2 base libraries and QuickLayouts that those
-REM plugins depend on.
-REM Without them the portable app exits immediately with:
-REM   Cannot load library ...qtquickcontrols2plugin.dll
-REM The chrome forces the Basic style (QT_QUICK_CONTROLS_STYLE=Basic in the
-REM vnm_qml_chrome build); the wider style set matches the regular build.
-for %%F in (
-    Qt6QuickShapes.dll
-    Qt6QuickControls2.dll
-    Qt6QuickControls2Impl.dll
-    Qt6QuickControls2Basic.dll
-    Qt6QuickControls2BasicStyleImpl.dll
-    Qt6QuickControls2Fusion.dll
-    Qt6QuickControls2FusionStyleImpl.dll
-    Qt6QuickControls2WindowsStyleImpl.dll
-    Qt6QuickTemplates2.dll
-    Qt6QuickLayouts.dll
-) do (
-    if not exist "%QT_PREFIX%\bin\%%F" (
-        echo ERROR: Required Qt runtime DLL %%F not found at "%QT_PREFIX%\bin\%%F".
-        exit /b 1
-    )
-    copy /y "%QT_PREFIX%\bin\%%F" "%RUNTIME_DIR%\%%F" >nul
-    if errorlevel 1 (
-        echo ERROR: Failed to copy Qt runtime DLL %%F into the runtime.
-        exit /b 1
-    )
-)
-
-REM Qt kits with split style modules need their backing DLLs alongside the plugins.
-for %%F in (
-    Qt6QuickControls2Windows.dll
-    Qt6QuickNativeStyle.dll
-) do (
-    if exist "%QT_PREFIX%\bin\%%F" (
-        copy /y "%QT_PREFIX%\bin\%%F" "%RUNTIME_DIR%\%%F" >nul
-        if errorlevel 1 (
-            echo ERROR: Failed to copy Qt runtime DLL %%F into the runtime.
-            exit /b 1
-        )
-    )
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tests\windows_portable_payload_tests.ps1" ^
+    -PayloadPath "%PORTABLE_DIR%" ^
+    -EmbeddedLauncherPath "%BUILD_DIR%\codex_launcher\%CONFIG%\vnm_terminal_codex_launcher.exe"
+if errorlevel 1 (
+    echo ERROR: Windows release payload validation failed.
+    exit /b 1
 )
 
 echo.

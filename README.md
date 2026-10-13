@@ -52,6 +52,39 @@ All published packages are available from the
 Windows and Linux packages include their private Qt runtime. Release source
 archives are available on the same page.
 
+On Windows, setup can remove a validated existing installation from
+`C:\Program Files\vnm_terminal` and continue installing in the same window.
+Start setup normally and close vnm_terminal and its terminal sessions first.
+Setup asks before removal and requests administrator permission separately.
+It preserves user settings outside the installation folder. Removal cannot be
+undone: canceling or a subsequent installation failure does not restore the
+previous application. Unsigned verification builds and installations outside
+the protected default folder require manual removal with their maintenance tool.
+
+Windows packages use a source-built Qt Installer Framework engine with Soter's
+responsive wizard layout and display-scaling fixes. Build that engine once from
+the sources and static dependencies described in
+[the private IFW build instructions](packaging/windows/private-ifw/README.md).
+Set `IFW_ROOT` in `build_config.bat` to its `build` directory.
+
+Prepare the source-built ConPTY runtime and set
+`VNM_TERMINAL_CONPTY_PACKAGE_DIR` to its `package` directory:
+
+```powershell
+pwsh.exe -NoProfile -File tools/provision_windows_conpty.ps1 `
+  -SourceRoot ../vnm_terminal_surface -OutputRoot build_ifw/conpty -Slots 2
+```
+
+Build the Windows packages with both input paths configured:
+
+```powershell
+queued-build --slots 4 -- cmd.exe /d /c build_windows_packages.bat
+```
+
+The package builder checks the engine's patch and binary provenance. Rebuild
+the engine when those inputs change. CI caches the custom engine and passes
+the same verified tools to the isolated release-signing job.
+
 The Linux Qt Installer Framework package installs under `/opt/vnm_terminal`,
 adds the `vnm_terminal` command under `/usr/local/bin`, and registers a desktop
 launcher. Run its installed `vnm_terminal_maintenance` tool to uninstall it.

@@ -59,10 +59,16 @@ runs them on every host.
   at the tag before it signs anything, and verifies the payload file by file
   against the hashes the package job recorded.
 - The job that attaches the Windows packages downloads the signed artifact and
-  nothing else. That is what keeps the unsigned build out of a release: the
+  the separate installer corresponding-source archive. That keeps the unsigned
+  build out of a release: the
   unsigned portable archive has the same file name as the archive rebuilt from
   the signed payload, so an extra download into that directory would replace it.
   `tests/windows_ifw_contract_tests.ps1` asserts the absence of that download.
+- The source-built Windows installer engine has a separate
+  `vnm_terminal_v<version>_windows_installer_source.zip` download and checksum.
+  It contains the matching Qt, Installer Framework and compression sources,
+  the appearance patch, build recipes and provenance. It is published alongside
+  the signed packages and stays outside the installed application payload.
 
 ## Re-signing a release that failed after packaging
 

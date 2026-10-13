@@ -10,13 +10,16 @@ REM build_config.bat is gitignored and will not be committed.
 REM ========================================================================
 
 set QT_PREFIX=C:\Qt\6.12.0\mingw_64
-set MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin
+set MINGW_BIN=C:\Qt\Tools\mingw1510_64\bin
 set CMAKE=C:\Qt\Tools\CMake_64\bin\cmake.exe
 set NINJA=C:\Qt\Tools\Ninja\ninja.exe
 set VNM_TERMINAL_SURFACE_SOURCE_DIR=C:\plms\varinomics\vnm_terminal_surface
+REM Prepare this source-built runtime with tools\provision_windows_conpty.ps1.
+set VNM_TERMINAL_CONPTY_PACKAGE_DIR=C:\plms\varinomics\vnm_terminal\build_ifw\conpty\package
 set VNM_QML_CHROME_SOURCE_DIR=C:\plms\varinomics\vnm_qml_chrome
-REM Provision this directory with tools\provision_windows_ifw.ps1 before packaging.
-set IFW_ROOT=C:\plms\varinomics\vnm_terminal\build_ifw\qt-ifw-4.11.0\root
+REM Build the custom installer engine with tools\build_windows_private_ifw.ps1.
+REM IFW_ROOT names its build directory, containing bin and the provenance JSON.
+set IFW_ROOT=C:\plms\varinomics\vnm_terminal\build_ifw\private\build
 REM Optional: if unset, build_portable.bat clones vnm_msdf_text under build_portable\_deps.
 REM set VNM_MSDF_TEXT_SOURCE_DIR=C:\plms\bsd_licensed\vnm_msdf_text
 REM Optional: if unset, the surface fetches vnm_qt_dispatch itself.

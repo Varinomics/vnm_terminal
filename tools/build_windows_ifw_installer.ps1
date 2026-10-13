@@ -375,6 +375,7 @@ $packageVersion = Get-PayloadVersion $PayloadPath
 $releaseDate = Get-Date -Format 'yyyy-MM-dd'
 $resolvedIfwRoot = (Resolve-Path -LiteralPath $IfwRoot).Path
 Assert-DirectoryExists $resolvedIfwRoot 'Qt IFW root'
+& (Join-Path $PSScriptRoot 'assert_windows_private_ifw.ps1') -IfwRoot $resolvedIfwRoot
 $binaryCreatorPath = Join-Path $resolvedIfwRoot 'bin\binarycreator.exe'
 $installerBaseSourcePath = Join-Path $resolvedIfwRoot 'bin\installerbase.exe'
 Assert-FileExists $binaryCreatorPath 'Qt IFW binarycreator'
@@ -456,28 +457,21 @@ Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'style.qss') `
     -Destination $configRoot
 Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'controller.qs') `
     -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'checkbox_check.svg') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'radio_dot.svg') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'combo_arrow.svg') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'varinomics_logo.png') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'varinomics_geometry.svg') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'varinomics_banner.png') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'varinomics_banner@2x.png') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'varinomics_geometry.png') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'varinomics_geometry@2x.png') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'log_path_probe.ps1') `
-    -Destination $configRoot
-Copy-Item -LiteralPath (Join-Path $ifwSourceRoot 'theme_resources.qrc') `
-    -Destination $configRoot
+foreach ($resource in @(
+    'checkbox_check.png',
+    'checkbox_check@2x.png',
+    'radio_dot.png',
+    'radio_dot@2x.png',
+    'combo_arrow.png',
+    'combo_arrow@2x.png',
+    'varinomics_logo.png',
+    'varinomics_logo@2x.png',
+    'log_path_probe.ps1',
+    'replacement_support.ps1',
+    'theme_resources.qrc'
+)) {
+    Copy-Item -LiteralPath (Join-Path $ifwSourceRoot $resource) -Destination $configRoot
+}
 Copy-Item -LiteralPath $installerBaseSourcePath -Destination $privateInstallerBasePath
 # Qt ships installerbase as a console-subsystem image so that its headless
 # commands can print. Windows therefore allocates a console for every graphical

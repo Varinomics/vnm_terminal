@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "purpose": "Qt Installer Framework appearance and maintenance publication used by the vnm_terminal Windows installer",
+  "qt_ifw": {
+    "version": "4.11.0",
+    "repository": "https://code.qt.io/installer-framework/installer-framework.git",
+    "commit": "aac2cf9c93b80a0f5959ab6c8a00bc378c54fdec",
+    "tree": "813413a48185d955fb44cd8bac3248bd46108055",
+    "license": "GPL-3.0-only WITH Qt-GPL-exception-1.0",
+    "tag": "4.11.0"
+  },
+  "qt_version": "6.12.0",
+  "appearance_origin": {
+    "repository": "https://github.com/Varinomics/soter",
+    "commit": "9b40cb141f636038b65fb6c1b5def17647d0ba1a",
+    "path": "packaging/windows/private-ifw/qt-ifw-4.11-soter.patch",
+    "scope": "packagemanagergui.cpp Modern wizard margins and high-DPI logo rendering"
+  },
+  "input_scope": "Frozen auxiliary toolchain inputs for the Qt Installer Framework appearance engine; independent of the application Qt deployment.",
+  "qt": {
+    "version": "6.12.0",
+    "repository": "https://code.qt.io/qt/qt5.git",
+    "tag_object": "41737d37054a9c500b2d0df38199593accb8b5c0",
+    "commit": "ef25002ed292b132d1ed3246bfcee1d24a9cd966",
+    "tree": "8f63f8c2ad1ff0011f3f5df0516a10d485d24fb9",
+    "modules": {
+      "qtbase": "025bdad181de241e81bf853c8a2d7bf3d19261a9",
+      "qtdeclarative": "4332fbbb4c340463dc8cee36dda0c85d932122d8",
+      "qttools": "613a6fbf0a7998010ab2fda260b64066d66a021d",
+      "qt5compat": "9c2a1b4c8298c750f8632e2fd19f7a1a539c5f09",
+      "qttranslations": "2811457ceff8f0c24a1c4d14f947a283a17239d0"
+    },
+    "distribution_basis": "GPL-3.0-only",
+    "tag": "v6.12.0"
+  },
+  "ifw_dependencies": {
+    "xz": {
+      "version": "5.8.3",
+      "repository": "https://github.com/tukaani-project/xz.git",
+      "tag_object": "9d0743bb9629e8a55ea7b1b40b981514a1f68408",
+      "commit": "4b73f2ec19a99ef465282fbce633e8deb33691b3",
+      "tree": "48c2abfd799dd73d5a2209b0aba285f8c89e8b71",
+      "license_material": [
+        "COPYING",
+        "COPYING.0BSD",
+        "COPYING.GPLv2",
+        "COPYING.GPLv3",
+        "COPYING.LGPLv2.1"
+      ],
+      "tag": "v5.8.3"
+    },
+    "bzip2": {
+      "version": "1.0.8",
+      "repository": "https://sourceware.org/git/bzip2.git",
+      "tag_object": "75a94bea3918e612b879d6a11ca64b8689526147",
+      "commit": "6a8690fc8d26c815e798c588f796eabe9d684cf0",
+      "tree": "5c486de7f86667d0f58f2a945c5c13d71235e98e",
+      "license_material": [
+        "LICENSE"
+      ],
+      "tag": "bzip2-1.0.8"
+    }
+  }
+}

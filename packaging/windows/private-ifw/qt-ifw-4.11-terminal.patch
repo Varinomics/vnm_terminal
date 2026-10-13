@@ -1,0 +1,369 @@
+diff --git a/src/libs/installer/binaryformatengine.cpp b/src/libs/installer/binaryformatengine.cpp
+index 36c3fb7..2d11a49 100644
+--- a/src/libs/installer/binaryformatengine.cpp
++++ b/src/libs/installer/binaryformatengine.cpp
+@@ -259,11 +259,11 @@ QStringList BinaryFormatEngine::entryList(QDirListing::IteratorFlags filters, co
+ 
+     QStringList result;
+     if (!m_collection.name().isEmpty()
+-            && (filters.testFlag(QDirListing::IteratorFlag::Default) || filters.testFlag(QDirListing::IteratorFlag::FilesOnly))) {
++            && !filters.testFlag(QDirListing::IteratorFlag::ExcludeFiles)) {
+         foreach (const QSharedPointer<Resource> &resource, m_collection.resources())
+             result.append(QString::fromUtf8(resource->name()));
+     } else if (m_collection.name().isEmpty()
+-            && (filters.testFlag(QDirListing::IteratorFlag::Default) || filters.testFlag(QDirListing::IteratorFlag::DirsOnly))) {
++            && !filters.testFlag(QDirListing::IteratorFlag::ExcludeDirs)) {
+         foreach (const ResourceCollection &collection, m_collections)
+             result.append(QString::fromUtf8(collection.name()));
+     }
+diff --git a/src/libs/installer/packagemanagercore.cpp b/src/libs/installer/packagemanagercore.cpp
+index 6f7e176..07f4c6f 100644
+--- a/src/libs/installer/packagemanagercore.cpp
++++ b/src/libs/installer/packagemanagercore.cpp
+@@ -474,6 +474,10 @@ void PackageManagerCore::writeMaintenanceTool()
+             d->m_needToWriteMaintenanceTool = false;
+         } catch (const Error &error) {
+             qCritical() << "Error writing Maintenance Tool: " << error.message();
++            if (isInstaller()) {
++                // Let runInstaller undo the installation instead of reporting success.
++                throw;
++            }
+             MessageBoxHandler::critical(MessageBoxHandler::currentBestSuitParent(),
+                 QLatin1String("WriteError"), tr("Error writing Maintenance Tool"), error.message(),
+                 QMessageBox::Ok, QMessageBox::Ok);
+diff --git a/src/libs/installer/packagemanagercore_p.cpp b/src/libs/installer/packagemanagercore_p.cpp
+index 14d3183..3c9711f 100644
+--- a/src/libs/installer/packagemanagercore_p.cpp
++++ b/src/libs/installer/packagemanagercore_p.cpp
+@@ -48,6 +48,7 @@
+ #include <QtCore/QFuture>
+ #include <QtCore/QFutureWatcher>
+ #include <QtCore/QTemporaryFile>
++#include <private/qabstractfileengine_p.h>
+ 
+ #include <QXmlStreamReader>
+ #include <QXmlStreamWriter>
+@@ -1315,6 +1316,30 @@ void PackageManagerCorePrivate::registerPathsForUninstallation(
+     }
+ }
+ 
++void PackageManagerCorePrivate::write_maintenance_tool_marker()
++{
++    QDir resourcePath(QFileInfo(maintenanceToolName()).dir());
++#ifdef Q_OS_MACOS
++    if (!resourcePath.path().endsWith(QLatin1String("Contents/MacOS")))
++        throw Error(tr("Maintenance tool is not a bundle"));
++    resourcePath.cdUp();
++    resourcePath.cd(QLatin1String("Resources"));
++#endif
++    QFile dataOut(generateTemporaryFileName());
++    QInstaller::openForWrite(&dataOut);
++    QInstallerTools::createMTDatFile(dataOut);
++
++    QFile dummy(resourcePath.filePath(QLatin1String("installer.dat")));
++    if (dummy.exists() && !dummy.remove()) {
++        throw Error(tr("Cannot remove data file \"%1\": %2").arg(dummy.fileName(), dummy.errorString()));
++    }
++    if (!dataOut.rename(resourcePath.filePath(QLatin1String("installer.dat")))) {
++        throw Error(tr("Cannot write maintenance tool data to %1: %2")
++            .arg(dataOut.fileName(), dataOut.errorString()));
++    }
++    setDefaultFilePermissions(&dataOut, DefaultFilePermissions::NonExecutable);
++}
++
+ void PackageManagerCorePrivate::writeMaintenanceToolBinary(QFile *const input, qint64 size, bool writeBinaryLayout)
+ {
+     QString maintenanceToolRenamedName = maintenanceToolName() + QLatin1String(".new");
+@@ -1329,33 +1354,7 @@ void PackageManagerCorePrivate::writeMaintenanceToolBinary(QFile *const input, q
+ 
+     QInstaller::appendData(&out, input, size);
+     if (writeBinaryLayout) {
+-
+-        QDir resourcePath(QFileInfo(maintenanceToolRenamedName).dir());
+-#ifdef Q_OS_MACOS
+-        if (!resourcePath.path().endsWith(QLatin1String("Contents/MacOS")))
+-            throw Error(tr("Maintenance tool is not a bundle"));
+-        resourcePath.cdUp();
+-        resourcePath.cd(QLatin1String("Resources"));
+-#endif
+-        // It's a bit odd to have only the magic in the data file, but this simplifies
+-        // other code a lot (since installers don't have any appended data either)
+-        QFile dataOut(generateTemporaryFileName());
+-        QInstaller::openForWrite(&dataOut);
+-        QInstallerTools::createMTDatFile(dataOut);
+-
+-        {
+-            QFile dummy(resourcePath.filePath(QLatin1String("installer.dat")));
+-            if (dummy.exists() && !dummy.remove()) {
+-                throw Error(tr("Cannot remove data file \"%1\": %2").arg(dummy.fileName(),
+-                    dummy.errorString()));
+-            }
+-        }
+-
+-        if (!dataOut.rename(resourcePath.filePath(QLatin1String("installer.dat")))) {
+-            throw Error(tr("Cannot write maintenance tool data to %1: %2").arg(dataOut.fileName(),
+-                dataOut.errorString()));
+-        }
+-        setDefaultFilePermissions(&dataOut, DefaultFilePermissions::NonExecutable);
++        write_maintenance_tool_marker();
+     }
+ 
+     {
+@@ -1581,6 +1580,7 @@ void PackageManagerCorePrivate::writeMaintenanceTool(OperationList performedOper
+         bool newBinaryWritten = false;
+         QString mtName = maintenanceToolName();
+         const QString installerBaseBinary = replaceVariables(m_installerBaseBinaryUnreplaced);
++        QString packaged_base_to_publish;
+         bool macOsMTBundleExtracted = false;
+         if (!installerBaseBinary.isEmpty() && QFileInfo::exists(installerBaseBinary)) {
+             qCDebug(QInstaller::lcInstallerInstallLog) << "Got a replacement installer base binary:"
+@@ -1595,28 +1595,49 @@ void PackageManagerCorePrivate::writeMaintenanceTool(OperationList performedOper
+             } else {
+                 writeMaintenanceToolAppBundle(performedOperations);
+                 QFile replacementBinary(installerBaseBinary);
++                const bool publish_packaged_base = isInstaller()
++                    && QFileInfo(installerBaseBinary).absolutePath().compare(
++                        QFileInfo(mtName).absolutePath(), Qt::CaseInsensitive) == 0;
+                 try {
+-                    QInstaller::openForRead(&replacementBinary);
+-                    writeMaintenanceToolBinary(&replacementBinary, replacementBinary.size(), true);
++                    if (publish_packaged_base) {
++                        // Keep the signed package file intact until its metadata is ready.
++                        // Publishing this sibling by rename needs no second executable copy.
++                        write_maintenance_tool_marker();
++                        if (!setDefaultFilePermissions(&replacementBinary, DefaultFilePermissions::Executable)) {
++                            throw Error(tr("Cannot set maintenance tool permissions: %1")
++                                .arg(replacementBinary.errorString()));
++                        }
++                        packaged_base_to_publish = installerBaseBinary;
++                    }
++                    else {
++                        QInstaller::openForRead(&replacementBinary);
++                        writeMaintenanceToolBinary(&replacementBinary, replacementBinary.size(), true);
++                    }
+                     qCDebug(QInstaller::lcInstallerInstallLog) << "Wrote the binary with the new replacement.";
+ 
+                     newBinaryWritten = true;
+                 } catch (const Error &error) {
++                    if (publish_packaged_base) {
++                        throw;
++                    }
+                     qCWarning(QInstaller::lcInstallerInstallLog) << error.message();
+                 }
+ 
+-                if (!replacementBinary.remove()) {
+-                    // Is there anything more sensible we can do with this error? I think not. It's not serious
+-                    // enough for throwing / aborting the process.
+-                    qCDebug(QInstaller::lcInstallerInstallLog) << "Cannot remove installer base binary"
+-                        << installerBaseBinary << "after updating the maintenance tool:"
+-                        << replacementBinary.errorString();
+-                } else {
+-                    qCDebug(QInstaller::lcInstallerInstallLog) << "Removed installer base binary"
+-                        << installerBaseBinary << "after updating the maintenance tool.";
++                if (!publish_packaged_base) {
++                    if (!replacementBinary.remove()) {
++                        qCDebug(QInstaller::lcInstallerInstallLog) << "Cannot remove installer base binary"
++                            << installerBaseBinary << "after updating the maintenance tool:"
++                            << replacementBinary.errorString();
++                    }
++                    else {
++                        qCDebug(QInstaller::lcInstallerInstallLog) << "Removed installer base binary"
++                            << installerBaseBinary << "after updating the maintenance tool.";
++                    }
+                 }
+             }
+-            m_installerBaseBinaryUnreplaced.clear();
++            if (packaged_base_to_publish.isEmpty()) {
++                m_installerBaseBinaryUnreplaced.clear();
++            }
+         } else if (!installerBaseBinary.isEmpty() && !QFileInfo::exists(installerBaseBinary)) {
+             qCWarning(QInstaller::lcInstallerInstallLog) << "The current maintenance tool could not be updated."
+                 << installerBaseBinary << "does not exist. Please fix the \"setInstallerBaseBinary"
+@@ -1691,6 +1712,10 @@ void PackageManagerCorePrivate::writeMaintenanceTool(OperationList performedOper
+             }
+             setDefaultFilePermissions(&file, DefaultFilePermissions::NonExecutable);
+         } catch (const Error &/*error*/) {
++            if (!packaged_base_to_publish.isEmpty()) {
++                // Appending fallback metadata would invalidate this signed executable.
++                throw;
++            }
+             if (!newBinaryWritten) {
+                 newBinaryWritten = true;
+                 QFile tmp(isInstaller() ? installerBinaryPath() : maintenanceToolName());
+@@ -1707,8 +1732,16 @@ void PackageManagerCorePrivate::writeMaintenanceTool(OperationList performedOper
+             QInstaller::appendInt64(&file, BinaryContent::MagicCookie);
+         }
+         input.close();
+-        if (m_core->isInstaller())
+-            registerMaintenanceTool();
++        if (m_core->isInstaller()) {
++            if (packaged_base_to_publish.isEmpty()) {
++                registerMaintenanceTool();
++            }
++            else {
++                // Persist the product identifier before publication, without
++                // advertising an uninstaller that does not exist yet.
++                registerPath();
++            }
++        }
+ #ifdef Q_OS_MACOS
+         if (newBinaryWritten) {
+             // Remove old alias as the name may have changed.
+@@ -1726,13 +1759,29 @@ void PackageManagerCorePrivate::writeMaintenanceTool(OperationList performedOper
+         QFile::remove(dataFile);
+         QFileInfo fi(mtName);
+         //Rename the dat file according to maintenancetool name
+-        QFile::rename(dataFile + QLatin1String(".new"), targetDir() + QLatin1Char('/') + fi.baseName() + QLatin1String(".dat"));
++        const bool data_published = QFile::rename(dataFile + QLatin1String(".new"),
++            targetDir() + QLatin1Char('/') + fi.baseName() + QLatin1String(".dat"));
++        if (!data_published && !packaged_base_to_publish.isEmpty()) {
++            throw Error(tr("Cannot publish maintenance tool metadata."));
++        }
+ 
+         const bool restart = !statusCanceledOrFailed() && m_needsHardRestart;
+         qCDebug(QInstaller::lcInstallerInstallLog) << "Maintenance tool hard restart:"
+             << (restart ? "true." : "false.");
+ 
+         if (newBinaryWritten) {
++            if (!packaged_base_to_publish.isEmpty()) {
++                // QFile::rename can fall back to copy/delete; use the framework's
++                // file engine so a sharing or permission failure remains a failure.
++                auto engine = QAbstractFileEngine::create(packaged_base_to_publish);
++                if (!engine->rename(mtName)) {
++                    throw Error(tr("Cannot publish maintenance tool: %1").arg(engine->errorString()));
++                }
++                registerMaintenanceTool();
++                m_installerBaseBinaryUnreplaced.clear();
++                qCDebug(QInstaller::lcInstallerInstallLog) << "Published packaged maintenance tool by rename:" << mtName;
++            }
++            else
+             if (macOsMTBundleExtracted)
+                 deferredRename(mtName, targetDir() + QDir::separator() + fi.fileName(), restart);
+             else if (isInstaller())
+diff --git a/src/libs/installer/packagemanagercore_p.h b/src/libs/installer/packagemanagercore_p.h
+index c2a2936..b0498dc 100644
+--- a/src/libs/installer/packagemanagercore_p.h
++++ b/src/libs/installer/packagemanagercore_p.h
+@@ -238,6 +238,7 @@ private:
+     void registerMaintenanceTool();
+     void unregisterMaintenanceTool();
+ 
++    void write_maintenance_tool_marker();
+     void writeMaintenanceToolBinary(QFile *const input, qint64 size, bool writeBinaryLayout);
+     void writeMaintenanceToolBinaryData(QFileDevice *output, QFile *const input,
+         const OperationList &performed, const BinaryLayout &layout);
+diff --git a/src/libs/installer/packagemanagergui.cpp b/src/libs/installer/packagemanagergui.cpp
+index adc7d6f..4d50e58 100644
+--- a/src/libs/installer/packagemanagergui.cpp
++++ b/src/libs/installer/packagemanagergui.cpp
+@@ -61,6 +61,9 @@
+ #include <QFileDialog>
+ #include <QGroupBox>
+ #include <QScreen>
++#include <QStyle>
++#include <QFileInfo>
++#include <QGuiApplication>
+ 
+ #ifdef Q_OS_WIN
+ # include <qt_windows.h>
+@@ -74,6 +77,61 @@ using namespace KDUpdater;
+ using namespace QInstaller;
+ 
+ 
++#if defined(Q_OS_WIN)
++namespace {
++
++class Terminal_wizard_spacing : public QObject
++{
++public:
++    explicit Terminal_wizard_spacing(QWizard* wizard)
++
++    :
++        QObject(wizard),
++        m_wizard(wizard)
++    {
++        m_wizard->installEventFilter(this);
++        connect(m_wizard, &QWizard::currentIdChanged, this, [this] { apply_spacing(); });
++    }
++
++protected:
++    bool eventFilter(QObject*, QEvent* event) override
++    {
++        if (event->type() == QEvent::Show || event->type() == QEvent::LayoutRequest) {
++            apply_spacing();
++        }
++        return false;
++    }
++
++private:
++    void apply_spacing()
++    {
++        auto* page = m_wizard->currentPage();
++        auto* side = m_wizard->sideWidget();
++        if (!page || !side || side->parentWidget() == m_wizard) {
++            return;
++        }
++        // Modern QWizard nests page and sidebar layouts with independent margins.
++        // Use the button row's native outer margin once at each content boundary.
++        const int margin = m_wizard->style()->pixelMetric(QStyle::PM_LayoutRightMargin, nullptr, m_wizard);
++        auto* page_frame = page->parentWidget();
++        auto* side_frame = side->parentWidget();
++        page_frame->installEventFilter(this);
++        side_frame->installEventFilter(this);
++        page_frame->setContentsMargins(margin, 0, margin, 0);
++        page_frame->layout()->setContentsMargins(0, 0, 0, 0);
++        page->layout()->setContentsMargins(0, margin, 0, margin);
++        if (qobject_cast<LicenseAgreementPage*>(page)) {
++            page->layout()->setSpacing(margin);
++        }
++        side_frame->layout()->setContentsMargins(margin, margin, 0, margin);
++    }
++
++    QWizard* m_wizard;
++};
++
++}
++#endif
++
+ class DynamicInstallerPage : public PackageManagerPage
+ {
+     Q_OBJECT
+@@ -414,6 +472,11 @@ PackageManagerGui::PackageManagerGui(PackageManagerCore *core, QWidget *parent)
+         sideWidget->setLayout(sideWidgetLayout);
+ 
+         setSideWidget(sideWidget);
++#if defined(Q_OS_WIN)
++        if (wizardStyle() == QWizard::ModernStyle) {
++            new Terminal_wizard_spacing(this);
++        }
++#endif
+     }
+ 
+     connect(this, &QDialog::rejected, m_core, &PackageManagerCore::setCanceled);
+@@ -1343,7 +1406,26 @@ QPixmap PackageManagerPage::wizardPixmap(const QString &pixmapType) const
+ {
+     QString pixmapStr = m_core->value(pixmapType);
+     QInstaller::replaceHighDpiImage(pixmapStr);
++#if defined(Q_OS_WIN)
++    if (pixmapType == scLogo) {
++        const QFileInfo logo_file(m_core->value(scLogo));
++        const QString dense_logo = logo_file.absolutePath() + QLatin1Char('/')
++            + logo_file.baseName() + scHighDpi + logo_file.suffix();
++        if (QFileInfo::exists(dense_logo)) {
++            pixmapStr = dense_logo;
++        }
++    }
++#endif
+     QPixmap pixmap(pixmapStr);
++#if defined(Q_OS_WIN)
++    if (pixmapType == scLogo && !pixmap.isNull()) {
++        // QLabel otherwise enlarges the low-density image at fractional display scales.
++        constexpr int k_logo_width = 246;
++        const qreal pixel_ratio = QGuiApplication::primaryScreen()->devicePixelRatio();
++        pixmap = pixmap.scaledToWidth(qRound(k_logo_width * pixel_ratio), Qt::SmoothTransformation);
++        pixmap.setDevicePixelRatio(pixel_ratio);
++    }
++#endif
+     if (pixmapType == scBanner) {
+         if (!pixmap.isNull()) {
+             int width;

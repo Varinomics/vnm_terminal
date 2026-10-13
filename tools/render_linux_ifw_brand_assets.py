@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render deterministic Qt IFW PNGs from the canonical brand sources."""
+"""Render deterministic Linux Qt IFW PNGs from the canonical brand sources."""
 
 from __future__ import annotations
 
@@ -21,11 +21,9 @@ GEOMETRY_SIZE = (300, 174)
 BACKGROUND = QColor("#111111")
 
 
-def render_banner(logo_path: Path, destination: Path, scale: int) -> None:
-    width, height = (dimension * scale for dimension in BANNER_SIZE)
-    logo_width, logo_height = (
-        dimension * scale for dimension in BANNER_LOGO_SIZE
-    )
+def render_banner(logo_path: Path, destination: Path) -> None:
+    width, height = BANNER_SIZE
+    logo_width, logo_height = BANNER_LOGO_SIZE
     logo = QImage(str(logo_path))
     if logo.isNull():
         raise RuntimeError(f"Qt could not load the canonical logo: {logo_path}")
@@ -40,9 +38,9 @@ def render_banner(logo_path: Path, destination: Path, scale: int) -> None:
         Qt.AspectRatioMode.KeepAspectRatio,
         Qt.TransformationMode.SmoothTransformation,
     )
-    x_position = width - BANNER_MARGIN * scale - logo.width()
-    y_position = BANNER_LOGO_TOP * scale
-    if BANNER_TEXT_SAFE_RIGHT + BANNER_TEXT_LOGO_GUTTER > x_position // scale:
+    x_position = width - BANNER_MARGIN - logo.width()
+    y_position = BANNER_LOGO_TOP
+    if BANNER_TEXT_SAFE_RIGHT + BANNER_TEXT_LOGO_GUTTER > x_position:
         raise RuntimeError("The Banner logo violates the text-safe region")
     painter.drawImage(x_position, y_position, logo)
     painter.end()
@@ -50,12 +48,12 @@ def render_banner(logo_path: Path, destination: Path, scale: int) -> None:
         raise RuntimeError(f"Qt could not write the banner: {destination}")
 
 
-def render_geometry(svg_path: Path, destination: Path, scale: int) -> None:
+def render_geometry(svg_path: Path, destination: Path) -> None:
     renderer = QSvgRenderer(str(svg_path))
     if not renderer.isValid():
         raise RuntimeError(f"Qt could not load the brand geometry: {svg_path}")
 
-    width, height = (dimension * scale for dimension in GEOMETRY_SIZE)
+    width, height = GEOMETRY_SIZE
     image = QImage(width, height, QImage.Format.Format_ARGB32_Premultiplied)
     image.fill(BACKGROUND)
     painter = QPainter(image)
@@ -67,7 +65,7 @@ def render_geometry(svg_path: Path, destination: Path, scale: int) -> None:
         raise RuntimeError(f"Qt could not write the geometry: {destination}")
 
 
-def verify_banner_logo_bounds(path: Path, scale: int) -> None:
+def verify_banner_logo_bounds(path: Path) -> None:
     image = QImage(str(path)).convertToFormat(QImage.Format.Format_RGBA8888)
     background = bytes((17, 17, 17, 255))
     pixels = image.constBits().asstring(image.sizeInBytes())
@@ -88,9 +86,7 @@ def verify_banner_logo_bounds(path: Path, scale: int) -> None:
     if right == 0:
         raise RuntimeError(f"The generated Banner has no wordmark: {path}")
     actual_bounds = (left, top, right, bottom)
-    expected_bounds = tuple(
-        coordinate * scale for coordinate in (682, 11, 982, 53)
-    )
+    expected_bounds = (682, 11, 982, 53)
     if actual_bounds != expected_bounds:
         raise RuntimeError(
             f"Unexpected wordmark bounds for {path}: {actual_bounds} instead of "
@@ -118,26 +114,19 @@ def main() -> None:
     arguments = parser.parse_args()
 
     source_root = arguments.source_root.resolve()
-    ifw_root = source_root / "packaging" / "windows" / "ifw"
+    ifw_root = source_root / "packaging" / "linux" / "ifw"
     logo_path = ifw_root / "varinomics_logo.png"
     svg_path = ifw_root / "varinomics_geometry.svg"
 
     application = QGuiApplication([])
     application.setApplicationName("vnm-terminal-ifw-brand-renderer")
-    for scale, suffix in ((1, ""), (2, "@2x")):
-        banner_path = ifw_root / f"varinomics_banner{suffix}.png"
-        geometry_path = ifw_root / f"varinomics_geometry{suffix}.png"
-        render_banner(logo_path, banner_path, scale)
-        render_geometry(svg_path, geometry_path, scale)
-        verify_png(
-            banner_path,
-            tuple(dimension * scale for dimension in BANNER_SIZE),
-        )
-        verify_banner_logo_bounds(banner_path, scale)
-        verify_png(
-            geometry_path,
-            tuple(dimension * scale for dimension in GEOMETRY_SIZE),
-        )
+    banner_path = ifw_root / "varinomics_banner.png"
+    geometry_path = ifw_root / "varinomics_geometry.png"
+    render_banner(logo_path, banner_path)
+    render_geometry(svg_path, geometry_path)
+    verify_png(banner_path, BANNER_SIZE)
+    verify_banner_logo_bounds(banner_path)
+    verify_png(geometry_path, GEOMETRY_SIZE)
 
 
 if __name__ == "__main__":

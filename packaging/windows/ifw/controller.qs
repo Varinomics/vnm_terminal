@@ -1,12 +1,18 @@
 function Controller()
 {
+    this.requireStoppedSessions();
+    installer.aboutCalculateComponentsToInstall.connect(
+        this, Controller.prototype.requireStoppedSessions);
+    installer.aboutCalculateComponentsToUninstall.connect(
+        this, Controller.prototype.requireStoppedSessions);
     // IFW loads the control script before it presents the wizard. Component
     // scripts load later, after the initial page list has already been shown.
     if (installer.isInstaller()) {
         installer.setDefaultPageVisible(QInstaller.ComponentSelection, false);
         Controller.prototype.configureUserLogFile();
         Controller.prototype.promptedExistingInstallationDirectory = "";
-        Controller.prototype.closeRequested = false;
+        Controller.prototype.replacementStopped = false;
+        Controller.prototype.removedInstallationDirectory = "";
     }
 }
 
@@ -44,6 +50,32 @@ Controller.prototype.configureUserLogFile = function()
         "LogFileName", installer.toNativeSeparators(logFileName));
 }
 
+Controller.prototype.requireStoppedSessions = function()
+{
+    if (installer.isOfflineGenerator() || installer.isPackageViewer())
+        return;
+
+    var target = installer.value("TargetDir").replace(/\\/g, "/").replace(/\/+$/, "");
+    var processes = [
+        target + "/vnm_terminal.exe",
+        target + "/vnm_terminal_runtime/vnm_terminal.exe",
+        target + "/vnm_terminal_runtime/x64/OpenConsole.exe",
+        target + "/vnm_terminal_runtime/arm64/OpenConsole.exe"
+    ];
+    for (var index = 0; index < processes.length; ++index) {
+        if (installer.isProcessRunning(processes[index])) {
+            var message = "vnm_terminal setup cannot continue while vnm_terminal or its terminal sessions "
+                + "in this installation folder are running. All sessions in this installation "
+                + "must be closed before setup can continue. Setup has not stopped any process.";
+            if (!installer.isCommandLineInstance()) {
+                QMessageBox.critical("vnm_terminal.runningSessions", "vnm_terminal setup", message, QMessageBox.Ok);
+            }
+            installer.setCanceled();
+            throw new Error(message);
+        }
+    }
+}
+
 Controller.prototype.windowsPowerShellPath = function()
 {
     var rootDirectory = installer.toNativeSeparators(installer.value("RootDir"));
@@ -56,47 +88,53 @@ Controller.prototype.windowsPowerShellPath = function()
 // one of its own installations.
 Controller.prototype.maintenanceToolFileName = "vnm_terminal_maintenance.exe";
 
-// Product policy: do not redesign this offline-install flow implicitly.
-// After the Target Directory page is initialized, inspect only the TargetDir
-// that was present on entry. If it is an installation, offer its normal GUI
-// uninstaller. No keeps folder selection available; a free side-by-side target
-// is allowed as best effort, but copies share Start Menu shortcuts and user
-// settings and are not independent. Later edits belong to IFW validation and
-// may receive its native existing-installation refusal. Yes starts this exact
-// maintenance tool detached with --start-uninstaller, closes setup, and the
-// user reruns setup after removal. The detached process must never inherit an
-// elevated setup token. Unless the product owner explicitly changes this
-// contract, do not add startup registry or link discovery, ambiguity lockout,
-// automatic purge-and-continue, setup elevation choreography, or a repository
-// updater. The manual two-step intentionally makes no transactional promise.
-
 // The folder callback may be re-entered without the user changing TargetDir.
-// Remember that answer; this latch does not monitor later field edits.
+// Remember that exact answer, but let a changed path be evaluated afresh.
 Controller.prototype.promptedExistingInstallationDirectory = "";
 
-// IFW may re-enter a page callback while rejectWithoutPrompt is taking effect.
-// Every such callback repeats the close request without repeating the launch.
-Controller.prototype.closeRequested = false;
-
-Controller.prototype.continueRequestedClose = function()
-{
-    if (!Controller.prototype.closeRequested)
-        return false;
-    gui.rejectWithoutPrompt();
-    return true;
-}
+Controller.prototype.replacementStopped = false;
+Controller.prototype.removedInstallationDirectory = "";
 
 Controller.prototype.normalizedTargetDirectory = function()
 {
-    var targetDirectory =
-        installer.toNativeSeparators(installer.value("TargetDir"));
+    var targetDirectoryPage = gui.pageWidgetByObjectName("TargetDirectoryPage");
+    var targetDirectory = installer.toNativeSeparators(
+        targetDirectoryPage.TargetDirectoryLineEdit.text.trim());
     while (targetDirectory.length > 3 && /[\\\/]$/.test(targetDirectory))
         targetDirectory = targetDirectory.substring(0, targetDirectory.length - 1);
     return targetDirectory;
 }
 
-Controller.prototype.offerSelectedInstallationUninstaller = function()
+Controller.prototype.runReplacementHelper = function(targetDirectory, action)
 {
+    var powershellPath = Controller.prototype.windowsPowerShellPath();
+    var supportScript = installer.readFile(
+        ":/metadata/installer-theme/replacement_support.ps1", "UTF-8");
+    if (!installer.fileExists(powershellPath) || supportScript == "") {
+        return ["not-started\nSetup cannot run its replacement helper on this computer.", 2];
+    }
+    var invocation = "\n[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)\n"
+        + "$script:VnmTerminalReplacementRemovalMayHaveStarted = $true\n"
+        // The leading blank line terminates the library; the final statement
+        // must stay on one line for Windows PowerShell's stdin/EOF parser.
+        + "try { Invoke-VnmTerminalSetupReplacement -TargetDirectory '"
+        + targetDirectory.replace(/'/g, "''") + "' -Action '" + action + "' } "
+        + "catch { if (!$script:VnmTerminalReplacementRemovalMayHaveStarted) { "
+        + "[Console]::Out.WriteLine('not-started'); [Console]::Out.WriteLine($_.Exception.Message); exit 2 }; "
+        + "[Console]::Out.WriteLine($_.Exception.Message); exit 1 }\n";
+    return installer.execute(
+        powershellPath,
+        ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"],
+        supportScript + invocation,
+        "UTF-8",
+        "UTF-8");
+}
+
+Controller.prototype.offerSelectedInstallationReplacement = function()
+{
+    if (Controller.prototype.replacementStopped) {
+        return;
+    }
     var targetDirectory = Controller.prototype.normalizedTargetDirectory();
     var maintenanceToolPath = targetDirectory + "\\"
         + Controller.prototype.maintenanceToolFileName;
@@ -110,62 +148,88 @@ Controller.prototype.offerSelectedInstallationUninstaller = function()
         return;
     }
 
-    Controller.prototype.promptedExistingInstallationDirectory = targetDirectory;
-    var response = QMessageBox.question(
-        "ExistingInstallationFound",
-        "Existing installation found",
-        "vnm_terminal is already installed in:\n\n"
-            + targetDirectory
-            + "\n\nThis offline installer does not replace an existing "
-            + "installation directly. Open its uninstaller now? Nothing is "
-            + "removed until you confirm removal there. After removal "
-            + "finishes, run this setup again. Select No to stay on this "
-            + "page and choose another folder. A side-by-side copy is best "
-            + "effort only: installations share Start Menu shortcuts and "
-            + "user settings, so they are not independent.",
-        QMessageBox.Yes | QMessageBox.No,
-        QMessageBox.Yes);
-    if (response == QMessageBox.No)
-        return;
-
-    // executeDetached inherits setup's token. Never let an elevated setup
-    // launch a maintenance path selected from user-writable state. The folder
-    // page remains usable so the user can choose another target.
+    // Permission is requested separately for the validated maintenance image.
+    // A selected image must never inherit an elevated setup token.
     if (installer.hasAdminRights()) {
         QMessageBox.critical(
-            "ElevatedExistingInstallationHandoff",
+            "ElevatedExistingInstallationReplacement",
             "Start setup normally",
-            "Setup is running with administrator rights and will not open "
-                + "the existing installation's maintenance tool, because it "
-                + "would inherit those rights. Start setup normally so the "
-                + "maintenance tool can request its own permissions, or open "
-                + "this maintenance tool manually:\n\n" + maintenanceToolPath
-                + "\n\nYou can also choose another folder on this page.");
+            "Close this setup and start it normally. The existing maintenance "
+                + "tool needs a separate permission request. No removal was started.");
         return;
     }
-
-    // The installed maintenance GUI owns its records, confirmation, and
-    // elevation. With the inherited-token constraint above, this intentional
-    // two-step handoff avoids deleting the old installation before the user
-    // commits in its uninstaller. It does not promise transactional recovery;
-    // setup is rerun after removal completes.
-    if (installer.executeDetached(
-            maintenanceToolPath,
-            ["--start-uninstaller"],
-            targetDirectory))
-    {
-        Controller.prototype.closeRequested = true;
+    var validation = Controller.prototype.runReplacementHelper(targetDirectory, "Validate");
+    if (validation.length != 2 || validation[1] != 0 || validation[0].trim() != "validated") {
+        QMessageBox.critical(
+            "ExistingInstallationValidationFailed",
+            "Replacement could not be prepared",
+            "No removal was started.\n\n"
+                + (validation.length == 2 ? validation[0].replace(/^not-started\r?\n/, "")
+                    : "The validation helper could not run.")
+                + "\n\nCorrect the reported problem and return to this page to retry.");
+        return;
+    }
+    Controller.prototype.promptedExistingInstallationDirectory = targetDirectory;
+    var response = QMessageBox.question(
+        "ExistingInstallationReplacement",
+        "Replace the existing installation",
+        "vnm_terminal is installed in:\n\n" + targetDirectory
+            + "\n\nRemove it now and continue installation in this setup? "
+            + "Close vnm_terminal and all surviving terminals first. "
+            + "Removal ends the previous installation and cannot be undone. "
+            + "Your user settings outside the installation folder are preserved. "
+            + "If you cancel or installation fails afterward, the previous "
+            + "application remains removed. Removal cannot be canceled after "
+            + "you select Yes; you can cancel its permission request. "
+            + "Setup waits while removal runs. "
+            + "Select No to keep the existing installation.",
+        QMessageBox.Yes | QMessageBox.No,
+        QMessageBox.No);
+    if (response != QMessageBox.Yes) {
+        return;
+    }
+    var targetDirectoryPage = gui.pageWidgetByObjectName("TargetDirectoryPage");
+    var removal = Controller.prototype.runReplacementHelper(targetDirectory, "Remove");
+    if (removal.length == 2 && removal[1] == 2 && /^not-started\r?\n/.test(removal[0])) {
+        Controller.prototype.promptedExistingInstallationDirectory = "";
+        QMessageBox.critical(
+            "ExistingInstallationRemovalNotStarted",
+            "No removal was started",
+            removal[0].replace(/^not-started\r?\n/, "")
+                + "\n\nThe previous installation is unchanged. "
+                + "Correct the reported problem and return to this page to retry.");
+        return;
+    }
+    if (removal.length != 2 || removal[1] != 0 || removal[0].trim() != "removed") {
+        Controller.prototype.replacementStopped = true;
+        QMessageBox.critical(
+            "ExistingInstallationRemovalFailed",
+            "Replacement has not started",
+            "Removal did not complete. The previous installation may have changed.\n\n"
+                + (removal.length == 2 ? removal[0] : "The removal helper could not run.")
+                + "\n\nUser settings outside the installation folder are preserved. "
+                + "This setup will close. Wait for any removal still running to end, "
+                + "then resolve the reported problem before starting setup again.");
         gui.rejectWithoutPrompt();
         return;
     }
+    Controller.prototype.removedInstallationDirectory = targetDirectory;
+    installer.setValue("TargetDir", targetDirectory);
+    // A text change makes the native page re-evaluate the now-vacant folder.
+    targetDirectoryPage.TargetDirectoryLineEdit.setText(targetDirectory + "\\");
+    targetDirectoryPage.TargetDirectoryLineEdit.setText(targetDirectory);
+    targetDirectoryPage.MessageLabel.setText(
+        "The previous installation was removed. Continue with this setup. "
+            + "Your user settings outside its folder are preserved.");
+}
 
-    QMessageBox.critical(
-        "ExistingInstallationUninstallerLaunchFailed",
-        "Could not open the uninstaller",
-        "Setup could not open:\n\n" + maintenanceToolPath
-            + "\n\nNo removal was started. Open that maintenance tool "
-            + "manually, or choose another folder on this page. After "
-            + "removing vnm_terminal, run setup again.");
+// IFW may re-enter page callbacks while a failed removal closes setup.
+Controller.prototype.continueRequestedClose = function()
+{
+    if (!Controller.prototype.replacementStopped)
+        return false;
+    gui.rejectWithoutPrompt();
+    return true;
 }
 
 Controller.prototype.IntroductionPageCallback = function()
@@ -177,14 +241,13 @@ Controller.prototype.IntroductionPageCallback = function()
 
     var introductionPage = gui.pageWidgetByObjectName("IntroductionPage");
     introductionPage.title = "Welcome";
-    introductionPage.subTitle = "Install vnm_terminal on this computer.";
+    introductionPage.subTitle = "vnm_terminal installation.";
     introductionPage.MessageLabel.setText(
-        "<div class=\"BrandPresentation\" style=\"color:#E0E0E0;\">"
-        + "<span style=\"color:#999999;\">vnm_terminal</span>"
-        + "<br /><span style=\"font-size:20px; font-weight:600;\">"
-        + "A terminal for the desktop.</span>"
-        + "<br /><br /><span>This setup will install vnm_terminal "
-        + "and its required runtime.</span></div>");
+        "<div style=\"color:#E0E0E0;\">"
+        + "<span style=\"font-size:20px; font-weight:600;\">"
+        + "vnm_terminal</span>"
+        + "<br /><br /><span>vnm_terminal and its required runtime "
+        + "will be installed on this computer.</span></div>");
 }
 
 Controller.prototype.TargetDirectoryPageCallback = function()
@@ -198,9 +261,11 @@ Controller.prototype.TargetDirectoryPageCallback = function()
     if (Controller.prototype.continueRequestedClose())
         return;
 
-    // Apply the product policy only after the folder page is initialized.
-    // Subsequent field edits remain entirely under IFW validation.
-    Controller.prototype.offerSelectedInstallationUninstaller();
+    targetDirectoryPage.MessageLabel.setText(
+        "Setup can remove a validated existing vnm_terminal installation and continue here. "
+        + "Your settings outside the installation folder are preserved.");
+    // Offer only on page entry; editing the path must not interrupt typing.
+    Controller.prototype.offerSelectedInstallationReplacement();
 }
 
 Controller.prototype.ReadyForInstallationPageCallback = function()
@@ -212,6 +277,11 @@ Controller.prototype.ReadyForInstallationPageCallback = function()
 
     var summaryPage = gui.pageWidgetByObjectName("ReadyForInstallationPage");
     summaryPage.subTitle = "Review your choices before installation.";
+    if (Controller.prototype.removedInstallationDirectory != "") {
+        summaryPage.subTitle =
+            "The previous installation was removed. Canceling or a later failure "
+                + "will not restore it.";
+    }
 
     // IFW's component size excludes the maintenance-tool resources that its
     // labeled SpaceWidget includes. Hide the ambiguous, unlabeled tree value.
@@ -247,13 +317,20 @@ Controller.prototype.StartMenuDirectoryPageCallback = function()
 
 Controller.prototype.PerformInstallationPageCallback = function()
 {
+    var performInstallationPage =
+        gui.pageWidgetByObjectName("PerformInstallationPage");
+    var detailsButton = gui.findChild(performInstallationPage, "DetailsButton");
+    var detailsBrowser = gui.findChild(performInstallationPage, "DetailsBrowser");
+    // Use IFW's toggle to keep the image panel and completion state in sync.
+    if (!detailsBrowser.visible)
+        detailsButton.click();
+    detailsButton.hide();
+
     if (!installer.isInstaller())
         return;
     if (Controller.prototype.continueRequestedClose())
         return;
 
-    var performInstallationPage =
-        gui.pageWidgetByObjectName("PerformInstallationPage");
     performInstallationPage.subTitle =
         "Installing vnm_terminal. Please wait.";
 }
@@ -309,6 +386,12 @@ Controller.prototype.FinishedPageCallback = function()
         heading = "Installation failed.";
         detail = "Close setup and try again.<br /><br />"
             + Controller.prototype.escapeHtml(frameworkMessage);
+    }
+
+    if (Controller.prototype.removedInstallationDirectory != "") {
+        detail += "<br /><br />The previous installation was removed from "
+            + Controller.prototype.escapeHtml(Controller.prototype.removedInstallationDirectory)
+            + ". User settings outside that folder were preserved.";
     }
 
     finishedPage.MessageLabel.setText(

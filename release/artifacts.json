@@ -14,6 +14,14 @@
       "name": "vnm-terminal-windows-x64-signing-payload"
     },
     {
+      "id": "windows_installer_engine",
+      "name": "vnm-terminal-windows-installer-engine"
+    },
+    {
+      "id": "windows_installer_source",
+      "name": "vnm-terminal-windows-installer-source"
+    },
+    {
       "id": "windows_signed",
       "name": "vnm-terminal-windows-x64-signed"
     },

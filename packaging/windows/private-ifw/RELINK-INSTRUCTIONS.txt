@@ -1,0 +1,52 @@
+vnm_terminal Windows installer corresponding source
+
+The engine uses Qt Installer Framework 4.11 with the accompanying appearance
+appearance and maintenance-publication patch, under GPLv3 with the Qt GPL
+Exception. Its static Qt 6.12.0 use is under
+GPLv3. Exact native input identities and qmake arguments are recorded in
+vnm-terminal-ifw-provenance.json. This GPL-compatible engine contains no product
+licensing plugin. Matching sources and build instructions, rather than a copy of
+the Qt object tree, are provided separately from the installed application.
+
+The source ZIP contains sources/{qt,qtbase,qtdeclarative,qttools,qt5compat,
+qttranslations,xz,bzip2,ifw}.tar, including the upstream license notices. Owned
+recipes and the IFW patch retain their tools/ and packaging/windows/private-ifw/
+paths. input-provenance.json identifies the dependency source and build material.
+Additional original build evidence, when present, records the supplied static
+inputs rather than claiming they were produced by a different recipe.
+
+Use Visual Studio 2026 x64 with MSVC v145 and a CMake version supporting it.
+Load vcvarsall.bat x64 -vcvars_ver=14.51 before compiling. Compiler/linker commands
+on the Varinomics workstation run through queued-build with their actual width.
+
+Automated rebuild: tools/provision_windows_private_ifw_inputs.ps1 retrieves the
+exact locked repositories and builds static Qt, xz and bzip2. Pass its sources/ifw,
+qt, xz and bzip2 directories to tools/build_windows_private_ifw.ps1 as documented
+in README.md, with a fresh output directory. The native helper applies the patch
+itself. Do not apply it twice.
+
+Offline or modified-source rebuild from the included archives:
+1. Extract qt.tar to a Qt source directory. Extract each qtbase/qtdeclarative/
+   qttools/qt5compat/qttranslations archive to its matching subdirectory beneath
+   that Qt source directory. Extract xz.tar and bzip2.tar to their own sources.
+2. Configure Qt and xz in separate build directories with CMake -S <source>
+   -B <build> -G Ninja -C packaging/windows/private-ifw/static-inputs.cmake
+   -DCMAKE_INSTALL_PREFIX=<prefix>. Configure bzip2 with -S pointing at the
+   included packaging/windows/private-ifw/bzip2-static project and add
+   -DBZIP2_SOURCE_DIR=<extracted-bzip2-source>. Build and install each prefix.
+   The original build evidence, if present, contains the actual supplied-input
+   configuration for exact replication instead of the standard rebuild recipe.
+3. Extract ifw.tar and run git apply <qt-ifw-4.11-terminal.patch> from that
+   directory (git apply does not require a repository). Create a separate IFW
+   build directory, then run the new static Qt's qmake using the qmake_arguments
+   from vnm-terminal-ifw-provenance.json. Substitute the extracted IFW source
+   and rebuilt Qt/xz/bzip2 prefix paths for the original absolute paths.
+4. Run jom -j N (queued-build --slots N on the workstation), or serial nmake.
+   The resulting bin/installerbase.exe and bin/binarycreator.exe can create an
+   installer using the product's public packaging configuration and payload.
+
+The automated path produces the provenance required by the product packaging
+driver. A modified-source manual build can use binarycreator directly with
+--config <config.xml> --packages <packages> --template <installerbase.exe>.
+Unsigned rebuilt installers can be launched normally; Windows may show the
+ordinary unsigned-publisher prompt. No product activation is part of this engine.

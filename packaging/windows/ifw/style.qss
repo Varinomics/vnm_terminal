@@ -37,18 +37,6 @@ QWizard #SideWidget
     border-right: 1px solid #3A3A3A;
 }
 
-QWizard QWizardPage#IntroductionPage
-{
-    background-image: url(:/metadata/installer-theme/varinomics_geometry.png);
-    background-position: right bottom;
-    background-repeat: no-repeat;
-}
-
-QWizard QWizardPage#IntroductionPage QWidget
-{
-    background-color: transparent;
-}
-
 QWizard #PageListWidget
 {
     border: none;
@@ -185,7 +173,7 @@ QWizard QComboBox::drop-down
 
 QWizard QComboBox::down-arrow
 {
-    image: url(:/metadata/installer-theme/combo_arrow.svg);
+    image: url(:/metadata/installer-theme/combo_arrow.png);
     width: 10px;
     height: 6px;
 }
@@ -246,14 +234,14 @@ QWizard QRadioButton::indicator:unchecked:focus
 
 QWizard QCheckBox::indicator:checked
 {
-    image: url(:/metadata/installer-theme/checkbox_check.svg);
+    image: url(:/metadata/installer-theme/checkbox_check.png);
     background-color: #8AB4C7;
     border-color: #8EC4DF;
 }
 
 QWizard QRadioButton::indicator:checked
 {
-    image: url(:/metadata/installer-theme/radio_dot.svg);
+    image: url(:/metadata/installer-theme/radio_dot.png);
     background-color: #8AB4C7;
     border-color: #8EC4DF;
 }
@@ -276,69 +264,42 @@ QWizard QRadioButton::indicator:unchecked:disabled
 
 QWizard QCheckBox::indicator:checked:disabled
 {
-    image: url(:/metadata/installer-theme/checkbox_check.svg);
+    image: url(:/metadata/installer-theme/checkbox_check.png);
     background-color: #3A3A3A;
     border-color: #999999;
 }
 
 QWizard QRadioButton::indicator:checked:disabled
 {
-    image: url(:/metadata/installer-theme/radio_dot.svg);
+    image: url(:/metadata/installer-theme/radio_dot.png);
     background-color: #3A3A3A;
     border-color: #999999;
 }
 
 QWizard QPushButton
 {
-    color: #E0E0E0;
-    background-color: #1F1F1F;
-    border: 1px solid #3A3A3A;
-    border-radius: 2px;
+    color: #F0F0F0;
+    background-color: #363636;
+    border: 1px solid #666666;
+    border-radius: 3px;
     min-height: 26px;
-    min-width: 72px;
-    padding: 3px 16px;
+    min-width: 78px;
+    padding: 6px 14px;
 }
 
 QWizard QPushButton:hover
 {
-    background-color: #111111;
-    border-color: #8AB4C7;
-}
-
-QWizard QPushButton:focus
-{
-    border: 2px solid #8EC4DF;
+    background-color: #444444;
 }
 
 QWizard QPushButton:pressed
 {
-    background-color: #111111;
-}
-
-QWizard QPushButton:default
-{
-    color: #111111;
-    background-color: #8AB4C7;
-    border-color: #8AB4C7;
-}
-
-QWizard QPushButton:default:hover,
-QWizard QPushButton:default:focus
-{
-    background-color: #8EC4DF;
-    border-color: #E0E0E0;
-}
-
-QWizard QPushButton:default:pressed
-{
-    background-color: #6FA8C7;
+    background-color: #2D2D2D;
 }
 
 QWizard QPushButton:disabled
 {
-    color: #999999;
-    background-color: #1F1F1F;
-    border-color: #3A3A3A;
+    color: #828282;
 }
 
 QWizard QProgressBar
@@ -472,53 +433,26 @@ QMessageBox QLabel#qt_msgboxex_icon_label
 
 QMessageBox QPushButton
 {
-    color: #E0E0E0;
-    background-color: #1F1F1F;
-    border: 1px solid #3A3A3A;
-    border-radius: 2px;
+    color: #F0F0F0;
+    background-color: #363636;
+    border: 1px solid #666666;
+    border-radius: 3px;
     min-height: 26px;
-    min-width: 72px;
-    padding: 3px 16px;
+    min-width: 78px;
+    padding: 6px 14px;
 }
 
 QMessageBox QPushButton:hover
 {
-    background-color: #111111;
-    border-color: #8AB4C7;
-}
-
-QMessageBox QPushButton:focus
-{
-    border: 2px solid #8EC4DF;
+    background-color: #444444;
 }
 
 QMessageBox QPushButton:pressed
 {
-    background-color: #111111;
-}
-
-QMessageBox QPushButton:default
-{
-    color: #111111;
-    background-color: #8AB4C7;
-    border-color: #8AB4C7;
-}
-
-QMessageBox QPushButton:default:hover,
-QMessageBox QPushButton:default:focus
-{
-    background-color: #8EC4DF;
-    border-color: #E0E0E0;
-}
-
-QMessageBox QPushButton:default:pressed
-{
-    background-color: #6FA8C7;
+    background-color: #2D2D2D;
 }
 
 QMessageBox QPushButton:disabled
 {
-    color: #999999;
-    background-color: #1F1F1F;
-    border-color: #3A3A3A;
+    color: #828282;
 }

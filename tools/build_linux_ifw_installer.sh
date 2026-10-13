@@ -124,14 +124,13 @@ cp -a "$source_root/controller.qs" "$config_root/"
 cp -a "$source_root/theme_resources.qrc" "$config_root/"
 cp -a "$source_root/installscript.qs" "$package_meta_root/"
 cp -a "$repository_root/LICENSE" "$package_meta_root/LICENSE.txt"
-cp -a "$repository_root/packaging/windows/ifw/style.qss" "$config_root/"
-cp -a "$repository_root/packaging/windows/ifw/varinomics_banner.png" \
-    "$config_root/"
 cp -a \
-    "$repository_root/packaging/windows/ifw/checkbox_check.svg" \
-    "$repository_root/packaging/windows/ifw/combo_arrow.svg" \
-    "$repository_root/packaging/windows/ifw/radio_dot.svg" \
-    "$repository_root/packaging/windows/ifw/varinomics_geometry.png" \
+    "$source_root/style.qss" \
+    "$source_root/varinomics_banner.png" \
+    "$source_root/checkbox_check.svg" \
+    "$source_root/combo_arrow.svg" \
+    "$source_root/radio_dot.svg" \
+    "$source_root/varinomics_geometry.png" \
     "$config_root/"
 cp -a "$repository_root/packaging/linux/com.varinomics.vnm-terminal.png" \
     "$config_root/"

@@ -7,7 +7,7 @@ param(
 
     [string]$DumpPath,
 
-    [string]$IfwArchivePath
+    [string]$IfwRoot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -93,18 +93,18 @@ function Get-IfwPngDimensions {
     }
 }
 
-function Assert-IfwExistingInstallationHandoffRuntime {
+function Assert-IfwControllerRuntime {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ControllerScriptPath
     )
 
     $node = Get-Command node.exe -ErrorAction SilentlyContinue
-    Assert-IfwContract ($null -ne $node) 'the existing-installation handoff contract requires node.exe'
+    Assert-IfwContract ($null -ne $node) 'the controller contract requires node.exe'
 
     $harnessPath = [IO.Path]::Combine(
         [IO.Path]::GetTempPath(),
-        "vnm-terminal-ifw-handoff-$([Guid]::NewGuid().ToString('N')).js")
+        "vnm-terminal-ifw-controller-$([Guid]::NewGuid().ToString('N')).js")
     try {
         $harness = @'
 const fs = require("fs");
@@ -141,6 +141,11 @@ global.QMessageBox = {
 global.installer = {
     status: QInstaller.Success,
     isInstaller() { return true; },
+    isOfflineGenerator() { return false; },
+    isPackageViewer() { return false; },
+    isProcessRunning() { return false; },
+    aboutCalculateComponentsToInstall: { connect() {} },
+    aboutCalculateComponentsToUninstall: { connect() {} },
     hasAdminRights() { return state.isAdmin; },
     setDefaultPageVisible(page) {
         state.hiddenPages.push(page);
@@ -181,10 +186,6 @@ global.installer = {
             return [output, state.logProbeExitCode];
         }
         throw new Error("unexpected PowerShell command");
-    },
-    executeDetached(program, args, workingDirectory) {
-        state.detachedExecutions.push({ program, args, workingDirectory });
-        return state.detachedLaunchSucceeds;
     },
 };
 global.gui = {
@@ -234,13 +235,11 @@ function run(overrides) {
         logProbeOutput: "",
         logProbeStarts: true,
         logProbeExitCode: 0,
-        detachedLaunchSucceeds: true,
         isAdmin: false,
         answer: QMessageBox.Yes,
         questions: [],
         errors: [],
         executions: [],
-        detachedExecutions: [],
         assignedValues: [],
         hiddenPages: [],
         hiddenSummaryColumns: [],
@@ -254,6 +253,7 @@ function run(overrides) {
             TargetDirectoryPage: {
                 subTitle: "",
                 TargetDirectoryLineEdit: { text: nativeDirectory },
+                MessageLabel: labelStub(),
             },
             LicenseAgreementPage: { subTitle: "" },
             ReadyForInstallationPage: { subTitle: "" },
@@ -275,94 +275,11 @@ function run(overrides) {
     return state;
 }
 
-let result = run({});
-if (result.questions.length !== 0 ||
-    result.detachedExecutions.length !== 0 ||
-    result.rejections !== 0 ||
-    result.pages.IntroductionPage.subTitle.indexOf("Install") < 0)
-{
-    throw new Error(
-        "startup and Welcome must remain normal when the default folder exists");
-}
-
-Controller.prototype.TargetDirectoryPageCallback();
-if (result.questions.length !== 1 ||
-    result.questions[0].text.indexOf(result.nativeDirectory) < 0 ||
-    result.questions[0].text.indexOf("Select No") < 0 ||
-    result.questions[0].text.indexOf("Start Menu shortcuts") < 0 ||
-    result.questions[0].text.indexOf("not independent") < 0 ||
-    result.detachedExecutions.length !== 1 ||
-    result.detachedExecutions[0].program !== result.maintenanceToolPath ||
-    result.detachedExecutions[0].args.join(" ") !== "--start-uninstaller" ||
-    result.detachedExecutions[0].workingDirectory !== result.nativeDirectory ||
-    result.rejections !== 1)
-{
-    throw new Error(
-        "the selected existing folder must hand off to its graphical uninstaller");
-}
-Controller.prototype.TargetDirectoryPageCallback();
-Controller.prototype.IntroductionPageCallback();
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 1 ||
-    result.rejections !== 3)
-{
-    throw new Error(
-        "close re-entry must reject again without another prompt or launch");
-}
-
-result = run({ answer: QMessageBox.No });
-Controller.prototype.TargetDirectoryPageCallback();
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 0 ||
-    result.rejections !== 0 ||
-    result.pages.TargetDirectoryPage.subTitle.indexOf("Choose") < 0)
-{
-    throw new Error(
-        "No must keep the folder page usable and latch the unchanged path");
-}
-result.values.TargetDir = "D:\\Fresh";
-result.pages.TargetDirectoryPage.TargetDirectoryLineEdit.text = "D:\\Fresh";
-Controller.prototype.LicenseAgreementPageCallback();
-Controller.prototype.ReadyForInstallationPageCallback();
-if (result.questions.length !== 1 ||
-    result.rejections !== 0 ||
-    result.pages.LicenseAgreementPage.subTitle.indexOf("Review") < 0 ||
-    result.pages.ReadyForInstallationPage.subTitle.indexOf("Review") < 0)
-    throw new Error(
-        "choosing a fresh folder after No must proceed through ordinary callbacks");
-
-result = run({ isAdmin: true });
-Controller.prototype.TargetDirectoryPageCallback();
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 0 ||
-    result.errors.length !== 1 ||
-    result.errors[0].text.indexOf("inherit those rights") < 0 ||
-    result.errors[0].text.indexOf(result.maintenanceToolPath) < 0 ||
-    result.rejections !== 0)
-{
-    throw new Error(
-        "elevated handoff must be blocked once while the folder stays usable");
-}
-
-result = run({ detachedLaunchSucceeds: false });
-Controller.prototype.TargetDirectoryPageCallback();
-if (result.questions.length !== 1 ||
-    result.detachedExecutions.length !== 1 ||
-    result.errors.length !== 1 ||
-    result.errors[0].text.indexOf("No removal was started") < 0 ||
-    result.errors[0].text.indexOf("choose another folder") < 0 ||
-    result.rejections !== 0)
-{
-    throw new Error(
-        "launch failure must be safe, truthful, latched, and usable");
-}
-
-result = run({ installationPresent: false });
+let result = run({ installationPresent: false });
 Controller.prototype.TargetDirectoryPageCallback();
 Controller.prototype.ReadyForInstallationPageCallback();
 if (result.hiddenPages.join(",") !== String(QInstaller.ComponentSelection) ||
     result.questions.length !== 0 ||
-    result.detachedExecutions.length !== 0 ||
     result.rejections !== 0 ||
     result.pages.ReadyForInstallationPage.subTitle.indexOf("Review") < 0 ||
     result.hiddenSummaryColumns.join(",") !== "5")
@@ -387,7 +304,7 @@ if (logAssignments.length !== 2 || logAssignments[1].value !== uncLogPath)
             $harness,
             [Text.UTF8Encoding]::new($false))
         & $node.Source $harnessPath $ControllerScriptPath
-        Assert-IfwContract ($LASTEXITCODE -eq 0) 'the existing-installation handoff runtime contract must pass'
+        Assert-IfwContract ($LASTEXITCODE -eq 0) 'the controller runtime contract must pass'
     }
     finally {
         Remove-Item -LiteralPath $harnessPath -Force -ErrorAction SilentlyContinue
@@ -934,128 +851,13 @@ function Assert-IfwSignedValidationRuntime {
     }
 }
 
-function Assert-IfwProvisionerRuntime {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$ProvisionScriptPath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ArchivePath
-    )
-
-    $resolvedArchivePath = (Resolve-Path -LiteralPath $ArchivePath).Path
-    $testRoot = Join-Path ([IO.Path]::GetTempPath()) (
-        'vnm-ifw-provision-test-' + [Guid]::NewGuid().ToString('N'))
-    $destinationPath = Join-Path $testRoot 'root'
-    $corruptArchivePath = Join-Path $testRoot 'corrupt.7z'
-    $corruptDestinationPath = Join-Path $testRoot 'corrupt-root'
-    $extractionFailureDestinationPath = Join-Path $testRoot 'extraction-failure-root'
-    $fakeToolsPath = Join-Path $testRoot 'fake-tools'
-
-    function Invoke-Provisioner {
-        param(
-            [Parameter(Mandatory = $true)]
-            [string]$InputArchivePath,
-
-            [Parameter(Mandatory = $true)]
-            [string]$OutputRootPath,
-
-            [string]$PathPrefix
-        )
-
-        $originalPath = $env:PATH
-        $originalErrorActionPreference = $ErrorActionPreference
-        try {
-            if ($PathPrefix) {
-                $env:PATH = "$PathPrefix;$originalPath"
-            }
-            $ErrorActionPreference = 'Continue'
-            $output = & powershell.exe -NoLogo -NoProfile -NonInteractive `
-                -ExecutionPolicy Bypass `
-                -File $ProvisionScriptPath `
-                -ArchivePath $InputArchivePath `
-                -DestinationPath $OutputRootPath 2>&1 |
-                    Out-String
-            return [pscustomobject]@{
-                ExitCode = $LASTEXITCODE
-                Output = $output
-            }
-        }
-        finally {
-            $env:PATH = $originalPath
-            $ErrorActionPreference = $originalErrorActionPreference
-        }
-    }
-
-    try {
-        [void](New-Item -ItemType Directory -Path $testRoot)
-
-        $freshResult = Invoke-Provisioner $resolvedArchivePath $destinationPath
-        Assert-IfwContract ($freshResult.ExitCode -eq 0) `
-            "fresh explicit-archive provisioning must succeed: $($freshResult.Output)"
-        Assert-IfwContract `
-            (Test-Path -LiteralPath (Join-Path $destinationPath 'bin\binarycreator.exe') -PathType Leaf) `
-            'fresh provisioning must publish binarycreator in the requested root'
-        Assert-IfwContract `
-            (Test-Path -LiteralPath (Join-Path $destinationPath 'bin\installerbase.exe') -PathType Leaf) `
-            'fresh provisioning must publish installerbase in the requested root'
-        $markerPath = Join-Path $destinationPath '.vnm-ifw-provisioned.json'
-        Assert-IfwContract (Test-Path -LiteralPath $markerPath -PathType Leaf) `
-            'fresh provisioning must atomically publish its verification marker with the root'
-        $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
-        Assert-IfwContract ($marker.version -eq '4.11.0') `
-            'the provisioned root marker must identify IFW 4.11.0'
-        Assert-IfwContract `
-            ($marker.archive_sha256 -eq 'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1') `
-            'the provisioned root marker must record the verified official archive hash'
-
-        $staleSentinelPath = Join-Path $destinationPath 'must-not-survive-reprovision.txt'
-        [IO.File]::WriteAllText($staleSentinelPath, 'stale extraction')
-        $secondResult = Invoke-Provisioner $resolvedArchivePath $destinationPath
-        Assert-IfwContract ($secondResult.ExitCode -eq 0) `
-            "a second extraction from the same cache input must succeed: $($secondResult.Output)"
-        Assert-IfwContract (-not (Test-Path -LiteralPath $staleSentinelPath)) `
-            'a cache-input hit must still rehash and extract a complete fresh root'
-
-        [IO.File]::WriteAllText($corruptArchivePath, 'not the official IFW archive')
-        $corruptResult = Invoke-Provisioner $corruptArchivePath $corruptDestinationPath
-        Assert-IfwContract ($corruptResult.ExitCode -ne 0) `
-            'a corrupt explicit archive must fail provisioning'
-        Assert-IfwContract (-not (Test-Path -LiteralPath $corruptDestinationPath)) `
-            'a corrupt archive must not leave a committed IFW root'
-
-        [void](New-Item -ItemType Directory -Path $fakeToolsPath)
-        Copy-Item -LiteralPath "$env:SystemRoot\System32\where.exe" `
-            -Destination (Join-Path $fakeToolsPath '7z.exe')
-        $extractionFailureResult = Invoke-Provisioner `
-            $resolvedArchivePath `
-            $extractionFailureDestinationPath `
-            $fakeToolsPath
-        Assert-IfwContract ($extractionFailureResult.ExitCode -ne 0) `
-            'an extraction-tool failure must fail provisioning'
-        Assert-IfwContract `
-            (-not (Test-Path -LiteralPath $extractionFailureDestinationPath)) `
-            'an extraction failure must not leave a committed IFW root'
-    }
-    finally {
-        Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
-}
-
 $resolvedSourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $ifwSourceRoot = Join-Path $resolvedSourceRoot 'packaging\windows\ifw'
 $configPath = Join-Path $ifwSourceRoot 'config.xml.in'
 $styleSheetPath = Join-Path $ifwSourceRoot 'style.qss'
 $controllerScriptPath = Join-Path $ifwSourceRoot 'controller.qs'
-$checkboxCheckPath = Join-Path $ifwSourceRoot 'checkbox_check.svg'
-$radioDotPath = Join-Path $ifwSourceRoot 'radio_dot.svg'
-$comboArrowPath = Join-Path $ifwSourceRoot 'combo_arrow.svg'
 $brandLogoPath = Join-Path $ifwSourceRoot 'varinomics_logo.png'
-$brandGeometryPath = Join-Path $ifwSourceRoot 'varinomics_geometry.svg'
-$brandBannerPath = Join-Path $ifwSourceRoot 'varinomics_banner.png'
-$brandBannerHighDpiPath = Join-Path $ifwSourceRoot 'varinomics_banner@2x.png'
-$brandGeometryPngPath = Join-Path $ifwSourceRoot 'varinomics_geometry.png'
-$brandGeometryHighDpiPath = Join-Path $ifwSourceRoot 'varinomics_geometry@2x.png'
+$brandLogoHighDpiPath = Join-Path $ifwSourceRoot 'varinomics_logo@2x.png'
 $brandProvenancePath = Join-Path $ifwSourceRoot 'brand_assets.provenance.json'
 $logPathProbePath = Join-Path $ifwSourceRoot 'log_path_probe.ps1'
 $themeResourcesPath = Join-Path $ifwSourceRoot 'theme_resources.qrc'
@@ -1064,23 +866,17 @@ $installScriptPath = Join-Path $ifwSourceRoot 'installscript.qs'
 $maintenancePackagePath = Join-Path $ifwSourceRoot 'maintenance_package.xml.in'
 $maintenanceInstallScriptPath = Join-Path $ifwSourceRoot 'maintenance_installscript.qs'
 $buildScriptPath = Join-Path $resolvedSourceRoot 'tools\build_windows_ifw_installer.ps1'
-$provisionScriptPath = Join-Path $resolvedSourceRoot 'tools\provision_windows_ifw.ps1'
+$nativeBuildScriptPath = Join-Path $resolvedSourceRoot 'tools\build_windows_private_ifw.ps1'
 $windowsWorkflowPath = Join-Path $resolvedSourceRoot '.github\workflows\ci-windows.yml'
 $installationTestsPath = Join-Path `
     $resolvedSourceRoot 'tests\windows_ifw_installation_tests.ps1'
 $windowsPackagesPath = Join-Path $resolvedSourceRoot 'build_windows_packages.bat'
 $buildConfigExamplePath = Join-Path $resolvedSourceRoot 'build_config.bat.example'
-$brandRendererPath = Join-Path $resolvedSourceRoot 'tools\render_windows_ifw_brand_assets.py'
 $noticesPath = Join-Path $resolvedSourceRoot 'THIRD_PARTY_NOTICES.md'
 
 [xml]$config = Get-Content -Raw -LiteralPath $configPath
 $styleSheet = Get-Content -Raw -LiteralPath $styleSheetPath
 $controllerScript = Get-Content -Raw -LiteralPath $controllerScriptPath
-$checkboxCheck = Get-Content -Raw -LiteralPath $checkboxCheckPath
-$radioDot = Get-Content -Raw -LiteralPath $radioDotPath
-$comboArrow = Get-Content -Raw -LiteralPath $comboArrowPath
-$brandGeometry = Get-Content -Raw -LiteralPath $brandGeometryPath
-[xml]$brandGeometryXml = $brandGeometry
 $brandProvenance = Get-Content -Raw -LiteralPath $brandProvenancePath |
     ConvertFrom-Json
 $logPathProbe = Get-Content -Raw -LiteralPath $logPathProbePath
@@ -1090,25 +886,25 @@ $logPathProbe = Get-Content -Raw -LiteralPath $logPathProbePath
 $installScript = Get-Content -Raw -LiteralPath $installScriptPath
 $maintenanceInstallScript = Get-Content -Raw -LiteralPath $maintenanceInstallScriptPath
 $buildScript = Get-Content -Raw -LiteralPath $buildScriptPath
-$provisionScript = Get-Content -Raw -LiteralPath $provisionScriptPath
 $windowsWorkflow = Get-Content -Raw -LiteralPath $windowsWorkflowPath
 $windowsPackages = Get-Content -Raw -LiteralPath $windowsPackagesPath
 $buildConfigExample = Get-Content -Raw -LiteralPath $buildConfigExamplePath
-$brandRenderer = Get-Content -Raw -LiteralPath $brandRendererPath
 $notices = Get-Content -Raw -LiteralPath $noticesPath
 $installationTests = Get-Content -Raw -LiteralPath $installationTestsPath
 
-Assert-IfwExistingInstallationHandoffRuntime $controllerScriptPath
+Assert-IfwControllerRuntime $controllerScriptPath
+& node.exe (Join-Path $PSScriptRoot 'windows_ifw_maintenance_tests.js')
+Assert-IfwContract ($LASTEXITCODE -eq 0) 'the maintenance base must be selected before the disk-space estimate'
+& (Join-Path $PSScriptRoot 'windows_ifw_replacement_tests.ps1')
 Assert-IfwHashRuntime $buildScriptPath 'the IFW build script'
-Assert-IfwHashRuntime $provisionScriptPath 'the IFW provisioner'
 Assert-IfwCertificateTableRuntime $buildScriptPath
 Assert-IfwGuiSubsystemRuntime $buildScriptPath
 Assert-IfwSignedValidationRuntime $buildScriptPath
-Assert-IfwPowerShellParses $provisionScriptPath 'the IFW provisioner'
+Assert-IfwPowerShellParses $nativeBuildScriptPath 'the private IFW build script'
 Assert-IfwPowerShellParses `
     $installationTestsPath 'the generated-installer lifecycle test'
-if ($IfwArchivePath) {
-    Assert-IfwProvisionerRuntime $provisionScriptPath $IfwArchivePath
+if ($IfwRoot) {
+    & (Join-Path $resolvedSourceRoot 'tools\assert_windows_private_ifw.ps1') -IfwRoot $IfwRoot
 }
 Assert-IfwStartMenuShortcutRuntime $installScriptPath
 
@@ -1135,8 +931,14 @@ Assert-IfwContract `
     'the installer must use the product icon'
 Assert-IfwContract ($config.Installer.WizardStyle -eq 'Modern') `
     'the installer must use a consistent cross-theme wizard layout'
-Assert-IfwContract ($config.Installer.Banner -eq 'varinomics_banner.png') `
-    'the Modern header must use the supported IFW banner pixmap hook'
+Assert-IfwContract ($config.Installer.Logo -eq 'varinomics_logo.png') `
+    'the Modern header must use the adopted IFW logo pixmap hook'
+Assert-IfwContract `
+    ($config.Installer.WizardDefaultWidth -eq '800' -and
+        $config.Installer.WizardMinimumWidth -eq '800' -and
+        $config.Installer.WizardDefaultHeight -eq '500' -and
+        $config.Installer.WizardMinimumHeight -eq '500') `
+    'the wizard must use the adopted 800 by 500 default and minimum size'
 Assert-IfwContract ($null -eq $config.Installer.PageListPixmap) `
     'nonessential geometry must not alter the stable sidebar geometry'
 Assert-IfwContract ($config.Installer.StyleSheet -eq 'style.qss') `
@@ -1164,37 +966,25 @@ Assert-IfwContract `
     ($styleSheet -match 'QCheckBox::indicator,\s*QWizard QRadioButton::indicator\s*\{[^}]*background-color:\s*#111111;[^}]*border:\s*2px solid #8AB4C7') `
     'unchecked selection indicators must have an explicit high-contrast border'
 Assert-IfwContract `
-    ($styleSheet -match 'QCheckBox::indicator:checked\s*\{[^}]*image:\s*url\(:/metadata/installer-theme/checkbox_check\.svg\);[^}]*background-color:\s*#8AB4C7') `
+    ($styleSheet -match 'QCheckBox::indicator:checked\s*\{[^}]*image:\s*url\(:/metadata/installer-theme/checkbox_check\.png\);[^}]*background-color:\s*#8AB4C7') `
     'checked checkboxes must use the embedded check glyph and explicit fill'
 Assert-IfwContract `
-    ($styleSheet -match 'QRadioButton::indicator:checked\s*\{[^}]*image:\s*url\(:/metadata/installer-theme/radio_dot\.svg\);[^}]*background-color:\s*#8AB4C7') `
+    ($styleSheet -match 'QRadioButton::indicator:checked\s*\{[^}]*image:\s*url\(:/metadata/installer-theme/radio_dot\.png\);[^}]*background-color:\s*#8AB4C7') `
     'checked radio buttons must use the embedded dot glyph and explicit fill'
 Assert-IfwContract `
     ($styleSheet -match 'QCheckBox::indicator:unchecked:disabled,[^\{]*\{[^}]*background-color:\s*#1F1F1F;[^}]*border-color:\s*#3A3A3A') `
     'disabled unchecked indicators must remain distinguishable'
 Assert-IfwContract `
-    ($styleSheet -match 'QPushButton:disabled\s*\{[^}]*color:\s*#999999;[^}]*background-color:\s*#1F1F1F') `
+    ($styleSheet -match 'QPushButton:disabled\s*\{[^}]*color:\s*#828282') `
     'disabled wizard buttons must remain legible'
-Assert-IfwContract `
-    ($styleSheet -match 'QWizard QWizardPage#IntroductionPage\s*\{[^}]*background-image:\s*url\(:/metadata/installer-theme/varinomics_geometry\.png\);[^}]*background-position:\s*right bottom;[^}]*background-repeat:\s*no-repeat' -and
-        $styleSheet -match 'QWizard QWizardPage#IntroductionPage QWidget\s*\{[^}]*background-color:\s*transparent') `
-    'the stock Introduction page must resolve its nonessential artwork through a Qt stylesheet image without an obscuring child surface'
 Assert-IfwContract `
     ($styleSheet -match 'QMessageBox\s*\{[^}]*color:\s*#E0E0E0;[^}]*background-color:\s*#111111' -and
         $styleSheet -match 'QMessageBox QLabel#qt_msgbox_label,[\s\S]*?\{[^}]*color:\s*#E0E0E0;[^}]*background-color:\s*transparent' -and
-        $styleSheet -match 'QMessageBox QPushButton\s*\{[^}]*color:\s*#E0E0E0;[^}]*background-color:\s*#1F1F1F;[^}]*border:\s*1px solid #3A3A3A' -and
-        $styleSheet -match 'QMessageBox QPushButton:hover\s*\{[^}]*border-color:\s*#8AB4C7' -and
-        $styleSheet -match 'QMessageBox QPushButton:focus\s*\{[^}]*border:\s*2px solid #8EC4DF' -and
-        $styleSheet -match 'QMessageBox QPushButton:default\s*\{[^}]*color:\s*#111111;[^}]*background-color:\s*#8AB4C7' -and
-        $styleSheet -match 'QMessageBox QPushButton:disabled\s*\{[^}]*color:\s*#999999;[^}]*background-color:\s*#1F1F1F') `
-    'installer-owned message boxes must use coherent website text, icon-area, and button states'
-Assert-IfwContract `
-    ($checkboxCheck -match '<path[^>]*stroke="#111111"') `
-    'the checkbox glyph must remain visible on its selected fill'
-Assert-IfwContract ($radioDot -match '<circle[^>]*fill="#111111"') `
-    'the radio glyph must remain visible on its selected fill'
-Assert-IfwContract ($comboArrow -match '<path[^>]*stroke="#E0E0E0"') `
-    'the combo-box arrow must remain visible on dark controls'
+        $styleSheet -match 'QMessageBox QPushButton\s*\{[^}]*color:\s*#F0F0F0;[^}]*background-color:\s*#363636;[^}]*border:\s*1px solid #666666' -and
+        $styleSheet -match 'QMessageBox QPushButton:hover\s*\{[^}]*background-color:\s*#444444' -and
+        $styleSheet -match 'QMessageBox QPushButton:pressed\s*\{[^}]*background-color:\s*#2D2D2D' -and
+        $styleSheet -match 'QMessageBox QPushButton:disabled\s*\{[^}]*color:\s*#828282') `
+    'installer-owned message boxes must use the adopted Soter text and button states'
 Assert-IfwContract `
     (@($themeResources.RCC.qresource |
         Where-Object { $_.prefix -eq '/installer-theme' }).Count -eq 1) `
@@ -1202,35 +992,29 @@ Assert-IfwContract `
 $themeResourceFiles = @($themeResources.RCC.qresource |
     Where-Object { $_.prefix -eq '/installer-theme' } |
     ForEach-Object { @($_.file) })
-Assert-IfwContract ($themeResourceFiles.Count -eq 6) `
-    'the resource collection must contain every theme glyph, geometry density, and helper'
-Assert-IfwContract ($themeResourceFiles -contains 'checkbox_check.svg') `
-    'the checkbox glyph must be addressable through the resource collection'
-Assert-IfwContract ($themeResourceFiles -contains 'radio_dot.svg') `
-    'the radio glyph must be addressable through the resource collection'
-Assert-IfwContract ($themeResourceFiles -contains 'combo_arrow.svg') `
-    'the combo-box arrow must be addressable through the resource collection'
-Assert-IfwContract ($themeResourceFiles -contains 'varinomics_geometry.png') `
-    'the Qt-decodable website geometry must be addressable through the stylesheet resource collection'
-Assert-IfwContract ($themeResourceFiles -contains 'varinomics_geometry@2x.png') `
-    'the high-DPI website geometry must be addressable through the stylesheet resource collection'
-Assert-IfwContract `
-    ($themeResourceFiles -notcontains 'varinomics_logo.png' -and
-        $themeResourceFiles -notcontains 'varinomics_geometry.svg') `
-    'the QTextDocument-incompatible brand image paths must not remain in runtime resources'
-Assert-IfwContract ($themeResourceFiles -contains 'log_path_probe.ps1') `
-    'the writable log-path probe must be embedded with the controller resources'
+$expectedThemeFiles = @(
+    'checkbox_check.png', 'checkbox_check@2x.png',
+    'radio_dot.png', 'radio_dot@2x.png',
+    'combo_arrow.png', 'combo_arrow@2x.png',
+    'log_path_probe.ps1', 'replacement_support.ps1'
+)
+Assert-IfwContract ($themeResourceFiles.Count -eq $expectedThemeFiles.Count) `
+    'the resource collection must contain the adopted control densities and controller helpers'
+foreach ($resource in $expectedThemeFiles) {
+    Assert-IfwContract ($themeResourceFiles -contains $resource) `
+        "the resource collection must expose $resource"
+}
 Assert-IfwContract `
     (@($themeResources.RCC.qresource).Count -eq 2) `
-    'the custom resource manifest must contain only the theme collection and proven high-DPI Banner sibling'
-$highDpiBannerResource = @($themeResources.RCC.qresource |
+    'the custom resource manifest must contain only the theme collection and proven high-DPI logo sibling'
+$highDpiLogoResource = @($themeResources.RCC.qresource |
     Where-Object { $_.prefix -eq '/installer-config' } |
     ForEach-Object { @($_.file) })
 Assert-IfwContract `
-    ($highDpiBannerResource.Count -eq 1 -and
-        $highDpiBannerResource[0].alias -eq 'varinomics_banner_png@2x.' -and
-        $highDpiBannerResource[0].'compression-algorithm' -eq 'none' -and
-        $highDpiBannerResource[0].'#text' -eq 'varinomics_banner@2x.png') `
+    ($highDpiLogoResource.Count -eq 1 -and
+        $highDpiLogoResource[0].alias -eq 'varinomics_logo_png@2x.' -and
+        $highDpiLogoResource[0].'compression-algorithm' -eq 'none' -and
+        $highDpiLogoResource[0].'#text' -eq 'varinomics_logo@2x.png') `
     'the XML QRC must expose the exact high-DPI sibling path proven against IFW 4.11'
 Assert-IfwContract `
     ($styleSheet -notmatch ':/installer-theme/' -and
@@ -1239,71 +1023,30 @@ Assert-IfwContract `
 
 $brandLogoHash =
     (Get-FileHash -LiteralPath $brandLogoPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$brandLogoHighDpiHash =
+    (Get-FileHash -LiteralPath $brandLogoHighDpiPath -Algorithm SHA256).Hash.ToLowerInvariant()
 Assert-IfwContract `
-    ($brandLogoHash -eq '35d11678fa347e37f29b85bf0bbe4a0f21b89011f1406a61c7bca4098e6232c7') `
-    'the wordmark must remain byte-exact with website public/logo-dark.png'
-Assert-IfwContract ($brandProvenance.schema -eq 1) `
-    'brand-asset provenance must use the supported schema'
+    ($brandProvenance.schema_version -eq 1 -and
+        $brandProvenance.source_repository -eq 'https://github.com/Varinomics/website' -and
+        $brandProvenance.source_path -eq 'public/logo-dark.png' -and
+        $brandProvenance.source_sha256 -eq '35d11678fa347e37f29b85bf0bbe4a0f21b89011f1406a61c7bca4098e6232c7') `
+    'logo provenance must identify the canonical website artwork'
 Assert-IfwContract `
-    ($brandProvenance.sourceRepository -eq 'https://github.com/Varinomics/website' -and
-        $brandProvenance.sourceBranch -eq 'master') `
-    'brand-asset provenance must identify the canonical website repository'
-Assert-IfwContract `
-    ($brandProvenance.assets.'varinomics_logo.png'.source -eq 'public/logo-dark.png' -and
-        $brandProvenance.assets.'varinomics_logo.png'.sha256 -eq $brandLogoHash -and
-        $brandProvenance.assets.'varinomics_logo.png'.transformation -eq 'none') `
-    'the wordmark provenance must identify its exact authored source and lack of transformation'
-Assert-IfwContract `
-    ($brandProvenance.assets.'varinomics_geometry.svg'.geometrySourceSha256 -eq
-        '9b7af692bb261943cf6a35987ec2f2fd929ed58b39eaf1fc7e7a147d2531d505' -and
-        $brandProvenance.assets.'varinomics_geometry.svg'.paletteSourceSha256 -eq
-        '87e5416cb1c2d456478cdff9e40e8da958d4ee9b8cb9b2b287c6376420a56a49' -and
-        $brandProvenance.assets.'varinomics_geometry.svg'.shaderSourceSha256 -eq
-        'd2d7f12c340c492cd1cf3d14ccfac27049ec17973b1a781e287bd8c154b8dff8') `
-    'the derived artwork provenance must pin every authored website input'
-
-$brandBannerHash =
-    (Get-FileHash -LiteralPath $brandBannerPath -Algorithm SHA256).Hash.ToLowerInvariant()
-$brandBannerHighDpiHash =
-    (Get-FileHash -LiteralPath $brandBannerHighDpiPath -Algorithm SHA256).Hash.ToLowerInvariant()
-$brandGeometryPngHash =
-    (Get-FileHash -LiteralPath $brandGeometryPngPath -Algorithm SHA256).Hash.ToLowerInvariant()
-$brandGeometryHighDpiHash =
-    (Get-FileHash -LiteralPath $brandGeometryHighDpiPath -Algorithm SHA256).Hash.ToLowerInvariant()
-Assert-IfwContract `
-    ($brandBannerHash -eq 'ee98f36defaee87112f62b02e1dde6c26b1c3ec5fcf9d7fe50536e8b8bb79674' -and
-        $brandBannerHighDpiHash -eq '23e02853788a3b547f3c4428e838829441ce759a6ec2d45e1fa690de82411334' -and
-        $brandGeometryPngHash -eq '43543c0d3c20ced0acacc357b78ca9957b667cc5099c91dd5b34b57349759283' -and
-        $brandGeometryHighDpiHash -eq '82ea293d949f7e10eeB77e632dd7abc3a4ea566e6705975f88ec8dcd4eb99987'.ToLowerInvariant()) `
-    'the mechanically rendered standard and high-DPI brand PNGs must remain deterministic'
-Assert-IfwContract `
-    ($brandProvenance.assets.'varinomics_banner.png'.sha256 -eq $brandBannerHash -and
-        $brandProvenance.assets.'varinomics_banner.png'.highDpiSha256 -eq $brandBannerHighDpiHash -and
-        $brandProvenance.assets.'varinomics_geometry.png'.sha256 -eq $brandGeometryPngHash -and
-        $brandProvenance.assets.'varinomics_geometry.png'.highDpiSha256 -eq $brandGeometryHighDpiHash -and
-        $brandProvenance.assets.'varinomics_banner.png'.rendererQtVersion -eq '6.11.0' -and
-        $brandProvenance.assets.'varinomics_geometry.png'.rendererQtVersion -eq '6.11.0') `
-    'generated brand provenance must pin the renderer and every output hash'
-$bannerDimensions = Get-IfwPngDimensions $brandBannerPath
-$bannerHighDpiDimensions = Get-IfwPngDimensions $brandBannerHighDpiPath
-$geometryDimensions = Get-IfwPngDimensions $brandGeometryPngPath
-$geometryHighDpiDimensions = Get-IfwPngDimensions $brandGeometryHighDpiPath
-Assert-IfwContract `
-    (($bannerDimensions -join 'x') -eq '998x80' -and
-        ($bannerHighDpiDimensions -join 'x') -eq '1996x160' -and
-        ($geometryDimensions -join 'x') -eq '300x174' -and
-        ($geometryHighDpiDimensions -join 'x') -eq '600x348') `
-    'all generated PNGs must fully decode at the intended logical and high-DPI dimensions'
-Assert-IfwContract `
-    ($brandRenderer -match 'QImageReader\(str\(path\), b"PNG"\)' -and
-        $brandRenderer -match 'if not reader\.canRead\(\)' -and
-        $brandRenderer -match 'if reader\.read\(\)\.isNull\(\)' -and
-        $brandRenderer -match 'x_position = width - BANNER_MARGIN \* scale - logo\.width\(\)' -and
-        $brandRenderer -match 'y_position = BANNER_LOGO_TOP \* scale' -and
-        $brandRenderer -match 'BANNER_TEXT_SAFE_RIGHT \+ BANNER_TEXT_LOGO_GUTTER > x_position // scale' -and
-        $brandRenderer -match 'coordinate \* scale for coordinate in \(682, 11, 982, 53\)' -and
-        $brandRenderer -match 'Qt\.AspectRatioMode\.KeepAspectRatio') `
-    'the renderer must preserve wordmark geometry and reserve an explicit text-safe region at every density'
+    ($brandLogoHash -eq 'c2bad1ff7612bb35996fcdf3a5a943ecd275f4c6bf9dd99031f22797d48013e7' -and
+        $brandLogoHighDpiHash -eq 'f6926e2d6fd95ef8636a9f990bf6b7a6d1245d738be387eb4b384387fae736db' -and
+        $brandProvenance.outputs_sha256.'varinomics_logo.png' -eq $brandLogoHash -and
+        $brandProvenance.outputs_sha256.'varinomics_logo@2x.png' -eq $brandLogoHighDpiHash) `
+    'both logo densities must match the adopted Soter artwork and provenance'
+foreach ($asset in @(
+    @('varinomics_logo.png', '246x34'), @('varinomics_logo@2x.png', '492x68'),
+    @('checkbox_check.png', '16x16'), @('checkbox_check@2x.png', '32x32'),
+    @('radio_dot.png', '10x10'), @('radio_dot@2x.png', '20x20'),
+    @('combo_arrow.png', '10x6'), @('combo_arrow@2x.png', '20x12')
+)) {
+    $dimensions = Get-IfwPngDimensions (Join-Path $ifwSourceRoot $asset[0])
+    Assert-IfwContract (($dimensions -join 'x') -eq $asset[1]) `
+        "$($asset[0]) must decode at its adopted density dimensions"
+}
 
 if ($ArtifactPath) {
     $resolvedArtifactPath = (Resolve-Path -LiteralPath $ArtifactPath).Path
@@ -1319,6 +1062,87 @@ if ($ArtifactPath) {
             $checksumParts[0].ToLowerInvariant() -eq $actualArtifactHash -and
             $checksumParts[1] -eq (Split-Path -Leaf $resolvedArtifactPath)) `
         'the final signed artifact must match its adjacent checksum and exact filename'
+
+    # The SDK's recursive dump omits some separately mounted resource segments.
+    # CLI search loads a control script without a GUI or installation, so it can
+    # read those exact resources without devtool's privileged logging fallback.
+    $resourceTestRoot = Join-Path ([IO.Path]::GetTempPath()) (
+        'vnm-ifw-resources-' + [Guid]::NewGuid().ToString('N'))
+    $inspectionTarget = Join-Path $resourceTestRoot 'uncreated-target'
+    $inspectionScriptPath = Join-Path $resourceTestRoot 'inspect-resources.qs'
+    $inspectionCache = Join-Path $resourceTestRoot 'cache'
+    [void](New-Item -ItemType Directory -Path $resourceTestRoot)
+    $inspectionProcess = $null
+    try {
+        $inspectionScript = @'
+function Controller()
+{
+    installer.setValue("LogFileName", "\\\\.\\NUL");
+    installer.setValue("TargetDir", @TARGET@);
+    installer.autoRejectMessageBoxes();
+    var resources = @RESOURCES@;
+    for (var index = 0; index < resources.length; ++index) {
+        var name = resources[index];
+        if (!installer.performOperation("Copy", [
+                ":/metadata/installer-theme/" + name, @DESTINATION@ + "/" + name]))
+        {
+            throw new Error("Cannot extract installer resource: " + name);
+        }
+    }
+    console.log("VNM_IFW_RESOURCES_COMPLETE");
+}
+'@
+        $inspectionScript = $inspectionScript.Replace(
+            '@TARGET@', (ConvertTo-Json -InputObject $inspectionTarget -Compress)).Replace(
+            '@RESOURCES@', (ConvertTo-Json -InputObject $expectedThemeFiles -Compress)).Replace(
+            '@DESTINATION@', (ConvertTo-Json -InputObject $resourceTestRoot -Compress))
+        [IO.File]::WriteAllText($inspectionScriptPath, $inspectionScript, [Text.UTF8Encoding]::new($false))
+        $inspectionStart = [Diagnostics.ProcessStartInfo]::new()
+        $inspectionStart.FileName = $resolvedArtifactPath
+        $inspectionStart.Arguments = 'search --verbose --script "' + $inspectionScriptPath +
+            '" --cache-path "' + $inspectionCache + '" "TargetDir=' + $inspectionTarget +
+            '" "LogFileName=\\.\NUL"'
+        $inspectionStart.UseShellExecute = $false
+        $inspectionStart.CreateNoWindow = $true
+        $inspectionStart.RedirectStandardOutput = $true
+        $inspectionStart.RedirectStandardError = $true
+        $inspectionStart.EnvironmentVariables['QT_FORCE_STDERR_LOGGING'] = '1'
+        $inspectionProcess = [Diagnostics.Process]::Start($inspectionStart)
+        $inspectionOutput = $inspectionProcess.StandardOutput.ReadToEndAsync()
+        $inspectionErrors = $inspectionProcess.StandardError.ReadToEndAsync()
+        if (-not $inspectionProcess.WaitForExit(45000)) {
+            $inspectionProcess.Kill()
+            $inspectionProcess.WaitForExit()
+            throw 'The read-only installer resource inspector did not exit within 45 seconds.'
+        }
+        $inspectionDiagnostics = $inspectionOutput.Result + $inspectionErrors.Result
+        Assert-IfwContract `
+            ($inspectionProcess.ExitCode -eq 0 -and
+                $inspectionDiagnostics -match 'VNM_IFW_RESOURCES_COMPLETE') `
+            "the read-only resource inspector must finish successfully: $inspectionDiagnostics"
+        Assert-IfwContract (-not (Test-Path -LiteralPath $inspectionTarget)) `
+            'resource inspection must not create an installation target'
+        foreach ($resource in $expectedThemeFiles) {
+            $extractedResource = Join-Path $resourceTestRoot $resource
+            Assert-IfwContract (Test-Path -LiteralPath $extractedResource -PathType Leaf) `
+                "the installer must embed $resource"
+            Assert-IfwContract `
+                ((Get-FileHash -LiteralPath $extractedResource -Algorithm SHA256).Hash -eq
+                    (Get-FileHash -LiteralPath (Join-Path $ifwSourceRoot $resource) -Algorithm SHA256).Hash) `
+                "the embedded $resource must match its source"
+        }
+    }
+    finally {
+        if ($null -ne $inspectionProcess) {
+            $inspectionProcess.Dispose()
+        }
+        $resolvedResourceTestRoot = [IO.Path]::GetFullPath($resourceTestRoot)
+        $temporaryRootPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+        if (-not $resolvedResourceTestRoot.StartsWith($temporaryRootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Refusing cleanup outside the owned resource-inspection directory.'
+        }
+        Remove-Item -LiteralPath $resolvedResourceTestRoot -Recurse -Force
+    }
 }
 
 if ($DumpPath) {
@@ -1326,100 +1150,39 @@ if ($DumpPath) {
         'artifact-level resource checks require the dumped artifact path'
     $resolvedDumpPath = (Resolve-Path -LiteralPath $DumpPath).Path
     $dumpedConfigPath = Join-Path $resolvedDumpPath 'metadata\installer-config\config.xml'
-    $dumpedBannerPath =
-        Join-Path $resolvedDumpPath 'metadata\installer-config\varinomics_banner_png'
-    $dumpedBannerHighDpiPath =
-        Join-Path $resolvedDumpPath 'metadata\installer-config\varinomics_banner_png@2x'
+    $dumpedLogoPath =
+        Join-Path $resolvedDumpPath 'metadata\installer-config\varinomics_logo_png'
+    $dumpedLogoHighDpiPath =
+        Join-Path $resolvedDumpPath 'metadata\installer-config\varinomics_logo_png@2x'
     $dumpedInstallScriptPath = Join-Path `
         $resolvedDumpPath 'metadata\com.varinomics.vnm_terminal\installscript.qs'
     Assert-IfwContract `
         ((Test-Path -LiteralPath $dumpedConfigPath -PathType Leaf) -and
-            (Test-Path -LiteralPath $dumpedBannerPath -PathType Leaf) -and
-            (Test-Path -LiteralPath $dumpedBannerHighDpiPath -PathType Leaf) -and
+            (Test-Path -LiteralPath $dumpedLogoPath -PathType Leaf) -and
+            (Test-Path -LiteralPath $dumpedLogoHighDpiPath -PathType Leaf) -and
             (Test-Path -LiteralPath $dumpedInstallScriptPath -PathType Leaf)) `
-        'devtool dump must materialize the IFW config, component script, and both Banner density paths'
+        'devtool dump must materialize the IFW config, component script, and both logo density paths'
 
     [xml]$dumpedConfig = Get-Content -LiteralPath $dumpedConfigPath -Raw
-    $dumpedBannerHash =
-        (Get-FileHash -LiteralPath $dumpedBannerPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    $dumpedBannerHighDpiHash =
-        (Get-FileHash -LiteralPath $dumpedBannerHighDpiPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $dumpedLogoHash =
+        (Get-FileHash -LiteralPath $dumpedLogoPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $dumpedLogoHighDpiHash =
+        (Get-FileHash -LiteralPath $dumpedLogoHighDpiPath -Algorithm SHA256).Hash.ToLowerInvariant()
     Assert-IfwContract `
-        ($dumpedConfig.Installer.Banner -eq 'varinomics_banner_png' -and
-            $dumpedBannerHash -eq $brandBannerHash -and
-            $dumpedBannerHighDpiHash -eq $brandBannerHighDpiHash -and
+        ($dumpedConfig.Installer.Logo -eq 'varinomics_logo_png' -and
+            $dumpedLogoHash -eq $brandLogoHash -and
+            $dumpedLogoHighDpiHash -eq $brandLogoHighDpiHash -and
             (Get-Content -LiteralPath $dumpedInstallScriptPath -Raw) -eq
                 $installScript) `
-        'the dumped component script, Banner setting, and embedded resources must match their exact source bodies'
+        'the dumped component script, logo setting, and embedded resources must match their exact source bodies'
 
-    $dumpedBannerDimensions = Get-IfwPngDimensions $dumpedBannerPath
-    $dumpedBannerHighDpiDimensions = Get-IfwPngDimensions $dumpedBannerHighDpiPath
+    $dumpedLogoDimensions = Get-IfwPngDimensions $dumpedLogoPath
+    $dumpedLogoHighDpiDimensions = Get-IfwPngDimensions $dumpedLogoHighDpiPath
     Assert-IfwContract `
-        (($dumpedBannerDimensions -join 'x') -eq '998x80' -and
-            ($dumpedBannerHighDpiDimensions -join 'x') -eq '1996x160') `
-        'both extensionless dumped Banner resources must decode at their intended density dimensions'
+        (($dumpedLogoDimensions -join 'x') -eq '246x34' -and
+            ($dumpedLogoHighDpiDimensions -join 'x') -eq '492x68') `
+        'both extensionless dumped logo resources must decode at their intended density dimensions'
 }
-
-Assert-IfwContract ($brandGeometryXml.svg.viewBox -eq '0 0 760 440') `
-    'the geometry must retain its deliberate installer crop'
-$geometryLines = @($brandGeometryXml.svg.g | ForEach-Object { @($_.line) }) |
-    Where-Object { $null -ne $_ }
-$geometryCircles = @($brandGeometryXml.svg.g | ForEach-Object { @($_.circle) }) |
-    Where-Object { $null -ne $_ }
-Assert-IfwContract ($geometryLines.Count -eq 30) `
-    'the static geometry must retain all 30 authored icosahedron edges'
-Assert-IfwContract ($geometryCircles.Count -eq 12) `
-    'the static geometry must retain all 12 authored icosahedron vertices'
-
-$expectedGeometryEdges = @(
-    '319.5,399.76,521.66,411.9',
-    '319.5,399.76,543.23,407.87',
-    '319.5,399.76,335.68,261.83',
-    '319.5,399.76,242.31,165.05',
-    '319.5,399.76,370.58,255.3',
-    '521.66,411.9,543.23,407.87',
-    '521.66,411.9,335.68,261.83',
-    '521.66,411.9,569.42,184.7',
-    '521.66,411.9,697.69,274.95',
-    '418.34,28.1,620.5,40.24',
-    '418.34,28.1,604.32,178.17',
-    '418.34,28.1,396.77,32.13',
-    '418.34,28.1,242.31,165.05',
-    '418.34,28.1,370.58,255.3',
-    '620.5,40.24,604.32,178.17',
-    '620.5,40.24,396.77,32.13',
-    '620.5,40.24,569.42,184.7',
-    '620.5,40.24,697.69,274.95',
-    '604.32,178.17,543.23,407.87',
-    '604.32,178.17,697.69,274.95',
-    '604.32,178.17,370.58,255.3',
-    '543.23,407.87,697.69,274.95',
-    '543.23,407.87,370.58,255.3',
-    '396.77,32.13,335.68,261.83',
-    '396.77,32.13,569.42,184.7',
-    '396.77,32.13,242.31,165.05',
-    '335.68,261.83,569.42,184.7',
-    '335.68,261.83,242.31,165.05',
-    '569.42,184.7,697.69,274.95',
-    '242.31,165.05,370.58,255.3'
-)
-$actualGeometryEdges = @($geometryLines | ForEach-Object {
-    '{0},{1},{2},{3}' -f $_.x1, $_.y1, $_.x2, $_.y2
-})
-Assert-IfwContract `
-    (($actualGeometryEdges -join '|') -eq ($expectedGeometryEdges -join '|')) `
-    'the fixed projection must preserve the authored website edge order and coordinates'
-Assert-IfwContract `
-    ($brandGeometry -match 'stop-color="#2e1a0f"' -and
-        $brandGeometry -match 'stop-color="#0f1424"' -and
-        $brandGeometry -match 'fill="#111111"' -and
-        $brandGeometry -match 'fill="#c44d28"' -and
-        $brandGeometry -match 'fill="#a7acb4"') `
-    'the artwork must use the website base, logo marks, and shader-derived warm/cool palette'
-Assert-IfwContract `
-    (($styleSheet + $controllerScript + $brandGeometry) -notmatch
-        '#(?:1F6FEB|1858B6|12458F|75B7FF|79C0FF|B7D7FF)') `
-    'the website-derived theme must not retain the superseded GitHub-blue palette'
 
 Assert-IfwContrast '#E0E0E0' '#111111' 7.0 `
     'wizard text must meet enhanced contrast against the main surface'
@@ -1497,7 +1260,7 @@ Assert-IfwContract `
     'initial-install branding must guard before touching the existing introduction page'
 $installerPageSubtitles = @(
     @('IntroductionPageCallback', 'IntroductionPage', 'introductionPage',
-        'Install vnm_terminal on this computer.'),
+        'vnm_terminal installation.'),
     @('TargetDirectoryPageCallback', 'TargetDirectoryPage', 'targetDirectoryPage',
         'Choose where vnm_terminal will be installed.'),
     @('LicenseAgreementPageCallback', 'LicenseAgreementPage', 'licenseAgreementPage',
@@ -1505,9 +1268,7 @@ $installerPageSubtitles = @(
     @('StartMenuDirectoryPageCallback', 'StartMenuDirectoryPage', 'startMenuDirectoryPage',
         'Choose where Start Menu shortcuts will appear.'),
     @('ReadyForInstallationPageCallback', 'ReadyForInstallationPage', 'summaryPage',
-        'Review your choices before installation.'),
-    @('PerformInstallationPageCallback', 'PerformInstallationPage', 'performInstallationPage',
-        'Installing vnm_terminal. Please wait.')
+        'Review your choices before installation.')
 )
 foreach ($subtitleContract in $installerPageSubtitles) {
     $callbackName, $objectName, $variableName, $subtitle = $subtitleContract
@@ -1526,12 +1287,8 @@ foreach ($subtitleContract in $installerPageSubtitles) {
         "$objectName must receive its concise subtitle after an immediate installer-only guard"
 }
 Assert-IfwContract `
-    ($controllerScript -match 'QMessageBox\.question\s*\([\s\S]{0,400}?"Existing installation found"' -and
-        $controllerScript -match 'installer\.executeDetached\s*\(\s*maintenanceToolPath\s*,\s*\[\s*"--start-uninstaller"\s*\]\s*,\s*targetDirectory\s*\)' -and
-        $controllerScript -match 'Nothing is\s*"\s*\+\s*"removed until you confirm removal there' -and
-        $controllerScript -match 'run this setup again' -and
-        $controllerScript -match 'gui\.rejectWithoutPrompt\s*\(\s*\)') `
-    'an existing installation must be handed to its normal graphical uninstaller before this setup closes'
+    ($controllerScript -match 'Controller\.prototype\.PerformInstallationPageCallback\s*=\s*function\s*\(\s*\)\s*\{[\s\S]{0,800}?if\s*\(\s*!installer\.isInstaller\(\)\s*\)\s*return\s*;[\s\S]{0,240}?performInstallationPage\.subTitle\s*=\s*"Installing vnm_terminal\. Please wait\.";') `
+    'the shared progress page must limit its installation subtitle to installer mode'
 Assert-IfwContract `
     ($controllerScript -notmatch 'Please read the following license agreement\. You must accept the terms') `
     'the controller must not preserve the overflowing framework License subtitle'
@@ -1556,9 +1313,9 @@ foreach ($visibleSource in $userVisibleInstallerSources) {
     }
 }
 Assert-IfwContract `
-    ($controllerScript -notmatch 'varinomics_logo\.png|varinomics_geometry\.(?:svg|png)' -and
-        $config.Installer.Banner -eq 'varinomics_banner.png') `
-    'the canonical wordmark must appear only in the Modern banner and no image may rely on QTextDocument resource lookup'
+    ($controllerScript -notmatch '<img\s' -and
+        $config.Installer.Logo -eq 'varinomics_logo.png') `
+    'the canonical wordmark must appear only in the Modern logo and no image may rely on QTextDocument resource lookup'
 Assert-IfwContract `
     ($controllerScript -match 'Controller\.prototype\.FinishedPageCallback\s*=\s*function\s*\(\s*\)\s*\{\s*if\s*\(\s*!installer\.isInstaller\(\)\s*\)\s*return\s*;[\s\S]{0,300}?var\s+finishedPage\s*=\s*gui\.pageWidgetByObjectName\s*\(\s*"FinishedPage"\s*\)') `
     'initial-install branding must guard before reading or changing the finished page'
@@ -1587,9 +1344,6 @@ Assert-IfwContract `
         $controllerScript -notmatch 'installer\.(?:gainAdminRights|runProgram)\s*\(' -and
         $controllerScript -notmatch 'finishButtonClicked\.connect') `
     'failure logging must preserve status and avoid privileged target writes, elevation, or launch actions'
-Assert-IfwContract `
-    (($controllerScript + $installScript) -notmatch 'installer\.installationStarted|installer\.setCanceled|installer\.runInstaller\s*\(|Start-Process|VNM_PURGE_EXIT') `
-    'the handoff must not enter installation or retain the superseded automatic-removal machinery'
 Assert-IfwContract `
     ($logPathProbe -match '\[IO\.Path\]::IsPathRooted\(\$candidate\)' -and
         $logPathProbe -match '\[IO\.Directory\]::Exists\(\$candidate\)' -and
@@ -1621,14 +1375,8 @@ Assert-IfwContract `
     'the existing-installation probe must name the configured maintenance tool'
 Assert-IfwContract `
     ($controllerScript -notmatch 'registeredInstallationDirectories|detectExistingInstallations|VNM_INSTALL:|CurrentVersion\\\\Uninstall' -and
-        $controllerScript -match 'TargetDirectoryPageCallback[\s\S]{0,1600}?offerSelectedInstallationUninstaller\s*\(\s*\)') `
+        $controllerScript -match 'TargetDirectoryPageCallback[\s\S]{0,1600}?offerSelectedInstallationReplacement\s*\(\s*\)') `
     'existing-installation detection must inspect only the current folder after its page is initialized'
-Assert-IfwContract `
-    ($controllerScript -match 'promptedExistingInstallationDirectory\s*=\s*targetDirectory[\s\S]{0,400}?QMessageBox\.question' -and
-        $controllerScript -match 'closeRequested\s*=\s*true[\s\S]{0,160}?gui\.rejectWithoutPrompt' -and
-        $controllerScript -match 'executeDetached[\s\S]{0,1200}?No removal was started' -and
-        $controllerScript -match 'continueRequestedClose[\s\S]{0,300}?gui\.rejectWithoutPrompt') `
-    'unchanged-folder prompts and successful-close re-entry must be latched before modal or close callbacks'
 Assert-IfwContract `
     ($installScript -notmatch 'runningTargetPaths|validateReplacementCommitPage|runMaintenancePurge|waitForDirectoryRemoval|gainAdminRights|executeDetached' -and
         $controllerScript -notmatch 'setDefaultPageVisible\s*\(\s*QInstaller\.(?:TargetDirectory|ReadyForInstallation)\s*,\s*false\s*\)') `
@@ -1656,29 +1404,6 @@ Assert-IfwContract `
     ($maintenanceInstallScript -match '@TargetDir@/installerbase\.exe') `
     'the maintenance component must select its packaged installerbase'
 
-Assert-IfwContract ($provisionScript -match '\$ifwVersion\s*=\s*''4\.11\.0''') `
-    'the IFW tool version must be pinned to 4.11.0'
-Assert-IfwContract `
-    ($provisionScript -match 'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1') `
-    'the official IFW archive checksum must remain pinned'
-Assert-IfwContract `
-    ($provisionScript -match 'https://download\.qt\.io/online/qtsdkrepository/windows_x86/ifw/' -and
-        $provisionScript -match '4\.11\.0-0-202603231357ifw-win-x64\.7z') `
-    'the provisioner must own the exact official IFW 4.11.0 archive URL'
-Assert-IfwContract `
-    ($provisionScript -match 'Get-Sha256FileHash\s+\$ArchivePath' -and
-        $provisionScript -match '--fail' -and
-        $provisionScript -match '--location' -and
-        $provisionScript -match '--retry\s+4' -and
-        $provisionScript -match '--max-time\s+600' -and
-        $provisionScript -match '\$partPath\s*=\s*"\$Path\.part"') `
-    'the provisioner must use BCL hashing and bounded curl retries through a part file'
-Assert-IfwContract `
-    ($provisionScript -match '\.staging-' -and
-        $provisionScript -match '\.vnm-ifw-provisioned\.json' -and
-        $provisionScript -notmatch 'RedirectStandardOutput' -and
-        $provisionScript -match '\*>\s*\$extractionOutputPath') `
-    'the provisioner must isolate extraction output and publish a marked staged root'
 Assert-IfwContract `
     ($buildScript -notmatch 'Invoke-WebRequest|curl\.exe|ifwArchiveUrl|ifwArchiveSha256|Resolve-IfwRoot|Get-SevenZipPath|\.7z') `
     'the installer builder must not own IFW network, archive, cache, or extraction behavior'
@@ -1697,10 +1422,19 @@ Assert-IfwContract `
     'unsigned validation must inspect the PE certificate table while signed validation remains strict and timestamped'
 Assert-IfwContract `
     ($windowsPackages -match 'if\s+"%IFW_ROOT%"==""' -and
+        $windowsPackages -match 'vnm-terminal-ifw-provenance\.json' -and
         $windowsPackages -match '-IfwRoot\s+"%IFW_ROOT%"') `
-    'the Windows package entry point must require and pass IFW_ROOT explicitly'
-Assert-IfwContract ($buildConfigExample -match 'set IFW_ROOT=') `
-    'the local build configuration example must document IFW_ROOT'
+    'the Windows package entry point must require a custom IFW root and pass it explicitly'
+Assert-IfwContract `
+    ($windowsPackages -match 'if\s+"%VNM_TERMINAL_CONPTY_PACKAGE_DIR%"==""' -and
+        $windowsPackages -match 'conpty-source-build\.json' -and
+        $windowsWorkflow -match 'tools/provision_windows_conpty\.ps1' -and
+        $windowsWorkflow -match 'set VNM_TERMINAL_CONPTY_PACKAGE_DIR=\$env:VNM_CONPTY_ROOT\\package') `
+    'Windows packages must provision and require the receipt-bearing source-built ConPTY runtime'
+Assert-IfwContract `
+    ($buildConfigExample -match 'build_windows_private_ifw\.ps1' -and
+        $buildConfigExample -match 'set IFW_ROOT=.*\\build') `
+    'the local build configuration example must point to the custom engine build directory'
 $jobLevelEnvironmentBlocks = [regex]::Matches(
     $windowsWorkflow,
     '(?m)^ {4}env:\s*\r?\n(?:(?:^ {6,}[^\r\n]*\r?\n)|(?:^\s*\r?\n))*')
@@ -1708,32 +1442,50 @@ Assert-IfwContract `
     (-not ($jobLevelEnvironmentBlocks.Value -match '\$\{\{\s*runner\.')) `
     'job-level workflow environment must not reference runner context'
 $ifwPathInitializationIndex = $windowsWorkflow.IndexOf(
-    '- name: Initialize Qt IFW paths')
+    '- name: Initialize private Qt IFW paths')
 $ifwCacheRestoreIndex = $windowsWorkflow.IndexOf(
-    '- name: Restore verified Qt IFW archive')
+    '- name: Restore private Qt IFW inputs')
 Assert-IfwContract `
     ($ifwPathInitializationIndex -ge 0 -and
         $ifwCacheRestoreIndex -gt $ifwPathInitializationIndex -and
-        $windowsWorkflow -match '\$ifwArchivePath\s*=\s*Join-Path\s+\$env:RUNNER_TEMP' -and
-        $windowsWorkflow -match '\$ifwRoot\s*=\s*Join-Path\s+\$env:RUNNER_TEMP' -and
-        $windowsWorkflow -match '"IFW_ARCHIVE_PATH=\$ifwArchivePath"[\s\S]*?\$env:GITHUB_ENV' -and
+        $windowsWorkflow -match '\$ifwInputRoot\s*=\s*Join-Path\s+\$env:RUNNER_TEMP' -and
+        $windowsWorkflow -match '\$ifwEngineRoot\s*=\s*Join-Path\s+\$env:RUNNER_TEMP' -and
+        $windowsWorkflow -match '"IFW_INPUT_ROOT=\$ifwInputRoot"[\s\S]*?\$env:GITHUB_ENV' -and
+        $windowsWorkflow -match '"IFW_ENGINE_ROOT=\$ifwEngineRoot"[\s\S]*?\$env:GITHUB_ENV' -and
         $windowsWorkflow -match '"IFW_ROOT=\$ifwRoot"[\s\S]*?\$env:GITHUB_ENV') `
     'Windows CI must derive IFW paths on the runner before the cache step and export them'
-$ifwCacheKeyPattern =
-    '\$\{\{ runner\.os \}\}-qt-ifw-4\.11\.0-' +
-    'c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1'
-Assert-IfwContract `
-    ([regex]::Matches($windowsWorkflow, $ifwCacheKeyPattern).Count -eq 2 -and
-        [regex]::Matches(
-            $windowsWorkflow,
-            'path:\s*\$\{\{\s*env\.IFW_ARCHIVE_PATH\s*\}\}').Count -eq 2) `
-    'Windows CI restore and save steps must share the exact archive path and cache key'
+foreach ($cacheKind in @('inputs', 'engine')) {
+    $cacheKeys = [regex]::Matches($windowsWorkflow,
+        "(?m)^\s*key: (.+-vs2026-ifw-$cacheKind-.+)$")
+    Assert-IfwContract `
+        ($cacheKeys.Count -eq 2 -and
+            $cacheKeys[0].Groups[1].Value -ceq $cacheKeys[1].Groups[1].Value -and
+            $cacheKeys[0].Value -match 'hashFiles\(') `
+        "Windows CI must restore and save the $cacheKind cache with the same source-derived key"
+}
 Assert-IfwContract `
     ($windowsWorkflow -match 'actions/cache/restore@[0-9a-f]{40}' -and
         $windowsWorkflow -match 'actions/cache/save@[0-9a-f]{40}' -and
-        $windowsWorkflow -match 'tools/provision_windows_ifw\.ps1' -and
+        $windowsWorkflow -match 'tools/provision_windows_private_ifw_inputs\.ps1' -and
+        $windowsWorkflow -match 'tools/build_windows_private_ifw\.ps1' -and
+        $windowsWorkflow -match 'tools/assert_windows_private_ifw\.ps1' -and
         $windowsWorkflow -match 'set IFW_ROOT=\$env:IFW_ROOT') `
-    'Windows CI must cache only the verified archive, reprovision IFW, and pass IFW_ROOT to packaging'
+    'Windows CI must provision, build, verify, and pass the custom engine to packaging'
+$signingJob = [regex]::Match($windowsWorkflow,
+    '(?ms)^  sign-windows-package:\r?\n.*?(?=^  [a-z][a-z-]+:|\z)').Value
+Assert-IfwContract `
+    ($windowsWorkflow -match '(?s)Upload the release installer engine.*?name: vnm-terminal-windows-installer-engine' -and
+        $signingJob -match '(?s)Download the release installer engine.*?name: vnm-terminal-windows-installer-engine' -and
+        $signingJob.IndexOf('-File tools/assert_windows_private_ifw.ps1') -ge 0 -and
+        $signingJob.IndexOf('-File tools/assert_windows_private_ifw.ps1') -lt
+            $signingJob.IndexOf('- name: Authenticate to Azure for signing')) `
+    'the signing job must verify the exact engine artifact from the package job before authenticating'
+Assert-IfwContract `
+    ($windowsWorkflow -match '(?s)Archive installer corresponding source.*?IFW_ENGINE_ROOT\\source-material' -and
+        $windowsWorkflow -match '(?s)Upload installer corresponding source.*?name: vnm-terminal-windows-installer-source' -and
+        $windowsWorkflow -match '(?s)Download installer corresponding source.*?name: vnm-terminal-windows-installer-source' -and
+        $windowsWorkflow -match '(?s)gh release upload.*?dist/vnm_terminal_v\*_windows_installer_source\.zip') `
+    'release publication must provide the matching installer source packet as a separate download'
 Assert-IfwContract `
     ($windowsWorkflow -match `
             'nuget\.exe install Microsoft\.ArtifactSigning\.Client' -and
@@ -1814,10 +1566,7 @@ $installerBaseSigningIndex = $buildScript.IndexOf(
     'Invoke-TrustedSigning $privateInstallerBasePath')
 $configRenderIndex = $buildScript.IndexOf(
     "-Destination (Join-Path `$configRoot 'config.xml')")
-$bannerCopyIndex = $buildScript.IndexOf(
-    "ifwSourceRoot 'varinomics_banner.png'")
-$bannerHighDpiCopyIndex = $buildScript.IndexOf(
-    "ifwSourceRoot 'varinomics_banner@2x.png'")
+$resourceCopyIndex = $buildScript.IndexOf('foreach ($resource in @(')
 $binaryCreatorIndex = $buildScript.IndexOf('& $binaryCreatorPath --offline-only')
 $finalSigningIndex = $buildScript.LastIndexOf('Invoke-TrustedSigning $artifactPath')
 Assert-IfwContract ($payloadSigningIndex -ge 0) `
@@ -1829,11 +1578,8 @@ Assert-IfwContract ($installerBaseSigningIndex -gt $payloadCopyIndex) `
 Assert-IfwContract ($binaryCreatorIndex -gt $installerBaseSigningIndex) `
     'binarycreator must run after the packaged maintenance-tool base is signed'
 Assert-IfwContract `
-    ($configRenderIndex -ge 0 -and
-        $bannerCopyIndex -gt $configRenderIndex -and
-        $bannerHighDpiCopyIndex -gt $bannerCopyIndex -and
-        $binaryCreatorIndex -gt $bannerHighDpiCopyIndex) `
-    'IFW must see the standard and @2x Banner siblings beside the rendered config before resource collection'
+    ($resourceCopyIndex -gt $configRenderIndex -and $binaryCreatorIndex -gt $resourceCopyIndex) `
+    'IFW must see the adopted resource files beside the rendered config before resource collection'
 Assert-IfwContract ($finalSigningIndex -gt $binaryCreatorIndex) `
     'the final installer must be signed after binarycreator finishes'
 $privateBaseSubsystemIndex = $buildScript.IndexOf(
@@ -1860,20 +1606,17 @@ Assert-IfwContract `
 Assert-IfwContract `
     ($buildScript -match 'ifwSourceRoot ''controller\.qs''[^\r\n]*\r?\n\s*-Destination \$configRoot') `
     'the pre-display controller must be embedded beside the installer config'
+foreach ($resource in ($expectedThemeFiles + @('varinomics_logo.png', 'varinomics_logo@2x.png', 'theme_resources.qrc'))) {
+    Assert-IfwContract ($buildScript.Contains("'$resource'")) `
+        "the builder must stage $resource"
+}
 Assert-IfwContract `
-    ($buildScript -match 'ifwSourceRoot ''log_path_probe\.ps1''[^\r\n]*\r?\n\s*-Destination \$configRoot') `
-    'the writable log-path probe must be staged beside its resource collection'
+    ($buildScript -match 'Copy-Item -LiteralPath \(Join-Path \$ifwSourceRoot \$resource\) -Destination \$configRoot') `
+    'the resource inventory must be copied beside the configuration'
 Assert-IfwContract `
     ($buildScript -match '--resources \(Join-Path \$configRoot ''theme_resources\.qrc''\)' -and
         $buildScript -notmatch '--resources \(Join-Path \$configRoot ''theme_resources\.rcc''\)') `
     'binarycreator must receive the XML resource manifest it compiles internally'
-Assert-IfwContract `
-    ($buildScript -match 'ifwSourceRoot ''varinomics_banner\.png''[^\r\n]*\r?\n\s*-Destination \$configRoot' -and
-        $buildScript -match 'ifwSourceRoot ''varinomics_banner@2x\.png''[^\r\n]*\r?\n\s*-Destination \$configRoot' -and
-        $buildScript -match 'ifwSourceRoot ''varinomics_geometry\.png''[^\r\n]*\r?\n\s*-Destination \$configRoot' -and
-        $buildScript -match 'ifwSourceRoot ''varinomics_geometry@2x\.png''[^\r\n]*\r?\n\s*-Destination \$configRoot') `
-    'the supported Modern banner and Qt stylesheet geometry at both densities must be staged beside the config'
-
 $probeTestRoot = Join-Path ([IO.Path]::GetTempPath()) (
     'vnm-ifw-log-probe-test-' + [Guid]::NewGuid().ToString('N'))
 $validCandidate = Join-Path $probeTestRoot 'valid'
@@ -2011,18 +1754,6 @@ finally {
         Remove-Item -LiteralPath $probeTestRoot -Recurse -Force
     }
 }
-Assert-IfwContract `
-    ($buildScript -match 'ifwSourceRoot ''checkbox_check\.svg''[^\r\n]*\r?\n\s*-Destination \$configRoot') `
-    'the checkbox glyph must be embedded in the installer'
-Assert-IfwContract `
-    ($buildScript -match 'ifwSourceRoot ''radio_dot\.svg''[^\r\n]*\r?\n\s*-Destination \$configRoot') `
-    'the radio glyph must be embedded in the installer'
-Assert-IfwContract `
-    ($buildScript -match 'ifwSourceRoot ''combo_arrow\.svg''[^\r\n]*\r?\n\s*-Destination \$configRoot') `
-    'the combo-box arrow must be embedded in the installer'
-Assert-IfwContract `
-    ($buildScript -match 'ifwSourceRoot ''theme_resources\.qrc''[^\r\n]*\r?\n\s*-Destination \$configRoot') `
-    'the source theme resource manifest must be staged for auditability'
 Assert-IfwContract `
     ($buildScript -match '--resources \(Join-Path \$configRoot ''theme_resources\.qrc''\)') `
     'binarycreator must compile and embed the theme resource manifest'

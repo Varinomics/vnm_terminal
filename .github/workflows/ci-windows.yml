@@ -260,7 +260,7 @@ jobs:
   package:
     name: Portable ZIP and EXE (Windows x64)
     needs: resolve-dependencies
-    runs-on: windows-2022
+    runs-on: windows-2025-vs2026
     # No signing or repository-write credentials. GitHub still gives the job a
     # read-only GITHUB_TOKEN, and the private surface checkout may receive the
     # repository-read token, but neither identity can reach Microsoft Artifact
@@ -273,13 +273,15 @@ jobs:
     # release.
 
     steps:
-      - name: Initialize Qt IFW paths
+      - name: Initialize private Qt IFW paths
         shell: pwsh
         run: |
-          $ifwArchivePath = Join-Path $env:RUNNER_TEMP `
-              'vnm-ifw-cache\ifw-win-x64.7z'
-          $ifwRoot = Join-Path $env:RUNNER_TEMP 'vnm-ifw-4.11.0'
-          "IFW_ARCHIVE_PATH=$ifwArchivePath" | Out-File `
+          $ifwInputRoot = Join-Path $env:RUNNER_TEMP 'vnm-private-ifw-inputs'
+          $ifwEngineRoot = Join-Path $env:RUNNER_TEMP 'vnm-private-ifw-engine'
+          $ifwRoot = Join-Path $ifwEngineRoot 'build'
+          "IFW_INPUT_ROOT=$ifwInputRoot" | Out-File `
+              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "IFW_ENGINE_ROOT=$ifwEngineRoot" | Out-File `
               -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "IFW_ROOT=$ifwRoot" | Out-File `
               -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -342,33 +344,116 @@ jobs:
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
-      - name: Restore verified Qt IFW archive
-        id: ifw-cache
+      - name: Resolve source-built ConPTY inputs
+        id: conpty-inputs
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          $conptyRoot = Join-Path $env:RUNNER_TEMP 'vnm-conpty'
+          "VNM_CONPTY_ROOT=$conptyRoot" | Out-File `
+              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $cacheKey = & pwsh.exe -NoProfile -ExecutionPolicy Bypass `
+              -File tools/provision_windows_conpty.ps1 `
+              -SourceRoot "$env:GITHUB_WORKSPACE\vnm_terminal_surface" `
+              -OutputRoot $conptyRoot -HostedCi -Slots 2 -CacheKeyOnly
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+          "cache-key=$cacheKey" | Out-File `
+              -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Restore source-built ConPTY package
+        id: conpty-cache
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          path: ${{ env.IFW_ARCHIVE_PATH }}
-          key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
+          path: ${{ env.VNM_CONPTY_ROOT }}/package
+          key: ${{ runner.os }}-conpty-${{ steps.conpty-inputs.outputs.cache-key }}
 
-      - name: Provision Qt Installer Framework
+      - name: Provision source-built ConPTY package
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          pwsh.exe -NoProfile -ExecutionPolicy Bypass `
+            -File tools/provision_windows_conpty.ps1 `
+            -SourceRoot "$env:GITHUB_WORKSPACE\vnm_terminal_surface" `
+            -OutputRoot "$env:VNM_CONPTY_ROOT" -HostedCi -Slots 2
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Save source-built ConPTY package
+        if: steps.conpty-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.VNM_CONPTY_ROOT }}/package
+          key: ${{ runner.os }}-conpty-${{ steps.conpty-inputs.outputs.cache-key }}
+
+      - name: Restore private Qt IFW inputs
+        id: ifw-input-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.IFW_INPUT_ROOT }}
+          key: ${{ runner.os }}-vs2026-ifw-inputs-${{ hashFiles('vnm_terminal/packaging/windows/private-ifw/source-lock.json', 'vnm_terminal/packaging/windows/private-ifw/static-inputs.cmake', 'vnm_terminal/packaging/windows/private-ifw/bzip2-static/CMakeLists.txt', 'vnm_terminal/tools/provision_windows_private_ifw_inputs.ps1') }}
+
+      - name: Provision private Qt IFW inputs
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          pwsh.exe -NoProfile -ExecutionPolicy Bypass `
+            -File tools/provision_windows_private_ifw_inputs.ps1 `
+            -OutputRoot "$env:IFW_INPUT_ROOT" -Generator Ninja -Jobs 4
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Save private Qt IFW inputs
+        if: steps.ifw-input-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.IFW_INPUT_ROOT }}
+          key: ${{ runner.os }}-vs2026-ifw-inputs-${{ hashFiles('vnm_terminal/packaging/windows/private-ifw/source-lock.json', 'vnm_terminal/packaging/windows/private-ifw/static-inputs.cmake', 'vnm_terminal/packaging/windows/private-ifw/bzip2-static/CMakeLists.txt', 'vnm_terminal/tools/provision_windows_private_ifw_inputs.ps1') }}
+
+      - name: Restore private Qt IFW engine
+        id: ifw-engine-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.IFW_ENGINE_ROOT }}
+          key: ${{ runner.os }}-vs2026-ifw-engine-${{ hashFiles('vnm_terminal/packaging/windows/private-ifw/**', 'vnm_terminal/tools/build_windows_private_ifw.ps1', 'vnm_terminal/tools/provision_windows_private_ifw_inputs.ps1', 'vnm_terminal/tools/prepare_windows_private_ifw_source.ps1') }}
+
+      - name: Build private Qt IFW engine
+        if: steps.ifw-engine-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          pwsh.exe -NoProfile -ExecutionPolicy Bypass `
+            -File tools/build_windows_private_ifw.ps1 `
+            -QtIfwRepositoryPath "$env:IFW_INPUT_ROOT\sources\ifw" `
+            -QtRoot "$env:IFW_INPUT_ROOT\qt" `
+            -XzRoot "$env:IFW_INPUT_ROOT\xz" `
+            -Bzip2Root "$env:IFW_INPUT_ROOT\bzip2" `
+            -InputMaterialRoot "$env:IFW_INPUT_ROOT\source-material" `
+            -OutputRoot "$env:IFW_ENGINE_ROOT" `
+            -HostedBuild -Jobs 1
+          if ($LASTEXITCODE -ne 0) {
+              exit $LASTEXITCODE
+          }
+
+      - name: Verify private Qt IFW engine
         shell: pwsh
         working-directory: vnm_terminal
         run: |
           powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File tools/provision_windows_ifw.ps1 `
-            -ArchivePath "$env:IFW_ARCHIVE_PATH" `
-            -DestinationPath "$env:IFW_ROOT"
+            -File tools/assert_windows_private_ifw.ps1 -IfwRoot "$env:IFW_ROOT"
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
-          "IFW_ROOT=$env:IFW_ROOT" | Out-File `
-              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Save verified Qt IFW archive
-        if: steps.ifw-cache.outputs.cache-hit != 'true'
+      - name: Save private Qt IFW engine
+        if: steps.ifw-engine-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          path: ${{ env.IFW_ARCHIVE_PATH }}
-          key: ${{ runner.os }}-qt-ifw-4.11.0-c47201c4f6a82a8b607daa245237f40831d78425e904edd1514b71fd17efefc1
+          path: ${{ env.IFW_ENGINE_ROOT }}
+          key: ${{ runner.os }}-vs2026-ifw-engine-${{ hashFiles('vnm_terminal/packaging/windows/private-ifw/**', 'vnm_terminal/tools/build_windows_private_ifw.ps1', 'vnm_terminal/tools/provision_windows_private_ifw_inputs.ps1', 'vnm_terminal/tools/prepare_windows_private_ifw_source.ps1') }}
 
       - name: Validate Qt IFW packaging contract
         shell: pwsh
@@ -376,8 +461,7 @@ jobs:
         run: |
           powershell.exe -NoProfile -ExecutionPolicy Bypass `
             -File tests/windows_ifw_contract_tests.ps1 `
-            -SourceRoot . `
-            -IfwArchivePath "$env:IFW_ARCHIVE_PATH"
+            -SourceRoot . -IfwRoot "$env:IFW_ROOT"
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
@@ -389,7 +473,7 @@ jobs:
           arch: 'win64_mingw'
           archives: 'qtbase qtdeclarative qtsvg'
           modules: 'qtshadertools'
-          tools: 'tools_mingw1310,qt.tools.win64_mingw1310'
+          tools: 'tools_mingw1510,qt.tools.win64_mingw1510'
           cache: 'true'
           aqtsource: 'git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b'
 
@@ -399,10 +483,11 @@ jobs:
           $config = @(
               '@echo off',
               "set QT_PREFIX=$env:QT_ROOT_DIR",
-              "set MINGW_BIN=$env:IQTA_TOOLS\mingw1310_64\bin",
+              "set MINGW_BIN=$env:IQTA_TOOLS\mingw1510_64\bin",
               "set CMAKE=$((Get-Command cmake.exe).Source)",
               "set NINJA=$((Get-Command ninja.exe).Source)",
               "set VNM_TERMINAL_SURFACE_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_terminal_surface",
+              "set VNM_TERMINAL_CONPTY_PACKAGE_DIR=$env:VNM_CONPTY_ROOT\package",
               "set VNM_QML_CHROME_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qml_chrome",
               "set VNM_MSDF_TEXT_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_msdf_text",
               "set VNM_QT_DISPATCH_SOURCE_DIR=$env:GITHUB_WORKSPACE\vnm_qt_dispatch",
@@ -526,6 +611,28 @@ jobs:
             vnm_terminal/dist/vnm_terminal_windows_x64_build_provenance.json
           if-no-files-found: error
 
+      - name: Archive installer corresponding source
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          $installer = Get-ChildItem dist -Filter 'vnm_terminal_v*_windows_x64_unsigned.exe' |
+              Select-Object -First 1
+          $archiveName = $installer.Name.Replace('_windows_x64_unsigned.exe', '_windows_installer_source.zip')
+          $archivePath = Join-Path (Resolve-Path dist) $archiveName
+          Compress-Archive -Path "$env:IFW_ENGINE_ROOT\source-material\*" `
+              -DestinationPath $archivePath -CompressionLevel Optimal
+          $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          [IO.File]::WriteAllText("$archivePath.sha256", "$hash  $archiveName`n", [Text.Encoding]::ASCII)
+
+      - name: Upload installer corresponding source
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: vnm-terminal-windows-installer-source
+          path: |
+            vnm_terminal/dist/vnm_terminal_v*_windows_installer_source.zip
+            vnm_terminal/dist/vnm_terminal_v*_windows_installer_source.zip.sha256
+          if-no-files-found: error
+
       - name: Upload the release signing payload
         if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -545,6 +652,19 @@ jobs:
           # retention workflow removes superseded artifacts after their owning
           # runs have completed.
 
+      - name: Upload the release installer engine
+        if: ${{ github.event_name == 'release' || inputs.release_tag != '' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: vnm-terminal-windows-installer-engine
+          path: |
+            ${{ env.IFW_ROOT }}/bin/installerbase.exe
+            ${{ env.IFW_ROOT }}/bin/binarycreator.exe
+            ${{ env.IFW_ROOT }}/bin/devtool.exe
+            ${{ env.IFW_ROOT }}/bin/repogen.exe
+            ${{ env.IFW_ROOT }}/vnm-terminal-ifw-provenance.json
+          if-no-files-found: error
+
   # Everything with access to the signing credential lives here, and nothing
   # else does. Every action below is pinned to a full commit SHA because a
   # moving tag inside this job is a moving tag next to the only credential in
@@ -552,7 +672,7 @@ jobs:
   # written and want re-auditing before each release. The job deliberately does
   # not check out the surface or chrome repositories, install Qt, compile the
   # application, or run its test suite. It does check out the app release source
-  # and execute the audited IFW provisioning and packaging scripts needed to
+  # and execute the audited IFW verification and packaging scripts needed to
   # repackage the already-built payload, so those scripts remain inside the
   # credential boundary and need the same review as the pinned actions.
   #
@@ -610,14 +730,10 @@ jobs:
       id-token: write
 
     steps:
-      - name: Initialize Qt IFW paths
+      - name: Initialize private Qt IFW paths
         shell: pwsh
         run: |
-          $ifwArchivePath = Join-Path $env:RUNNER_TEMP `
-              'vnm-ifw-cache\ifw-win-x64.7z'
-          $ifwRoot = Join-Path $env:RUNNER_TEMP 'vnm-ifw-4.11.0'
-          "IFW_ARCHIVE_PATH=$ifwArchivePath" | Out-File `
-              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $ifwRoot = Join-Path $env:RUNNER_TEMP 'vnm-private-ifw-engine'
           "IFW_ROOT=$ifwRoot" | Out-File `
               -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
@@ -644,20 +760,20 @@ jobs:
             . dist/vnm_terminal_windows_x64_build_provenance.json `
             dist/portable_candidate
 
-      # No cache step here on purpose. The IFW archive is small, this job runs
-      # only for a release, and provision_windows_ifw.ps1 downloads it and
-      # checks it against the pinned SHA-256 when it is absent - so caching buys
-      # a minute and costs another third-party action inside the credential
-      # boundary. It would also add a second restore/save pair to the workflow,
-      # which tests/windows_ifw_contract_tests.ps1 reads as two competing caches.
-      - name: Provision Qt Installer Framework
+      # Reuse the package job's exact engine. Compilation and dependency
+      # downloads remain outside the signing credential boundary.
+      - name: Download the release installer engine
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: vnm-terminal-windows-installer-engine
+          path: ${{ env.IFW_ROOT }}
+
+      - name: Verify private Qt IFW engine
         shell: pwsh
         working-directory: vnm_terminal
         run: |
           powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File tools/provision_windows_ifw.ps1 `
-            -ArchivePath "$env:IFW_ARCHIVE_PATH" `
-            -DestinationPath "$env:IFW_ROOT"
+            -File tools/assert_windows_private_ifw.ps1 -IfwRoot "$env:IFW_ROOT"
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
@@ -926,6 +1042,12 @@ jobs:
           name: vnm-terminal-windows-x64-signed
           path: dist
 
+      - name: Download installer corresponding source
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: vnm-terminal-windows-installer-source
+          path: dist
+
       - name: Attach Windows packages to GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -938,5 +1060,7 @@ jobs:
             dist/vnm_terminal_v*_w64.zip.sha256 \
             dist/vnm_terminal_v*_windows_x64.exe \
             dist/vnm_terminal_v*_windows_x64.exe.sha256 \
+            dist/vnm_terminal_v*_windows_installer_source.zip \
+            dist/vnm_terminal_v*_windows_installer_source.zip.sha256 \
             dist/vnm_terminal_windows_x64_build_provenance.json \
             --repo "${GITHUB_REPOSITORY}" --clobber
