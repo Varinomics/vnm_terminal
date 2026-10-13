@@ -51,8 +51,9 @@ provenance record of every shipped file are in the dependency's own
 `LICENSES/` and `THIRD_PARTY/` directories.
 
 `FontAwesome7Free-Solid.otf` is redistributed byte-verbatim from Font Awesome
-Free 7.2.0 under the SIL Open Font License 1.1. Its licence and provenance are
-also recorded in the dependency's `LICENSES/` and `THIRD_PARTY/` directories.
+Free under the SIL Open Font License 1.1. The selected `vnm_fonts` dependency's
+`THIRD_PARTY/font_awesome_7_fonts.toml` manifest records its exact upstream
+version and file provenance; the complete licence text is in `LICENSES/`.
 
 Repository:
 
