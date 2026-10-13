@@ -115,6 +115,20 @@ jobs:
           ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
+      - name: Load installer recipe from the workflow commit
+        shell: pwsh
+        env:
+          PACKAGING_RECIPE_COMMIT: ${{ github.workflow_sha }}
+        run: |
+          $recipeRoot = Join-Path $env:RUNNER_TEMP 'vnm-terminal-installer-recipe'
+          git -C vnm_terminal fetch --no-tags --depth=1 origin "$env:PACKAGING_RECIPE_COMMIT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C vnm_terminal worktree add --detach $recipeRoot "$env:PACKAGING_RECIPE_COMMIT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "WINDOWS_INSTALLER_RECIPE_ROOT=$recipeRoot" | Out-File `
+              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Installer recipe: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/tree/$env:PACKAGING_RECIPE_COMMIT"
+
       - name: Checkout surface
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -193,11 +207,21 @@ jobs:
       - name: Build
         run: cmake --build vnm_terminal/build --config ${CMAKE_BUILD_TYPE} --parallel
 
-      - name: Run tests
+      # Application tests stay tied to the tagged source. The one installer
+      # source contract runs separately against the recipe that will be packed.
+      - name: Run application tests
         working-directory: vnm_terminal/build
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --output-on-failure -C ${CMAKE_BUILD_TYPE}
+        run: ctest --output-on-failure -C ${CMAKE_BUILD_TYPE} -E '^vnm_terminal_windows_ifw_contract$'
+
+      - name: Run installer recipe tests
+        shell: pwsh
+        run: |
+          powershell.exe -NoProfile -ExecutionPolicy Bypass `
+            -File "$env:WINDOWS_INSTALLER_RECIPE_ROOT/tests/windows_ifw_contract_tests.ps1" `
+            -SourceRoot "$env:WINDOWS_INSTALLER_RECIPE_ROOT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Create source archive
         shell: pwsh
@@ -292,6 +316,20 @@ jobs:
           path: vnm_terminal
           ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
+
+      - name: Load installer recipe from the workflow commit
+        shell: pwsh
+        env:
+          PACKAGING_RECIPE_COMMIT: ${{ github.workflow_sha }}
+        run: |
+          $recipeRoot = Join-Path $env:RUNNER_TEMP 'vnm-terminal-installer-recipe'
+          git -C vnm_terminal fetch --no-tags --depth=1 origin "$env:PACKAGING_RECIPE_COMMIT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C vnm_terminal worktree add --detach $recipeRoot "$env:PACKAGING_RECIPE_COMMIT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "WINDOWS_INSTALLER_RECIPE_ROOT=$recipeRoot" | Out-File `
+              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Installer recipe: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/tree/$env:PACKAGING_RECIPE_COMMIT"
 
       - name: Checkout surface
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -457,11 +495,10 @@ jobs:
 
       - name: Validate Qt IFW packaging contract
         shell: pwsh
-        working-directory: vnm_terminal
         run: |
           powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File tests/windows_ifw_contract_tests.ps1 `
-            -SourceRoot . -IfwRoot "$env:IFW_ROOT"
+            -File "$env:WINDOWS_INSTALLER_RECIPE_ROOT/tests/windows_ifw_contract_tests.ps1" `
+            -SourceRoot "$env:WINDOWS_INSTALLER_RECIPE_ROOT" -IfwRoot "$env:IFW_ROOT"
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
           }
@@ -501,10 +538,24 @@ jobs:
               $config,
               [System.Text.Encoding]::ASCII)
 
-      - name: Build Windows packages
+      - name: Build Windows portable payload
         shell: pwsh
         working-directory: vnm_terminal
-        run: cmd.exe /d /c build_windows_packages.bat
+        run: cmd.exe /d /c build_portable.bat
+
+      - name: Capture and build the unsigned installer recipe
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          & "$env:WINDOWS_INSTALLER_RECIPE_ROOT/tools/windows_installer_recipe.ps1" `
+              -Mode Capture -RecipeRoot dist/installer-recipe `
+              -SourceRoot "$env:WINDOWS_INSTALLER_RECIPE_ROOT" `
+              -PackagingCommit '${{ github.workflow_sha }}'
+          powershell.exe -NoProfile -ExecutionPolicy Bypass `
+              -File dist/installer-recipe/tools/build_windows_ifw_installer.ps1 `
+              -PayloadPath dist/portable_candidate -OutputDirectory dist `
+              -IfwRoot "$env:IFW_ROOT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Validate installer and packaged runtime
         shell: pwsh
@@ -574,8 +625,8 @@ jobs:
           }
 
           powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File tests/windows_ifw_contract_tests.ps1 `
-            -SourceRoot . `
+            -File "$env:WINDOWS_INSTALLER_RECIPE_ROOT/tests/windows_ifw_contract_tests.ps1" `
+            -SourceRoot "$env:WINDOWS_INSTALLER_RECIPE_ROOT" `
             -ArtifactPath $installer.FullName
           if ($LASTEXITCODE -ne 0) {
               exit $LASTEXITCODE
@@ -619,7 +670,7 @@ jobs:
               Select-Object -First 1
           $archiveName = $installer.Name.Replace('_windows_x64_unsigned.exe', '_windows_installer_source.zip')
           $archivePath = Join-Path (Resolve-Path dist) $archiveName
-          Compress-Archive -Path "$env:IFW_ENGINE_ROOT\source-material\*" `
+          Compress-Archive -Path @("$env:IFW_ENGINE_ROOT\source-material\*", 'dist/installer-recipe') `
               -DestinationPath $archivePath -CompressionLevel Optimal
           $hash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
           [IO.File]::WriteAllText("$archivePath.sha256", "$hash  $archiveName`n", [Text.Encoding]::ASCII)
@@ -640,6 +691,7 @@ jobs:
           name: vnm-terminal-windows-x64-signing-payload
           path: |
             vnm_terminal/dist/portable_candidate
+            vnm_terminal/dist/installer-recipe
             vnm_terminal/dist/payload.sha256
             vnm_terminal/dist/vnm_terminal_windows_x64_build_provenance.json
           if-no-files-found: error
@@ -744,6 +796,20 @@ jobs:
           ref: ${{ needs.resolve-dependencies.outputs.application }}
           persist-credentials: false
 
+      - name: Load installer recipe from the workflow commit
+        shell: pwsh
+        env:
+          PACKAGING_RECIPE_COMMIT: ${{ github.workflow_sha }}
+        run: |
+          $recipeRoot = Join-Path $env:RUNNER_TEMP 'vnm-terminal-installer-recipe'
+          git -C vnm_terminal fetch --no-tags --depth=1 origin "$env:PACKAGING_RECIPE_COMMIT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C vnm_terminal worktree add --detach $recipeRoot "$env:PACKAGING_RECIPE_COMMIT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "WINDOWS_INSTALLER_RECIPE_ROOT=$recipeRoot" | Out-File `
+              -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Installer recipe: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/tree/$env:PACKAGING_RECIPE_COMMIT"
+
       - name: Download the release signing payload
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
@@ -759,6 +825,15 @@ jobs:
           node tools/dependencies_lock.js verify-signing-input `
             . dist/vnm_terminal_windows_x64_build_provenance.json `
             dist/portable_candidate
+
+      - name: Verify the installer recipe
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          & "$env:WINDOWS_INSTALLER_RECIPE_ROOT/tools/windows_installer_recipe.ps1" `
+              -Mode Verify -RecipeRoot dist/installer-recipe `
+              -SourceRoot "$env:WINDOWS_INSTALLER_RECIPE_ROOT" `
+              -PackagingCommit '${{ github.workflow_sha }}'
 
       # Reuse the package job's exact engine. Compilation and dependency
       # downloads remain outside the signing credential boundary.
@@ -862,8 +937,8 @@ jobs:
         working-directory: vnm_terminal
         run: |
           powershell.exe -NoProfile -ExecutionPolicy Bypass `
-            -File tools/build_windows_ifw_installer.ps1 `
-            -PayloadPath dist/portable_candidate `
+            -File dist/installer-recipe/tools/build_windows_ifw_installer.ps1 `
+            -PayloadPath dist/portable_candidate -OutputDirectory dist `
             -IfwRoot "$env:IFW_ROOT" `
             -SignToolPath "$env:SIGNTOOL_PATH" `
             -TrustedSigningDlibPath "$env:SIGNING_DLIB_PATH" `

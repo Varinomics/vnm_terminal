@@ -2,6 +2,8 @@
 param(
     [string]$PayloadPath,
 
+    [string]$OutputDirectory,
+
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
     [string]$IfwRoot,
@@ -361,6 +363,10 @@ function Invoke-TrustedSigning {
 }
 
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+if (-not $OutputDirectory) {
+    $OutputDirectory = Join-Path $repositoryRoot 'dist'
+}
+$distRoot = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDirectory)
 if (-not $PayloadPath) {
     $PayloadPath = Join-Path $repositoryRoot 'dist\portable_candidate'
 }
@@ -387,7 +393,7 @@ if ($LASTEXITCODE -ne 0 -or $ifwVersionOutput -notmatch "IFW Version:\s*$([regex
 }
 
 $signingEnabled = Resolve-SigningConfiguration
-$stageRoot = Join-Path $repositoryRoot 'build_ifw\vnm_terminal_installer'
+$stageRoot = Join-Path (Split-Path -Parent $distRoot) 'build_ifw\vnm_terminal_installer'
 $configRoot = Join-Path $stageRoot 'config'
 $packagesRoot = Join-Path $stageRoot 'packages'
 $packageRoot = Join-Path $packagesRoot 'com.varinomics.vnm_terminal'
@@ -487,7 +493,6 @@ if ($signingEnabled) {
     Invoke-TrustedSigning $privateInstallerBasePath
 }
 
-$distRoot = Join-Path $repositoryRoot 'dist'
 New-Item -ItemType Directory -Force -Path $distRoot | Out-Null
 $artifactSuffix = if ($signingEnabled) { '' } else { '_unsigned' }
 $artifactName = "vnm_terminal_v${packageVersion}_windows_x64${artifactSuffix}.exe"
