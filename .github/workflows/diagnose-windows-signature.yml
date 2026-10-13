@@ -11,10 +11,10 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 5
     steps:
-      - name: Checkout the release source
+      - name: Checkout the exact diagnostic recipe
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: 442686b226838e21f3c607a2dd9960f3aa02142f
+          ref: ${{ github.workflow_sha }}
           persist-credentials: false
 
       - name: Capture the first signature probe and run the unchanged fixture

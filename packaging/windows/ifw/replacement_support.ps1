@@ -118,26 +118,26 @@ function Get-VnmTerminalReplacementSignature
     # operation without terminating an installed program or removal process.
     $start = [Diagnostics.ProcessStartInfo]::new()
     $start.FileName = Join-Path ([Environment]::SystemDirectory) 'WindowsPowerShell\v1.0\powershell.exe'
-    $start.Arguments = '-NoLogo -NoProfile -NonInteractive -Command -'
     $start.UseShellExecute = $false
     $start.CreateNoWindow = $true
-    $start.RedirectStandardInput = $true
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
     $start.StandardOutputEncoding = [Text.UTF8Encoding]::new($false)
     # Let Windows PowerShell resolve its own modules instead of inheriting PowerShell 7 modules.
     $start.EnvironmentVariables.Remove('PSModulePath')
-    $script = '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); ' +
+    $script = '$ProgressPreference = ''SilentlyContinue''; ' +
+        '[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); ' +
         '$s = Get-AuthenticodeSignature -LiteralPath ''' + $Path.Replace("'", "''") + '''; ' +
         '[pscustomobject]@{ Status = [string]$s.Status; ' +
         'SignerCertificate = if ($s.SignerCertificate) { @{ Subject = $s.SignerCertificate.Subject } } else { $null }; ' +
         'TimeStamperCertificate = if ($s.TimeStamperCertificate) { @{} } else { $null } } | ConvertTo-Json -Depth 3 -Compress'
+    # Framework's stdin writer can prepend a BOM under a UTF-8 console.
+    $start.Arguments = '-NoLogo -NoProfile -NonInteractive -EncodedCommand ' +
+        [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($script))
     $process = [Diagnostics.Process]::Start($start)
     try {
         $output = $process.StandardOutput.ReadToEndAsync()
         $errors = $process.StandardError.ReadToEndAsync()
-        $process.StandardInput.WriteLine($script)
-        $process.StandardInput.Close()
         if (-not $process.WaitForExit(30000)) {
             $process.Kill()
             throw 'The read-only signature check timed out. No removal was started.'

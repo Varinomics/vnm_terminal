@@ -52,7 +52,14 @@ function Get-VnmTerminalReplacementSignature
 
 try {
     [IO.File]::WriteAllText($maintenancePath, 'unsigned synthetic signature fixture')
-    $unsignedSignature = & $nativeSignatureProbe $maintenancePath
+    $originalInputEncoding = [Console]::InputEncoding
+    try {
+        [Console]::InputEncoding = [Text.UTF8Encoding]::new($true)
+        $unsignedSignature = & $nativeSignatureProbe $maintenancePath
+    }
+    finally {
+        [Console]::InputEncoding = $originalInputEncoding
+    }
     Assert-Replacement ([string]$unsignedSignature.Status -cne 'Valid') `
         'The bounded native read-only probe must refuse unsigned data'
     Assert-ReplacementFailure { Get-VnmTerminalReplacementTarget 'relative-folder' } 'absolute local'
