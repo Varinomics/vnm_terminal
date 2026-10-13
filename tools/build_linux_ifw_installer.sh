@@ -111,6 +111,8 @@ rm -rf -- "$stage_root"
 mkdir -p "$config_root" "$package_data_root" "$package_meta_root"
 
 cp -a "$payload_path/usr/bin" "$package_data_root/"
+install -m 755 "$script_dir/../packaging/linux/ifw/launcher.sh" \
+    "$package_data_root/bin/vnm_terminal_launcher"
 mkdir -p "$package_data_root/$package_libdir" "$package_data_root/share/icons"
 cp -a "$payload_libdir" "$package_data_root/$package_libdir/"
 mkdir -p "$package_data_root/share/doc" "$package_data_root/share/licenses"
@@ -134,7 +136,7 @@ sed \
 
 cp -a "$source_root/controller.qs" "$config_root/"
 cp -a "$source_root/theme_resources.qrc" "$config_root/"
-cp -a "$source_root/installscript.qs" "$package_meta_root/"
+cp -a "$script_dir/../packaging/linux/ifw/installscript.qs" "$package_meta_root/"
 cp -a "$repository_root/LICENSE" "$package_meta_root/LICENSE.txt"
 cp -a \
     "$source_root/style.qss" \

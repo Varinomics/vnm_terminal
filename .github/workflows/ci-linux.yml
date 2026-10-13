@@ -376,6 +376,7 @@ jobs:
           git -C vnm_terminal archive "${PACKAGING_RECIPE_COMMIT}" \
             tools/finalize_linux_payload.py tools/finalize_linux_cpack.cmake \
             tools/build_linux_ifw_installer.sh packaging/linux/ifw/notices \
+            packaging/linux/ifw/installscript.qs packaging/linux/ifw/launcher.sh \
             | tar -x -C "${recipe_tools}/.."
           echo "LINUX_PACKAGING_TOOLS=${recipe_tools}" >> "${GITHUB_ENV}"
           echo "Packaging recipe: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${PACKAGING_RECIPE_COMMIT}"
@@ -529,9 +530,11 @@ jobs:
           test -L /usr/local/bin/vnm_terminal
           test -f \
             /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
-          env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QML_IMPORT_PATH \
-            QT_QPA_PLATFORM=offscreen /usr/local/bin/vnm_terminal --help \
-              >/tmp/vnm_terminal_ifw_help.txt
+          for executable in /opt/vnm_terminal/bin/vnm_terminal /usr/local/bin/vnm_terminal; do
+            env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QML_IMPORT_PATH \
+              QT_QPA_PLATFORM=offscreen "${executable}" --help \
+                >/tmp/vnm_terminal_ifw_help.txt
+          done
           sudo /opt/vnm_terminal/vnm_terminal_maintenance \
             --confirm-command \
             purge

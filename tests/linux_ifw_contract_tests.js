@@ -3,6 +3,8 @@
 
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+const childProcess = require("child_process");
 
 const sourceRoot = process.argv[2];
 if (!sourceRoot)
@@ -218,3 +220,33 @@ assert(result.questions.length === 0 &&
 
 console.log("Linux Qt IFW controller contract passed: " +
     path.relative(sourceRoot, path.join(ifwSourceRoot, "controller.qs")));
+
+if (process.platform === "linux") {
+    // The global entry point lives outside the installation. Qt needs argv[0]
+    // to name the real binary so it can find the adjacent qt.conf.
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "vnm launcher '"));
+    try {
+        const binaryDirectory = path.join(fixture, "installed app", "bin");
+        const globalDirectory = path.join(fixture, "global", "bin");
+        fs.mkdirSync(binaryDirectory, { recursive: true });
+        fs.mkdirSync(globalDirectory, { recursive: true });
+        const binary = path.join(binaryDirectory, "vnm_terminal");
+        fs.writeFileSync(binary,
+            "#!/bin/sh\nprintf '%s\\n' \"$$\" \"$0\" \"$@\"\nexit 37\n",
+            { mode: 0o755 });
+        const launcher = path.join(binaryDirectory, "vnm_terminal_launcher");
+        fs.copyFileSync(path.join(ifwSourceRoot, "launcher.sh"), launcher);
+        fs.chmodSync(launcher, 0o755);
+        const globalLauncher = path.join(globalDirectory, "vnm_terminal");
+        fs.symlinkSync(launcher, globalLauncher);
+        const args = ["two words", "quote'\"", "*", "$HOME", "", "semi;literal"];
+        const child = childProcess.spawnSync(globalLauncher, args, { encoding: "utf8" });
+        assert(!child.error && child.status === 37,
+            "the launcher must preserve the application's exit status");
+        assert(child.stdout === [String(child.pid), binary].concat(args, [""]).join("\n"),
+            "the launcher must exec the real path and preserve every argument");
+    } finally {
+        fs.rmSync(fixture, { recursive: true, force: true });
+    }
+    console.log("Linux Qt IFW global launcher contract passed");
+}

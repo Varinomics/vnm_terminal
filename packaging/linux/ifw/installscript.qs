@@ -5,15 +5,17 @@ function Component()
 Component.prototype.createOperations = function()
 {
     component.createOperations();
+    component.addElevatedOperation("Mkdir", "/usr/local/bin");
     component.addElevatedOperation(
         "Execute",
         "/bin/ln",
         "-s",
-        "@TargetDir@/bin/vnm_terminal",
+        "@TargetDir@/bin/vnm_terminal_launcher",
         "/usr/local/bin/vnm_terminal",
         "UNDOEXECUTE",
         "/usr/bin/unlink",
         "/usr/local/bin/vnm_terminal");
+    component.addElevatedOperation("Mkdir", "/usr/local/share/applications");
     component.addElevatedOperation(
         "CreateDesktopEntry",
         "/usr/local/share/applications/com.varinomics.vnm-terminal.desktop",
