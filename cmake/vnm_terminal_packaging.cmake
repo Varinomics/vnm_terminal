@@ -176,6 +176,8 @@ if(UNIX AND NOT APPLE)
     set(CPACK_PACKAGE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/dist")
     set(CPACK_PACKAGE_CHECKSUM SHA256)
     set(CPACK_STRIP_FILES ON)
+    set(CPACK_PRE_BUILD_SCRIPTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/finalize_linux_cpack.cmake")
     set(CPACK_COMPONENTS_ALL "${vnm_terminal_runtime_component}")
     set(CPACK_INSTALL_CMAKE_PROJECTS
         "${CMAKE_BINARY_DIR};${PROJECT_NAME};${vnm_terminal_runtime_component};/")

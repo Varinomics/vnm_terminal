@@ -4,13 +4,14 @@ set -eu
 
 usage()
 {
-    echo "usage: $0 --payload PATH --ifw-root PATH [--output PATH]" >&2
+    echo "usage: $0 --payload PATH --ifw-root PATH [--output PATH] [--source-root PATH]" >&2
     exit 2
 }
 
 payload_path=
 ifw_root=
 output_path=
+repository_root=
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -29,6 +30,11 @@ while [ "$#" -gt 0 ]; do
             output_path=$2
             shift 2
             ;;
+        --source-root)
+            [ "$#" -ge 2 ] || usage
+            repository_root=$2
+            shift 2
+            ;;
         *)
             usage
             ;;
@@ -39,7 +45,7 @@ done
 [ -n "$ifw_root" ] || usage
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-repository_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
+repository_root=$(CDPATH= cd -- "${repository_root:-$script_dir/..}" && pwd)
 payload_path=$(CDPATH= cd -- "$payload_path" && pwd)
 ifw_root=$(CDPATH= cd -- "$ifw_root" && pwd)
 binary_creator="$ifw_root/bin/binarycreator"
@@ -107,6 +113,12 @@ mkdir -p "$config_root" "$package_data_root" "$package_meta_root"
 cp -a "$payload_path/usr/bin" "$package_data_root/"
 mkdir -p "$package_data_root/$package_libdir" "$package_data_root/share/icons"
 cp -a "$payload_libdir" "$package_data_root/$package_libdir/"
+mkdir -p "$package_data_root/share/doc" "$package_data_root/share/licenses"
+cp -a "$payload_path/usr/share/doc/vnm_fonts" "$package_data_root/share/doc/"
+cp -a "$payload_path/usr/share/licenses/vnm_process_custody" \
+    "$package_data_root/share/licenses/"
+cp -a "$script_dir/../packaging/linux/ifw/notices" \
+    "$package_data_root/share/licenses/qt-installer-framework"
 cp -a "$repository_root/LICENSE" \
     "$repository_root/THIRD_PARTY_NOTICES.md" \
     "$package_data_root/"

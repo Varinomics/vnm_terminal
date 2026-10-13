@@ -82,6 +82,17 @@ way. There is nothing at such a tag recording which dependency commits it was
 built from, so no rebuild of it could be verified against anything; the resolve
 job says so and stops.
 
+## Recovering Linux packages
+
+Dispatch CI Linux from the branch containing the packaging correction, with
+`release_tag` set to the existing release. The application and dependencies
+still come from that immutable tag and its lock. The Linux finalizer and IFW
+assembler come from the exact workflow commit, outside the application tree.
+The package provenance's workflow run ID links to that public recipe commit;
+the application source tuple continues to identify the tagged compiled source.
+This allows a packaging correction without moving the release tag. Verify all
+four regenerated formats before promoting the release as latest.
+
 The dependency lock owns the commits, not the dependency policy. Every owned
 repository still tracks `master`, in `FetchContent` declarations and in the
 ordinary CI runs that resolve master fresh on every push. The lock records what

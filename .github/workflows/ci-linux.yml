@@ -363,12 +363,29 @@ jobs:
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
+      # Recovery keeps the tagged application and dependency trees intact, but
+      # executes the packaging recipe belonging to this public workflow commit.
+      # Existing provenance records the workflow run, whose head_sha identifies it.
+      - name: Load packaging tools from the workflow commit
+        env:
+          PACKAGING_RECIPE_COMMIT: ${{ github.workflow_sha }}
+        run: |
+          recipe_tools="${RUNNER_TEMP}/vnm-linux-packaging/tools"
+          mkdir -p "${recipe_tools}"
+          git -C vnm_terminal fetch --no-tags --depth=1 origin "${PACKAGING_RECIPE_COMMIT}"
+          git -C vnm_terminal archive "${PACKAGING_RECIPE_COMMIT}" \
+            tools/finalize_linux_payload.py tools/finalize_linux_cpack.cmake \
+            tools/build_linux_ifw_installer.sh packaging/linux/ifw/notices \
+            | tar -x -C "${recipe_tools}/.."
+          echo "LINUX_PACKAGING_TOOLS=${recipe_tools}" >> "${GITHUB_ENV}"
+          echo "Packaging recipe: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/tree/${PACKAGING_RECIPE_COMMIT}"
+
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             ${LINUX_SYSTEM_DEPS} \
-            appstream desktop-file-utils dpkg-dev rpm
+            appstream desktop-file-utils dpkg-dev rpm python3 binutils
 
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
@@ -478,6 +495,7 @@ jobs:
             --prefix /usr \
             --component vnm_terminal_runtime
 
+          python3 "${LINUX_PACKAGING_TOOLS}/finalize_linux_payload.py" --payload "${app_dir}"
           test -x "${app_dir}/usr/bin/vnm_terminal"
           test -f "${app_dir}/usr/bin/qt.conf"
           install_libdir="$(
@@ -487,8 +505,40 @@ jobs:
           test -n "${install_libdir}"
           test -d \
             "${app_dir}/usr/${install_libdir}/vnm_terminal/qml/QtQuick/Controls/Basic"
-          QT_QPA_PLATFORM=offscreen \
-            "${app_dir}/usr/bin/vnm_terminal" --help >/tmp/vnm_terminal_help.txt
+          env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QML_IMPORT_PATH \
+            QT_QPA_PLATFORM=offscreen "${app_dir}/usr/bin/vnm_terminal" --help >/tmp/vnm_terminal_help.txt
+
+      - name: Build and test Linux Qt IFW installer
+        run: |
+          ifw_root="${RUNNER_TEMP}/QtInstallerFramework/4.7"
+          vnm_terminal/tools/provision_linux_ifw.sh \
+            --destination "${ifw_root}"
+          sh "${LINUX_PACKAGING_TOOLS}/build_linux_ifw_installer.sh" \
+            --source-root "${GITHUB_WORKSPACE}/vnm_terminal" \
+            --payload "${GITHUB_WORKSPACE}/vnm_terminal/AppDir" \
+            --ifw-root "${ifw_root}"
+
+          installer="$(find vnm_terminal/dist -maxdepth 1 -type f \
+            -name 'vnm_terminal_v*_linux_x64.run' -print -quit)"
+          test -n "${installer}"
+          sudo "${installer}" \
+            --root /opt/vnm_terminal \
+            --accept-licenses \
+            --confirm-command \
+            install
+          test -L /usr/local/bin/vnm_terminal
+          test -f \
+            /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
+          env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QML_IMPORT_PATH \
+            QT_QPA_PLATFORM=offscreen /usr/local/bin/vnm_terminal --help \
+              >/tmp/vnm_terminal_ifw_help.txt
+          sudo /opt/vnm_terminal/vnm_terminal_maintenance \
+            --confirm-command \
+            purge
+          test ! -e /opt/vnm_terminal
+          test ! -e /usr/local/bin/vnm_terminal
+          test ! -e \
+            /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
 
       - name: Build Linux packages
         run: |
@@ -501,8 +551,10 @@ jobs:
             exit 1
           fi
 
-          cpack -G DEB --config vnm_terminal/build-package/CPackConfig.cmake
-          cpack -G RPM --config vnm_terminal/build-package/CPackConfig.cmake
+          cpack -G DEB --config vnm_terminal/build-package/CPackConfig.cmake \
+            -D "CPACK_PRE_BUILD_SCRIPTS=${LINUX_PACKAGING_TOOLS}/finalize_linux_cpack.cmake"
+          cpack -G RPM --config vnm_terminal/build-package/CPackConfig.cmake \
+            -D "CPACK_PRE_BUILD_SCRIPTS=${LINUX_PACKAGING_TOOLS}/finalize_linux_cpack.cmake"
 
           app_dir="${GITHUB_WORKSPACE}/vnm_terminal/AppDir"
           linuxdeploy="${RUNNER_TEMP}/linuxdeploy-x86_64.AppImage"
@@ -516,6 +568,7 @@ jobs:
             --executable "${app_dir}/usr/bin/vnm_terminal" \
             --desktop-file "${app_dir}/usr/share/applications/com.varinomics.vnm-terminal.desktop" \
             --icon-file "${app_dir}/usr/share/icons/hicolor/256x256/apps/com.varinomics.vnm-terminal.png"
+          python3 "${LINUX_PACKAGING_TOOLS}/finalize_linux_payload.py" --payload "${app_dir}"
           install -m 755 vnm_terminal/packaging/linux/AppRun "${app_dir}/AppRun"
 
           appimagetool="${RUNNER_TEMP}/appimagetool-x86_64.AppImage"
@@ -533,39 +586,8 @@ jobs:
             cd "${appimage_dir}"
             sha256sum "${appimage_name}" > "${appimage_name}.sha256"
           )
-          QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 \
-            "${appimage}" --help >/tmp/vnm_terminal_appimage_help.txt
-
-      - name: Build and test Linux Qt IFW installer
-        run: |
-          ifw_root="${RUNNER_TEMP}/QtInstallerFramework/4.7"
-          vnm_terminal/tools/provision_linux_ifw.sh \
-            --destination "${ifw_root}"
-          vnm_terminal/tools/build_linux_ifw_installer.sh \
-            --payload "${GITHUB_WORKSPACE}/vnm_terminal/AppDir" \
-            --ifw-root "${ifw_root}"
-
-          installer="$(find vnm_terminal/dist -maxdepth 1 -type f \
-            -name 'vnm_terminal_v*_linux_x64.run' -print -quit)"
-          test -n "${installer}"
-          sudo "${installer}" \
-            --root /opt/vnm_terminal \
-            --accept-licenses \
-            --confirm-command \
-            install
-          test -L /usr/local/bin/vnm_terminal
-          test -f \
-            /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
-          QT_QPA_PLATFORM=offscreen \
-            /usr/local/bin/vnm_terminal --help \
-              >/tmp/vnm_terminal_ifw_help.txt
-          sudo /opt/vnm_terminal/vnm_terminal_maintenance \
-            --confirm-command \
-            purge
-          test ! -e /opt/vnm_terminal
-          test ! -e /usr/local/bin/vnm_terminal
-          test ! -e \
-            /usr/local/share/applications/com.varinomics.vnm-terminal.desktop
+          env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QML_IMPORT_PATH \
+            QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 "${appimage}" --help >/tmp/vnm_terminal_appimage_help.txt
 
       - name: Record Linux package provenance
         env:
