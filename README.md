@@ -47,10 +47,15 @@ All published packages are available from the
 | --- | --- | --- |
 | Windows x64 | EXE, portable ZIP | The signed Qt Installer Framework EXE installs under `Program Files` and includes Start Menu integration. The portable ZIP contains a top-level launcher. |
 | Linux x64 | RUN, DEB, RPM, AppImage | The graphical RUN installer uses Qt Installer Framework. DEB and RPM integrate with native package managers; AppImage is the portable option. |
-| macOS x64 | Application ZIP | Requires macOS 14.4 or newer. The application bundle is ad-hoc signed but not Apple-notarized. Gatekeeper may quarantine it on first launch. |
+| macOS Intel (x64), Apple Silicon (arm64) | Application ZIP per architecture | Requires macOS 14.4 or newer. The application bundle is ad-hoc signed but not Apple-notarized. Gatekeeper may quarantine it on first launch. |
 
-Windows and Linux packages include their private Qt runtime. Release source
+Windows, Linux, and macOS packages include their private Qt runtime. Release source
 archives are available on the same page.
+
+For Apple Silicon, choose `vnm_terminal_v<version>_macos_arm64_unnotarized.zip`;
+Intel Macs use `vnm_terminal_v<version>_macos_x64_unnotarized.zip`.
+Both packages run natively on their respective architectures. The macOS CI
+workflow builds, tests, and validates the extracted bundle on each architecture.
 
 On Windows, setup can remove a validated existing installation from
 `C:\Program Files\vnm_terminal` and continue installing in the same window.

@@ -48,6 +48,8 @@ jobs:
       freetype: ${{ steps.resolve.outputs.freetype }}
       msdfgen: ${{ steps.resolve.outputs.msdfgen }}
       source_tuple: ${{ steps.resolve.outputs.source_tuple }}
+      macos_x64_artifact_name: ${{ steps.package.outputs.macos_x64_artifact_name }}
+      macos_arm64_artifact_name: ${{ steps.package.outputs.macos_arm64_artifact_name }}
 
     steps:
       # A release or dispatched run must read the lock from the tagged commit
@@ -87,15 +89,50 @@ jobs:
           fi
           node tools/dependencies_lock.js resolve .
 
+      - name: Derive package names
+        id: package
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+        run: |
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            package_version="${RELEASE_TAG#v}"
+          else
+            package_version="$(
+              sed -nE 's/^project\(vnm_terminal .* VERSION ([^ )]+)\).*/\1/p' CMakeLists.txt
+            )"
+          fi
+
+          if [[ -z "${package_version}" ]]; then
+            echo "Could not derive package version." >&2
+            exit 1
+          fi
+
+          echo "macos_x64_artifact_name=vnm_terminal_v${package_version}_macos_x64_unnotarized" >> "${GITHUB_OUTPUT}"
+          echo "macos_arm64_artifact_name=vnm_terminal_v${package_version}_macos_arm64_unnotarized" >> "${GITHUB_OUTPUT}"
+
   build-and-test:
-    name: Qt Quick Terminal (macOS)
+    name: Qt Quick Terminal (macOS ${{ matrix.architecture }})
     needs: resolve-dependencies
-    runs-on: macos-15-intel
-    outputs:
-      artifact_name: ${{ steps.package.outputs.artifact_name }}
-      zip_name: ${{ steps.package.outputs.zip_name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: x64
+            cmake_architecture: x86_64
+            runner: macos-15-intel
+          - architecture: arm64
+            cmake_architecture: arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    env:
+      MACOS_ARCHITECTURE: ${{ matrix.cmake_architecture }}
+      MACOSX_DEPLOYMENT_TARGET: '14.4'
+      PACKAGE_NAME: ${{ needs.resolve-dependencies.outputs[format('macos_{0}_artifact_name', matrix.architecture)] }}
 
     steps:
+      - name: Verify native build host
+        run: test "$(uname -m)" = "${MACOS_ARCHITECTURE}"
+
       # persist-credentials is off on every checkout below: actions/checkout
       # otherwise leaves its credential in the checkout's git config until the
       # post-job step, and the build in between runs repository-controlled
@@ -158,27 +195,15 @@ jobs:
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
-      - name: Derive package names
-        id: package
+      # Tagged rebuilds keep their application source intact while using this
+      # workflow's packaging checks, including tags that predate the verifier.
+      - name: Load bundle verifier from the workflow commit
         env:
-          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          PACKAGING_RECIPE_COMMIT: ${{ github.workflow_sha }}
         run: |
-          if [[ -n "${RELEASE_TAG}" ]]; then
-            package_version="${RELEASE_TAG#v}"
-          else
-            package_version="$(
-              sed -nE 's/^project\(vnm_terminal .* VERSION ([^ )]+)\).*/\1/p' \
-                vnm_terminal/CMakeLists.txt
-            )"
-          fi
-
-          if [[ -z "${package_version}" ]]; then
-            echo "Could not derive package version." >&2
-            exit 1
-          fi
-
-          echo "artifact_name=vnm_terminal_v${package_version}_macos_x64_unnotarized" >> "${GITHUB_OUTPUT}"
-          echo "zip_name=vnm_terminal_v${package_version}_macos_x64_unnotarized.zip" >> "${GITHUB_OUTPUT}"
+          git -C vnm_terminal fetch --no-tags --depth=1 origin "${PACKAGING_RECIPE_COMMIT}"
+          git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tools/verify_macos_bundle.sh" \
+            > "${RUNNER_TEMP}/verify_macos_bundle.sh"
 
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
@@ -215,6 +240,8 @@ jobs:
 
           cmake -S "${freetype_source_dir}" -B "${msdf_package_build_dir}/freetype" \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHITECTURE}" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET}" \
             -DCMAKE_INSTALL_PREFIX="${msdf_package_prefix}" \
             -DBUILD_SHARED_LIBS=OFF \
             -DFT_DISABLE_HARFBUZZ=ON \
@@ -223,10 +250,12 @@ jobs:
             -DFT_DISABLE_PNG=ON \
             -DFT_DISABLE_ZLIB=ON \
             -DFT_ENABLE_ERROR_STRINGS=OFF
-          cmake --build "${msdf_package_build_dir}/freetype" --target install --parallel
+          cmake --build "${msdf_package_build_dir}/freetype" --target install --parallel 3
 
           cmake -S "${msdfgen_source_dir}" -B "${msdf_package_build_dir}/msdfgen" \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHITECTURE}" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET}" \
             -DCMAKE_INSTALL_PREFIX="${msdf_package_prefix}" \
             -DCMAKE_PREFIX_PATH="${msdf_package_prefix}" \
             -DBUILD_SHARED_LIBS=OFF \
@@ -237,17 +266,19 @@ jobs:
             -DMSDFGEN_USE_SKIA=OFF \
             -DMSDFGEN_CORE_ONLY=OFF \
             -DMSDFGEN_INSTALL=ON
-          cmake --build "${msdf_package_build_dir}/msdfgen" --target install --parallel
+          cmake --build "${msdf_package_build_dir}/msdfgen" --target install --parallel 3
 
           cmake -S vnm_msdf_text -B "${msdf_package_build_dir}/vnm_msdf_text" \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHITECTURE}" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET}" \
             -DCMAKE_INSTALL_PREFIX="${msdf_package_prefix}" \
             -DCMAKE_PREFIX_PATH="${msdf_package_prefix}" \
             -DBUILD_SHARED_LIBS=OFF \
             -DVNM_MSDF_TEXT_FETCH_DEPS=OFF \
             -DVNM_MSDF_TEXT_BUILD_QT_LCD=ON \
             -DVNM_MSDF_TEXT_BUILD_TESTS=OFF
-          cmake --build "${msdf_package_build_dir}/vnm_msdf_text" --target install --parallel
+          cmake --build "${msdf_package_build_dir}/vnm_msdf_text" --target install --parallel 3
 
           test -f "${msdf_package_prefix}/lib/cmake/vnm_msdf_text/vnm_msdf_text-config.cmake"
 
@@ -255,6 +286,8 @@ jobs:
         run: |
           cmake -B vnm_terminal/build -S vnm_terminal \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
+            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHITECTURE}" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET}" \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR};${GITHUB_WORKSPACE}/msdf_package" \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
@@ -268,7 +301,7 @@ jobs:
             -DBUILD_TESTING=ON
 
       - name: Build
-        run: cmake --build vnm_terminal/build --config ${CMAKE_BUILD_TYPE} --parallel
+        run: cmake --build vnm_terminal/build --config ${CMAKE_BUILD_TYPE} --parallel 3
 
       - name: Run tests
         working-directory: vnm_terminal/build
@@ -334,6 +367,8 @@ jobs:
             echo "Profiling:       OFF"
             echo "Transcript:      OFF"
             echo "Toolchain:       clang"
+            echo "Architecture:    ${MACOS_ARCHITECTURE}"
+            echo "Minimum macOS:   ${MACOSX_DEPLOYMENT_TARGET}"
             echo "Qt:              ${QT_ROOT_DIR}"
           } > "${resources_dir}/vnm_terminal_build_info.txt"
 
@@ -360,6 +395,7 @@ jobs:
       - name: Sign and validate macOS app bundle
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
+          bash "${RUNNER_TEMP}/verify_macos_bundle.sh" "${app_bundle}" "${MACOS_ARCHITECTURE}"
           codesign --force --deep --sign - "${app_bundle}"
           codesign --verify --deep --strict "${app_bundle}"
           QT_QPA_PLATFORM=offscreen "${app_bundle}/Contents/MacOS/vnm_terminal" --help >/tmp/vnm_terminal_help.txt
@@ -369,21 +405,33 @@ jobs:
           mkdir -p vnm_terminal/dist
           ditto -c -k --sequesterRsrc --keepParent \
             "vnm_terminal/build/vnm_terminal.app" \
-            "vnm_terminal/dist/${{ steps.package.outputs.zip_name }}"
+            "vnm_terminal/dist/${PACKAGE_NAME}.zip"
+
+      - name: Validate packed macOS app bundle
+        run: |
+          unpack_dir="$(mktemp -d "${RUNNER_TEMP}/macos-package.XXXXXX")"
+          ditto -x -k "vnm_terminal/dist/${PACKAGE_NAME}.zip" "${unpack_dir}"
+          app_bundle="${unpack_dir}/vnm_terminal.app"
+          bash "${RUNNER_TEMP}/verify_macos_bundle.sh" "${app_bundle}" "${MACOS_ARCHITECTURE}"
+          codesign --verify --deep --strict "${app_bundle}"
+          QT_QPA_PLATFORM=offscreen "${app_bundle}/Contents/MacOS/vnm_terminal" --help >/tmp/vnm_terminal_packed_help.txt
 
       - name: Upload macOS bundle artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: ${{ steps.package.outputs.artifact_name }}
-          path: vnm_terminal/dist/${{ steps.package.outputs.zip_name }}
+          name: ${{ needs.resolve-dependencies.outputs[format('macos_{0}_artifact_name', matrix.architecture)] }}
+          path: vnm_terminal/dist/${{ env.PACKAGE_NAME }}.zip
           if-no-files-found: error
 
   attach-release-asset:
-    name: Attach macOS Bundle
+    name: Attach macOS Bundle (${{ matrix.architecture }})
     if: >-
       github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
-    needs: build-and-test
+    needs: [resolve-dependencies, build-and-test]
+    strategy:
+      matrix:
+        architecture: [x64, arm64]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
@@ -393,16 +441,17 @@ jobs:
       - name: Download macOS bundle artifact
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
-          name: ${{ needs.build-and-test.outputs.artifact_name }}
+          name: ${{ needs.resolve-dependencies.outputs[format('macos_{0}_artifact_name', matrix.architecture)] }}
           path: dist
 
       - name: Attach macOS bundle to GitHub release
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          PACKAGE_NAME: ${{ needs.resolve-dependencies.outputs[format('macos_{0}_artifact_name', matrix.architecture)] }}
         run: |
           gh release upload \
             "${RELEASE_TAG}" \
-            "dist/${{ needs.build-and-test.outputs.zip_name }}" \
+            "dist/${PACKAGE_NAME}.zip" \
             --repo "${{ github.repository }}" \
             --clobber

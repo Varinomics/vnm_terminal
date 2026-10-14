@@ -55,6 +55,13 @@ runs them on every host.
   - Windows attaches `vnm_terminal_windows_x64_build_provenance.json`.
   - macOS embeds `vnm_terminal_build_provenance.json` under
     `Contents/Resources` and attaches no standalone provenance JSON.
+- macOS builds and tests natively on Intel and Apple Silicon, then attaches
+  separate `macos_x64_unnotarized.zip` and `macos_arm64_unnotarized.zip` bundles.
+  Each bundle records its architecture in `vnm_terminal_build_info.txt`; every
+  bundled Mach-O component must contain that architecture. CI checks the staged
+  bundle and the extracted ZIP before uploading either architecture's artifact.
+  The bundle verifier comes from the workflow commit, so a tagged rebuild uses
+  the same checks without changing the tagged application source.
 - The Windows signing job compares the Windows provenance record with the lock
   at the tag before it signs anything, and verifies the payload file by file
   against the hashes the package job recorded.

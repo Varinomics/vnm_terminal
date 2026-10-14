@@ -376,6 +376,29 @@ const CASES = [
         expect: "selects every artifact in the repository"
     },
     {
+        name: "a macOS arm64 artifact renamed outside its retention family",
+        tool: "release_artifacts.js",
+        mutate: root => {
+            const relativePath = WORKFLOW_DIRECTORY + "/ci-macos.yml";
+            const text = readText(root, relativePath);
+            writeText(root, relativePath,
+                text.replace("_macos_arm64_unnotarized", "_macos_aarch64_unnotarized"));
+        },
+        expect: "no normalized workflow step builds a name"
+    },
+    {
+        name: "macOS architectures sharing one retention family",
+        tool: "release_artifacts.js",
+        mutate: root => {
+            const declaration = readJson(root, "release/artifacts.json");
+            const artifact = declaration.artifacts.find(entry => entry.id === "macos_x64");
+            artifact.prune_pattern = "^vnm_terminal_v.*_macos_";
+            writeJson(root, "release/artifacts.json", declaration);
+            return { arguments: ["retention-families", root] };
+        },
+        expect: "also matches artifact \"macos_arm64\""
+    },
+    {
         name: "a dependency checked out beside the directory the lock names",
         tool: "dependencies_lock.js",
         mutate: root => {
