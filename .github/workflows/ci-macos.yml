@@ -393,12 +393,20 @@ jobs:
           cp vnm_fonts/LICENSES/*.txt "${font_notices_dir}/LICENSES/"
 
       - name: Sign and validate macOS app bundle
+        id: bundle_validation
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
           bash "${RUNNER_TEMP}/verify_macos_bundle.sh" "${app_bundle}" "${MACOS_ARCHITECTURE}"
           codesign --force --deep --sign - "${app_bundle}"
           codesign --verify --deep --strict "${app_bundle}"
           QT_QPA_PLATFORM=offscreen "${app_bundle}/Contents/MacOS/vnm_terminal" --help >/tmp/vnm_terminal_help.txt
+
+      - name: Diagnose rejected macOS bundle build inputs
+        if: failure() && steps.bundle_validation.outcome == 'failure'
+        run: |
+          cat vnm_terminal/build/CMakeFiles/vnm_terminal.dir/link.txt
+          find vnm_terminal/build msdf_package_build -name flags.make \
+            -exec grep -H -E '^(C|CXX)_FLAGS =' {} +
 
       - name: Package macOS app bundle
         run: |

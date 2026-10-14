@@ -31,10 +31,11 @@ done < <(find "${app_bundle}" -type f -print0)
 # their supplied layout; standalone debugging and relinking files do not ship.
 load_commands="$(otool -l "${executable}")"
 symbols="$(nm -ap "${executable}")"
-if [[ "${load_commands}" == *__DWARF* ]] ||
-    awk '$2 == "-" { found = 1 } END { exit !found }' <<< "${symbols}"
-then
+debug_symbols="$(awk '$2 == "-"' <<< "${symbols}")"
+if [[ "${load_commands}" == *__DWARF* || -n "${debug_symbols}" ]]; then
     echo "Debug information is present in ${executable}." >&2
+    printf 'Mach-O load commands:\n%s\nSTABS records:\n%s\n' \
+        "${load_commands}" "${debug_symbols}" >&2
     exit 1
 fi
 
