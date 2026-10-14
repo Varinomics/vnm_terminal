@@ -22,7 +22,7 @@ fi
 while IFS= read -r -d '' component; do
     description="$(file -b "${component}")"
     if [[ "${description}" == *Mach-O* ]]; then
-        lipo -verify_arch "${architecture}" "${component}"
+        lipo "${component}" -verify_arch "${architecture}"
         echo "${component}: $(lipo -archs "${component}")"
     fi
 done < <(find "${app_bundle}" -type f -print0)
