@@ -394,7 +394,7 @@ jobs:
             vnm_terminal "${GITHUB_WORKSPACE}" \
             vnm_terminal/build/vnm_terminal.app/Contents/Resources/vnm_terminal_build_provenance.json
 
-      - name: Include application and bundled font notices
+      - name: Include application and bundled dependency notices
         run: |
           resources_dir="vnm_terminal/build/vnm_terminal.app/Contents/Resources"
           font_notices_dir="${resources_dir}/vnm_fonts"
@@ -402,6 +402,22 @@ jobs:
           cp vnm_terminal/LICENSE vnm_terminal/THIRD_PARTY_NOTICES.md "${resources_dir}/"
           cp vnm_fonts/THIRD_PARTY_NOTICES.md "${font_notices_dir}/"
           cp vnm_fonts/LICENSES/*.txt "${font_notices_dir}/LICENSES/"
+          mkdir -p "${resources_dir}/licenses/freetype" "${resources_dir}/licenses/msdfgen"
+          cp _deps/freetype-src/docs/FTL.TXT "${resources_dir}/licenses/freetype/"
+          cp _deps/msdfgen-src/LICENSE.txt "${resources_dir}/licenses/msdfgen/"
+          cat >> "${resources_dir}/THIRD_PARTY_NOTICES.md" <<'EOF'
+
+          ## macOS static rendering dependencies
+
+          This software is based in part on the work of the FreeType Team.
+          FreeType is used under the FreeType Project License; the complete
+          license is included in `licenses/freetype/FTL.TXT`.
+          Matching source: https://gitlab.freedesktop.org/freetype/freetype/-/tree/${{ needs.resolve-dependencies.outputs.freetype }}
+
+          msdfgen is used under the MIT License. Its complete copyright,
+          permission notice and disclaimer are included in `licenses/msdfgen/LICENSE.txt`.
+          Matching source: https://github.com/Chlumsky/msdfgen/tree/${{ needs.resolve-dependencies.outputs.msdfgen }}
+          EOF
 
       - name: Sign and validate macOS app bundle
         id: bundle_validation
@@ -433,6 +449,11 @@ jobs:
           app_bundle="${unpack_dir}/vnm_terminal.app"
           bash "${RUNNER_TEMP}/verify_macos_bundle.sh" "${app_bundle}" "${MACOS_ARCHITECTURE}"
           codesign --verify --deep --strict "${app_bundle}"
+          resources_dir="${app_bundle}/Contents/Resources"
+          cmp _deps/freetype-src/docs/FTL.TXT "${resources_dir}/licenses/freetype/FTL.TXT"
+          cmp _deps/msdfgen-src/LICENSE.txt "${resources_dir}/licenses/msdfgen/LICENSE.txt"
+          grep -Fq 'This software is based in part on the work of the FreeType Team.' \
+            "${resources_dir}/THIRD_PARTY_NOTICES.md"
           python3 "${RUNNER_TEMP}/verify_macos_bundle_runtime.py" \
             "${app_bundle}" "${unpack_dir}/runtime-evidence"
 

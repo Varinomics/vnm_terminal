@@ -64,6 +64,8 @@ runs them on every host.
   UI's Qt imports. The extracted app must open its Cocoa window, render frames,
   and complete a PTY command with the build machine's Qt environment removed;
   loader and QML traces must resolve the Qt runtime from inside the bundle.
+  The bundle includes the FreeType acknowledgement and the FreeType/msdfgen
+  license files from the pinned sources; CI compares those files after ZIP extraction.
   The bundle verifiers come from the workflow commit, so a tagged rebuild uses
   the same checks without changing the tagged application source.
 - The Windows signing job compares the Windows provenance record with the lock
