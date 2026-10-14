@@ -30,7 +30,7 @@ Packages include the Qt runtime. Source archives are available on the
 [release page](https://github.com/Varinomics/vnm_terminal/releases/latest).
 
 The macOS bundles are ad-hoc signed and not Apple-notarized; Gatekeeper may
-quarantine them on first launch. Their filenames include `_unnotarized`.
+quarantine them on first launch.
 
 The Linux RUN installer installs under `/opt/vnm_terminal` and adds the
 `vnm_terminal` command and a desktop launcher. Its installed
