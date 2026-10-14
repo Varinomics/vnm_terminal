@@ -204,6 +204,8 @@ jobs:
           git -C vnm_terminal fetch --no-tags --depth=1 origin "${PACKAGING_RECIPE_COMMIT}"
           git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tools/verify_macos_bundle.sh" \
             > "${RUNNER_TEMP}/verify_macos_bundle.sh"
+          git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tests/macos_bundle_verifier_tests.sh" \
+            > "${RUNNER_TEMP}/macos_bundle_verifier_tests.sh"
 
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
@@ -314,6 +316,12 @@ jobs:
           app_bundle="vnm_terminal/build/vnm_terminal.app"
           test -d "${app_bundle}"
           "${QT_ROOT_DIR}/bin/macdeployqt" "${app_bundle}" -verbose=2
+
+      - name: Test macOS bundle debug-symbol classification
+        run: |
+          bash "${RUNNER_TEMP}/macos_bundle_verifier_tests.sh" \
+            "${RUNNER_TEMP}/verify_macos_bundle.sh" \
+            vnm_terminal/build/vnm_terminal.app "${MACOS_ARCHITECTURE}"
 
       - name: Write macOS build info
         run: |

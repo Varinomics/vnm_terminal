@@ -31,7 +31,12 @@ done < <(find "${app_bundle}" -type f -print0)
 # their supplied layout; standalone debugging and relinking files do not ship.
 load_commands="$(otool -l "${executable}")"
 symbols="$(nm -ap "${executable}")"
-debug_symbols="$(awk '$2 == "-"' <<< "${symbols}")"
+# Apple strip inserts this N_OPT placeholder for indirect-symbol table layout;
+# it carries no debugging data. See apple-oss-distributions/cctools misc/strip.c.
+debug_symbols="$(awk '
+    $2 == "-" && !($1 == "0000000005614542" && $3 == "00" && $4 == "0000" &&
+                  $5 == "OPT" && $6 == "radr://5614542" && NF == 6)
+' <<< "${symbols}")"
 if [[ "${load_commands}" == *__DWARF* || -n "${debug_symbols}" ]]; then
     echo "Debug information is present in ${executable}." >&2
     printf 'Mach-O load commands:\n%s\nSTABS records:\n%s\n' \
