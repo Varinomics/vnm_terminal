@@ -24,6 +24,12 @@ unsure which standard applies, read all four before proceeding.
 
 Canonical repo: `https://github.com/Varinomics/varinomics-standards`
 
+## Documentation
+
+The README introduces the terminal to users; build and embedding reference
+lives in `docs/development.md`, and release instructions in `docs/releasing.md`.
+Follow the shared governance rules for README scope.
+
 ## Review and Plan Artifacts
 
 Default rule: do not stage or commit review reports, review plans,
@@ -42,6 +48,5 @@ the user-wide runtime policy it identifies.
 The supported `build_portable.bat` and `build_windows_packages.bat` workflows
 are project-specific MinGW/Ninja packaging exceptions. FASTBuild flags do not
 apply to them, but the compiler-invoking outer script still runs through the
-build queue: use `queued-build --slots all -- cmd.exe /c build_portable.bat` or
-`queued-build --slots all -- cmd.exe /c build_windows_packages.bat`.
-
+build queue: use `queued-build --slots 4 -- cmd.exe /c build_portable.bat` or
+`queued-build --slots 4 -- cmd.exe /c build_windows_packages.bat`.

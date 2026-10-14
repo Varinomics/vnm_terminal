@@ -9,6 +9,48 @@ restating their names. `tools/dependencies_lock.js` and
 `tools/release_artifacts.js` compare both against the workflows, and `ctest`
 runs them on every host.
 
+## Local packaging
+
+### Windows
+
+Copy [`build_config.bat.example`](../build_config.bat.example) to
+`build_config.bat` and set the local Qt, MinGW, and dependency paths.
+
+Build the source-based Qt Installer Framework engine using the
+[private IFW instructions](../packaging/windows/private-ifw/README.md), then
+set `IFW_ROOT` to its `build` directory. The package builder checks the
+engine's patch and binary provenance; rebuild the engine when those inputs
+change.
+
+Prepare the source-built ConPTY runtime:
+
+```powershell
+pwsh.exe -NoProfile -File tools/provision_windows_conpty.ps1 `
+  -SourceRoot ../vnm_terminal_surface -OutputRoot build_ifw/conpty -Slots 2
+```
+
+Set `VNM_TERMINAL_CONPTY_PACKAGE_DIR` in `build_config.bat` to the resulting
+`package` directory, then build:
+
+```powershell
+queued-build --slots 4 -- cmd.exe /d /c build_windows_packages.bat
+```
+
+Local and CI verification installers are named
+`vnm_terminal_v<version>_windows_x64_unsigned.exe`. A release EXE drops the
+`_unsigned` suffix only after its payload, maintenance tool, and final installer
+are signed as Varinomics Ltd and timestamped.
+
+### Linux RUN installer
+
+Build from a staged CMake install tree containing the application and runtime:
+
+```sh
+queued-build --slots 1 -- tools/build_linux_ifw_installer.sh \
+  --payload AppDir \
+  --ifw-root /path/to/QtInstallerFramework/4.7
+```
+
 ## Cutting a release
 
 1. **Refresh the dependency lock and commit it.**

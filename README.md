@@ -2,291 +2,80 @@
 
 [![CI Linux](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-linux.yml) [![CI Windows](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-windows.yml) [![CI macOS](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-macos.yml/badge.svg?branch=master)](https://github.com/Varinomics/vnm_terminal/actions/workflows/ci-macos.yml)
 
-> **Latest release:** [Windows installer and other platform downloads](https://github.com/Varinomics/vnm_terminal/releases/latest)
->
-> The primary Windows package is
-> `vnm_terminal_v<version>_windows_x64.exe`.
+`vnm_terminal` is a terminal emulator for Windows, macOS, and Linux. Each
+window runs your default shell or a command you choose.
 
-`vnm_terminal` is a terminal emulator for Windows,
-macOS, and Linux. Each window hosts the platform's default shell or one explicit
-command. Tabs, splits, and connection management are outside the application's
-scope.
-
-The application is built on
-[`vnm_terminal_surface`](https://github.com/Varinomics/vnm_terminal_surface),
-which owns terminal parsing, ConPTY/PTY process hosting, screen state, and
-GPU-accelerated rendering.
+**[Download the latest release](https://github.com/Varinomics/vnm_terminal/releases/latest)**
 
 https://github.com/user-attachments/assets/8e9f8d95-cac4-434f-8612-d7b36ef34d94
 
-*An interactive vnm_terminal session, including appearance and behavior settings.*
+*An interactive session, including appearance and behavior settings.*
 
-## Highlights
+## Features
 
-- Native ConPTY/PTY hosting with alternate-screen applications, keyboard and
-  mouse reporting, bracketed paste, selection, and IME input.
-- GPU glyph-atlas text rendering with automatic MSDF and glyph-renderer
-  selection, including LCD subpixel modes.
-- Reproducible terminal-cell widths based on an owned
-  [Unicode 16.0 policy](https://github.com/Varinomics/vnm_terminal_surface/blob/master/docs/unicode_width_policy.md).
-- Built-in window chrome, color schemes, font controls, scrollback settings,
-  and persisted appearance and window configuration.
-- Retained-output search with result navigation and synchronized-output-safe
-  publication semantics.
-- Explicit OSC 8 hyperlink interaction with host-side HTTP, HTTPS, and mailto
-  scheme validation.
-- Safe clipboard defaults: terminal-originated OSC 52 writes remain denied
-  unless the application policy explicitly allows them.
+- GPU-accelerated text rendering, Unicode support, and inline SIXEL graphics.
+- Configurable fonts, color schemes, scrollback, and window appearance.
+- Search through terminal output, with next and previous result navigation.
+- Text selection, configurable paste shortcuts, IME input, and clickable links.
 
-## Release packages
-
-All published packages are available from the
-[latest release](https://github.com/Varinomics/vnm_terminal/releases/latest).
+## Downloads
 
 | Platform | Packages | Notes |
 | --- | --- | --- |
-| Windows x64 | EXE, portable ZIP | The signed Qt Installer Framework EXE installs under `Program Files` and includes Start Menu integration. The portable ZIP contains a top-level launcher. |
-| Linux x64 | RUN, DEB, RPM, AppImage | The graphical RUN installer uses Qt Installer Framework. DEB and RPM integrate with native package managers; AppImage is the portable option. |
-| macOS Intel (x64), Apple Silicon (arm64) | Application ZIP per architecture | Requires macOS 14.4 or newer. The application bundle is ad-hoc signed but not Apple-notarized. Gatekeeper may quarantine it on first launch. |
+| Windows x64 | Signed EXE installer, portable ZIP | The installer adds a Start Menu shortcut; the ZIP runs without installation. |
+| Linux x64 | RUN installer, DEB, RPM, AppImage | Choose a native package for your distribution or AppImage for portable use. |
+| macOS Intel (x64), Apple Silicon (arm64) | Application ZIP per architecture | Requires macOS 14.4 or newer. Choose the ZIP matching your Mac. |
 
-Windows, Linux, and macOS packages include their private Qt runtime. Release source
-archives are available on the same page.
+Packages include the Qt runtime. Source archives are available on the
+[release page](https://github.com/Varinomics/vnm_terminal/releases/latest).
 
-For Apple Silicon, choose `vnm_terminal_v<version>_macos_arm64_unnotarized.zip`;
-Intel Macs use `vnm_terminal_v<version>_macos_x64_unnotarized.zip`.
-Both packages run natively on their respective architectures. The macOS CI
-workflow builds, tests, and validates the extracted bundle on each architecture.
+The macOS bundles are ad-hoc signed and not Apple-notarized; Gatekeeper may
+quarantine them on first launch. Their filenames include `_unnotarized`.
 
-On Windows, setup can remove a validated existing installation from
-`C:\Program Files\vnm_terminal` and continue installing in the same window.
-Start setup normally and close vnm_terminal and its terminal sessions first.
-Setup asks before removal and requests administrator permission separately.
-It preserves user settings outside the installation folder. Removal cannot be
-undone: canceling or a subsequent installation failure does not restore the
-previous application. Unsigned verification builds and installations outside
-the protected default folder require manual removal with their maintenance tool.
+The Linux RUN installer installs under `/opt/vnm_terminal` and adds the
+`vnm_terminal` command and a desktop launcher. Its installed
+`vnm_terminal_maintenance` tool uninstalls it.
 
-Windows packages use a source-built Qt Installer Framework engine with Soter's
-responsive wizard layout and display-scaling fixes. Build that engine once from
-the sources and static dependencies described in
-[the private IFW build instructions](packaging/windows/private-ifw/README.md).
-Set `IFW_ROOT` in `build_config.bat` to its `build` directory.
+## Everyday use
 
-Prepare the source-built ConPTY runtime and set
-`VNM_TERMINAL_CONPTY_PACKAGE_DIR` to its `package` directory:
-
-```powershell
-pwsh.exe -NoProfile -File tools/provision_windows_conpty.ps1 `
-  -SourceRoot ../vnm_terminal_surface -OutputRoot build_ifw/conpty -Slots 2
-```
-
-Build the Windows packages with both input paths configured:
-
-```powershell
-queued-build --slots 4 -- cmd.exe /d /c build_windows_packages.bat
-```
-
-The package builder checks the engine's patch and binary provenance. Rebuild
-the engine when those inputs change. CI caches the custom engine and passes
-the same verified tools to the isolated release-signing job.
-
-The Linux Qt Installer Framework package installs under `/opt/vnm_terminal`,
-adds the `vnm_terminal` command under `/usr/local/bin`, and registers a desktop
-launcher. Run its installed `vnm_terminal_maintenance` tool to uninstall it.
-Build it from a staged CMake install tree with:
-
-```bash
-tools/build_linux_ifw_installer.sh \
-  --payload AppDir \
-  --ifw-root /path/to/QtInstallerFramework/4.7
-```
-
-Cutting a release starts with refreshing the dependency lock. The procedure is
-in [docs/releasing.md](docs/releasing.md).
-
-Windows CI produces an explicitly named
-`vnm_terminal_v<version>_windows_x64_unsigned.exe` verification artifact. It is
-not a release installer. A release EXE has the `_unsigned` suffix removed only
-after the payload, maintenance tool, and final installer have been
-successfully signed as Varinomics Ltd and timestamped.
-
-## Interaction
+Open the application to start your default shell. Appearance and behavior
+options are available in **Settings**.
 
 | Action | Default interaction |
 | --- | --- |
-| Search | `Ctrl+F` (`Cmd+F` on macOS) opens the search overlay. `Enter` or `F3` advances; the corresponding Shift chord selects the previous result. |
-| Explicit hyperlink | `Ctrl+left-click` requests activation. Only absolute HTTP, HTTPS, and mailto targets are dispatched. |
-| Paste | `Ctrl+V` and `Ctrl+Shift+V`; the exact policy is configurable. |
-| Copy on selection | Disabled by default and available under **Settings > Behavior**. |
-| Custom window title | Alt+left-click the built-in titlebar, edit the title, then press `Enter` or click elsewhere. |
-| Native titlebar | On Windows, macOS, and Linux, `--native-titlebar` selects the platform frame; built-in chrome is the default. |
+| Search | `Ctrl+F` (`Cmd+F` on macOS). `Enter` or `F3` goes to the next result; add `Shift` for the previous result. |
+| Open a link | `Ctrl+left-click` on an HTTP, HTTPS, or mailto link. |
+| Paste | `Ctrl+V` or `Ctrl+Shift+V`; configurable in Settings. |
+| Copy on selection | Enable under **Settings > Behavior**; disabled by default. |
+| Rename the window | Alt+left-click the built-in titlebar, edit, then press `Enter`. |
 
-## Command line
-
-Without an explicit command after `--`, the platform's default shell starts.
-On Linux, a nonblank `$SHELL` is used as one executable argument; when it is
-unset or empty, `vnm_terminal` uses the current account's login shell and falls
-back to `/bin/sh` if no login shell is available.
+To launch a specific command, put it after `--`:
 
 ```text
-vnm_terminal [application options] [-- command [arguments...]]
+vnm_terminal [options] [-- command [arguments...]]
 ```
 
-Common application options:
-
-| Option | Values | Purpose |
-| --- | --- | --- |
-| `--window-size` | `<width>x<height>` | Initial window dimensions. |
-| `--native-titlebar` | — | On Windows, macOS, and Linux, use the platform-provided window frame. |
-| `--text-renderer` | `auto`, `msdf`, `glyph` | Terminal text-renderer policy. |
-| `--lcd-subpixel` | `auto`, `none`, `rgb`, `bgr`, `vrgb`, `vbgr` | MSDF LCD sampling policy. |
-| `--paste-shortcut` | `<mode>` | Configurable paste-shortcut policy. |
-| `--synchronized-output-scroll-policy` | `defer`, `immediate-public` | Scroll behavior during DEC synchronized output. |
-
-Example:
+For example, on Windows:
 
 ```powershell
-.\build\Release\vnm_terminal.exe --window-size 1000x640 -- cmd.exe
+vnm_terminal --window-size 1000x640 -- cmd.exe
 ```
 
-### Codex SIXEL graphics
+Use `--native-titlebar` for the platform's window frame, or `--help` for all
+command-line options.
 
-Inside a SIXEL-enabled `vnm_terminal`, run Codex normally:
+With SIXEL enabled, run `codex` or `codex-pet` inside the terminal for Codex
+graphics. Direct launches such as `vnm_terminal -- codex` also work.
 
-```powershell
-codex
-codex resume
-codex-pet
-```
+## Development
 
-Direct launches work too:
+The application uses
+[`vnm_terminal_surface`](https://github.com/Varinomics/vnm_terminal_surface)
+for terminal emulation and rendering.
 
-```sh
-vnm_terminal -- codex
-vnm_terminal -- codex-pet
-```
-
-The application adds a private command directory to that terminal session's
-`PATH`. Its adapter handles both `codex` and `codex-pet` and resolves the
-original command after removing that directory, preserving npm and other
-PATH-based wrappers. It sets
-`TERM=vnm-terminal-sixel` only while launching Codex and removes inherited
-identity hints that can mask SIXEL support. Arguments, working directory,
-standard streams, and exit status are preserved. Other commands keep the normal
-terminal type; no shell profile or Codex configuration file is edited.
-
-Windows integration supports the built-in Windows PowerShell 5.1, installed
-PowerShell, and cmd. Direct launches recognized by their executable name use
-an installed PowerShell on `PATH` when available and otherwise use Windows
-PowerShell. A PowerShell script wrapper
-executes in the caller's PowerShell host and receives its arguments exactly;
-any native command forwarding inside that wrapper follows the host's own
-argument rules. Native executables receive their arguments exactly, including
-empty arguments, quotes, and trailing backslashes. cmd retains its original
-working directory, `PATH`, and `PATHEXT` lookup and command parsing.
-If the private command directory cannot be prepared, ordinary shells still
-start without the adapter; direct Codex launches report the setup problem.
-Linux and macOS use `/bin/sh` and
-ordinary shell PATH lookup. Shell aliases/functions and commands invoked by an
-explicit path inside a shell retain their usual resolution; they can bypass
-the adapter. Direct application launches also adapt explicit paths named
-`codex` or `codex-pet` and, on Windows, their `.exe`, `.cmd`, `.bat`, or `.ps1`
-forms.
-
-Each invocation also passes
-`-c 'shell_environment_policy.set.TERM="xterm-256color"'`, so commands launched
-through Codex's shell tools use an existing terminfo profile. Codex environment
-allowlists can still remove that value, and an explicit later command-line
-override can replace it. This policy does not configure external MCP servers.
-See the [Codex shell environment policy](https://learn.chatgpt.com/docs/config-file/config-advanced#shell-environment-policy).
-
-The adapter preserves tmux and Zellij indicators, so Codex's multiplexer
-graphics restrictions still apply. In Codex, `/pets` opens
-the pet selector when its graphics requirements are met.
-
-Embedding applications use `vnm_terminal::terminal_app::Codex_command_environment`
-from `<vnm_terminal/app_support/codex_command_environment.h>`, linked through
-`vnm_terminal::vnm_terminal_app_support`. Call `prepare()` on the final terminal
-command and environment before starting its backend, and retain the adapter for
-the terminal session's lifetime so its private commands remain available.
-For a verified native executable or interpreter invocation, supply
-`Codex_invocation{argument_prefix_size}` as the final argument to `prepare()`.
-The prefix includes the absolute executable and fixed interpreter arguments:
-use one for a native Codex executable, or two for Node and its verified Codex
-entry point. The adapter inserts the shell environment option after that
-prefix and forwards the remaining arguments unchanged. Windows uses the
-bundled native launcher directly, preserving the verified installation without
-PowerShell or PATH rediscovery. An invocation without that record keeps the
-ordinary executable-name detection; unrelated Node commands are unaffected.
-The Windows child launcher is embedded in that library. Rebuild embedding
-applications, including Logonomic and Soter, with the updated app support
-dependency to include the adapter changes; no separate launcher deployment is
-required.
-
-## Source build
-
-The release dependency layout places `vnm_terminal_surface`, `vnm_qml_chrome`
-and `vnm_fonts` beside this repository. Custom locations are supported through
-`VNM_TERMINAL_SURFACE_SOURCE_DIR`, `VNM_QML_CHROME_SOURCE_DIR` and
-`FETCHCONTENT_SOURCE_DIR_VNM_FONTS`; `vnm_fonts` is cloned from its `master` branch when no
-checkout is found.
-
-`vnm_terminal_surface` must provide the
-`vnm_terminal_surface::vnm_terminal_surface` embedded-surface API target; its
-release version is independent of the application version. `vnm_qml_chrome`
-requires the same major version and at least the 1.8 top-frame stacking and
-default PID-reveal titlebar contracts. Source builds require Qt 6.12 or newer.
-Release packages are built with Qt 6.12.0.
-
-### QML build and runtime policy
-
-Application QML and `VNM_Chrome` use `qt_add_qml_module(QML_FILES ...)`.
-Qt embeds compiled QML units; Release omits the original source text from
-resources, while other configurations retain it. Keep
-`QT_QML_NO_CACHEGEN=OFF` (the default); configure rejects disabling generation.
-Qt compiles supported bindings to native code and retains compiled bytecode
-for the others. These units require the matching Qt build
-at runtime, so rebuild the application and its QML dependencies when changing
-Qt. Release has no embedded source fallback, so QML debugging that disables
-compiled units cannot load its components.
-
-Before constructing Qt application or QML engine objects, the standalone
-application sets `QML_DISK_CACHE=aot` and removes `QML_FORCE_DISK_CACHE` and
-`QML_DISABLE_DISK_CACHE` from its own environment. This retains embedded units
-while disabling generated `.qmlc` disk-cache reads and writes. Child terminal
-processes retain the caller's original environment. Embedding applications
-must apply that runtime policy themselves; the libraries do not change their
-host's environment. Other projects can use the same build and runtime settings.
-
-Compiled QML can still contain strings, metadata, bytecode and native code;
-omitting source text is not encryption.
-
-### Build and test
-
-```powershell
-cmake -S . -B build -DBUILD_TESTING=ON
-cmake --build build --config Release
-ctest --test-dir build -C Release --output-on-failure
-```
-
-Automated runs must not write the user's persisted settings. Defining
-`VNM_TERMINAL_SETTINGS_NO_PERSIST` disables window and appearance persistence
-for the process. The check is on the variable being defined, not on its value:
-any value disables persistence, including `0` and the empty string. Re-enable
-persistence by removing the variable from the environment. The offscreen Qt
-platform disables persistence as well, and the test registrations define the
-variable themselves.
-
-The Windows build target deploys the required Qt DLLs and `platforms` plugin
-beside `vnm_terminal.exe`. The executable and its deployed runtime form one
-launchable build artifact.
-
-Transcript capture/replay is excluded from normal builds. Local diagnostic
-builds expose it through
-`-DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON`; distribution builds use
-`-DVNM_TERMINAL_DISTRIBUTION_BUILD=ON` and reject transcript capture.
+- [Building, testing, and embedding support](docs/development.md)
+- [Packaging and releasing](docs/releasing.md)
 
 ## License
 
-GNU General Public License version 3 only. [LICENSE](LICENSE) contains the full
-license text.
+GNU General Public License version 3 only. See [LICENSE](LICENSE).
