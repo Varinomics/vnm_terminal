@@ -60,7 +60,11 @@ runs them on every host.
   Each bundle records its architecture in `vnm_terminal_build_info.txt`; every
   bundled Mach-O component must contain that architecture. CI checks the staged
   bundle and the extracted ZIP before uploading either architecture's artifact.
-  The bundle verifier comes from the workflow commit, so a tagged rebuild uses
+  Deployment scans `packaging/vnm_terminal_runtime_imports.qml` for the embedded
+  UI's Qt imports. The extracted app must open its Cocoa window, render frames,
+  and complete a PTY command with the build machine's Qt environment removed;
+  loader and QML traces must resolve the Qt runtime from inside the bundle.
+  The bundle verifiers come from the workflow commit, so a tagged rebuild uses
   the same checks without changing the tagged application source.
 - The Windows signing job compares the Windows provenance record with the lock
   at the tag before it signs anything, and verifies the payload file by file

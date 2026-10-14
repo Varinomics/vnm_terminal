@@ -206,6 +206,8 @@ jobs:
             > "${RUNNER_TEMP}/verify_macos_bundle.sh"
           git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tests/macos_bundle_verifier_tests.sh" \
             > "${RUNNER_TEMP}/macos_bundle_verifier_tests.sh"
+          git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tools/verify_macos_bundle_runtime.py" \
+            > "${RUNNER_TEMP}/verify_macos_bundle_runtime.py"
 
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
@@ -315,7 +317,8 @@ jobs:
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
           test -d "${app_bundle}"
-          "${QT_ROOT_DIR}/bin/macdeployqt" "${app_bundle}" -verbose=2
+          "${QT_ROOT_DIR}/bin/macdeployqt" "${app_bundle}" \
+            -qmldir="${GITHUB_WORKSPACE}/vnm_terminal/packaging" -verbose=2
 
       - name: Test macOS bundle debug-symbol classification
         run: |
@@ -430,7 +433,8 @@ jobs:
           app_bundle="${unpack_dir}/vnm_terminal.app"
           bash "${RUNNER_TEMP}/verify_macos_bundle.sh" "${app_bundle}" "${MACOS_ARCHITECTURE}"
           codesign --verify --deep --strict "${app_bundle}"
-          QT_QPA_PLATFORM=offscreen "${app_bundle}/Contents/MacOS/vnm_terminal" --help >/tmp/vnm_terminal_packed_help.txt
+          python3 "${RUNNER_TEMP}/verify_macos_bundle_runtime.py" \
+            "${app_bundle}" "${unpack_dir}/runtime-evidence"
 
       - name: Upload macOS bundle artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
