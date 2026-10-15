@@ -1,5 +1,7 @@
 #include "vnm_terminal/app_support/terminal_display_settings.h"
 
+#include "terminal_settings_fields.h"
+
 #include "vnm_terminal/internal/terminal_color_scheme.h"
 
 #include <QColor>
@@ -61,14 +63,9 @@ bool settings_values_valid(const QVariantMap& changes, bool snapshot)
         }
         else
         if (key == QStringLiteral("row_timestamp_tooltip_enabled") ||
-            key == QStringLiteral("copy_on_select"))
+            key == QStringLiteral("copy_on_select")                ||
+            key == QStringLiteral("invert_brightness"))
         {
-            if (value.metaType().id() != QMetaType::Bool) {
-                return false;
-            }
-        }
-        else
-        if (key == QStringLiteral("invert_brightness")) {
             if (value.metaType().id() != QMetaType::Bool) {
                 return false;
             }
@@ -122,26 +119,13 @@ bool settings_values_valid(const QVariantMap& changes, bool snapshot)
 Terminal_settings_snapshot settings_snapshot(
     const QVariantMap& values, Terminal_settings_snapshot base)
 {
-    const auto read = [
-            &values
-        ](
-            const char* key,
-            auto& target)
-        {
-            const auto it = values.constFind(QLatin1String(key));
-            if (it != values.cend()) {
-                target = it->value<std::remove_cvref_t<decltype(target)>>();
-            }
-        };
-    read("color_scheme",                  base.color_scheme);
-    read("font_family",                   base.font_family);
-    read("font_size",                     base.font_size);
-    read("font_advance_policy",           base.font_advance_policy);
-    read("text_renderer_mode",            base.text_renderer_mode);
-    read("lcd_subpixel_order",            base.lcd_subpixel_order);
-    read("invert_brightness",              base.invert_brightness);
-    read("row_timestamp_tooltip_enabled",  base.row_timestamp_tooltip_enabled);
-    read("copy_on_select",                 base.copy_on_select);
+    detail::for_each_terminal_setting_field([&](const char* key, auto member) {
+        const auto it = values.constFind(QLatin1String(key));
+        if (it != values.cend()) {
+            auto& target = base.*member;
+            target = it->value<std::remove_cvref_t<decltype(target)>>();
+        }
+    });
     if (values.contains(QStringLiteral("scrollback_buffer_size_mib"))) {
         base.scrollback_buffer_size_mib = values.value(
             QStringLiteral("scrollback_buffer_size_mib")).toInt();
@@ -174,17 +158,10 @@ std::optional<Terminal_settings_snapshot> terminal_settings_from_json(
 
 QVariantMap terminal_settings_payload(const Terminal_settings_snapshot& settings)
 {
-    QVariantMap result{
-        {QStringLiteral("color_scheme"), settings.color_scheme},
-        {QStringLiteral("font_family"), settings.font_family},
-        {QStringLiteral("font_size"), settings.font_size},
-        {QStringLiteral("font_advance_policy"), settings.font_advance_policy},
-        {QStringLiteral("text_renderer_mode"), settings.text_renderer_mode},
-        {QStringLiteral("lcd_subpixel_order"), settings.lcd_subpixel_order},
-        {QStringLiteral("invert_brightness"), settings.invert_brightness},
-        {QStringLiteral("row_timestamp_tooltip_enabled"), settings.row_timestamp_tooltip_enabled},
-        {QStringLiteral("copy_on_select"), settings.copy_on_select},
-    };
+    QVariantMap result;
+    detail::for_each_terminal_setting_field([&](const char* key, auto member) {
+        result.insert(QLatin1String(key), QVariant::fromValue(settings.*member));
+    });
     if (settings.scrollback_buffer_size_mib) {
         result.insert(
             QStringLiteral("scrollback_buffer_size_mib"),

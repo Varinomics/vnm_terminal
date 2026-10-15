@@ -1,8 +1,11 @@
 #include "vnm_terminal/app_support/terminal_settings_reconciler.h"
 
+#include "terminal_settings_fields.h"
+
 #include <QLatin1String>
 #include <QScopedValueRollback>
 
+#include <type_traits>
 #include <utility>
 
 namespace vnm_terminal::terminal_app {
@@ -20,44 +23,19 @@ void apply_pending_change(
     const QString&              key,
     const QVariant&             value)
 {
-    if (key == QStringLiteral("color_scheme")) {
-        settings.color_scheme = value.toString();
-    }
-    else
-    if (key == QStringLiteral("font_family")) {
-        settings.font_family = value.toString();
-    }
-    else
-    if (key == QStringLiteral("font_size")) {
-        settings.font_size = value.value<qreal>();
-    }
-    else
-    if (key == QStringLiteral("font_advance_policy")) {
-        settings.font_advance_policy = value.toInt();
-    }
-    else
-    if (key == QStringLiteral("text_renderer_mode")) {
-        settings.text_renderer_mode = value.toInt();
-    }
-    else
-    if (key == QStringLiteral("lcd_subpixel_order")) {
-        settings.lcd_subpixel_order = value.toInt();
-    }
-    else
-    if (key == QStringLiteral("invert_brightness")) {
-        settings.invert_brightness = value.toBool();
-    }
-    else
-    if (key == QStringLiteral("row_timestamp_tooltip_enabled")) {
-        settings.row_timestamp_tooltip_enabled = value.toBool();
-    }
-    else
     if (key == QStringLiteral("scrollback_buffer_size_mib")) {
         settings.scrollback_buffer_size_mib = value.toInt();
+        return;
     }
-    else {
-        Q_ASSERT_X(false, "Terminal_settings_reconciler", "unknown observed setting");
-    }
+    bool matched = false;
+    detail::for_each_terminal_setting_field([&](const char* name, auto member) {
+        if (key == QLatin1String(name)) {
+            auto& target = settings.*member;
+            target = value.value<std::remove_cvref_t<decltype(target)>>();
+            matched = true;
+        }
+    });
+    Q_ASSERT_X(matched, "Terminal_settings_reconciler", "unknown observed setting");
 }
 
 } // namespace

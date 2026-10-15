@@ -203,6 +203,7 @@ add_library(vnm_terminal_app_support STATIC
     include/vnm_terminal/app_support/app_settings.h
     include/vnm_terminal/app_support/terminal_display_settings.h
     src/terminal_settings_reconciler.cpp
+    src/terminal_settings_fields.h
     include/vnm_terminal/app_support/terminal_settings_reconciler.h
     src/app_shortcuts.cpp
     include/vnm_terminal/app_support/app_shortcuts.h
