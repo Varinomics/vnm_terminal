@@ -121,8 +121,13 @@ jobs:
           PACKAGING_RECIPE_COMMIT: ${{ github.workflow_sha }}
         run: |
           $recipeRoot = Join-Path $env:RUNNER_TEMP 'vnm-terminal-installer-recipe'
-          git -C vnm_terminal fetch --no-tags --depth=1 origin "$env:PACKAGING_RECIPE_COMMIT"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # A missing local recipe is expected for tagged rebuilds; inspect Git's exit codes below.
+          $PSNativeCommandUseErrorActionPreference = $false
+          git -C vnm_terminal cat-file -e "$($env:PACKAGING_RECIPE_COMMIT)^{commit}" 2>$null
+          if ($LASTEXITCODE -ne 0) {
+              git -C vnm_terminal fetch --no-tags --depth=1 origin "$env:PACKAGING_RECIPE_COMMIT"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           git -C vnm_terminal worktree add --detach $recipeRoot "$env:PACKAGING_RECIPE_COMMIT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "WINDOWS_INSTALLER_RECIPE_ROOT=$recipeRoot" | Out-File `
@@ -323,8 +328,13 @@ jobs:
           PACKAGING_RECIPE_COMMIT: ${{ github.workflow_sha }}
         run: |
           $recipeRoot = Join-Path $env:RUNNER_TEMP 'vnm-terminal-installer-recipe'
-          git -C vnm_terminal fetch --no-tags --depth=1 origin "$env:PACKAGING_RECIPE_COMMIT"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # A missing local recipe is expected for tagged rebuilds; inspect Git's exit codes below.
+          $PSNativeCommandUseErrorActionPreference = $false
+          git -C vnm_terminal cat-file -e "$($env:PACKAGING_RECIPE_COMMIT)^{commit}" 2>$null
+          if ($LASTEXITCODE -ne 0) {
+              git -C vnm_terminal fetch --no-tags --depth=1 origin "$env:PACKAGING_RECIPE_COMMIT"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           git -C vnm_terminal worktree add --detach $recipeRoot "$env:PACKAGING_RECIPE_COMMIT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "WINDOWS_INSTALLER_RECIPE_ROOT=$recipeRoot" | Out-File `
@@ -825,8 +835,13 @@ jobs:
           PACKAGING_RECIPE_COMMIT: ${{ github.workflow_sha }}
         run: |
           $recipeRoot = Join-Path $env:RUNNER_TEMP 'vnm-terminal-installer-recipe'
-          git -C vnm_terminal fetch --no-tags --depth=1 origin "$env:PACKAGING_RECIPE_COMMIT"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # A missing local recipe is expected for tagged rebuilds; inspect Git's exit codes below.
+          $PSNativeCommandUseErrorActionPreference = $false
+          git -C vnm_terminal cat-file -e "$($env:PACKAGING_RECIPE_COMMIT)^{commit}" 2>$null
+          if ($LASTEXITCODE -ne 0) {
+              git -C vnm_terminal fetch --no-tags --depth=1 origin "$env:PACKAGING_RECIPE_COMMIT"
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
           git -C vnm_terminal worktree add --detach $recipeRoot "$env:PACKAGING_RECIPE_COMMIT"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           "WINDOWS_INSTALLER_RECIPE_ROOT=$recipeRoot" | Out-File `
