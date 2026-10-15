@@ -703,6 +703,8 @@ if(TARGET vnm_terminal_canvas_fixture)
                 "--window-size" "800x480"
                 "--timeout-ms" "10000"
                 "--require-output"
+                "--metrics-json" "${CMAKE_CURRENT_BINARY_DIR}/terminal-custom-titlebar-metrics.json"
+                "--capture-output" "${CMAKE_CURRENT_BINARY_DIR}/terminal-custom-titlebar-output"
                 "--"
                 "$<TARGET_FILE:vnm_terminal_canvas_fixture>"
                 "--list"

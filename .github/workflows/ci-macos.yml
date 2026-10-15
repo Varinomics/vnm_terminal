@@ -7,6 +7,11 @@ on:
         description: Existing release tag to receive the macOS bundle
         required: false
         type: string
+      validation:
+        description: Full validation or the focused x64 custom-titlebar check
+        type: choice
+        default: full
+        options: [full, custom-titlebar]
   push:
     branches: [ master, main, dev ]
   pull_request:
@@ -52,6 +57,12 @@ jobs:
       macos_arm64_artifact_name: ${{ steps.package.outputs.macos_arm64_artifact_name }}
 
     steps:
+      - name: Validate focused request
+        if: inputs.validation == 'custom-titlebar' && inputs.release_tag != ''
+        run: |
+          echo "Focused validation cannot attach a release bundle." >&2
+          exit 1
+
       # A release or dispatched run must read the lock from the tagged commit
       # rather than from the workflow ref, for the same reason the signing job
       # checks the release source out by tag.
@@ -116,13 +127,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - architecture: x64
-            cmake_architecture: x86_64
-            runner: macos-15-intel
-          - architecture: arm64
-            cmake_architecture: arm64
-            runner: macos-15
+        include: >-
+          ${{ fromJSON(inputs.validation == 'custom-titlebar' &&
+              '[{"architecture":"x64","cmake_architecture":"x86_64","runner":"macos-15-intel"}]' ||
+              '[{"architecture":"x64","cmake_architecture":"x86_64","runner":"macos-15-intel"},
+                {"architecture":"arm64","cmake_architecture":"arm64","runner":"macos-15"}]') }}
     runs-on: ${{ matrix.runner }}
     env:
       MACOS_ARCHITECTURE: ${{ matrix.cmake_architecture }}
@@ -309,15 +318,41 @@ jobs:
             -DBUILD_TESTING=ON
 
       - name: Build
-        run: cmake --build vnm_terminal/build --config ${CMAKE_BUILD_TYPE} --parallel 3
+        env:
+          VALIDATION: ${{ inputs.validation }}
+        run: |
+          targets=()
+          if [[ "${VALIDATION}" == custom-titlebar ]]; then
+            targets=(--target vnm_terminal vnm_terminal_canvas_fixture)
+          fi
+          cmake --build vnm_terminal/build --config "${CMAKE_BUILD_TYPE}" --parallel 3 "${targets[@]}"
 
       - name: Run tests
+        id: terminal_tests
         working-directory: vnm_terminal/build
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --output-on-failure
+          VALIDATION: ${{ inputs.validation }}
+        run: |
+          selection=()
+          if [[ "${VALIDATION}" == custom-titlebar ]]; then
+            selection=(-R '^vnm_terminal_custom_titlebar_smoke$')
+          fi
+          ctest --output-on-failure "${selection[@]}"
+
+      - name: Retain focused terminal evidence
+        if: always() && inputs.validation == 'custom-titlebar' && steps.terminal_tests.outcome != 'skipped'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: vnm-terminal-macos-custom-titlebar-evidence
+          path: |
+            vnm_terminal/build/tests/terminal-custom-titlebar-*
+            vnm_terminal/build/Testing/Temporary/LastTest.log
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Deploy macOS app bundle
+        if: inputs.validation != 'custom-titlebar'
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
           test -d "${app_bundle}"
@@ -325,12 +360,14 @@ jobs:
             -qmldir="${GITHUB_WORKSPACE}/vnm_terminal/packaging" -verbose=2
 
       - name: Test macOS bundle debug-symbol classification
+        if: inputs.validation != 'custom-titlebar'
         run: |
           bash "${RUNNER_TEMP}/macos_bundle_verifier_tests.sh" \
             "${RUNNER_TEMP}/verify_macos_bundle.sh" \
             vnm_terminal/build/vnm_terminal.app "${MACOS_ARCHITECTURE}"
 
       - name: Write macOS build info
+        if: inputs.validation != 'custom-titlebar'
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
           resources_dir="${app_bundle}/Contents/Resources"
@@ -388,6 +425,7 @@ jobs:
           } > "${resources_dir}/vnm_terminal_build_info.txt"
 
       - name: Record macOS package provenance
+        if: inputs.validation != 'custom-titlebar'
         env:
           SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
           THIRD_PARTY_CHECKOUTS: '{"freetype":"_deps/freetype-src","msdfgen":"_deps/msdfgen-src"}'
@@ -399,6 +437,7 @@ jobs:
             vnm_terminal/build/vnm_terminal.app/Contents/Resources/vnm_terminal_build_provenance.json
 
       - name: Include application and bundled dependency notices
+        if: inputs.validation != 'custom-titlebar'
         run: |
           resources_dir="vnm_terminal/build/vnm_terminal.app/Contents/Resources"
           font_notices_dir="${resources_dir}/vnm_fonts"
@@ -424,6 +463,7 @@ jobs:
           EOF
 
       - name: Sign and validate macOS app bundle
+        if: inputs.validation != 'custom-titlebar'
         id: bundle_validation
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
@@ -440,6 +480,7 @@ jobs:
             -exec grep -H -E '^(C|CXX)_FLAGS =' {} +
 
       - name: Package macOS app bundle
+        if: inputs.validation != 'custom-titlebar'
         run: |
           mkdir -p vnm_terminal/dist
           ditto -c -k --sequesterRsrc --keepParent \
@@ -447,6 +488,7 @@ jobs:
             "vnm_terminal/dist/${PACKAGE_NAME}.zip"
 
       - name: Validate packed macOS app bundle
+        if: inputs.validation != 'custom-titlebar'
         run: |
           unpack_dir="$(mktemp -d "${RUNNER_TEMP}/macos-package.XXXXXX")"
           ditto -x -k "vnm_terminal/dist/${PACKAGE_NAME}.zip" "${unpack_dir}"
@@ -462,6 +504,7 @@ jobs:
             "${app_bundle}" "${unpack_dir}/runtime-evidence"
 
       - name: Upload macOS bundle artifact
+        if: inputs.validation != 'custom-titlebar'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: ${{ needs.resolve-dependencies.outputs[format('macos_{0}_artifact_name', matrix.architecture)] }}
