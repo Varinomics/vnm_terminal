@@ -466,7 +466,7 @@ if(APPLE)
     endif()
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR APPLE)
     vnm_process_custody_deploy_owner(vnm_terminal)
 endif()
 
