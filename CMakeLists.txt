@@ -376,6 +376,8 @@ set(vnm_terminal_sources
     src/app_settings_keys.h
     src/standalone_environment.cpp
     src/standalone_environment.h
+    src/standalone_native_receipts.cpp
+    src/standalone_native_receipts.h
     src/app_presentation_metrics.cpp
     src/app_presentation_metrics.h
     src/app_profile_text.cpp
@@ -431,6 +433,9 @@ target_link_libraries(vnm_terminal PRIVATE
     Qt6::QuickControls2
     Qt6::Svg
 )
+if(APPLE)
+    target_link_libraries(vnm_terminal PRIVATE vnm_process_custody::vnm_process_custody)
+endif()
 
 target_compile_definitions(vnm_terminal PRIVATE
     VNM_TERMINAL_VERSION_STRING="${PROJECT_VERSION}"
