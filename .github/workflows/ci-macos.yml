@@ -201,7 +201,11 @@ jobs:
         env:
           PACKAGING_RECIPE_COMMIT: ${{ github.workflow_sha }}
         run: |
-          git -C vnm_terminal fetch --no-tags --depth=1 origin "${PACKAGING_RECIPE_COMMIT}"
+          # Avoid a network dependency when the exact recipe is already local.
+          # Tagged rebuilds may need a different commit from the app checkout.
+          if ! git -C vnm_terminal cat-file -e "${PACKAGING_RECIPE_COMMIT}^{commit}" 2>/dev/null; then
+            git -C vnm_terminal fetch --no-tags --depth=1 origin "${PACKAGING_RECIPE_COMMIT}"
+          fi
           git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tools/verify_macos_bundle.sh" \
             > "${RUNNER_TEMP}/verify_macos_bundle.sh"
           git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tests/macos_bundle_verifier_tests.sh" \
