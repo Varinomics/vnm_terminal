@@ -25,9 +25,10 @@ def duplicate_role(paths):
         {"LICENSE", "share/licenses/vnm_process_custody/LICENSE"},
     ):
         return "GPL license texts identify the application and custody component separately"
-    if set(paths) in (
-        {"LICENSE", "Licenses/LICENSE.txt"},
-        {"LICENSE", "Licenses/LICENSE.txt", "share/licenses/vnm_process_custody/LICENSE"},
+    managed_licenses = {Path("LICENSE"), Path("Licenses/LICENSE.txt")}
+    if {Path(path) for path in paths} in (
+        managed_licenses,
+        managed_licenses | {Path("share/licenses/vnm_process_custody/LICENSE")},
     ):
         return "IFW's native License operation manages Licenses/LICENSE.txt beside component notices"
     notices = {
