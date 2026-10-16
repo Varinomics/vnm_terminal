@@ -119,6 +119,9 @@ including renamed copies. It preserves symlink-based loader layouts and reports
 equal-content groups with their assessed roles. The adopted roles are distinct
 Basic header-delegate types registered in Qt's `qmldir`, privacy manifests at
 each Qt framework's required path, and component-specific Linux license notices.
+Qt IFW's native License operation also retains the declared application license
+at `Licenses/LICENSE.txt`; that managed installation path remains alongside the
+application and custody notices.
 Other groups stop packaging for role assessment; equality alone is not a
 packaging defect. Investigate the actual readers and layout before changing
 either the package or the role check. Keep legitimate resource identities;

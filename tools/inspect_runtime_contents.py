@@ -25,6 +25,11 @@ def duplicate_role(paths):
         {"LICENSE", "share/licenses/vnm_process_custody/LICENSE"},
     ):
         return "GPL license texts identify the application and custody component separately"
+    if set(paths) in (
+        {"LICENSE", "Licenses/LICENSE.txt"},
+        {"LICENSE", "Licenses/LICENSE.txt", "share/licenses/vnm_process_custody/LICENSE"},
+    ):
+        return "IFW's native License operation manages Licenses/LICENSE.txt beside component notices"
     notices = {
         "libgssapi-krb5-2", "libk5crypto3", "libkrb5-3", "libkrb5support0",
         "libxcb-xkb1", "libxcb-shm0", "libxcb-randr0", "libxcb-render0",
