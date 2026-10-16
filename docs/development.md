@@ -2,7 +2,7 @@
 
 ## Source builds
 
-Builds require CMake 3.21 or newer, a C++20 compiler, and Qt 6.12 or newer.
+Builds require CMake 3.25 or newer, a C++20 compiler, and Qt 6.12 or newer.
 Place `vnm_terminal_surface`, `vnm_qml_chrome`, and `vnm_fonts` beside this
 repository, or set `VNM_TERMINAL_SURFACE_SOURCE_DIR`,
 `VNM_QML_CHROME_SOURCE_DIR`, and `FETCHCONTENT_SOURCE_DIR_VNM_FONTS` for custom
