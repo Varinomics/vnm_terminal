@@ -88,11 +88,49 @@ queued-build --slots 1 -- tools/build_linux_ifw_installer.sh \
    platform tests; do not duplicate that validation locally. If no applicable
    CI covers a required check, run the relevant local check once before
    publication, following the shared governance and build-queue rules.
+   Inspect the candidate's package results as described below before tagging.
 
 4. **Tag the commit that carries the refreshed lock**, and publish the release.
    The tag has to name that commit: the signing job checks the release source
    out by tag, reads the lock from it, and refuses a payload whose recorded
    dependency commits disagree with it.
+
+## Runtime payload inspection
+
+The platform workflows inspect both staging trees and expanded deliverables
+before uploading packages. Windows checks the portable ZIP against its final
+staging tree and checks the actual EXE installation before uninstalling it,
+including the installer and maintenance tool. The same ZIP check runs again
+after signing. Linux checks the staged runtime, the actual RUN installation,
+and extracted DEB, RPM and AppImage contents. macOS checks the staged app and
+extracted ZIP, including architecture and native rendering/PTY execution.
+
+The existing platform binary readers check controlled executables for embedded
+debug data. Build settings require true Release inputs; stripping does not
+make another configuration a release input. Supplied Qt/system runtimes retain
+their vendor metadata under the vendor-binary exception, and inspection logs
+identify those binaries. Source-built ConPTY is checked at receipt intake and
+as part of the delivered Windows runtime. Matching installer source remains a
+separate download; source/relink objects and unexpanded nested archives fail
+the runtime content check.
+
+`tools/inspect_runtime_contents.py` inventories all regular files by content,
+including renamed copies. It preserves symlink-based loader layouts and reports
+equal-content groups with their assessed roles. The adopted roles are distinct
+Basic header-delegate types registered in Qt's `qmldir`, privacy manifests at
+each Qt framework's required path, and component-specific Linux license notices.
+Other groups stop packaging for role assessment; equality alone is not a
+packaging defect. Investigate the actual readers and layout before changing
+either the package or the role check. Keep legitimate resource identities;
+remove unnecessary copies and verify the resulting runtime loading.
+
+Before publication, review the current candidate's inspection output and source
+download routes, rather than substituting a previous artifact's results.
+Signing/repacking uses the verified payload and recipe; final expansion repeats
+the same role checks, and the portable ZIP must match signed staging byte for
+byte. A materially new path group therefore requires assessment before upload.
+macOS deploys the Basic style selected by the application, preserves its shared
+implementation, and omits unused style trees and Qt Creator metadata.
 
 ## What a release run does
 

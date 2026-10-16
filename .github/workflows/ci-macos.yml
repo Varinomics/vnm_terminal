@@ -221,6 +221,8 @@ jobs:
             > "${RUNNER_TEMP}/macos_bundle_verifier_tests.sh"
           git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tools/verify_macos_bundle_runtime.py" \
             > "${RUNNER_TEMP}/verify_macos_bundle_runtime.py"
+          git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tools/inspect_runtime_contents.py" \
+            > "${RUNNER_TEMP}/inspect_runtime_contents.py"
 
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
@@ -358,6 +360,18 @@ jobs:
           test -d "${app_bundle}"
           "${QT_ROOT_DIR}/bin/macdeployqt" "${app_bundle}" \
             -qmldir="${GITHUB_WORKSPACE}/vnm_terminal/packaging" -verbose=2
+          # main() selects Basic before any QML loads. Match the Windows runtime
+          # deployment while preserving Basic and its shared implementation.
+          qml_root="${app_bundle}/Contents/Resources/qml"
+          test -d "${qml_root}/QtQuick/Controls/Basic"
+          for style in "${qml_root}/QtQuick/Controls/"*; do
+            if [[ -d "${style}" && "${style##*/}" != Basic && "${style##*/}" != impl ]]; then
+              rm -rf -- "${style}"
+            fi
+          done
+          rm -rf -- "${qml_root}/QtQuick/NativeStyle" \
+            "${qml_root}/QtQuick/tooling" "${qml_root}/QtQuick/designer"
+          find "${qml_root}" -name '*.qmltypes' -type f -delete
 
       - name: Test macOS bundle debug-symbol classification
         if: inputs.validation != 'custom-titlebar'

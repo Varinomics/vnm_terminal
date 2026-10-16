@@ -28,6 +28,10 @@ while IFS= read -r -d '' component; do
     if [[ "${description}" == *Mach-O* ]]; then
         lipo "${component}" -verify_arch "${architecture}"
         echo "${component}: $(lipo -archs "${component}")"
+        if [[ "${component}" != "${controlled_executables[0]}" &&
+              "${component}" != "${controlled_executables[1]}" ]]; then
+            echo "Supplied vendor runtime (debug metadata permitted): ${component}"
+        fi
     fi
 done < <(find "${app_bundle}" -type f -print0)
 
@@ -58,5 +62,7 @@ while IFS= read -r -d '' component; do
             ;;
     esac
 done < <(find "${app_bundle}" -print0)
+
+python3 "$(dirname "$0")/inspect_runtime_contents.py" "${app_bundle}"
 
 echo "Verified macOS ${architecture} bundle: ${app_bundle}"

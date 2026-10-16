@@ -5,7 +5,34 @@ import argparse
 import filecmp
 import os
 from pathlib import Path
+import re
+import shutil
 import subprocess
+
+from inspect_runtime_contents import inspect_contents
+
+
+def inspect_payload(payload):
+    inspect_contents(payload)
+    prefix = payload / "usr" if (payload / "usr/bin/vnm_terminal").is_file() else payload
+    for name in ("vnm_terminal", "vnm_process_custody_owner"):
+        executable = prefix / "bin" / name
+        if not executable.is_file() or executable.is_symlink():
+            raise RuntimeError(f"Missing controlled executable: {executable}")
+    for path in sorted(payload.rglob("*")):
+        if not path.is_file() or path.is_symlink():
+            continue
+        with path.open("rb") as stream:
+            if stream.read(4) != b"\x7fELF":
+                continue
+        if path.name in {"vnm_terminal", "vnm_process_custody_owner"}:
+            sections = subprocess.run(["readelf", "-WS", str(path)], check=True,
+                                      capture_output=True, text=True).stdout
+            if re.search(r"\.(?:z?debug\S*|stab\S*|symtab|gdb_index|gnu_debug\S*)\s",
+                         sections):
+                raise RuntimeError(f"Controlled Release binary retains debug data: {path}")
+        else:
+            print(f"Supplied vendor runtime (debug metadata permitted): {path}")
 
 
 def finalize_payload(payload):
@@ -20,6 +47,11 @@ def finalize_payload(payload):
     # its SDK archive, which has no role in a runtime package.
     for archive in prefix.glob("lib*/**/libvnm_fonts.a"):
         archive.unlink()
+    font_headers = prefix / "include/vnm_fonts"
+    if font_headers.is_dir():
+        shutil.rmtree(font_headers)
+    for font_exports in prefix.glob("lib*/**/cmake/vnm_fonts"):
+        shutil.rmtree(font_exports)
 
     runtime_directories = list(prefix.glob("lib*/vnm_terminal"))
     runtime_directories += list(prefix.glob("lib*/*/vnm_terminal"))
@@ -53,6 +85,8 @@ def main():
     roots = parser.add_mutually_exclusive_group(required=True)
     roots.add_argument("--payload", type=Path)
     roots.add_argument("--cpack-root", type=Path)
+    parser.add_argument("--inspect-only", action="store_true",
+                        help="Inspect expanded packages or installed IFW files without modifying them")
     args = parser.parse_args()
     if args.payload:
         payload = args.payload.resolve(strict=True)
@@ -61,7 +95,9 @@ def main():
         if len(binaries) != 1:
             raise RuntimeError("Expected one vnm_terminal runtime in the CPack staging tree")
         payload = binaries[0].parents[2]
-    finalize_payload(payload)
+    if not args.inspect_only:
+        finalize_payload(payload)
+    inspect_payload(payload)
 
 
 if __name__ == "__main__":

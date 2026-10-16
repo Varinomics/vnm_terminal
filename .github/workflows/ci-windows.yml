@@ -643,6 +643,15 @@ jobs:
               exit $LASTEXITCODE
           }
 
+      - name: Inspect expanded portable ZIP
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          $archive = Get-ChildItem -Path dist -Filter 'vnm_terminal_v*_w64.zip' |
+              Select-Object -First 1
+          & "$env:WINDOWS_INSTALLER_RECIPE_ROOT/tests/windows_portable_payload_tests.ps1" `
+              -PayloadPath dist/portable_candidate -ArchivePath $archive.FullName
+
       # The contract test's artifact-level assertions need a built installer, so
       # they cannot run in the source-only pass above. Without this step the
       # checksum sidecar convention is declared and never exercised.
@@ -1016,6 +1025,8 @@ jobs:
               "$archivePath.sha256",
               "$hash  $archiveName`n",
               [System.Text.ASCIIEncoding]::new())
+          & "$env:WINDOWS_INSTALLER_RECIPE_ROOT/tests/windows_portable_payload_tests.ps1" `
+              -PayloadPath $payload -ArchivePath $archivePath
 
       - name: Verify the installer is signed
         shell: pwsh

@@ -3,8 +3,11 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$PayloadPath,
 
-    [Parameter(Mandatory = $true)]
-    [string]$EmbeddedLauncherPath
+    [string]$EmbeddedLauncherPath,
+
+    [string]$ArchivePath,
+
+    [string]$InstallerPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,18 +39,35 @@ function Assert-SymbolFreeExecutable {
     } else {
         throw "Unknown PE optional header: $Path"
     }
+    $debugRva  = [BitConverter]::ToUInt32($bytes, $directories + 6 * 8)
     $debugSize = [BitConverter]::ToUInt32($bytes, $directories + 6 * 8 + 4)
-    if ($debugSize -ne 0) {
-        throw "Release executable retains a PE debug directory: $Path"
-    }
 
     $sectionCount = [BitConverter]::ToUInt16($bytes, $peOffset + 6)
     $headerSize   = [BitConverter]::ToUInt16($bytes, $peOffset + 20)
+    $debugOffset = $null
     for ($index = 0; $index -lt $sectionCount; ++$index) {
         $offset = $optionalHeader + $headerSize + $index * 40
         $name = [Text.Encoding]::ASCII.GetString($bytes, $offset, 8).TrimEnd([char]0)
         if ($name -match '^\.(debug|zdebug|stab)' -or $name.StartsWith('/')) {
             throw "Release executable retains a debugging section $name`: $Path"
+        }
+        $rva  = [BitConverter]::ToUInt32($bytes, $offset + 12)
+        $size = [BitConverter]::ToUInt32($bytes, $offset + 16)
+        if ($debugSize -gt 0 -and $debugRva -ge $rva -and
+            $debugRva + $debugSize -le $rva + $size)
+        {
+            $debugOffset = [BitConverter]::ToUInt32($bytes, $offset + 20) + $debugRva - $rva
+        }
+    }
+    if ($debugSize % 28 -ne 0 -or ($debugSize -gt 0 -and $null -eq $debugOffset)) {
+        throw "Invalid PE debug directory: $Path"
+    }
+    # Match the ConPTY producer: REPRO and extended DLL characteristics carry
+    # build identity and CET security metadata, rather than debugging symbols.
+    for ($index = 0; $index -lt $debugSize; $index += 28) {
+        $type = [BitConverter]::ToUInt32($bytes, $debugOffset + $index + 12)
+        if ($type -notin @(16, 20)) {
+            throw "Release executable retains debugging metadata type ${type}: $Path"
         }
     }
 }
@@ -57,13 +77,31 @@ $runtimeRoot = Join-Path $payloadRoot 'vnm_terminal_runtime'
 Assert-SymbolFreeExecutable (Join-Path $payloadRoot 'vnm_terminal.exe')
 Assert-SymbolFreeExecutable (Join-Path $runtimeRoot 'vnm_terminal.exe')
 # This helper is embedded by rcc. Check its exact build input before packaging.
-Assert-SymbolFreeExecutable (Resolve-Path -LiteralPath $EmbeddedLauncherPath).Path
+if ($EmbeddedLauncherPath) {
+    Assert-SymbolFreeExecutable (Resolve-Path -LiteralPath $EmbeddedLauncherPath).Path
+}
+if ($InstallerPath) {
+    Assert-SymbolFreeExecutable (Resolve-Path -LiteralPath $InstallerPath).Path
+}
 
-foreach ($file in (Get-ChildItem -LiteralPath $payloadRoot -Recurse -File)) {
-    if ($file.Extension -in @('.pdb', '.qmltypes', '.debug')) {
-        throw "Development-only file in the application payload: $($file.FullName)"
+foreach ($file in (Get-ChildItem -LiteralPath $payloadRoot -Recurse -File -Force)) {
+    if ($file.Extension -eq '.qmltypes') {
+        throw "Development-only Qt tooling metadata in the runtime deployment: $($file.FullName)"
+    }
+    if ($file.Extension -in @('.exe', '.dll')) {
+        if ($file.Extension -eq '.exe' -or $file.Name -eq 'conpty.dll' -or
+            $file.Name -like 'vnm_*.dll')
+        {
+            Assert-SymbolFreeExecutable $file.FullName
+        }
+        else {
+            Write-Output "Supplied vendor runtime (debug metadata permitted): $($file.FullName)"
+        }
     }
 }
+$inspector = Join-Path $PSScriptRoot '..\tools\inspect_runtime_contents.py'
+& python $inspector $payloadRoot
+if ($LASTEXITCODE -ne 0) { throw 'Runtime contents inspection failed.' }
 foreach ($requiredFile in @(
     'Qt6Core.dll', 'Qt6Gui.dll', 'Qt6Quick.dll', 'Qt6QuickControls2Basic.dll',
     'qml\QtQuick\Controls\Basic\qmldir', 'conpty.dll',
@@ -85,6 +123,26 @@ foreach ($unusedRuntime in @(
 )) {
     if (Test-Path -LiteralPath (Join-Path $runtimeRoot $unusedRuntime)) {
         throw "Unselected runtime deployment remains: $unusedRuntime"
+    }
+}
+if ($ArchivePath) {
+    $archiveRoot = Join-Path ([IO.Path]::GetTempPath()) (
+        'vnm-terminal-packed-' + [Guid]::NewGuid().ToString('N'))
+    $temporaryPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+    $archiveRoot = [IO.Path]::GetFullPath($archiveRoot)
+    if (-not $archiveRoot.StartsWith($temporaryPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Packed inspection target is outside the temporary directory: $archiveRoot"
+    }
+    try {
+        Expand-Archive -LiteralPath $ArchivePath -DestinationPath $archiveRoot
+        & $PSCommandPath -PayloadPath $archiveRoot
+        & python $inspector $archiveRoot --reference $payloadRoot
+        if ($LASTEXITCODE -ne 0) { throw 'Packed ZIP differs from its final staging tree.' }
+    }
+    finally {
+        if (Test-Path -LiteralPath $archiveRoot) {
+            Remove-Item -LiteralPath $archiveRoot -Recurse -Force
+        }
     }
 }
 Write-Output 'Windows portable payload has symbol-free application executables and runtime-only Qt deployment.'

@@ -281,6 +281,8 @@ try {
         'the committed all-users installation must have one machine registration'
 
     Assert-ProductSignature $resolvedInstallerPath
+    & (Join-Path $PSScriptRoot 'windows_portable_payload_tests.ps1') `
+        -PayloadPath $installRoot -InstallerPath $resolvedInstallerPath
     foreach ($productExecutable in @(
         $launcherPath,
         $runtimePath,

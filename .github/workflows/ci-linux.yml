@@ -379,6 +379,7 @@ jobs:
           fi
           git -C vnm_terminal archive "${PACKAGING_RECIPE_COMMIT}" \
             tools/finalize_linux_payload.py tools/finalize_linux_cpack.cmake \
+            tools/inspect_runtime_contents.py \
             tools/build_linux_ifw_installer.sh packaging/linux/ifw/notices \
             packaging/linux/ifw/installscript.qs packaging/linux/ifw/launcher.sh \
             | tar -x -C "${recipe_tools}/.."
@@ -390,7 +391,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             ${LINUX_SYSTEM_DEPS} \
-            appstream desktop-file-utils dpkg-dev rpm python3 binutils
+            appstream desktop-file-utils dpkg-dev rpm cpio python3 binutils
 
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
@@ -539,6 +540,8 @@ jobs:
               QT_QPA_PLATFORM=offscreen "${executable}" --help \
                 >/tmp/vnm_terminal_ifw_help.txt
           done
+          python3 "${LINUX_PACKAGING_TOOLS}/finalize_linux_payload.py" \
+            --payload /opt/vnm_terminal --inspect-only
           sudo /opt/vnm_terminal/vnm_terminal_maintenance \
             --confirm-command \
             purge
@@ -595,6 +598,27 @@ jobs:
           )
           env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QML_IMPORT_PATH \
             QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 "${appimage}" --help >/tmp/vnm_terminal_appimage_help.txt
+
+      - name: Inspect expanded Linux packages
+        run: |
+          unpack_root="$(mktemp -d "${RUNNER_TEMP}/linux-packages.XXXXXX")"
+          for package in vnm_terminal/dist/*.deb vnm_terminal/dist/*.rpm; do
+            destination="${unpack_root}/$(basename "${package}")"
+            mkdir "${destination}"
+            case "${package}" in
+              *.deb) dpkg-deb -x "${package}" "${destination}" ;;
+              *.rpm) rpm2cpio "${package}" | (cd "${destination}" && cpio -idm --quiet) ;;
+            esac
+            python3 "${LINUX_PACKAGING_TOOLS}/finalize_linux_payload.py" \
+              --payload "${destination}" --inspect-only
+            env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH -u QML_IMPORT_PATH \
+              QT_QPA_PLATFORM=offscreen "${destination}/usr/bin/vnm_terminal" --help >/dev/null
+          done
+          appimage="$(realpath vnm_terminal/dist/*.AppImage)"
+          mkdir "${unpack_root}/appimage"
+          (cd "${unpack_root}/appimage" && "${appimage}" --appimage-extract >/dev/null)
+          python3 "${LINUX_PACKAGING_TOOLS}/finalize_linux_payload.py" \
+            --payload "${unpack_root}/appimage/squashfs-root" --inspect-only
 
       - name: Record Linux package provenance
         env:
