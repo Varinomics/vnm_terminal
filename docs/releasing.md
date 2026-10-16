@@ -1,5 +1,13 @@
 # Releasing vnm_terminal
 
+Every new `vnm_terminal_surface` release requires a coordinated `vnm_terminal`
+release using the same version in both repositories' `project()` declarations,
+tags, and GitHub releases. Follow the surface's
+[release guide](https://github.com/Varinomics/vnm_terminal_surface/blob/master/docs/releasing.md)
+for provider-first publication and source-release validation. Matching versions
+record release coordination; the required surface targets and API determine
+build compatibility.
+
 A release is described by two checked-in declarations.
 `release/dependencies.lock.json` says what a release was built from: the commit
 of each owned dependency and the commit each pinned third-party tag named.
@@ -53,12 +61,16 @@ queued-build --slots 1 -- tools/build_linux_ifw_installer.sh \
 
 ## Cutting a release
 
-1. **Refresh the dependency lock and commit it.**
+1. **Finalize the version**, in the `project()` call in `CMakeLists.txt`. The
+   asset names are rendered from it and nothing else needs editing for a version
+   bump. For a coordinated surface release, use the same version in both
+   repositories.
+
+2. **Refresh the dependency lock.**
 
    ```bash
    node tools/dependencies_lock.js refresh .
    git diff release/dependencies.lock.json
-   git commit release/dependencies.lock.json -m "Refresh the release dependency lock"
    ```
 
    This is not optional and it is not a formality. A `release: published` run
@@ -69,17 +81,13 @@ queued-build --slots 1 -- tools/build_linux_ifw_installer.sh \
    third-party tag currently names, so an upstream tag that moved shows up in
    the diff rather than in a differently linked binary.
 
-2. **Run the gates locally.**
-
-   ```bash
-   node tools/dependencies_lock.js check .
-   node tools/release_artifacts.js check .
-   ctest --test-dir <build> --output-on-failure
-   ```
-
-3. **Bump the version if this release changes it**, in the `project()` call in
-   `CMakeLists.txt`. The asset names are rendered from it and nothing else needs
-   editing for a version bump.
+3. **Review, commit, push, and use applicable hosted CI.** Obtain independent
+   review, then stage and commit the finalized version and dependency lock and
+   push to `master`. Publish the provider's source changes first for a
+   coordinated release. Applicable hosted CI runs the declaration checks and
+   platform tests; do not duplicate that validation locally. If no applicable
+   CI covers a required check, run the relevant local check once before
+   publication, following the shared governance and build-queue rules.
 
 4. **Tag the commit that carries the refreshed lock**, and publish the release.
    The tag has to name that commit: the signing job checks the release source
