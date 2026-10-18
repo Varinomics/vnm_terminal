@@ -293,7 +293,7 @@ jobs:
           $expected = "$env:VS2026_PATH/VC/Tools/MSVC/14.51.".Replace('\', '/')
           $cache = Get-Content -LiteralPath 'vnm_terminal/build/CMakeCache.txt'
           foreach ($language in 'C', 'CXX') {
-              $entries = @($cache | Where-Object { $_ -match "^CMAKE_${language}_COMPILER:FILEPATH=" })
+              $entries = @($cache | Where-Object { $_ -match "^CMAKE_${language}_COMPILER:[^=]+=" })
               if ($entries.Count -ne 1) { throw "Missing $language compiler in CMake cache." }
               $compiler = ($entries[0] -split '=', 2)[1].Replace('\', '/')
               if (!$compiler.StartsWith($expected, [StringComparison]::OrdinalIgnoreCase)) {
@@ -384,7 +384,7 @@ jobs:
           $expected = "$env:VS2026_PATH/VC/Tools/MSVC/14.51.".Replace('\', '/')
           $cache = Get-Content -LiteralPath "$env:ARCHIVE_BUILD_DIR/CMakeCache.txt"
           foreach ($language in 'C', 'CXX') {
-              $entries = @($cache | Where-Object { $_ -match "^CMAKE_${language}_COMPILER:FILEPATH=" })
+              $entries = @($cache | Where-Object { $_ -match "^CMAKE_${language}_COMPILER:[^=]+=" })
               if ($entries.Count -ne 1) { throw "Missing $language compiler in CMake cache." }
               $compiler = ($entries[0] -split '=', 2)[1].Replace('\', '/')
               if (!$compiler.StartsWith($expected, [StringComparison]::OrdinalIgnoreCase)) {
