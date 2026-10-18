@@ -4,12 +4,10 @@
 #include "helpers/test_check.h"
 
 #include <QByteArray>
-#include <QAbstractNativeEventFilter>
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QKeyEvent>
-#include <QLoggingCategory>
 #include <QPoint>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -28,7 +26,6 @@
 #include <initializer_list>
 #include <memory>
 #include <utility>
-#include <vector>
 
 namespace app = vnm_terminal::terminal_app;
 namespace term = vnm_terminal::internal;
@@ -36,49 +33,6 @@ namespace term = vnm_terminal::internal;
 namespace {
 
 using vnm_terminal::test_helpers::check;
-
-class Comma_native_observer final : public QAbstractNativeEventFilter
-{
-public:
-    bool nativeEventFilter(const QByteArray& type, void* message, qintptr*) override
-    {
-        if (type != QByteArrayLiteral("mac_generic_NSEvent")) {
-            return false;
-        }
-        NSEvent* event = static_cast<NSEvent*>(message);
-        if ((event.type == NSEventTypeKeyDown || event.type == NSEventTypeKeyUp) &&
-            [event.charactersIgnoringModifiers isEqualToString:@","])
-        {
-            std::cerr << "COMMA NATIVE type=" << event.type << " flags=" << event.modifierFlags
-                      << " window=" << event.window.windowNumber
-                      << " keyWindow=" << NSApp.keyWindow.windowNumber
-                      << " qtFocus=" << QGuiApplication::focusWindow() << '\n';
-        }
-        return false;
-    }
-};
-
-void inspect_comma_menu(NSMenu* menu, std::vector<NSMenuItem*>& placeholders)
-{
-    for (NSMenuItem* item in menu.itemArray) {
-        if ([item.keyEquivalent isEqualToString:@","]) {
-            std::cerr << "COMMA MENU title=" << item.title.UTF8String
-                      << " enabled=" << item.enabled << " hidden=" << item.hidden
-                      << " allowedHidden=" << item.allowsKeyEquivalentWhenHidden
-                      << " flags=" << item.keyEquivalentModifierMask
-                      << " action=" << (item.action ? NSStringFromSelector(item.action).UTF8String : "none")
-                      << '\n';
-            if (!item.enabled && item.hidden &&
-                item.keyEquivalentModifierMask == NSEventModifierFlagCommand)
-            {
-                placeholders.push_back(item);
-            }
-        }
-        if (item.hasSubmenu) {
-            inspect_comma_menu(item.submenu, placeholders);
-        }
-    }
-}
 
 class Input_backend final : public term::Terminal_backend
 {
@@ -174,14 +128,12 @@ Qt::KeyboardModifiers qt_modifiers(NSEventModifierFlags flags)
     return result;
 }
 
-bool send_native_key(QQuickWindow& window, Native_key_observer& observer,
-    int key, unsigned short native_key, NSEventModifierFlags flags,
+void dispatch_native_key(QQuickWindow& window,
+    unsigned short native_key, NSEventModifierFlags flags,
     NSString* characters, NSString* unmodified)
 {
     NSView* view = reinterpret_cast<NSView*>(window.winId());
     NSWindow* native_window = view.window;
-    const int before = observer.count();
-    std::cerr << "DISPATCH key=" << key << " flags=" << flags << '\n';
     @autoreleasepool {
         for (NSEventType type : {NSEventTypeKeyDown, NSEventTypeKeyUp}) {
             NSEvent* event = [NSEvent keyEventWithType:type
@@ -194,6 +146,14 @@ bool send_native_key(QQuickWindow& window, Native_key_observer& observer,
         }
     }
     QCoreApplication::processEvents();
+}
+
+bool send_native_key(QQuickWindow& window, Native_key_observer& observer,
+    int key, unsigned short native_key, NSEventModifierFlags flags,
+    NSString* characters, NSString* unmodified)
+{
+    const int before = observer.count();
+    dispatch_native_key(window, native_key, flags, characters, unmodified);
     return check(observer.count() == before + 1 &&
         observer.matches(key, qt_modifiers(flags), native_key, flags),
         "AppKit delivers one spontaneous Qt key press with the physical Cocoa modifiers");
@@ -281,11 +241,7 @@ bool test_keyboard()
     int settings_requests = 0;
     QObject::connect(&shortcuts, &app::Terminal_shortcut_filter::settings_requested,
         &window, [&] { ++settings_requests; });
-    std::vector<NSMenuItem*> comma_placeholders;
-    inspect_comma_menu(NSApp.mainMenu, comma_placeholders);
-    const bool command_comma_delivered = send_native_key(
-        window, observer, Qt::Key_Comma, kVK_ANSI_Comma, NSEventModifierFlagCommand, @",", @",");
-    ok &= command_comma_delivered;
+    send(Qt::Key_Comma, kVK_ANSI_Comma, NSEventModifierFlagCommand, @",", @",");
     ok &= check(settings_requests == 1, "Command+comma requests Settings");
     expect_input({}, "Command+comma sends no terminal bytes");
     const int before_control_comma = settings_requests;
@@ -368,21 +324,35 @@ bool test_keyboard()
         "Command+C keeps the native text-field copy action");
     expect_input({}, "text-field copy sends no terminal bytes");
 
-    // Diagnostic only: the unmodified delivery above remains a required gate.
-    // Restore the menu immediately, and never credit this altered delivery.
-    if (!command_comma_delivered && comma_placeholders.size() == 1) {
-        surface.forceActiveFocus();
-        NSMenuItem* placeholder = comma_placeholders.front();
-        NSString* original_key = [placeholder.keyEquivalent copy];
-        const int before_diagnostic = settings_requests;
-        placeholder.keyEquivalent = @"";
-        const bool diagnostic_delivered = send_native_key(
-            window, observer, Qt::Key_Comma, kVK_ANSI_Comma, NSEventModifierFlagCommand, @",", @",");
-        placeholder.keyEquivalent = original_key;
-        [original_key release];
-        std::cerr << "COMMA DIAGNOSTIC placeholder-cleared delivered=" << diagnostic_delivered
-                  << " settings=" << settings_requests - before_diagnostic << '\n';
+    const int before_editor_comma = settings_requests;
+    dispatch_native_key(window, kVK_ANSI_Comma, NSEventModifierFlagCommand, @",", @",");
+    ok &= check(settings_requests == before_editor_comma,
+        "Command+comma in an unrelated text field does not open terminal Settings");
+    expect_input({}, "text-field Command+comma sends no terminal bytes");
+
+    shortcuts.set_search_ui_root(editor);
+    send(Qt::Key_Comma, kVK_ANSI_Comma, NSEventModifierFlagCommand, @",", @",");
+    ok &= check(settings_requests == before_editor_comma + 1,
+        "Command+comma in the owned search field requests Settings");
+    expect_input({}, "search-field Command+comma sends no terminal bytes");
+    shortcuts.set_search_ui_root(nullptr);
+
+    surface.forceActiveFocus();
+    QQuickWindow other_window;
+    other_window.resize(240, 120);
+    other_window.show();
+    NSView* other_view = reinterpret_cast<NSView*>(other_window.winId());
+    [other_view.window makeKeyAndOrderFront:nil];
+    [other_view.window makeFirstResponder:other_view];
+    if (!check(QTest::qWaitForWindowActive(&other_window), "unrelated Cocoa window becomes active")) {
+        return false;
     }
+    const int before_other_comma = settings_requests;
+    dispatch_native_key(other_window, kVK_ANSI_Comma, NSEventModifierFlagCommand, @",", @",");
+    ok &= check(settings_requests == before_other_comma,
+        "Command+comma in another window does not open terminal Settings");
+    expect_input({}, "another window's Command+comma sends no terminal bytes");
+
     return ok;
 }
 
@@ -393,11 +363,7 @@ int main(int argc, char** argv)
     if (argc == 2 && QByteArray(argv[1]) == "--literal-modifiers") {
         QCoreApplication::setAttribute(Qt::AA_MacDontSwapCtrlAndMeta);
     }
-    QLoggingCategory::setFilterRules(QStringLiteral(
-        "qt.qpa.input.keys.debug=true\nqt.qpa.events.debug=true"));
     QGuiApplication application(argc, argv);
-    Comma_native_observer native_observer;
-    application.installNativeEventFilter(&native_observer);
     vnm_terminal::apply_terminal_renderer_minimum_surface_format();
     if (!check(QGuiApplication::platformName() == QStringLiteral("cocoa"),
             "native keyboard regression requires the Cocoa platform"))

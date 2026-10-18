@@ -227,6 +227,13 @@ add_library(vnm_terminal_app_support STATIC
     include/vnm_terminal/app_support/terminal_settings_window.h
 )
 add_dependencies(vnm_terminal_app_support vnm_terminal_build_info)
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    enable_language(OBJCXX)
+    target_sources(vnm_terminal_app_support PRIVATE src/app_shortcuts_macos.mm)
+    target_link_libraries(vnm_terminal_app_support PRIVATE "-framework AppKit")
+    set_target_properties(vnm_terminal_app_support PROPERTIES
+        OBJCXX_STANDARD 20 OBJCXX_STANDARD_REQUIRED ON)
+endif()
 set(vnm_terminal_qml_files
     qml/terminal_qml_chrome.qml
     qml/terminal_search_bar.qml

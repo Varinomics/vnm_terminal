@@ -106,6 +106,14 @@ QString resolved_font_family(const QQuickItem* item)
 
 using vnm_terminal::test_helpers::check;
 
+#if defined(Q_OS_MACOS)
+Qt::KeyboardModifier macos_command_modifier()
+{
+    return QCoreApplication::testAttribute(Qt::AA_MacDontSwapCtrlAndMeta)
+        ? Qt::MetaModifier : Qt::ControlModifier;
+}
+#endif
+
 bool nearly_equal(qreal actual, qreal expected)
 {
     return std::abs(actual - expected) <= 0.000001;
@@ -2826,8 +2834,14 @@ bool test_paste_shortcut_should_paste_predicate()
     using chrome_test::Paste_shortcut_policy;
     using chrome_test::paste_shortcut_should_paste;
 
+#if defined(Q_OS_MACOS)
+    const Qt::KeyboardModifiers ctrl =
+        QCoreApplication::testAttribute(Qt::AA_MacDontSwapCtrlAndMeta)
+        ? Qt::ControlModifier : Qt::MetaModifier;
+#else
     const Qt::KeyboardModifiers ctrl = Qt::ControlModifier;
-    const Qt::KeyboardModifiers ctrl_shift = Qt::ControlModifier | Qt::ShiftModifier;
+#endif
+    const Qt::KeyboardModifiers ctrl_shift = ctrl | Qt::ShiftModifier;
     const Qt::KeyboardModifiers no_mods = Qt::NoModifier;
     const Qt::KeyboardModifiers shift_only = Qt::ShiftModifier;
 
@@ -2907,19 +2921,19 @@ bool test_paste_shortcut_should_paste_predicate()
 #if defined(Q_OS_MACOS)
     // Only PLATFORM_DEFAULT honors the macOS Cmd+V shortcut; the explicit
     // Ctrl-combo policies are literal overrides that drop it.
-    const Qt::KeyboardModifiers meta = Qt::MetaModifier;
+    const Qt::KeyboardModifiers command = macos_command_modifier();
     ok &= check(
-        paste_shortcut_should_paste(Paste_shortcut_policy::PLATFORM_DEFAULT, Qt::Key_V, meta),
+        paste_shortcut_should_paste(Paste_shortcut_policy::PLATFORM_DEFAULT, Qt::Key_V, command),
         "platform-default paste policy accepts macOS Cmd+V");
     ok &= check(
-        !paste_shortcut_should_paste(Paste_shortcut_policy::CTRL_SHIFT_V, Qt::Key_V, meta),
+        !paste_shortcut_should_paste(Paste_shortcut_policy::CTRL_SHIFT_V, Qt::Key_V, command),
         "ctrl-shift-v paste policy rejects macOS Cmd+V");
     ok &= check(
         !paste_shortcut_should_paste(
-            Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V, Qt::Key_V, meta),
+            Paste_shortcut_policy::CTRL_V_AND_CTRL_SHIFT_V, Qt::Key_V, command),
         "ctrl-v-and-ctrl-shift-v paste policy rejects macOS Cmd+V");
     ok &= check(
-        !paste_shortcut_should_paste(Paste_shortcut_policy::DISABLED, Qt::Key_V, meta),
+        !paste_shortcut_should_paste(Paste_shortcut_policy::DISABLED, Qt::Key_V, command),
         "disabled paste policy rejects macOS Cmd+V");
 #endif
 
@@ -3618,11 +3632,11 @@ bool test_macos_command_shortcuts_are_host_shortcuts(QGuiApplication& app)
     surface.forceActiveFocus();
     pump_events(app);
 
-    QKeyEvent paste_event(QEvent::KeyPress, Qt::Key_V, Qt::MetaModifier);
+    QKeyEvent paste_event(QEvent::KeyPress, Qt::Key_V, macos_command_modifier());
     paste_event.setAccepted(false);
     const bool paste_sent = QCoreApplication::sendEvent(&window, &paste_event);
 
-    QKeyEvent copy_event(QEvent::KeyPress, Qt::Key_C, Qt::MetaModifier);
+    QKeyEvent copy_event(QEvent::KeyPress, Qt::Key_C, macos_command_modifier());
     copy_event.setAccepted(false);
     const bool copy_sent = QCoreApplication::sendEvent(&window, &copy_event);
 
@@ -4189,7 +4203,7 @@ bool test_settings_shortcut_requests_settings(QGuiApplication& app)
         });
 
 #if defined(Q_OS_MACOS)
-    const Qt::KeyboardModifiers settings_modifier = Qt::MetaModifier;
+    const Qt::KeyboardModifiers settings_modifier = macos_command_modifier();
 #else
     const Qt::KeyboardModifiers settings_modifier = Qt::ControlModifier;
 #endif
@@ -4263,7 +4277,7 @@ bool test_host_shortcuts_preserve_title_editor_keys(QGuiApplication& app)
     QKeyEvent search_event(QEvent::KeyPress, Qt::Key_F, Qt::ControlModifier);
     QCoreApplication::sendEvent(&window, &search_event);
 #if defined(Q_OS_MACOS)
-    const Qt::KeyboardModifiers settings_modifier = Qt::MetaModifier;
+    const Qt::KeyboardModifiers settings_modifier = macos_command_modifier();
 #else
     const Qt::KeyboardModifiers settings_modifier = Qt::ControlModifier;
 #endif

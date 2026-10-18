@@ -545,7 +545,6 @@ vnm_terminal_add_target_test(vnm_terminal_custom_titlebar_integration
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    enable_language(OBJCXX)
     add_executable(vnm_terminal_macos_keyboard terminal_app/macos_keyboard_tests.mm)
     target_link_libraries(vnm_terminal_macos_keyboard PRIVATE
         vnm_terminal::vnm_terminal_app_support

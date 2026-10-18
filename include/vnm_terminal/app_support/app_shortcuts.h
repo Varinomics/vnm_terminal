@@ -6,6 +6,10 @@
 #include <QPointer>
 #include <Qt>
 
+#if defined(Q_OS_MACOS)
+#include <QAbstractNativeEventFilter>
+#endif
+
 class QEvent;
 class QQuickItem;
 
@@ -32,6 +36,7 @@ enum class Search_shortcut_action
 // pre-masks modifiers to Ctrl|Shift|Alt|Meta; the predicate masks too so it is
 // safe to call with raw modifiers. PLATFORM_DEFAULT includes macOS Cmd+V; the
 // explicit Ctrl-combo policies are literal and do not honor Cmd+V.
+// macOS modifiers follow the host's AA_MacDontSwapCtrlAndMeta convention.
 bool paste_shortcut_should_paste(
     Paste_shortcut_policy   policy,
     int                     key,
@@ -44,6 +49,9 @@ Search_shortcut_action terminal_search_shortcut_action(
     bool                    query_active);
 
 class Terminal_shortcut_filter final : public QObject
+#if defined(Q_OS_MACOS)
+    , private QAbstractNativeEventFilter
+#endif
 {
     Q_OBJECT
 
@@ -63,6 +71,9 @@ protected:
     bool eventFilter(QObject*, QEvent* event) override;
 
 private:
+#if defined(Q_OS_MACOS)
+    bool nativeEventFilter(const QByteArray& type, void* message, qintptr* result) override;
+#endif
     bool host_shortcuts_have_focus() const;
     bool copy_selected_text();
     bool paste_clipboard_text();

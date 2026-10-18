@@ -13,6 +13,20 @@ namespace vnm_terminal::terminal_app {
 
 namespace {
 
+Qt::KeyboardModifiers physical_shortcut_modifiers(Qt::KeyboardModifiers modifiers)
+{
+#if defined(Q_OS_MACOS)
+    if (!QGuiApplication::testAttribute(Qt::AA_MacDontSwapCtrlAndMeta)) {
+        const bool qt_control = modifiers.testFlag(Qt::ControlModifier);
+        const bool qt_meta    = modifiers.testFlag(Qt::MetaModifier);
+        modifiers &= ~(Qt::ControlModifier | Qt::MetaModifier);
+        if (qt_control) { modifiers |= Qt::MetaModifier;    }
+        if (qt_meta)    { modifiers |= Qt::ControlModifier; }
+    }
+#endif
+    return modifiers;
+}
+
 bool item_belongs_to(QQuickItem* item, const QQuickItem* root)
 {
     while (item != nullptr) {
@@ -48,7 +62,7 @@ bool paste_shortcut_should_paste(
     }
 
     const Qt::KeyboardModifiers masked =
-        modifiers &
+        physical_shortcut_modifiers(modifiers) &
         (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
     const bool ctrl_shift_v = masked == (Qt::ControlModifier | Qt::ShiftModifier);
     const bool ctrl_or_ctrl_shift_v =
@@ -118,7 +132,11 @@ Terminal_shortcut_filter::Terminal_shortcut_filter(
     QObject(surface),
     m_surface(surface),
     m_paste_policy(paste_policy)
-{}
+{
+#if defined(Q_OS_MACOS)
+    QGuiApplication::instance()->installNativeEventFilter(this);
+#endif
+}
 
 void Terminal_shortcut_filter::set_search_ui_root(QQuickItem* root_item)
 {
@@ -164,11 +182,12 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
     }
 
     if (key_event->key() == Qt::Key_Comma) {
-        // Settings shortcut: Ctrl+, everywhere, Cmd+, on macOS (the platform
+        // Settings shortcut: Ctrl+, on Windows and Linux, Cmd+, on macOS (the platform
         // Preferences convention, and the only entry point where the custom
         // chrome -- and thus the settings gear -- is unavailable).
 #if defined(Q_OS_MACOS)
-        const bool settings_shortcut = modifiers == Qt::MetaModifier;
+        const bool settings_shortcut =
+            physical_shortcut_modifiers(modifiers) == Qt::MetaModifier;
 #else
         const bool settings_shortcut = modifiers == Qt::ControlModifier;
 #endif
@@ -185,11 +204,24 @@ bool Terminal_shortcut_filter::eventFilter(QObject*, QEvent* event)
 #if defined(Q_OS_MACOS)
     const bool copy_shortcut =
         key_event->key() == Qt::Key_C &&
-        modifiers       == Qt::MetaModifier;
+        physical_shortcut_modifiers(modifiers) == Qt::MetaModifier;
 #else
     constexpr bool copy_shortcut = false;
 #endif
     if (!paste_shortcut && !copy_shortcut) {
+#if defined(Q_OS_MACOS)
+        const Qt::KeyboardModifiers physical_modifiers =
+            physical_shortcut_modifiers(key_event->modifiers());
+        if (m_surface->hasActiveFocus() &&
+            physical_modifiers.testFlag(Qt::ControlModifier) &&
+            !physical_modifiers.testFlag(Qt::MetaModifier))
+        {
+            // Cocoa may deliver control commands without text. The terminal
+            // encoder needs the physical Control bit; unclaimed Command chords
+            // retain the host's original event and modifier convention.
+            key_event->setModifiers(physical_modifiers);
+        }
+#endif
         m_surface->record_interaction_diagnostic(
             "app-shortcut", "routed", QStringLiteral("surface"));
         return false;
