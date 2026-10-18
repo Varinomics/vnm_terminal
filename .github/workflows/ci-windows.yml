@@ -7,6 +7,11 @@ on:
         description: Existing release tag to receive the signed installer and portable zip
         required: false
         type: string
+      source_package_only:
+        description: Validate the native Windows source package without portable packaging
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [ master, main, dev ]
   pull_request:
@@ -84,6 +89,8 @@ jobs:
         id: resolve
         env:
           GH_TOKEN: ${{ secrets.VARINOMICS_REPO_READ_TOKEN || github.token }}
+          SOURCE_PACKAGE_ONLY: ${{ inputs.source_package_only }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           # The resolver derives release state from GitHub's event payload. A
           # tag cut before this lock existed carries neither the lock
@@ -95,6 +102,10 @@ jobs:
             echo "there is nothing at that tag recording which dependency commits it was built from." >&2
             exit 1
           fi
+          if [[ "$SOURCE_PACKAGE_ONLY" == 'true' && -n "$RELEASE_TAG" ]]; then
+            echo 'source_package_only is a development gate and cannot target a release.' >&2
+            exit 1
+          fi
           node tools/dependencies_lock.js resolve .
 
   build-and-test:
@@ -102,6 +113,7 @@ jobs:
     needs: resolve-dependencies
     runs-on: windows-2025-vs2026
     env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_MAXSIZE: 2GiB
@@ -312,6 +324,7 @@ jobs:
       # Application tests stay tied to the tagged source. The one installer
       # source contract runs separately against the recipe that will be packed.
       - name: Run application tests
+        if: ${{ !inputs.source_package_only }}
         shell: cmd
         working-directory: vnm_terminal/build
         env:
@@ -320,6 +333,17 @@ jobs:
           call "%VS2026_PATH%\VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.51
           if errorlevel 1 exit /b 1
           ctest --output-on-failure -C %CMAKE_BUILD_TYPE% -E "^vnm_terminal_windows_ifw_contract$"
+
+      - name: Run source package fixture and consumer
+        if: ${{ inputs.source_package_only }}
+        shell: cmd
+        working-directory: vnm_terminal/build
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          call "%VS2026_PATH%\VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.51
+          if errorlevel 1 exit /b 1
+          ctest --verbose -C %CMAKE_BUILD_TYPE% -R "^vnm_terminal_(prepare_source_package|public_target_consumer_builds)$"
 
       - name: Run installer recipe tests
         shell: pwsh
@@ -421,6 +445,7 @@ jobs:
   package:
     name: Portable ZIP and EXE (Windows x64)
     needs: resolve-dependencies
+    if: ${{ !inputs.source_package_only }}
     runs-on: windows-2025-vs2026
     # No signing or repository-write credentials. GitHub still gives the job a
     # read-only GITHUB_TOKEN, and the private surface checkout may receive the
