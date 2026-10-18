@@ -18,8 +18,9 @@
 #include <QTest>
 #include <QUrl>
 
+#define __ASSERT_MACROS_DEFINE_VERSIONS_WITHOUT_UNDERSCORES 0
 #import <AppKit/AppKit.h>
-#import <HIToolbox/Events.h>
+#import <Carbon/Carbon.h>
 
 #include <iostream>
 #include <initializer_list>
