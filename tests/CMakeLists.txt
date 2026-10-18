@@ -544,6 +544,30 @@ vnm_terminal_add_target_test(vnm_terminal_custom_titlebar_integration
         ${vnm_terminal_qt_unscaled_environment}
 )
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    enable_language(OBJCXX)
+    add_executable(vnm_terminal_macos_keyboard terminal_app/macos_keyboard_tests.mm)
+    target_link_libraries(vnm_terminal_macos_keyboard PRIVATE
+        vnm_terminal::vnm_terminal_app_support
+        vnm_terminal_surface::vnm_terminal_surface
+        Qt6::Qml Qt6::Quick Qt6::Test
+        "-framework AppKit"
+    )
+    target_include_directories(vnm_terminal_macos_keyboard PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_target_properties(vnm_terminal_macos_keyboard PROPERTIES
+        OBJCXX_STANDARD 20 OBJCXX_STANDARD_REQUIRED ON AUTOMOC OFF
+    )
+    foreach(mode IN ITEMS default literal-modifiers)
+        add_test(NAME vnm_terminal_macos_keyboard_${mode}
+            COMMAND vnm_terminal_macos_keyboard --${mode})
+        set_tests_properties(vnm_terminal_macos_keyboard_${mode} PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=cocoa"
+            TIMEOUT 60
+            RUN_SERIAL TRUE
+        )
+    endforeach()
+endif()
+
 add_executable(vnm_terminal_app_persistence
     terminal_app/app_persistence_tests.cpp
     "${PROJECT_SOURCE_DIR}/src/app_clipboard_reader.cpp"

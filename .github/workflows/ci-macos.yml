@@ -8,10 +8,10 @@ on:
         required: false
         type: string
       validation:
-        description: Full validation or the focused x64 custom-titlebar check
+        description: Full validation or a focused native check
         type: choice
         default: full
-        options: [full, custom-titlebar]
+        options: [full, custom-titlebar, keyboard]
   push:
     branches: [ master, main, dev ]
   pull_request:
@@ -58,7 +58,7 @@ jobs:
 
     steps:
       - name: Validate focused request
-        if: inputs.validation == 'custom-titlebar' && inputs.release_tag != ''
+        if: inputs.validation != 'full' && inputs.validation != '' && inputs.release_tag != ''
         run: |
           echo "Focused validation cannot attach a release bundle." >&2
           exit 1
@@ -130,6 +130,8 @@ jobs:
         include: >-
           ${{ fromJSON(inputs.validation == 'custom-titlebar' &&
               '[{"architecture":"x64","cmake_architecture":"x86_64","runner":"macos-15-intel"}]' ||
+              inputs.validation == 'keyboard' &&
+              '[{"architecture":"arm64","cmake_architecture":"arm64","runner":"macos-15"}]' ||
               '[{"architecture":"x64","cmake_architecture":"x86_64","runner":"macos-15-intel"},
                 {"architecture":"arm64","cmake_architecture":"arm64","runner":"macos-15"}]') }}
     runs-on: ${{ matrix.runner }}
@@ -137,6 +139,11 @@ jobs:
       MACOS_ARCHITECTURE: ${{ matrix.cmake_architecture }}
       MACOSX_DEPLOYMENT_TARGET: '14.4'
       PACKAGE_NAME: ${{ needs.resolve-dependencies.outputs[format('macos_{0}_artifact_name', matrix.architecture)] }}
+      CCACHE_MAXSIZE: 2GiB
+      CCACHE_COMPILERCHECK: content
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_OBJCXX_COMPILER_LAUNCHER: ccache
 
     steps:
       - name: Verify native build host
@@ -224,6 +231,32 @@ jobs:
           git -C vnm_terminal show "${PACKAGING_RECIPE_COMMIT}:tools/inspect_runtime_contents.py" \
             > "${RUNNER_TEMP}/inspect_runtime_contents.py"
 
+      - name: Install and identify compiler cache
+        id: compiler_cache
+        run: |
+          brew install ccache
+          echo "CCACHE_DIR=${RUNNER_TEMP}/vnm-terminal-ccache" >> "${GITHUB_ENV}"
+          {
+            ccache --version
+            xcodebuild -version
+            xcrun --show-sdk-path
+            xcrun --show-sdk-version
+            shasum -a 256 "$(xcrun --find clang++)" "$(command -v ccache)"
+          } | tee "${RUNNER_TEMP}/compiler-cache-toolchain.txt"
+          toolchain_hash=$(shasum -a 256 "${RUNNER_TEMP}/compiler-cache-toolchain.txt" | cut -d ' ' -f 1)
+          echo "key_prefix=${RUNNER_OS}-${RUNNER_ARCH}-terminal-ccache-${CMAKE_BUILD_TYPE}-${toolchain_hash}-" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore compiler cache
+        id: restore_compiler_cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.compiler_cache.outputs.key_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.compiler_cache.outputs.key_prefix }}
+
+      - name: Initialize compiler cache statistics
+        run: ccache --zero-stats
+
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
@@ -308,6 +341,7 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHITECTURE}" \
             -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET}" \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR};${GITHUB_WORKSPACE}/msdf_package" \
+            -DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache \
             -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
             -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
             -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
@@ -320,14 +354,29 @@ jobs:
             -DBUILD_TESTING=ON
 
       - name: Build
+        id: build
         env:
           VALIDATION: ${{ inputs.validation }}
         run: |
           targets=()
           if [[ "${VALIDATION}" == custom-titlebar ]]; then
             targets=(--target vnm_terminal vnm_terminal_canvas_fixture)
+          elif [[ "${VALIDATION}" == keyboard ]]; then
+            targets=(--target vnm_terminal_macos_keyboard vnm_terminal_custom_titlebar_integration)
           fi
           cmake --build vnm_terminal/build --config "${CMAKE_BUILD_TYPE}" --parallel 3 "${targets[@]}"
+
+      - name: Report compiler cache usage
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        run: ccache --show-stats --verbose | tee "${RUNNER_TEMP}/compiler-cache-stats.txt"
+
+      # Preserve reusable compilation even when a later test fails.
+      - name: Save compiler cache
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.restore_compiler_cache.outputs.cache-primary-key }}
 
       - name: Run tests
         id: terminal_tests
@@ -339,6 +388,8 @@ jobs:
           selection=()
           if [[ "${VALIDATION}" == custom-titlebar ]]; then
             selection=(-R '^vnm_terminal_custom_titlebar_smoke$')
+          elif [[ "${VALIDATION}" == keyboard ]]; then
+            selection=(-R '^vnm_terminal_(macos_keyboard_.*|custom_titlebar_integration)$')
           fi
           ctest --output-on-failure "${selection[@]}"
 
@@ -353,8 +404,19 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+      - name: Retain native keyboard evidence
+        if: always() && inputs.validation == 'keyboard' && steps.terminal_tests.outcome != 'skipped'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: vnm-terminal-macos-keyboard-${{ matrix.architecture }}-evidence
+          path: |
+            vnm_terminal/build/Testing/Temporary/LastTest.log
+            ${{ runner.temp }}/compiler-cache-*.txt
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Deploy macOS app bundle
-        if: inputs.validation != 'custom-titlebar'
+        if: inputs.validation != 'custom-titlebar' && inputs.validation != 'keyboard'
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
           test -d "${app_bundle}"
@@ -374,14 +436,14 @@ jobs:
           find "${qml_root}" -name '*.qmltypes' -type f -delete
 
       - name: Test macOS bundle debug-symbol classification
-        if: inputs.validation != 'custom-titlebar'
+        if: inputs.validation != 'custom-titlebar' && inputs.validation != 'keyboard'
         run: |
           bash "${RUNNER_TEMP}/macos_bundle_verifier_tests.sh" \
             "${RUNNER_TEMP}/verify_macos_bundle.sh" \
             vnm_terminal/build/vnm_terminal.app "${MACOS_ARCHITECTURE}"
 
       - name: Write macOS build info
-        if: inputs.validation != 'custom-titlebar'
+        if: inputs.validation != 'custom-titlebar' && inputs.validation != 'keyboard'
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
           resources_dir="${app_bundle}/Contents/Resources"
@@ -439,7 +501,7 @@ jobs:
           } > "${resources_dir}/vnm_terminal_build_info.txt"
 
       - name: Record macOS package provenance
-        if: inputs.validation != 'custom-titlebar'
+        if: inputs.validation != 'custom-titlebar' && inputs.validation != 'keyboard'
         env:
           SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
           THIRD_PARTY_CHECKOUTS: '{"freetype":"_deps/freetype-src","msdfgen":"_deps/msdfgen-src"}'
@@ -451,7 +513,7 @@ jobs:
             vnm_terminal/build/vnm_terminal.app/Contents/Resources/vnm_terminal_build_provenance.json
 
       - name: Include application and bundled dependency notices
-        if: inputs.validation != 'custom-titlebar'
+        if: inputs.validation != 'custom-titlebar' && inputs.validation != 'keyboard'
         run: |
           resources_dir="vnm_terminal/build/vnm_terminal.app/Contents/Resources"
           font_notices_dir="${resources_dir}/vnm_fonts"
@@ -477,7 +539,7 @@ jobs:
           EOF
 
       - name: Sign and validate macOS app bundle
-        if: inputs.validation != 'custom-titlebar'
+        if: inputs.validation != 'custom-titlebar' && inputs.validation != 'keyboard'
         id: bundle_validation
         run: |
           app_bundle="vnm_terminal/build/vnm_terminal.app"
@@ -494,7 +556,7 @@ jobs:
             -exec grep -H -E '^(C|CXX)_FLAGS =' {} +
 
       - name: Package macOS app bundle
-        if: inputs.validation != 'custom-titlebar'
+        if: inputs.validation != 'custom-titlebar' && inputs.validation != 'keyboard'
         run: |
           mkdir -p vnm_terminal/dist
           ditto -c -k --sequesterRsrc --keepParent \
@@ -502,7 +564,7 @@ jobs:
             "vnm_terminal/dist/${PACKAGE_NAME}.zip"
 
       - name: Validate packed macOS app bundle
-        if: inputs.validation != 'custom-titlebar'
+        if: inputs.validation != 'custom-titlebar' && inputs.validation != 'keyboard'
         run: |
           unpack_dir="$(mktemp -d "${RUNNER_TEMP}/macos-package.XXXXXX")"
           ditto -x -k "vnm_terminal/dist/${PACKAGE_NAME}.zip" "${unpack_dir}"
@@ -518,7 +580,7 @@ jobs:
             "${app_bundle}" "${unpack_dir}/runtime-evidence"
 
       - name: Upload macOS bundle artifact
-        if: inputs.validation != 'custom-titlebar'
+        if: inputs.validation != 'custom-titlebar' && inputs.validation != 'keyboard'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: ${{ needs.resolve-dependencies.outputs[format('macos_{0}_artifact_name', matrix.architecture)] }}
