@@ -100,7 +100,12 @@ jobs:
   build-and-test:
     name: Qt Quick Terminal (Windows)
     needs: resolve-dependencies
-    runs-on: windows-2022
+    runs-on: windows-2025-vs2026
+    env:
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_MAXSIZE: 2GiB
+      CCACHE_COMPILERCHECK: content
 
     steps:
       # persist-credentials is off on every checkout below: actions/checkout
@@ -185,6 +190,71 @@ jobs:
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
+      - name: Verify Visual Studio 2026 toolchain
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $instances = @(& $vswhere -latest -products '*' -version '[18.0,19.0)' `
+              -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json)
+          if ($instances.Count -ne 1 -or !$instances[0].isComplete -or !$instances[0].isLaunchable) {
+              throw 'A complete, launchable Visual Studio 2026 installation is required.'
+          }
+          $vs = $instances[0].installationPath
+          $tools = Get-ChildItem -LiteralPath "$vs/VC/Tools/MSVC" -Directory |
+              Where-Object Name -Like '14.51.*' | Sort-Object { [version]$_.Name } -Descending |
+              Select-Object -First 1
+          if (!$tools) { throw 'MSVC v145 14.51 is required.' }
+          $instances[0] | Select-Object installationPath, installationVersion, isComplete, isLaunchable |
+              ConvertTo-Json
+          [ordered]@{
+              CBS = Test-Path 'HKLM:/SOFTWARE/Microsoft/Windows/CurrentVersion/Component Based Servicing/RebootPending'
+              WindowsUpdate = Test-Path 'HKLM:/SOFTWARE/Microsoft/Windows/CurrentVersion/WindowsUpdate/Auto Update/RebootRequired'
+              PendingFileRename = $null -ne (Get-ItemProperty `
+                  'HKLM:/SYSTEM/CurrentControlSet/Control/Session Manager' `
+                  -Name PendingFileRenameOperations -ErrorAction SilentlyContinue)
+          } | ConvertTo-Json
+          "VS2026_PATH=$vs" >> $env:GITHUB_ENV
+          "MSVC_COMPILER_DIR=$($tools.FullName)/bin/Hostx64/x64" >> $env:GITHUB_ENV
+
+      - name: Install and identify compiler cache
+        id: compiler_cache
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'ccache.zip'
+          $root = Join-Path $env:RUNNER_TEMP 'ccache'
+          Invoke-WebRequest -Uri 'https://github.com/ccache/ccache/releases/download/v4.14.1/ccache-4.14.1-windows-x86_64.zip' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne
+              '6219f3865ca59aec41ee4b678df171d5d35855ecb2b6dbbbd20690b3a68af7b4') {
+              throw 'Compiler cache archive checksum mismatch.'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $root
+          $cacheExe = @(Get-ChildItem -LiteralPath $root -Filter ccache.exe -Recurse)
+          if ($cacheExe.Count -ne 1) { throw 'Expected one compiler cache executable.' }
+          $cacheExe = $cacheExe[0]
+          $cacheExe.DirectoryName >> $env:GITHUB_PATH
+          "CCACHE_DIR=$env:RUNNER_TEMP/vnm-terminal-ccache" >> $env:GITHUB_ENV
+          $fingerprint = Join-Path $env:RUNNER_TEMP 'compiler-cache-toolchain.txt'
+          Get-FileHash -Algorithm SHA256 -LiteralPath `
+              "$env:MSVC_COMPILER_DIR/cl.exe", "$env:MSVC_COMPILER_DIR/c1.dll", `
+              "$env:MSVC_COMPILER_DIR/c1xx.dll", "$env:MSVC_COMPILER_DIR/c2.dll", $cacheExe.FullName |
+              ForEach-Object { "$($_.Hash) $($_.Path)" } | Set-Content $fingerprint
+          & $cacheExe.FullName --version | Tee-Object -FilePath $fingerprint -Append
+          Get-Content -LiteralPath $fingerprint
+          $hash = (Get-FileHash -LiteralPath $fingerprint -Algorithm SHA256).Hash.ToLowerInvariant()
+          "key_prefix=$env:RUNNER_OS-$env:RUNNER_ARCH-terminal-ccache-msvc-v145-$env:CMAKE_BUILD_TYPE-$hash-" >> $env:GITHUB_OUTPUT
+
+      - name: Restore compiler cache
+        id: restore_compiler_cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.compiler_cache.outputs.key_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.compiler_cache.outputs.key_prefix }}
+
+      - name: Reset compiler cache statistics
+        run: ccache --zero-stats
+
+      # The v145 linker accepts these prebuilt MSVC Qt import libraries.
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
@@ -195,30 +265,61 @@ jobs:
           cache: 'true'
           aqtsource: 'git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b'
 
+      # Hosted CMake has no FASTBuild generator; Ninja supports compiler launchers.
       - name: Configure CMake
+        shell: cmd
         run: |
-          cmake -B vnm_terminal/build -S vnm_terminal \
-            -G "Visual Studio 17 2022" \
-            -A x64 \
-            -DCMAKE_CONFIGURATION_TYPES="${CMAKE_BUILD_TYPE}" \
-            -DVNM_TERMINAL_SURFACE_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_terminal_surface" \
-            -DVNM_QML_CHROME_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qml_chrome" \
-            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_msdf_text" \
-            -DVNM_QT_DISPATCH_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_qt_dispatch" \
-            -DVNM_FONTS_SOURCE_DIR="${GITHUB_WORKSPACE}/vnm_fonts" \
-            -DVNM_TERMINAL_ENABLE_PROFILING=OFF \
+          call "%VS2026_PATH%\VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.51
+          if errorlevel 1 exit /b 1
+          cmake -B vnm_terminal/build -S vnm_terminal ^
+            -G Ninja ^
+            -DCMAKE_BUILD_TYPE=%CMAKE_BUILD_TYPE% ^
+            -DCMAKE_C_COMPILER="%VCToolsInstallDir%bin/Hostx64/x64/cl.exe" ^
+            -DCMAKE_CXX_COMPILER="%VCToolsInstallDir%bin/Hostx64/x64/cl.exe" ^
+            -DCMAKE_POLICY_DEFAULT_CMP0141=NEW ^
+            -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded ^
+            -DVNM_TERMINAL_SURFACE_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_terminal_surface" ^
+            -DVNM_QML_CHROME_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_qml_chrome" ^
+            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_msdf_text" ^
+            -DVNM_QT_DISPATCH_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_qt_dispatch" ^
+            -DVNM_FONTS_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_fonts" ^
+            -DVNM_TERMINAL_ENABLE_PROFILING=OFF ^
             -DBUILD_TESTING=ON
+          if errorlevel 1 exit /b 1
+
+      - name: Verify configured MSVC compilers
+        shell: pwsh
+        run: |
+          $expected = "$env:VS2026_PATH/VC/Tools/MSVC/14.51.".Replace('\', '/')
+          $cache = Get-Content -LiteralPath 'vnm_terminal/build/CMakeCache.txt'
+          foreach ($language in 'C', 'CXX') {
+              $entries = @($cache | Where-Object { $_ -match "^CMAKE_${language}_COMPILER:FILEPATH=" })
+              if ($entries.Count -ne 1) { throw "Missing $language compiler in CMake cache." }
+              $compiler = ($entries[0] -split '=', 2)[1].Replace('\', '/')
+              if (!$compiler.StartsWith($expected, [StringComparison]::OrdinalIgnoreCase)) {
+                  throw "Unexpected $language compiler: $compiler"
+              }
+              Write-Host $entries[0]
+          }
 
       - name: Build
-        run: cmake --build vnm_terminal/build --config ${CMAKE_BUILD_TYPE} --parallel
+        shell: cmd
+        run: |
+          call "%VS2026_PATH%\VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.51
+          if errorlevel 1 exit /b 1
+          cmake --build vnm_terminal/build --config %CMAKE_BUILD_TYPE% --parallel 4
 
       # Application tests stay tied to the tagged source. The one installer
       # source contract runs separately against the recipe that will be packed.
       - name: Run application tests
+        shell: cmd
         working-directory: vnm_terminal/build
         env:
           QT_QPA_PLATFORM: offscreen
-        run: ctest --output-on-failure -C ${CMAKE_BUILD_TYPE} -E '^vnm_terminal_windows_ifw_contract$'
+        run: |
+          call "%VS2026_PATH%\VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.51
+          if errorlevel 1 exit /b 1
+          ctest --output-on-failure -C %CMAKE_BUILD_TYPE% -E "^vnm_terminal_windows_ifw_contract$"
 
       - name: Run installer recipe tests
         shell: pwsh
@@ -233,7 +334,7 @@ jobs:
         working-directory: vnm_terminal
         run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/create_source_archive.ps1
 
-      - name: Validate source archive build
+      - name: Prepare source archive build
         shell: pwsh
         run: |
           $archive = Get-ChildItem -Path vnm_terminal/dist -Filter 'vnm_terminal_v*_source.zip' | Select-Object -First 1
@@ -253,31 +354,62 @@ jobs:
               throw "Expected exactly one source root in archive, found $($roots.Count)."
           }
           $sourceRoot = $roots[0].FullName
-          $surfaceDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_terminal_surface'
-          $chromeDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_qml_chrome'
-          $msdfTextDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_msdf_text'
-          $qtDispatchDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_qt_dispatch'
-          $fontsDir = Join-Path $env:GITHUB_WORKSPACE 'vnm_fonts'
+          "ARCHIVE_SOURCE_DIR=$sourceRoot" >> $env:GITHUB_ENV
+          "ARCHIVE_BUILD_DIR=$buildDir" >> $env:GITHUB_ENV
 
-          cmake -B $buildDir -S $sourceRoot `
-            -G "Visual Studio 17 2022" `
-            -A x64 `
-            -DCMAKE_CONFIGURATION_TYPES="$env:CMAKE_BUILD_TYPE" `
-            -DVNM_TERMINAL_SURFACE_SOURCE_DIR="$surfaceDir" `
-            -DVNM_QML_CHROME_SOURCE_DIR="$chromeDir" `
-            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="$msdfTextDir" `
-            -DVNM_QT_DISPATCH_SOURCE_DIR="$qtDispatchDir" `
-            -DVNM_FONTS_SOURCE_DIR="$fontsDir" `
-            -DVNM_TERMINAL_ENABLE_PROFILING=OFF `
+      - name: Configure source archive build
+        shell: cmd
+        run: |
+          call "%VS2026_PATH%\VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.51
+          if errorlevel 1 exit /b 1
+          cmake -B "%ARCHIVE_BUILD_DIR%" -S "%ARCHIVE_SOURCE_DIR%" ^
+            -G Ninja ^
+            -DCMAKE_BUILD_TYPE=%CMAKE_BUILD_TYPE% ^
+            -DCMAKE_C_COMPILER="%VCToolsInstallDir%bin/Hostx64/x64/cl.exe" ^
+            -DCMAKE_CXX_COMPILER="%VCToolsInstallDir%bin/Hostx64/x64/cl.exe" ^
+            -DCMAKE_POLICY_DEFAULT_CMP0141=NEW ^
+            -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded ^
+            -DVNM_TERMINAL_SURFACE_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_terminal_surface" ^
+            -DVNM_QML_CHROME_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_qml_chrome" ^
+            -DVNM_TERMINAL_MSDF_TEXT_RENDERER_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_msdf_text" ^
+            -DVNM_QT_DISPATCH_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_qt_dispatch" ^
+            -DVNM_FONTS_SOURCE_DIR="%GITHUB_WORKSPACE%/vnm_fonts" ^
+            -DVNM_TERMINAL_ENABLE_PROFILING=OFF ^
             -DBUILD_TESTING=ON
-          if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
+          if errorlevel 1 exit /b 1
+
+      - name: Verify configured MSVC compilers
+        shell: pwsh
+        run: |
+          $expected = "$env:VS2026_PATH/VC/Tools/MSVC/14.51.".Replace('\', '/')
+          $cache = Get-Content -LiteralPath "$env:ARCHIVE_BUILD_DIR/CMakeCache.txt"
+          foreach ($language in 'C', 'CXX') {
+              $entries = @($cache | Where-Object { $_ -match "^CMAKE_${language}_COMPILER:FILEPATH=" })
+              if ($entries.Count -ne 1) { throw "Missing $language compiler in CMake cache." }
+              $compiler = ($entries[0] -split '=', 2)[1].Replace('\', '/')
+              if (!$compiler.StartsWith($expected, [StringComparison]::OrdinalIgnoreCase)) {
+                  throw "Unexpected $language compiler: $compiler"
+              }
+              Write-Host $entries[0]
           }
 
-          cmake --build $buildDir --config $env:CMAKE_BUILD_TYPE --parallel
-          if ($LASTEXITCODE -ne 0) {
-              exit $LASTEXITCODE
-          }
+      - name: Validate source archive build
+        shell: cmd
+        run: |
+          call "%VS2026_PATH%\VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.51
+          if errorlevel 1 exit /b 1
+          cmake --build "%ARCHIVE_BUILD_DIR%" --config %CMAKE_BUILD_TYPE% --parallel 4
+
+      - name: Report compiler cache usage
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        run: ccache --show-stats --verbose
+
+      - name: Save compiler cache
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.restore_compiler_cache.outputs.cache-primary-key }}
 
       - name: Upload source archive artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -547,6 +679,43 @@ jobs:
           }
           "bin=$bin" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
+      - name: Install and identify compiler cache
+        id: compiler_cache
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'ccache.zip'
+          $root = Join-Path $env:RUNNER_TEMP 'ccache'
+          Invoke-WebRequest -Uri 'https://github.com/ccache/ccache/releases/download/v4.14.1/ccache-4.14.1-windows-x86_64.zip' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne
+              '6219f3865ca59aec41ee4b678df171d5d35855ecb2b6dbbbd20690b3a68af7b4') {
+              throw 'Compiler cache archive checksum mismatch.'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $root
+          $cacheExe = @(Get-ChildItem -LiteralPath $root -Filter ccache.exe -Recurse)
+          if ($cacheExe.Count -ne 1) { throw 'Expected one compiler cache executable.' }
+          $cacheExe = $cacheExe[0]
+          $cacheExe.DirectoryName >> $env:GITHUB_PATH
+          "CCACHE_DIR=$env:RUNNER_TEMP/vnm-terminal-ccache" >> $env:GITHUB_ENV
+          $fingerprint = Join-Path $env:RUNNER_TEMP 'compiler-cache-toolchain.txt'
+          Get-FileHash -Algorithm SHA256 -LiteralPath `
+              '${{ steps.mingw.outputs.bin }}/gcc.exe', '${{ steps.mingw.outputs.bin }}/g++.exe', $cacheExe.FullName |
+              ForEach-Object { "$($_.Hash) $($_.Path)" } | Set-Content $fingerprint
+          & $cacheExe.FullName --version | Tee-Object -FilePath $fingerprint -Append
+          Get-Content -LiteralPath $fingerprint
+          $hash = (Get-FileHash -LiteralPath $fingerprint -Algorithm SHA256).Hash.ToLowerInvariant()
+          "key_prefix=$env:RUNNER_OS-$env:RUNNER_ARCH-terminal-ccache-mingw-$env:CMAKE_BUILD_TYPE-$hash-" >> $env:GITHUB_OUTPUT
+
+      - name: Restore compiler cache
+        id: restore_compiler_cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.compiler_cache.outputs.key_prefix }}${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.compiler_cache.outputs.key_prefix }}
+
+      - name: Reset compiler cache statistics
+        run: ccache --zero-stats
+
       - name: Write package build configuration
         shell: pwsh
         run: |
@@ -573,8 +742,24 @@ jobs:
 
       - name: Build Windows portable payload
         shell: pwsh
+        env:
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
+          CCACHE_MAXSIZE: 2GiB
+          CCACHE_COMPILERCHECK: content
         working-directory: vnm_terminal
         run: cmd.exe /d /c build_portable.bat
+
+      - name: Report compiler cache usage
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        run: ccache --show-stats --verbose
+
+      - name: Save compiler cache
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.restore_compiler_cache.outputs.cache-primary-key }}
 
       - name: Capture and build the unsigned installer recipe
         shell: pwsh

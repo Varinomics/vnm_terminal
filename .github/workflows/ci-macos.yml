@@ -408,7 +408,7 @@ jobs:
         if: always() && inputs.validation == 'keyboard' && steps.terminal_tests.outcome != 'skipped'
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: vnm-terminal-macos-keyboard-${{ matrix.architecture }}-evidence
+          name: vnm-terminal-macos-keyboard-evidence
           path: |
             vnm_terminal/build/Testing/Temporary/LastTest.log
             ${{ runner.temp }}/compiler-cache-*.txt

@@ -34,6 +34,10 @@
       "name": "vnm-terminal-macos-custom-titlebar-evidence"
     },
     {
+      "id": "macos_keyboard_evidence",
+      "name": "vnm-terminal-macos-keyboard-evidence"
+    },
+    {
       "id": "macos_x64",
       "name_template": "vnm_terminal_v{version}_macos_x64_unnotarized",
       "name_expressions": [

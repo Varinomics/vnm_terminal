@@ -30,13 +30,17 @@ defaults:
 
 env:
   CMAKE_BUILD_TYPE: Release
+  CMAKE_C_COMPILER_LAUNCHER: ccache
+  CMAKE_CXX_COMPILER_LAUNCHER: ccache
+  CCACHE_MAXSIZE: 2GiB
+  CCACHE_COMPILERCHECK: content
   LINUX_SYSTEM_DEPS: >-
     libgl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev
     libxi-dev libxext-dev libwayland-dev libxkbcommon-dev libvulkan-dev
     libdbus-1-3 libegl1 libglib2.0-0t64 libopengl0
     libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1
     libxcb-render-util0 libxcb-shape0 libxcb-xkb1 libxkbcommon-x11-0
-    fontconfig fonts-dejavu-core fonts-liberation
+    fontconfig fonts-dejavu-core fonts-liberation ccache
 
 jobs:
   # Every build, package and test job below checks out the dependency commits
@@ -171,6 +175,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ${LINUX_SYSTEM_DEPS}
 
+      - name: Identify compiler cache
+        id: compiler_cache
+        run: |
+          echo "CCACHE_DIR=${RUNNER_TEMP}/vnm-terminal-ccache" >> "${GITHUB_ENV}"
+          {
+            ccache --version
+            gcc --version
+            g++ --version
+            sha256sum "$(command -v gcc)" "$(command -v g++)" "$(command -v ccache)" \
+              "$(gcc -print-prog-name=cc1)" "$(g++ -print-prog-name=cc1plus)"
+          } | tee "${RUNNER_TEMP}/compiler-cache-toolchain.txt"
+          toolchain_hash=$(sha256sum "${RUNNER_TEMP}/compiler-cache-toolchain.txt" | cut -d ' ' -f 1)
+          echo "key_prefix=${RUNNER_OS}-${RUNNER_ARCH}-terminal-ccache-${CMAKE_BUILD_TYPE}-${toolchain_hash}-" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore compiler cache
+        id: restore_compiler_cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.compiler_cache.outputs.key_prefix }}${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.compiler_cache.outputs.key_prefix }}${{ github.job }}-
+            ${{ steps.compiler_cache.outputs.key_prefix }}
+
+      - name: Reset compiler cache statistics
+        run: ccache --zero-stats
+
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
@@ -192,7 +223,18 @@ jobs:
             -DBUILD_TESTING=ON
 
       - name: Build
-        run: cmake --build vnm_terminal/build --config ${CMAKE_BUILD_TYPE} --parallel
+        run: cmake --build vnm_terminal/build --config ${CMAKE_BUILD_TYPE} --parallel 4
+
+      - name: Report compiler cache usage
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        run: ccache --show-stats --verbose
+
+      - name: Save compiler cache
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.restore_compiler_cache.outputs.cache-primary-key }}
 
       - name: Run tests
         working-directory: vnm_terminal/build
@@ -269,6 +311,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ${LINUX_SYSTEM_DEPS}
 
+      - name: Identify compiler cache
+        id: compiler_cache
+        run: |
+          echo "CCACHE_DIR=${RUNNER_TEMP}/vnm-terminal-ccache" >> "${GITHUB_ENV}"
+          {
+            ccache --version
+            gcc --version
+            g++ --version
+            sha256sum "$(command -v gcc)" "$(command -v g++)" "$(command -v ccache)" \
+              "$(gcc -print-prog-name=cc1)" "$(g++ -print-prog-name=cc1plus)"
+          } | tee "${RUNNER_TEMP}/compiler-cache-toolchain.txt"
+          toolchain_hash=$(sha256sum "${RUNNER_TEMP}/compiler-cache-toolchain.txt" | cut -d ' ' -f 1)
+          echo "key_prefix=${RUNNER_OS}-${RUNNER_ARCH}-terminal-ccache-${CMAKE_BUILD_TYPE}-${toolchain_hash}-" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore compiler cache
+        id: restore_compiler_cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.compiler_cache.outputs.key_prefix }}${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.compiler_cache.outputs.key_prefix }}${{ github.job }}-
+            ${{ steps.compiler_cache.outputs.key_prefix }}
+
+      - name: Reset compiler cache statistics
+        run: ccache --zero-stats
+
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
@@ -291,7 +360,18 @@ jobs:
             -DBUILD_TESTING=ON
 
       - name: Build
-        run: cmake --build vnm_terminal/build-transcript --config ${CMAKE_BUILD_TYPE} --parallel
+        run: cmake --build vnm_terminal/build-transcript --config ${CMAKE_BUILD_TYPE} --parallel 4
+
+      - name: Report compiler cache usage
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        run: ccache --show-stats --verbose
+
+      - name: Save compiler cache
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.restore_compiler_cache.outputs.cache-primary-key }}
 
       - name: Run tests
         working-directory: vnm_terminal/build-transcript
@@ -393,6 +473,33 @@ jobs:
             ${LINUX_SYSTEM_DEPS} \
             appstream desktop-file-utils dpkg-dev rpm cpio python3 binutils
 
+      - name: Identify compiler cache
+        id: compiler_cache
+        run: |
+          echo "CCACHE_DIR=${RUNNER_TEMP}/vnm-terminal-ccache" >> "${GITHUB_ENV}"
+          {
+            ccache --version
+            gcc --version
+            g++ --version
+            sha256sum "$(command -v gcc)" "$(command -v g++)" "$(command -v ccache)" \
+              "$(gcc -print-prog-name=cc1)" "$(g++ -print-prog-name=cc1plus)"
+          } | tee "${RUNNER_TEMP}/compiler-cache-toolchain.txt"
+          toolchain_hash=$(sha256sum "${RUNNER_TEMP}/compiler-cache-toolchain.txt" | cut -d ' ' -f 1)
+          echo "key_prefix=${RUNNER_OS}-${RUNNER_ARCH}-terminal-ccache-${CMAKE_BUILD_TYPE}-${toolchain_hash}-" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore compiler cache
+        id: restore_compiler_cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.compiler_cache.outputs.key_prefix }}${{ github.job }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            ${{ steps.compiler_cache.outputs.key_prefix }}${{ github.job }}-
+            ${{ steps.compiler_cache.outputs.key_prefix }}
+
+      - name: Reset compiler cache statistics
+        run: ccache --zero-stats
+
       - name: Install Qt
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
@@ -436,7 +543,7 @@ jobs:
             -DFT_DISABLE_PNG=ON \
             -DFT_DISABLE_ZLIB=ON \
             -DFT_ENABLE_ERROR_STRINGS=OFF
-          cmake --build "${msdf_package_build_dir}/freetype" --target install --parallel
+          cmake --build "${msdf_package_build_dir}/freetype" --target install --parallel 4
 
           cmake -S "${msdfgen_source_dir}" -B "${msdf_package_build_dir}/msdfgen" \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
@@ -450,7 +557,7 @@ jobs:
             -DMSDFGEN_USE_SKIA=OFF \
             -DMSDFGEN_CORE_ONLY=OFF \
             -DMSDFGEN_INSTALL=ON
-          cmake --build "${msdf_package_build_dir}/msdfgen" --target install --parallel
+          cmake --build "${msdf_package_build_dir}/msdfgen" --target install --parallel 4
 
           cmake -S vnm_msdf_text -B "${msdf_package_build_dir}/vnm_msdf_text" \
             -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} \
@@ -460,7 +567,7 @@ jobs:
             -DVNM_MSDF_TEXT_FETCH_DEPS=OFF \
             -DVNM_MSDF_TEXT_BUILD_QT_LCD=ON \
             -DVNM_MSDF_TEXT_BUILD_TESTS=OFF
-          cmake --build "${msdf_package_build_dir}/vnm_msdf_text" --target install --parallel
+          cmake --build "${msdf_package_build_dir}/vnm_msdf_text" --target install --parallel 4
 
       - name: Configure package build
         run: |
@@ -482,9 +589,20 @@ jobs:
 
       - name: Build and test package configuration
         run: |
-          cmake --build vnm_terminal/build-package --config ${CMAKE_BUILD_TYPE} --parallel
+          cmake --build vnm_terminal/build-package --config ${CMAKE_BUILD_TYPE} --parallel 4
           QT_QPA_PLATFORM=offscreen \
             ctest --test-dir vnm_terminal/build-package --output-on-failure
+
+      - name: Report compiler cache usage
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        run: ccache --show-stats --verbose
+
+      - name: Save compiler cache
+        if: always() && steps.restore_compiler_cache.outcome == 'success'
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.restore_compiler_cache.outputs.cache-primary-key }}
 
       - name: Validate Linux desktop metadata
         run: |
