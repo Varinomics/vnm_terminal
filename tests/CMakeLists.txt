@@ -1219,12 +1219,12 @@ if(TARGET vnm_terminal_canvas_fixture)
 endif()
 
 add_test(
-    NAME vnm_terminal_help_mentions_alternate_wheel_default
+    NAME vnm_terminal_help_contract
     COMMAND
         "${CMAKE_COMMAND}"
-        "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=alternate-screen wheel: mouse\\(default\\), cursor, or page"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
+        "-Dnative_titlebar_supported=${vnm_terminal_custom_titlebar_supported}"
+        "-Dtranscript_capture_replay_enabled=${VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/terminal_app/help_contract.cmake"
         --
         "${CMAKE_COMMAND}" -E env
         ${vnm_terminal_qt_offscreen_environment}
@@ -1234,47 +1234,7 @@ add_test(
         "--help"
 )
 
-set_tests_properties(vnm_terminal_help_mentions_alternate_wheel_default PROPERTIES
-    TIMEOUT 30
-)
-
-add_test(
-    NAME vnm_terminal_help_mentions_text_renderer
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=text renderer: auto\\(default\\), msdf, or glyph"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
-        --
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal>"
-        "--help"
-)
-
-set_tests_properties(vnm_terminal_help_mentions_text_renderer PROPERTIES
-    TIMEOUT 30
-)
-
-add_test(
-    NAME vnm_terminal_help_mentions_row_timestamps
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=row hover timestamp tooltip: on\\(default\\) or off"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
-        --
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal>"
-        "--help"
-)
-
-set_tests_properties(vnm_terminal_help_mentions_row_timestamps PROPERTIES
+set_tests_properties(vnm_terminal_help_contract PROPERTIES
     TIMEOUT 30
 )
 
@@ -1303,191 +1263,6 @@ if(WIN32 AND TARGET vnm_terminal_canvas_fixture)
         TIMEOUT 30
     )
 endif()
-
-add_test(
-    NAME vnm_terminal_help_mentions_synchronized_output_scroll_policy
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=--synchronized-output-scroll-policy <policy>"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
-        --
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal>"
-        "--help"
-)
-
-add_test(
-    NAME vnm_terminal_help_describes_synchronized_output_scroll_policy_values
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=DEC synchronized-output scroll: defer\\(default\\) or immediate-public \\(case-insensitive\\)"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
-        --
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal>"
-        "--help"
-)
-
-set_tests_properties(
-    vnm_terminal_help_mentions_synchronized_output_scroll_policy
-    vnm_terminal_help_describes_synchronized_output_scroll_policy_values
-    PROPERTIES
-    TIMEOUT 30
-)
-
-if(vnm_terminal_custom_titlebar_supported)
-    add_test(
-        NAME vnm_terminal_help_mentions_native_titlebar
-        COMMAND
-            "${CMAKE_COMMAND}"
-            "-Dexpected_exit_code=0"
-            "-Dexpected_stdout_regex=--native-titlebar +use the platform titlebar instead of built-in chrome"
-            "-Drequire_empty_stderr=ON"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/terminal_app/expect_process_clean.cmake"
-            --
-            "${CMAKE_COMMAND}" -E env
-            ${vnm_terminal_qt_offscreen_environment}
-            ${vnm_terminal_qt_unscaled_environment}
-            "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal>"
-            "--help"
-    )
-
-    set_tests_properties(vnm_terminal_help_mentions_native_titlebar PROPERTIES
-        TIMEOUT 30
-    )
-endif()
-
-if(VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
-    add_test(
-        NAME vnm_terminal_help_mentions_transcript_capture
-        COMMAND
-            "${CMAKE_COMMAND}"
-            "-Dexpected_exit_code=0"
-            "-Dexpected_output_regex=--capture-transcript <path> +write sensitive NDJSON replay transcript"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
-            --
-            "${CMAKE_COMMAND}" -E env
-            ${vnm_terminal_qt_offscreen_environment}
-            ${vnm_terminal_qt_unscaled_environment}
-            "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal>"
-            "--help"
-    )
-
-    set_tests_properties(vnm_terminal_help_mentions_transcript_capture PROPERTIES
-        TIMEOUT 30
-    )
-
-    add_test(
-        NAME vnm_terminal_help_mentions_transcript_snapshot_diagnostics
-        COMMAND
-            "${CMAKE_COMMAND}"
-            "-Dexpected_exit_code=0"
-            "-Dexpected_output_regex=--transcript-snapshot-diagnostics +include visible row text/provenance snapshots"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
-            --
-            "${CMAKE_COMMAND}" -E env
-            ${vnm_terminal_qt_offscreen_environment}
-            ${vnm_terminal_qt_unscaled_environment}
-            "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal>"
-            "--help"
-    )
-
-    set_tests_properties(vnm_terminal_help_mentions_transcript_snapshot_diagnostics PROPERTIES
-        TIMEOUT 30
-    )
-else()
-    add_test(
-        NAME vnm_terminal_help_omits_transcript_capture
-        COMMAND
-            "${CMAKE_COMMAND}"
-            "-Dexpected_exit_code=0"
-            "-Dforbidden_stdout_regex=--capture-transcript|--transcript-snapshot-diagnostics"
-            "-Drequire_empty_stderr=ON"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/terminal_app/expect_process_clean.cmake"
-            --
-            "${CMAKE_COMMAND}" -E env
-            ${vnm_terminal_qt_offscreen_environment}
-            ${vnm_terminal_qt_unscaled_environment}
-            "${vnm_terminal_qt_runtime_path}"
-            "$<TARGET_FILE:vnm_terminal>"
-            "--help"
-    )
-
-    set_tests_properties(vnm_terminal_help_omits_transcript_capture PROPERTIES
-        TIMEOUT 30
-    )
-endif()
-
-add_test(
-    NAME vnm_terminal_help_mentions_mouse_selection
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=mouse-reporting apps receive unmodified mouse drags; Shift-drag selects locally"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
-        --
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal>"
-        "--help"
-)
-
-set_tests_properties(vnm_terminal_help_mentions_mouse_selection PROPERTIES
-    TIMEOUT 30
-)
-
-add_test(
-    NAME vnm_terminal_help_mentions_osc52_policy
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=OSC 52 clipboard writes are denied by default"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
-        --
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal>"
-        "--help"
-)
-
-set_tests_properties(vnm_terminal_help_mentions_osc52_policy PROPERTIES
-    TIMEOUT 30
-)
-
-add_test(
-    NAME vnm_terminal_help_mentions_paste_shortcut
-    COMMAND
-        "${CMAKE_COMMAND}"
-        "-Dexpected_exit_code=0"
-        "-Dexpected_output_regex=paste shortcut: platform-default\\(default\\), ctrl-shift-v, ctrl-v-and-ctrl-shift-v, or disabled"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/expect_process_result.cmake"
-        --
-        "${CMAKE_COMMAND}" -E env
-        ${vnm_terminal_qt_offscreen_environment}
-        ${vnm_terminal_qt_unscaled_environment}
-        "${vnm_terminal_qt_runtime_path}"
-        "$<TARGET_FILE:vnm_terminal>"
-        "--help"
-)
-
-set_tests_properties(vnm_terminal_help_mentions_paste_shortcut PROPERTIES
-    TIMEOUT 30
-)
 
 set(vnm_terminal_distribution_guard_configure_args
     "-G" "${CMAKE_GENERATOR}"
