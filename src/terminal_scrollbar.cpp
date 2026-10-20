@@ -1,5 +1,6 @@
 #include "vnm_terminal/app_support/terminal_scrollbar.h"
 
+#include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
 #include "vnm_terminal/internal/wheel_gesture.h"
 
 #include <QColor>
@@ -458,7 +459,7 @@ bool scrollbar::Terminal_scrollbar::zoom_surface_from_wheel(QWheelEvent* event)
 
     const qreal previous_font_size  = m_surface->font_size();
     const qreal requested_font_size =
-        term::font_size_after_wheel_zoom(previous_font_size, steps);
+        term::VNM_TerminalSurface_render_bridge::font_size_after_wheel_zoom(*m_surface, steps);
     m_surface->set_font_size(requested_font_size);
     record_wheel_trace_event(
         *event,

@@ -9,7 +9,12 @@
 #include "vnm_qml_chrome/vnm_chrome_geometry.h"
 
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
+#include "vnm_terminal/internal/qsg_atlas_renderer.h"
+#include "vnm_terminal/internal/qt_window_metrics.h"
 #include "vnm_terminal/internal/terminal_transcript.h"
+#include "vnm_terminal/internal/vnm_terminal_font.h"
+#include "vnm_terminal/internal/wheel_gesture.h"
+#include "vnm_terminal/font_metrics.h"
 #include "vnm_terminal/terminal_renderer_surface_format.h"
 #include "helpers/test_check.h"
 
@@ -1810,6 +1815,58 @@ bool test_terminal_scrollbar_tracks_surface_viewport(QGuiApplication& app)
         "scrollbar boundary remainder does not delay opposite scroll");
     ok &= check(surface.viewport_offset_from_tail() == 3,
         "scrollbar opposite scroll starts from a clean boundary remainder");
+
+    // Where this platform draws a size and the next whole size alike, a scrollbar notch
+    // from that size must still change the drawing, measured as the renderer accounts
+    // for what its text paths draw from.
+    const term::Terminal_text_renderer_policy renderer_policy =
+        surface.text_renderer_mode() == VNM_TerminalSurface::Text_renderer_mode::GLYPH
+            ? term::Terminal_text_renderer_policy::GLYPH
+            : surface.text_renderer_mode() == VNM_TerminalSurface::Text_renderer_mode::MSDF
+                ? term::Terminal_text_renderer_policy::MSDF
+                : term::Terminal_text_renderer_policy::AUTO;
+    const auto draw_sizes = [&](qreal effective_font_size) {
+        const qreal logical_dpi = term::window_logical_dpi(&window);
+        return term::qsg_atlas_text_draw_sizes(
+            term::vnm_terminal_font(surface.font_family(), effective_font_size, logical_dpi),
+            term::window_device_pixel_ratio(&window),
+            surface.font_advance_policy(),
+            logical_dpi);
+    };
+    const auto draw_sizes_of = [&](qreal font_size) {
+        return draw_sizes(vnm_terminal::effective_font_size_for_font(
+            surface.font_family(),
+            font_size,
+            term::window_device_pixel_ratio(&window),
+            surface.font_advance_policy(),
+            term::window_logical_dpi(&window)));
+    };
+    for (qreal font_size = term::k_font_zoom_min_pixel_size;
+         font_size < term::k_font_zoom_max_pixel_size;
+         font_size += 1.0)
+    {
+        if (term::qsg_atlas_text_draws_differently(
+                draw_sizes_of(font_size), draw_sizes_of(font_size + 1.0), renderer_policy))
+        {
+            continue;
+        }
+
+        surface.set_font_size(font_size);
+        const term::qsg_atlas_text_draw_sizes_t sizes_before =
+            draw_sizes(surface.effective_font_size());
+        ok &= send_item_wheel_event(
+            scrollbar,
+            Qt::ControlModifier,
+            0,
+            120,
+            true,
+            "scrollbar Ctrl+wheel zoom from a size drawing like the next is consumed");
+        ok &= check(
+            term::qsg_atlas_text_draws_differently(
+                sizes_before, draw_sizes(surface.effective_font_size()), renderer_policy),
+            "scrollbar Ctrl+wheel changes the drawing where the next size draws alike");
+        break;
+    }
 
     return ok;
 }
