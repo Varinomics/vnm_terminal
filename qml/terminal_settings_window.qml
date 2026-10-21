@@ -9,10 +9,8 @@ Window {
     objectName: "terminal_settings_window"
     property bool dark_mode: true
 
-    readonly property int settings_font_pixel_size: Math.max(1, Math.round(
-        VNM_system_window.application_font.pixelSize))
-    readonly property int caption_font_pixel_size: Math.max(1, Math.round(settings_font_pixel_size * 10 / 12))
-    readonly property int hint_font_pixel_size: Math.max(1, Math.round(settings_font_pixel_size * 11 / 12))
+    readonly property TerminalSettingsStyle settings_style: terminal_style
+    readonly property int settings_font_pixel_size: settings_style.font_pixel_size
     readonly property int minimum_content_width: Math.ceil(Math.max(
         form_left_column.implicitWidth, form_right_column.implicitWidth, 180))
     readonly property int natural_width: Math.ceil(
@@ -44,13 +42,26 @@ Window {
     maximumHeight: effective_height_limit
     visible: false
     flags: Qt.Tool | Qt.FramelessWindowHint
-    color: dark_mode ? "#202020" : "#f4f4f4"
+    color: settings_style.window_color
     title: "Terminal settings"
 
     signal close_requested()
     signal move_requested()
     signal resize_requested(int edges)
     signal font_family_selected(string family)
+
+    TerminalSettingsStyle {
+        id: terminal_style
+
+        dark_mode: win.dark_mode
+        font_pixel_size: Math.max(1, Math.round(VNM_system_window.application_font.pixelSize))
+        icon_font_family: settingsIconFontFamily
+    }
+
+    VNM_TextInputFocusController {
+        window: win
+        include_controls: true
+    }
 
     readonly property int titlebar_height: settings_titlebar.implicitHeight
     readonly property int body_margin: 16
@@ -61,23 +72,8 @@ Window {
             frame_border_width,
             VNM_chrome_geometry.default_resize_target_extent)
 
-    readonly property color section_color:      dark_mode ? "#8d99a8" : "#465366"
-    readonly property color label_color:        dark_mode ? "#9aa4b2" : "#465366"
-    readonly property color value_color:        dark_mode ? "#dfe5ee" : "#202834"
-    readonly property color hint_color:         dark_mode ? "#6c7886" : "#596575"
-    readonly property color warning_color:      dark_mode ? "#d6b25a" : "#896315"
-    readonly property color accent_color:       dark_mode ? "#71b4ff" : "#1763ad"
-    readonly property color separator_color:    dark_mode ? "#343434" : "#d0d0d0"
-    readonly property color field_color:        dark_mode ? "#262626" : "#ffffff"
-    readonly property color field_hover_color:  dark_mode ? "#2e2e2e" : "#eaeaea"
-    readonly property color field_border_color: dark_mode ? "#3a3a3a" : "#b8b8b8"
-    readonly property color field_focus_color:  dark_mode ? "#5a5a5a" : "#1763ad"
-    readonly property color popup_color:        dark_mode ? "#242424" : "#ffffff"
-    readonly property color row_hover_color:    dark_mode ? "#303030" : "#e5e5e5"
-    readonly property color card_color:         dark_mode ? "#252525" : "#ffffff"
-    readonly property color card_hover_color:   dark_mode ? "#2d2d2d" : "#eaeaea"
-    readonly property color card_border_color:  dark_mode ? "#383838" : "#b8b8b8"
-    readonly property color selection_color:    dark_mode ? "#2f4a6b" : "#c4dfff"
+    readonly property color value_color: settings_style.value_color
+    readonly property color field_color: settings_style.field_color
 
     readonly property bool msdf_unavailable: hasLiveSurface && surface.textRendererMode !== 2
         && !surface.msdfTextChecking
@@ -120,8 +116,8 @@ Window {
 
         Text {
             id: section_text
-            color: win.section_color
-            font.pixelSize: win.caption_font_pixel_size
+            color: settings_style.section_color
+            font.pixelSize: settings_style.caption_font_pixel_size
             font.weight: Font.DemiBold
             font.letterSpacing: 1.2
             font.capitalization: Font.AllUppercase
@@ -130,13 +126,13 @@ Window {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 1
-            color: win.separator_color
+            color: settings_style.separator_color
         }
     }
 
     component S_Label: Text {
-        color: win.label_color
-        font.pixelSize: win.settings_font_pixel_size
+        color: settings_style.label_color
+        font.pixelSize: settings_style.font_pixel_size
         Layout.minimumWidth: implicitWidth
     }
 
@@ -164,291 +160,15 @@ Window {
 
             text: tip.text
             color: win.value_color
-            font.pixelSize: win.hint_font_pixel_size
+            font.pixelSize: settings_style.hint_font_pixel_size
             wrapMode: Text.Wrap
         }
 
         background: Rectangle {
             radius: 4
-            color: win.popup_color
+            color: settings_style.popup_color
             border.width: 1
-            border.color: win.field_border_color
-        }
-    }
-
-    component S_ScrollBar: Basic.ScrollBar {
-        id: bar
-
-        implicitWidth: 8
-        implicitHeight: 8
-        padding: 2
-        policy: Basic.ScrollBar.AsNeeded
-        visible: bar.size < 1.0
-
-        background: Rectangle {
-            color: "transparent"
-        }
-
-        contentItem: Rectangle {
-            implicitWidth: 4
-            radius: 2
-            color: bar.pressed ? win.label_color : win.hint_color
-        }
-    }
-
-    component S_Combo: Basic.ComboBox {
-        id: combo
-
-        // Per-row hooks for the popup list: `row_enabled` grays out rows that
-        // are not currently selectable, and `use_row_font` renders each row in
-        // the font family it names (for font pickers).
-        property var  row_enabled: (row) => true
-        property bool use_row_font: false
-
-        implicitHeight: 30
-        rightPadding: 4
-        font.pixelSize: win.settings_font_pixel_size
-        hoverEnabled: true
-
-        background: VNM_Snapped_rectangle {
-            radius: 4
-            color: combo.hovered || combo.down ? win.field_hover_color : win.field_color
-            border_width: 1
-            border_color: combo.activeFocus || combo.down
-                ? win.field_focus_color : win.field_border_color
-
-            Behavior on color { ColorAnimation { duration: 100 } }
-        }
-
-        contentItem: Text {
-            leftPadding: 10
-            rightPadding: combo.rightPadding + combo.indicator.width + 5
-            text: combo.displayText
-            font: combo.font
-            color: win.value_color
-            verticalAlignment: Text.AlignVCenter
-            elide: Text.ElideRight
-        }
-
-        indicator: Text {
-            x: combo.width - width - combo.rightPadding
-            y: (combo.height - height) / 2 - font.pixelSize / 32
-            text: "\uf107"
-            font { family: settingsIconFontFamily; pixelSize: combo.font.pixelSize; }
-            color: win.label_color
-        }
-
-        delegate: Basic.ItemDelegate {
-            id: combo_row
-
-            required property int index
-            required property var modelData
-
-            width: ListView.view ? ListView.view.width : 0
-            height: 28
-            enabled: combo.row_enabled(modelData)
-            highlighted: combo.highlightedIndex === index
-            hoverEnabled: true
-
-            contentItem: Text {
-                leftPadding: 4
-                text: combo.textRole ? combo_row.modelData[combo.textRole] : combo_row.modelData
-                font.pixelSize: win.settings_font_pixel_size
-                font.family: combo.use_row_font ? combo_row.modelData : combo.font.family
-                color: !combo_row.enabled ? win.hint_color
-                    : combo_row.index === combo.currentIndex ? win.accent_color : win.value_color
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
-            }
-
-            background: VNM_Snapped_rectangle {
-                radius: 3
-                color: combo_row.highlighted ? win.row_hover_color : "transparent"
-            }
-        }
-
-        popup: Basic.Popup {
-            y: combo.height + 4
-            width: combo.width
-            padding: 6
-            implicitHeight: Math.min(
-                contentItem.implicitHeight + topPadding + bottomPadding, 280)
-
-            background: VNM_Snapped_rectangle {
-                radius: 6
-                color: win.popup_color
-                border_width: 1
-                border_color: win.field_border_color
-            }
-
-            contentItem: ListView {
-                implicitHeight: contentHeight
-                clip: true
-                model: combo.popup.visible ? combo.delegateModel : null
-                currentIndex: combo.highlightedIndex
-                boundsBehavior: Flickable.StopAtBounds
-
-                Basic.ScrollBar.vertical: S_ScrollBar {}
-            }
-        }
-    }
-
-    component S_SpinBox: Basic.SpinBox {
-        id: spin
-
-        implicitWidth: 110
-        implicitHeight: 30
-        editable: true
-        hoverEnabled: true
-        font.pixelSize: win.settings_font_pixel_size
-        Layout.minimumWidth: implicitWidth
-        leftPadding: 26
-        rightPadding: 26
-
-        background: VNM_Snapped_rectangle {
-            radius: 4
-            color: win.field_color
-            border_width: 1
-            border_color: spin.activeFocus ? win.field_focus_color : win.field_border_color
-        }
-
-        contentItem: TextInput {
-            text: spin.displayText
-            font: spin.font
-            color: win.value_color
-            selectionColor: win.selection_color
-            selectedTextColor: win.value_color
-            horizontalAlignment: Qt.AlignHCenter
-            verticalAlignment: Qt.AlignVCenter
-            readOnly: !spin.editable
-            validator: spin.validator
-            inputMethodHints: Qt.ImhDigitsOnly
-            clip: true
-        }
-
-        down.indicator: VNM_Snapped_rectangle {
-            x: 2
-            y: 2
-            width: 22
-            height: spin.height - 4
-            radius: 3
-            color: spin.down.pressed ? win.field_border_color
-                : down_hover.hovered ? win.row_hover_color : "transparent"
-
-            HoverHandler { id: down_hover }
-
-            Text {
-                anchors.centerIn: parent
-                text: "\u2212"
-                font.pixelSize: win.settings_font_pixel_size
-                color: win.label_color
-                opacity: spin.value > spin.from ? 1.0 : 0.35
-            }
-        }
-
-        up.indicator: VNM_Snapped_rectangle {
-            x: spin.width - width - 2
-            y: 2
-            width: 22
-            height: spin.height - 4
-            radius: 3
-            color: spin.up.pressed ? win.field_border_color
-                : up_hover.hovered ? win.row_hover_color : "transparent"
-
-            HoverHandler { id: up_hover }
-
-            Text {
-                anchors.centerIn: parent
-                text: "+"
-                font.pixelSize: win.settings_font_pixel_size
-                color: win.label_color
-                opacity: spin.value < spin.to ? 1.0 : 0.35
-            }
-        }
-    }
-
-    component S_Switch: Basic.Switch {
-        id: sw
-
-        implicitWidth: 38
-        implicitHeight: 30
-        hoverEnabled: true
-        leftPadding: 0
-        rightPadding: 0
-        topPadding: 0
-        bottomPadding: 0
-        Layout.minimumWidth: implicitWidth
-
-        indicator: Rectangle {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            implicitWidth: 38
-            implicitHeight: 20
-            radius: height / 2
-            color: win.dark_mode
-                ? (sw.checked ? "#33598a" : "#222a35")
-                : (sw.checked ? win.accent_color : win.field_hover_color)
-            border.width: 1
-            border.color: win.dark_mode
-                ? (sw.checked ? "#46719f" : "#36404e")
-                : (sw.checked ? win.accent_color : win.field_border_color)
-
-            Behavior on color { ColorAnimation { duration: 120 } }
-
-            Rectangle {
-                width: 14
-                height: 14
-                radius: 7
-                anchors.verticalCenter: parent.verticalCenter
-                x: sw.checked ? parent.width - width - 3 : 3
-                color: !win.dark_mode && !sw.checked
-                    ? (sw.pressed ? "#202834" : sw.hovered ? "#465366" : "#596575")
-                    : (sw.pressed ? "#c4d2e2" : sw.hovered ? "#eef4fb" : "#dfe9f5")
-
-                Behavior on x {
-                    NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
-                }
-            }
-        }
-    }
-
-    component S_ProgressBar: Basic.ProgressBar {
-        id: progress
-
-        implicitHeight: 4
-
-        background: Rectangle {
-            radius: 2
-            color: win.field_color
-        }
-
-        contentItem: Item {
-            clip: true
-
-            Rectangle {
-                width: parent.width * progress.position
-                height: parent.height
-                radius: 2
-                color: win.accent_color
-                visible: !progress.indeterminate
-            }
-
-            Rectangle {
-                id: progress_sweep
-                width: parent.width * 0.3
-                height: parent.height
-                radius: 2
-                color: win.accent_color
-                visible: progress.indeterminate
-
-                NumberAnimation on x {
-                    running: progress.indeterminate && progress.visible
-                    loops: Animation.Infinite
-                    from: -progress_sweep.width
-                    to: progress.width
-                    duration: 1200
-                }
-            }
+            border.color: settings_style.field_border_color
         }
     }
 
@@ -465,12 +185,12 @@ Window {
         titlebar: win.color
         titlebar_text: win.value_color
         titlebar_button_icon: win.value_color
-        titlebar_button_hover: win.row_hover_color
-        titlebar_button_pressed: win.field_border_color
+        titlebar_button_hover: settings_style.row_hover_color
+        titlebar_button_pressed: settings_style.field_border_color
         titlebar_close_hover: win.dark_mode ? "#c6303a" : "#f3bdc1"
         titlebar_close_pressed: win.dark_mode ? "#96222a" : "#e99ba2"
-        titlebar_content_border: win.separator_color
-        window_frame_border: win.separator_color
+        titlebar_content_border: settings_style.separator_color
+        window_frame_border: settings_style.separator_color
     }
 
     VNM_NativeWindowFrame {
@@ -565,8 +285,9 @@ Window {
                 boundsMovement: Flickable.StopAtBounds
                 interactive: contentHeight > height || contentWidth > width
 
-                Basic.ScrollBar.vertical: S_ScrollBar {
+                Basic.ScrollBar.vertical: TerminalSettingsScrollBar {
                     id: settings_body_scrollbar
+                    settings_style: win.settings_style
                     objectName: "settings_window_body_scrollbar"
 
                     anchors.top: parent.top
@@ -574,8 +295,9 @@ Window {
                     anchors.bottom: parent.bottom
                     z: 1
                 }
-                Basic.ScrollBar.horizontal: S_ScrollBar {
+                Basic.ScrollBar.horizontal: TerminalSettingsScrollBar {
                     id: settings_body_horizontal_scrollbar
+                    settings_style: win.settings_style
                     objectName: "settings_window_body_horizontal_scrollbar"
                     z: 1
                 }
@@ -620,10 +342,12 @@ Window {
                     id: preview_text_metrics
                     text: "Aa"
                     font.family: surface.fontFamily
-                    font.pixelSize: win.settings_font_pixel_size
+                    font.pixelSize: settings_style.font_pixel_size
                 }
 
-                Basic.ScrollBar.vertical: S_ScrollBar {}
+                Basic.ScrollBar.vertical: TerminalSettingsScrollBar {
+                    settings_style: win.settings_style
+                }
 
                 Connections {
                     target: win
@@ -662,9 +386,9 @@ Window {
                         anchors.rightMargin: 10
                         anchors.bottomMargin: 10
                         radius: 5
-                        color: card_hover.hovered ? win.card_hover_color : win.card_color
+                        color: card_hover.hovered ? settings_style.card_hover_color : settings_style.card_color
                         border.width: 1
-                        border.color: selected ? win.accent_color : win.card_border_color
+                        border.color: selected ? settings_style.accent_color : settings_style.card_border_color
 
                         Behavior on color { ColorAnimation { duration: 100 } }
 
@@ -723,7 +447,7 @@ Window {
                                         text: "Aa"
                                         color: preview.foreground
                                         font.family: surface.fontFamily
-                                        font.pixelSize: win.settings_font_pixel_size
+                                        font.pixelSize: settings_style.font_pixel_size
                                     }
 
                                     Rectangle {
@@ -745,7 +469,7 @@ Window {
                                             text: "Aa"
                                             color: preview.selection_foreground
                                             font.family: surface.fontFamily
-                                            font.pixelSize: win.settings_font_pixel_size
+                                            font.pixelSize: settings_style.font_pixel_size
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
@@ -760,16 +484,16 @@ Window {
                                 Text {
                                     Layout.fillWidth: true
                                     text: modelData
-                                    color: selected ? win.value_color : win.label_color
-                                    font.pixelSize: win.settings_font_pixel_size
+                                    color: selected ? win.value_color : settings_style.label_color
+                                    font.pixelSize: settings_style.font_pixel_size
                                     elide: Text.ElideRight
                                 }
 
                                 Text {
                                     visible: selected
                                     text: "\u2713"
-                                    font.pixelSize: win.settings_font_pixel_size
-                                    color: win.accent_color
+                                    font.pixelSize: settings_style.font_pixel_size
+                                    color: settings_style.accent_color
                                 }
                             }
                         }
@@ -824,7 +548,8 @@ Window {
                             text: "Family"
                         }
 
-                        S_Combo {
+                        TerminalSettingsComboBox {
+                            settings_style: win.settings_style
                             objectName: "font_family_combo"
                             Layout.fillWidth: true
                             use_row_font: true
@@ -853,7 +578,8 @@ Window {
                             Layout.fillWidth: true
                             spacing: 8
 
-                            S_SpinBox {
+                            TerminalSettingsSpinBox {
+                                settings_style: win.settings_style
                                 objectName: "font_size_spin"
                                 implicitWidth: 76
                                 Layout.maximumWidth: 68
@@ -887,7 +613,8 @@ Window {
                             text: "Cell width"
                         }
 
-                        S_Combo {
+                        TerminalSettingsComboBox {
+                            settings_style: win.settings_style
                             objectName: "font_advance_policy_combo"
                             Layout.fillWidth: true
                             model: [
@@ -922,8 +649,9 @@ Window {
                                 Layout.fillWidth: true
                                 spacing: 8
 
-                                S_Combo {
+                                TerminalSettingsComboBox {
                                     id: renderer_combo
+                                    settings_style: win.settings_style
                                     objectName: "renderer_mode_combo"
 
                                     Layout.fillWidth: true
@@ -957,12 +685,13 @@ Window {
 
                                     visible: win.msdf_unavailable
                                     text: "\u26A0"
-                                    font.pixelSize: win.settings_font_pixel_size
-                                    color: win.warning_color
+                                    font.pixelSize: settings_style.font_pixel_size
+                                    color: settings_style.warning_color
                                 }
                             }
 
-                            S_ProgressBar {
+                            TerminalSettingsProgressBar {
+                                settings_style: win.settings_style
                                 Layout.fillWidth: true
                                 indeterminate: true
                                 visible: hasLiveSurface && surface.msdfTextChecking
@@ -979,7 +708,8 @@ Window {
                             text: "LCD subpixel"
                         }
 
-                        S_Switch {
+                        TerminalSettingsSwitch {
+                            settings_style: win.settings_style
                             objectName: "lcd_subpixel_switch"
                             Layout.leftMargin: 14
                             // lcdSubpixelOrder: AUTO=0 (on, auto-detected order), NONE=1
@@ -1005,8 +735,9 @@ Window {
                             Layout.alignment: Qt.AlignVCenter
                         }
 
-                        S_Switch {
+                        TerminalSettingsSwitch {
                             id: invert_brightness_switch
+                            settings_style: win.settings_style
                             objectName: "invert_brightness_switch"
                             checked: surface.invertBrightness
                             onToggled: surface.invertBrightness = checked
@@ -1047,7 +778,8 @@ Window {
                             Layout.fillWidth: true
                         }
 
-                        S_Switch {
+                        TerminalSettingsSwitch {
+                            settings_style: win.settings_style
                             objectName: "row_timestamp_switch"
                             checked: surface.rowTimestampTooltipEnabled
                             onToggled: surface.rowTimestampTooltipEnabled = checked
@@ -1068,7 +800,8 @@ Window {
                             Layout.fillWidth: true
                         }
 
-                        S_Switch {
+                        TerminalSettingsSwitch {
+                            settings_style: win.settings_style
                             objectName: "copy_on_select_switch"
                             checked: surface.copyOnSelect
                             onToggled: surface.copyOnSelect = checked
@@ -1102,8 +835,9 @@ Window {
                                 Layout.fillWidth: true
                             }
 
-                            S_SpinBox {
+                            TerminalSettingsSpinBox {
                                 id: scrollback_buffer_size_spin
+                                settings_style: win.settings_style
                                 objectName: "scrollback_buffer_size_spin"
 
                                 implicitWidth: 68
@@ -1129,8 +863,8 @@ Window {
                                 ? "Up to " + surface.estimatedScrollbackLines.toLocaleString() +
                                     " plain-text lines at this width"
                                 : "Estimate appears when the terminal size is known"
-                            color: win.label_color
-                            font.pixelSize: win.caption_font_pixel_size
+                            color: settings_style.label_color
+                            font.pixelSize: settings_style.caption_font_pixel_size
                             horizontalAlignment: Text.AlignLeft
                             wrapMode: Text.Wrap
                         }
@@ -1158,8 +892,9 @@ Window {
                             Layout.fillWidth: true
                         }
 
-                        S_Switch {
+                        TerminalSettingsSwitch {
                             id: interaction_diagnostics_switch
+                            settings_style: win.settings_style
                             objectName: "interaction_diagnostics_switch"
 
                             visible: interactionDiagnosticsUnlocked
@@ -1189,7 +924,7 @@ Window {
                 Layout.fillWidth: true
                 Layout.topMargin: 2
                 implicitHeight: 1
-                color: win.separator_color
+                color: settings_style.separator_color
             }
 
             TextEdit {
@@ -1200,11 +935,11 @@ Window {
 
                 text: settings.buildProvenanceText
                 textFormat: TextEdit.PlainText
-                color: win.hint_color
+                color: settings_style.hint_color
                 selectedTextColor: win.value_color
-                selectionColor: win.selection_color
+                selectionColor: settings_style.selection_color
                 font.family: surface.fontFamily
-                font.pixelSize: win.caption_font_pixel_size
+                font.pixelSize: settings_style.caption_font_pixel_size
                 readOnly: true
                 selectByMouse: true
                 wrapMode: TextEdit.Wrap

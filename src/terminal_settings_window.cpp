@@ -252,10 +252,8 @@ QRect foreground_anchor_geometry()
 // titlebar so it visually belongs to the terminal. Its preference controls bind
 // to a live surface or settings model; the controller supplies the font list.
 //
-// The dialog styles every control itself (dialog-local inline `component`
-// definitions over QtQuick.Controls.Basic, carrying the S_ prefix) because the
-// controls and chrome follow the host application's dark/light selection,
-// independently of the terminal's color scheme. The form keeps its natural
+// The shared TerminalSettings controls follow the host application's dark/light
+// selection independently of the terminal's color scheme. The form keeps its natural
 // height when the screen can contain it; on a smaller screen its body scrolls below the fixed
 // titlebar.
 } // namespace
