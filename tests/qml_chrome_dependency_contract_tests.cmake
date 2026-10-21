@@ -45,15 +45,15 @@ if(older_provider_result EQUAL 0)
     message(FATAL_ERROR "vnm_terminal accepted vnm_qml_chrome 1.10.1")
 endif()
 string(REGEX REPLACE "[\r\n\t ]+" " " older_provider_log "${older_provider_log}")
-if(NOT older_provider_log MATCHES "older than the required minimum 1\\.11\\.0")
+if(NOT older_provider_log MATCHES "older than the required minimum 1\\.13\\.0")
     message(FATAL_ERROR
-        "Older-provider rejection did not name the required 1.11.0 floor:\n"
+        "Older-provider rejection did not name the required 1.13.0 floor:\n"
         "${older_provider_log}")
 endif()
 
-configure_with_chrome("1.11.0" minimum_provider_result minimum_provider_log)
+configure_with_chrome("1.13.0" minimum_provider_result minimum_provider_log)
 if(NOT minimum_provider_result EQUAL 0)
     message(FATAL_ERROR
-        "vnm_terminal rejected vnm_qml_chrome 1.11.0:\n"
+        "vnm_terminal rejected vnm_qml_chrome 1.13.0:\n"
         "${minimum_provider_log}")
 endif()

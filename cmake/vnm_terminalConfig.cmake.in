@@ -8,6 +8,7 @@ find_dependency(Qt6 6.12 REQUIRED COMPONENTS
     Qml
     Quick
     QuickControls2
+    QuickTemplates2Private
     QuickLayouts
     QuickShapes)
 find_dependency(vnm_terminal_surface CONFIG REQUIRED)
