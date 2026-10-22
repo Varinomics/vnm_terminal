@@ -235,6 +235,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         OBJCXX_STANDARD 20 OBJCXX_STANDARD_REQUIRED ON)
 endif()
 set(vnm_terminal_qml_files
+    qml/TerminalSettingsStyle.qml
+    qml/TerminalSettingsScrollBar.qml
+    qml/TerminalSettingsComboBox.qml
+    qml/TerminalSettingsSpinBox.qml
+    qml/TerminalSettingsSwitch.qml
+    qml/TerminalSettingsProgressBar.qml
     qml/terminal_qml_chrome.qml
     qml/terminal_search_bar.qml
     qml/terminal_settings_window.qml

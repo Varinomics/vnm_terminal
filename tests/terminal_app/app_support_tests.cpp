@@ -26,6 +26,7 @@
 #include <QMimeData>
 #include <QMetaType>
 #include <QPoint>
+#include <QPointF>
 #include <QPointer>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -1074,11 +1075,39 @@ private slots:
         QVERIFY(window->isVisible());
         QCOMPARE(window->title(), QStringLiteral("Terminal settings"));
         QVERIFY(warnings.isEmpty());
-        QObject* font_size = window->findChild<QObject*>(QStringLiteral("font_size_spin"));
+        QQuickItem* font_size = window->findChild<QQuickItem*>(QStringLiteral("font_size_spin"));
         QVERIFY(font_size != nullptr);
         QVERIFY(font_size->setProperty("value", 21));
         QVERIFY(QMetaObject::invokeMethod(font_size, "valueModified"));
         QCOMPARE(model.value(QStringLiteral("fontSize")).toInt(), 21);
+
+        QQuickItem* editor = font_size->property("contentItem").value<QQuickItem*>();
+        QQuickItem* viewport = window->findChild<QQuickItem*>(
+            QStringLiteral("settings_window_body_viewport"));
+        QVERIFY(editor != nullptr);
+        QVERIFY(viewport != nullptr);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+        const QPoint editor_position = editor->mapToScene(
+            QPointF(editor->width() / 2, editor->height() / 2)).toPoint();
+        QTest::mouseMove(window, editor_position);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, editor_position);
+        QTRY_VERIFY(editor->hasActiveFocus());
+        QTRY_VERIFY(font_size->hasActiveFocus());
+        QSignalSpy font_changes(&model, &terminal_app::Terminal_settings_model::changes_requested);
+        QTest::keyClick(window, Qt::Key_A, Qt::ControlModifier);
+        QTest::keyClick(window, Qt::Key_1);
+        QTest::keyClick(window, Qt::Key_9);
+        QCOMPARE(editor->property("text").toString(), QStringLiteral("19"));
+        const qreal half_body_margin = window->property("body_margin").toReal() / 2;
+        const QPoint blank_position = viewport->mapToScene(
+            QPointF(-half_body_margin, -half_body_margin)).toPoint();
+        QTest::mouseMove(window, blank_position);
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, blank_position);
+        QTRY_VERIFY(!editor->hasActiveFocus());
+        QTRY_VERIFY(!font_size->hasActiveFocus());
+        QTRY_COMPARE(model.value(QStringLiteral("fontSize")).toInt(), 19);
+        QCOMPARE(font_changes.size(), 1);
+
         QObject* copy_on_select = window->findChild<QObject*>(QStringLiteral("copy_on_select_switch"));
         QVERIFY(copy_on_select != nullptr);
         QVERIFY(copy_on_select->property("enabled").toBool());
