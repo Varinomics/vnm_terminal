@@ -11,6 +11,7 @@
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
 #include "vnm_terminal/internal/qsg_atlas_renderer.h"
 #include "vnm_terminal/internal/qt_window_metrics.h"
+#include "vnm_terminal/internal/terminal_content_tail_projection.h"
 #include "vnm_terminal/internal/terminal_transcript.h"
 #include "vnm_terminal/internal/vnm_terminal_font.h"
 #include "vnm_terminal/internal/wheel_gesture.h"
@@ -3526,8 +3527,16 @@ bool test_copy_on_select_copies_completed_plain_text_selection(QGuiApplication& 
         return ok;
     }
 
-    const QPointF start_point = point_in_terminal_grid_cell(surface, 0, 1);
-    const QPointF end_point   = point_in_terminal_grid_cell(surface, 0, 4);
+    const auto displayed = term::make_presented_snapshot(
+        term::VNM_TerminalSurface_render_bridge::render_snapshot(surface));
+    if (!check(displayed && !displayed->cells.empty(),
+            "copy-on-selection fixture publishes selectable text"))
+    {
+        return false;
+    }
+    const int text_row = displayed->cells.front().position.row;
+    const QPointF start_point = point_in_terminal_grid_cell(surface, text_row, 1);
+    const QPointF end_point   = point_in_terminal_grid_cell(surface, text_row, 4);
     const auto select_text = [
             &app,
             &end_point,
@@ -3585,9 +3594,9 @@ bool test_copy_on_select_copies_completed_plain_text_selection(QGuiApplication& 
     ok &= check(last_column > 12,
         "copy-on-selection empty-range fixture has enough columns");
     if (last_column > 12) {
-        const QPointF empty_start = point_in_terminal_grid_cell(surface, 0, 12);
+        const QPointF empty_start = point_in_terminal_grid_cell(surface, text_row, 12);
         const QPointF empty_end =
-            point_in_terminal_grid_cell(surface, 0, last_column);
+            point_in_terminal_grid_cell(surface, text_row, last_column);
         clipboard->setText(
             QStringLiteral("empty-range-sentinel"),
             QClipboard::Clipboard);
