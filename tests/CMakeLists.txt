@@ -496,30 +496,12 @@ vnm_terminal_add_target_test(vnm_terminal_app_clipboard_reader
 
 add_executable(vnm_terminal_custom_titlebar_integration
     terminal_app/custom_titlebar_integration_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/app_clipboard_reader.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_metrics.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_options_settings_adapter.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_presentation_metrics.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_profile_text.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_window.cpp"
 )
 
 target_link_libraries(vnm_terminal_custom_titlebar_integration PRIVATE
-    vnm_terminal::vnm_terminal_app_support
-    vnm_terminal::vnm_terminal_default_shell
-    vnm_terminal_surface::vnm_terminal_surface
-    vnm_qt_dispatch::vnm_qt_dispatch
-    vnm_qml_chrome::vnm_qml_chrome
+    vnm_terminal_app_impl
     vnm::fonts
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Qml
-    Qt6::Quick
     Qt6::QuickLayouts
-    Qt6::QuickControls2
     Qt6::Test
 )
 
@@ -569,29 +551,11 @@ endif()
 
 add_executable(vnm_terminal_app_persistence
     terminal_app/app_persistence_tests.cpp
-    "${PROJECT_SOURCE_DIR}/src/app_clipboard_reader.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_clipboard_policy.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_common.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_metrics.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_options.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_options_settings_adapter.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_presentation_metrics.cpp"
-    "${PROJECT_SOURCE_DIR}/src/app_profile_text.cpp"
-    "${PROJECT_SOURCE_DIR}/src/terminal_window.cpp"
 )
 
 target_link_libraries(vnm_terminal_app_persistence PRIVATE
-    vnm_terminal::vnm_terminal_app_support
-    vnm_terminal::vnm_terminal_default_shell
-    vnm_terminal_surface::vnm_terminal_surface
-    vnm_qt_dispatch::vnm_qt_dispatch
-    vnm_qml_chrome::vnm_qml_chrome
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Qml
-    Qt6::Quick
+    vnm_terminal_app_impl
     Qt6::QuickLayouts
-    Qt6::QuickControls2
 )
 
 set_target_properties(vnm_terminal_app_persistence PROPERTIES
