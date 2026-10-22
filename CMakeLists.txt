@@ -370,10 +370,9 @@ find_package(Qt6Svg 6.12 REQUIRED COMPONENTS
     QSvgPlugin
 )
 
-set(vnm_terminal_sources
-    src/main.cpp
-    src/app_cli.cpp
-    src/app_cli.h
+# Compile the window implementation once for the app and its integration tests.
+# Entry-point, CLI and test-driver definitions remain on their executables.
+add_library(vnm_terminal_app_impl OBJECT
     src/app_clipboard_reader.cpp
     src/app_clipboard_reader.h
     src/app_clipboard_policy.cpp
@@ -387,10 +386,6 @@ set(vnm_terminal_sources
     src/app_options_settings_adapter.cpp
     src/app_options_settings_adapter.h
     src/app_settings_keys.h
-    src/standalone_environment.cpp
-    src/standalone_environment.h
-    src/standalone_native_receipts.cpp
-    src/standalone_native_receipts.h
     src/app_presentation_metrics.cpp
     src/app_presentation_metrics.h
     src/app_profile_text.cpp
@@ -398,6 +393,28 @@ set(vnm_terminal_sources
     src/terminal_title_metadata.h
     src/terminal_window.cpp
     src/terminal_window.h
+)
+
+target_link_libraries(vnm_terminal_app_impl PUBLIC
+    vnm_terminal::vnm_terminal_app_support
+    vnm_terminal::vnm_terminal_default_shell
+    vnm_terminal_surface::vnm_terminal_surface
+    vnm_qt_dispatch::vnm_qt_dispatch
+    vnm_qml_chrome::vnm_qml_chrome
+    Qt6::QuickControls2
+)
+if(MSVC)
+    target_compile_options(vnm_terminal_app_impl PRIVATE /FS)
+endif()
+
+set(vnm_terminal_sources
+    src/main.cpp
+    src/app_cli.cpp
+    src/app_cli.h
+    src/standalone_environment.cpp
+    src/standalone_environment.h
+    src/standalone_native_receipts.cpp
+    src/standalone_native_receipts.h
 )
 
 if(VNM_TERMINAL_BUILD_PACKAGES)
@@ -437,13 +454,8 @@ if(APPLE AND EXISTS "${vnm_terminal_macos_icon}")
 endif()
 
 target_link_libraries(vnm_terminal PRIVATE
-    vnm_terminal::vnm_terminal_app_support
-    vnm_terminal::vnm_terminal_default_shell
-    vnm_terminal_surface::vnm_terminal_surface
-    vnm_qt_dispatch::vnm_qt_dispatch
-    vnm_qml_chrome::vnm_qml_chrome
+    vnm_terminal_app_impl
     vnm_terminal::vnm_terminal_environment_policy
-    Qt6::QuickControls2
     Qt6::Svg
 )
 if(APPLE)
