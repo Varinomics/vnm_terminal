@@ -80,7 +80,7 @@ Window {
         && !surface.msdfTextAvailable
     readonly property string renderer_status_text: {
         if (surface.textRendererMode === 2)
-            return "Using glyph rendering only."
+            return ""
         if (!hasLiveSurface)
             return "Renderer availability is checked when a terminal opens."
         if (surface.msdfTextChecking)
@@ -88,7 +88,7 @@ Window {
         if (!surface.msdfTextAvailable)
             return "MSDF is unavailable for " + surface.fontFamily
                 + "; using glyph rendering."
-        return "MSDF preferred; unsupported text automatically uses glyph rendering."
+        return "Unsupported text uses glyph rendering."
     }
 
     function enforce_size_limits() {
@@ -674,6 +674,7 @@ Window {
                                         text: win.renderer_status_text
                                         visible: renderer_combo.hovered
                                             && !renderer_combo.popup.visible
+                                            && text.length > 0
                                     }
                                 }
 
@@ -736,16 +737,10 @@ Window {
                         }
 
                         TerminalSettingsSwitch {
-                            id: invert_brightness_switch
                             settings_style: win.settings_style
                             objectName: "invert_brightness_switch"
                             checked: surface.invertBrightness
                             onToggled: surface.invertBrightness = checked
-
-                            S_ToolTip {
-                                text: "Inverts the HSV value (V) of rendered colors."
-                                visible: invert_brightness_switch.hovered
-                            }
                         }
                     }
                 }
@@ -850,7 +845,7 @@ Window {
                                 onValueModified: surface.scrollbackBufferSizeMiB = value
 
                                 S_ToolTip {
-                                    text: "Plain-text estimate at this width; reflow may retain fewer lines."
+                                    text: "Resizing may reduce the number of retained lines."
                                     visible: scrollback_buffer_size_spin.hovered
                                 }
                             }

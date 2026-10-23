@@ -3988,8 +3988,7 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
             if (surface.msdf_text_available()) {
                 ok &= check(
                     renderer_status_label->property("text").toString() ==
-                        QStringLiteral(
-                            "MSDF preferred; unsupported text automatically uses glyph rendering."),
+                        QStringLiteral("Unsupported text uses glyph rendering."),
                     "automatic renderer status explains per-text glyph fallback");
             }
 
@@ -3999,10 +3998,6 @@ bool test_settings_gear_button_and_window(QGuiApplication& app)
                 renderer_mode_combo->property("currentText").toString() ==
                     QStringLiteral("Glyph only"),
                 "renderer picker names the glyph-only policy");
-            ok &= check(
-                renderer_status_label->property("text").toString() ==
-                    QStringLiteral("Using glyph rendering only."),
-                "glyph-only renderer status matches the selected policy");
 
             surface.set_text_renderer_mode(VNM_TerminalSurface::Text_renderer_mode::AUTO);
             const QString unavailable_font =
