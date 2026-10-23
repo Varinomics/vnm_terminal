@@ -145,7 +145,16 @@ set(vnm_terminal_app_support_headers
     include/vnm_terminal/app_support/terminal_settings_dialog.h
     include/vnm_terminal/app_support/terminal_settings_model.h
     include/vnm_terminal/app_support/terminal_settings_window.h
+    include/vnm_terminal/app_support/terminal_title_metadata.h
 )
+
+add_library(vnm_terminal_title_metadata_headers INTERFACE)
+add_library(vnm_terminal::vnm_terminal_title_metadata_headers ALIAS vnm_terminal_title_metadata_headers)
+target_include_directories(vnm_terminal_title_metadata_headers INTERFACE
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
+target_link_libraries(vnm_terminal_title_metadata_headers INTERFACE Qt6::Core)
 
 qt_add_resources(vnm_terminal_codex_resource_sources
     resources/codex_commands.qrc
@@ -225,6 +234,7 @@ add_library(vnm_terminal_app_support STATIC
     src/terminal_settings_window.cpp
     src/terminal_settings_native_window_owner.h
     include/vnm_terminal/app_support/terminal_settings_window.h
+    include/vnm_terminal/app_support/terminal_title_metadata.h
 )
 add_dependencies(vnm_terminal_app_support vnm_terminal_build_info)
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
@@ -271,6 +281,7 @@ target_compile_definitions(vnm_terminal_app_support PRIVATE
 )
 target_link_libraries(vnm_terminal_app_support
     PUBLIC
+        vnm_terminal_title_metadata_headers
         vnm_terminal_surface::vnm_terminal_surface
         Qt6::Core
         Qt6::Gui
@@ -327,6 +338,7 @@ if(PROJECT_IS_TOP_LEVEL)
     install(TARGETS
         vnm_terminal_app_support
         vnm_terminal_default_shell
+        vnm_terminal_title_metadata_headers
         vnm_qml_chrome
         ${vnm_terminal_qml_output_targets}
         ${vnm_terminal_chrome_qml_output_targets}
@@ -390,7 +402,6 @@ add_library(vnm_terminal_app_impl OBJECT
     src/app_presentation_metrics.h
     src/app_profile_text.cpp
     src/app_profile_text.h
-    src/terminal_title_metadata.h
     src/terminal_window.cpp
     src/terminal_window.h
 )

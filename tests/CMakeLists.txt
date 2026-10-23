@@ -261,6 +261,9 @@ endif()
 add_executable(vnm_terminal_title_metadata
     terminal_app/terminal_title_metadata_tests.cpp
 )
+target_include_directories(vnm_terminal_title_metadata PRIVATE
+    "${PROJECT_SOURCE_DIR}/include"
+)
 
 target_link_libraries(vnm_terminal_title_metadata PRIVATE
     Qt6::Core

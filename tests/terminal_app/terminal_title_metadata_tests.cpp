@@ -1,4 +1,4 @@
-#include "terminal_title_metadata.h"
+#include "vnm_terminal/app_support/terminal_title_metadata.h"
 #include "helpers/test_check.h"
 
 #include <QByteArray>

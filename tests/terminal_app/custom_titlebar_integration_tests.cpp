@@ -4,7 +4,7 @@
 
 #include "../../src/terminal_settings_native_window_owner.h"
 
-#include "terminal_title_metadata.h"
+#include "vnm_terminal/app_support/terminal_title_metadata.h"
 
 #include "vnm_qml_chrome/vnm_chrome_geometry.h"
 

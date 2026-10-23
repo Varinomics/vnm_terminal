@@ -1,7 +1,7 @@
 #include "terminal_window.h"
 
 #include "app_common.h"
-#include "terminal_title_metadata.h"
+#include "vnm_terminal/app_support/terminal_title_metadata.h"
 
 #include "vnm_qml_chrome/vnm_chrome_geometry.h"
 
