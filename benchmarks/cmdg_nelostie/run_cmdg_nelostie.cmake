@@ -131,9 +131,6 @@ endif()
 
 if(NOT DEFINED run_id OR run_id STREQUAL "")
     set(run_id "nelostie")
-    set(use_legacy_output_names ON)
-else()
-    set(use_legacy_output_names OFF)
 endif()
 
 if(NOT run_id MATCHES "^[A-Za-z0-9_]+$")
@@ -233,15 +230,9 @@ if(NOT IS_DIRECTORY "${cmdg_working_dir}")
 endif()
 
 file(MAKE_DIRECTORY "${output_dir}")
-if(use_legacy_output_names)
-    set(terminal_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_terminal_metrics.json")
-    set(terminal_timeline "${output_dir}/vnm_terminal_cmdg_nelostie_terminal_timeline.jsonl")
-    set(cmdg_metrics "${output_dir}/vnm_terminal_cmdg_nelostie_cmdg_metrics.json")
-else()
-    set(terminal_metrics "${output_dir}/vnm_terminal_cmdg_${run_id}_terminal_metrics.json")
-    set(terminal_timeline "${output_dir}/vnm_terminal_cmdg_${run_id}_terminal_timeline.jsonl")
-    set(cmdg_metrics "${output_dir}/vnm_terminal_cmdg_${run_id}_cmdg_metrics.json")
-endif()
+set(terminal_metrics "${output_dir}/vnm_terminal_cmdg_${run_id}_terminal_metrics.json")
+set(terminal_timeline "${output_dir}/vnm_terminal_cmdg_${run_id}_terminal_timeline.jsonl")
+set(cmdg_metrics "${output_dir}/vnm_terminal_cmdg_${run_id}_cmdg_metrics.json")
 file(REMOVE "${terminal_metrics}" "${terminal_timeline}" "${cmdg_metrics}")
 if(profile_text)
     file(REMOVE "${profile_text}")
@@ -537,24 +528,14 @@ if(NOT cmdg_scene_frames STREQUAL "${frame_limit}")
         "expected ${frame_limit}")
 endif()
 
-string(JSON cmdg_benchmark_windows_type
-    ERROR_VARIABLE cmdg_benchmark_windows_error
-    TYPE "${cmdg_metrics_text}" benchmark_windows)
-if(cmdg_benchmark_windows_error STREQUAL "NOTFOUND")
-    if(NOT cmdg_benchmark_windows_type STREQUAL "OBJECT")
-        message(FATAL_ERROR
-            "CMDG metrics JSON reports benchmark_windows type "
-            "${cmdg_benchmark_windows_type}, expected OBJECT")
-    endif()
-    set(cmdg_benchmark_windows_available ON)
-else()
-    set(cmdg_benchmark_windows_available OFF)
-    message(STATUS
-        "CMDG metrics JSON has no benchmark_windows object; accepting older "
-        "scratch CMDG metrics without window samples.")
+vnm_terminal_read_json_type(cmdg_benchmark_windows_type
+    "${cmdg_metrics_text}" "${cmdg_metrics}" benchmark_windows)
+if(NOT cmdg_benchmark_windows_type STREQUAL "OBJECT")
+    message(FATAL_ERROR
+        "CMDG metrics JSON reports benchmark_windows type "
+        "${cmdg_benchmark_windows_type}, expected OBJECT")
 endif()
 
-if(cmdg_benchmark_windows_available)
 vnm_terminal_read_json_field(cmdg_window_schema
     "${cmdg_metrics_text}" "${cmdg_metrics}" benchmark_windows schema)
 vnm_terminal_read_json_field(cmdg_window_interval_ms
@@ -584,7 +565,6 @@ if(cmdg_window_count LESS benchmark_min_windows)
         "at least ${benchmark_min_windows}. Increase "
         "VNM_TERMINAL_CMDG_NELOSTIE_FRAMES or reduce "
         "VNM_TERMINAL_CMDG_BENCHMARK_WINDOW_MS.")
-endif()
 endif()
 
 vnm_terminal_read_json_field(cmdg_draw_frames
@@ -628,7 +608,6 @@ foreach(cmdg_number_field IN ITEMS
         ${cmdg_number_field})
 endforeach()
 
-if(cmdg_benchmark_windows_available)
 set(cmdg_window_scene_frames 0)
 set(cmdg_window_draw_frames 0)
 set(cmdg_window_scene_calc_ms_total 0)
@@ -769,7 +748,6 @@ foreach(cmdg_counter_name IN ITEMS
             "${cmdg_window_${cmdg_counter_name}}, expected ${cmdg_${cmdg_counter_name}}")
     endif()
 endforeach()
-endif()
 
 message(STATUS "CMDG scene: ${scene} (${run_id})")
 message(STATUS "terminal metrics: ${terminal_metrics}")
