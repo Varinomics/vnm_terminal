@@ -4,7 +4,6 @@
 
 #include "vnm_terminal/internal/terminal_color_scheme.h"
 
-#include <QColor>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QLatin1String>
@@ -23,20 +22,6 @@ constexpr char k_appearance_invert_brightness_dark[] =
     "appearance/invert_brightness_dark";
 constexpr char k_appearance_invert_brightness_light[] =
     "appearance/invert_brightness_light";
-
-bool load_or_seed_invert_brightness_preference(
-    QSettings& store,
-    const char* key,
-    bool legacy_value)
-{
-    const QLatin1String setting_key(key);
-    if (store.contains(setting_key)) {
-        return store.value(setting_key).toBool();
-    }
-
-    store.setValue(setting_key, legacy_value);
-    return legacy_value;
-}
 
 bool settings_values_valid(const QVariantMap& changes, bool snapshot)
 {
@@ -177,23 +162,13 @@ Terminal_display_settings::Terminal_display_settings(bool dark_mode, QSettings* 
         store ? load_terminal_settings_snapshot(*store) : Terminal_settings_snapshot{})),
     m_dark_mode(dark_mode)
 {
-    const bool legacy_invert_brightness =
-        m_values.value(QStringLiteral("invert_brightness")).toBool();
-    m_dark_invert_brightness = legacy_invert_brightness;
-    m_light_invert_brightness = legacy_invert_brightness;
     if (store) {
-        m_dark_invert_brightness = load_or_seed_invert_brightness_preference(
-            *store, k_appearance_invert_brightness_dark, legacy_invert_brightness);
-        m_light_invert_brightness = load_or_seed_invert_brightness_preference(
-            *store, k_appearance_invert_brightness_light, legacy_invert_brightness);
-        // The unscoped palette predates mode binding. Its background identifies
-        // which mode can inherit it without turning a light terminal dark.
-        const auto* previous = vnm_terminal::internal::find_color_scheme(
-            m_values.value(QStringLiteral("color_scheme")).toString());
-        if (previous) {
-            const bool previous_dark = QColor::fromRgba(previous->background_rgba).lightnessF() < 0.5;
-            (previous_dark ? m_dark_scheme : m_light_scheme) = previous->name;
-        }
+        m_dark_invert_brightness = store->value(
+            QLatin1String(k_appearance_invert_brightness_dark),
+            m_dark_invert_brightness).toBool();
+        m_light_invert_brightness = store->value(
+            QLatin1String(k_appearance_invert_brightness_light),
+            m_light_invert_brightness).toBool();
         const auto load_scheme = [
                 store
             ](
