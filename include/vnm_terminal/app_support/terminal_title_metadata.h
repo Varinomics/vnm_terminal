@@ -7,17 +7,19 @@
 
 namespace vnm_terminal::terminal_app {
 
-constexpr char32_t k_activity_marker_braille_first = 0x2800;
-constexpr char32_t k_activity_marker_braille_last  = 0x28ff;
-constexpr char32_t k_activity_marker_dingbat_first = 0x2731;
-constexpr char32_t k_activity_marker_dingbat_last  = 0x273f;
-constexpr char32_t k_activity_marker_block_first   = 0x2596;
-constexpr char32_t k_activity_marker_block_last    = 0x259f;
+constexpr char32_t k_activity_marker_braille_first     = 0x2800;
+constexpr char32_t k_activity_marker_braille_last      = 0x28ff;
+constexpr char32_t k_activity_marker_dingbat_first     = 0x2731;
+constexpr char32_t k_activity_marker_dingbat_last      = 0x273f;
+constexpr char32_t k_activity_marker_teardrop_asterisk = 0x2722;
+constexpr char32_t k_activity_marker_block_first       = 0x2596;
+constexpr char32_t k_activity_marker_block_last        = 0x259f;
 
 static_assert(!QChar::requiresSurrogates(k_activity_marker_braille_first));
 static_assert(!QChar::requiresSurrogates(k_activity_marker_braille_last));
 static_assert(!QChar::requiresSurrogates(k_activity_marker_dingbat_first));
 static_assert(!QChar::requiresSurrogates(k_activity_marker_dingbat_last));
+static_assert(!QChar::requiresSurrogates(k_activity_marker_teardrop_asterisk));
 static_assert(!QChar::requiresSurrogates(k_activity_marker_block_first));
 static_assert(!QChar::requiresSurrogates(k_activity_marker_block_last));
 
@@ -38,6 +40,7 @@ inline bool is_activity_marker_codepoint(char32_t codepoint)
     return
         (codepoint >= k_activity_marker_braille_first && codepoint <= k_activity_marker_braille_last) ||
         (codepoint >= k_activity_marker_dingbat_first && codepoint <= k_activity_marker_dingbat_last) ||
+        codepoint == k_activity_marker_teardrop_asterisk ||
         (codepoint >= k_activity_marker_block_first && codepoint <= k_activity_marker_block_last);
 }
 
