@@ -308,6 +308,8 @@ private slots:
         QVERIFY(directory.isValid());
         QSettings store(directory.filePath(QStringLiteral("shared-display.ini")), QSettings::IniFormat);
         terminal_app::Terminal_display_settings display(true, &store);
+        QCOMPARE(display.values().value(QStringLiteral("color_scheme")).toString(), QStringLiteral("Classic"));
+        QVERIFY(!display.values().value(QStringLiteral("invert_brightness")).toBool());
         const QString font_family = QFontDatabase::families().constFirst();
         const QVariantMap changes{
             {QStringLiteral("font_family"), font_family},
@@ -335,8 +337,8 @@ private slots:
             }
             QCOMPARE(display.values().value(it.key()), it.value());
         }
-        QVERIFY(display.values().value(QStringLiteral("color_scheme")) !=
-            dark_values.value(QStringLiteral("color_scheme")));
+        QCOMPARE(display.values().value(QStringLiteral("color_scheme")).toString(),
+            QStringLiteral("Solarized Light"));
         QVERIFY(display.apply_changes(
             {{QStringLiteral("color_scheme"), QStringLiteral("One Half Light")}}, false));
         terminal_app::Terminal_display_settings restarted(false, &store);
