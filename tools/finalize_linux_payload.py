@@ -15,17 +15,16 @@ from inspect_runtime_contents import inspect_contents
 def inspect_payload(payload):
     inspect_contents(payload)
     prefix = payload / "usr" if (payload / "usr/bin/vnm_terminal").is_file() else payload
-    for name in ("vnm_terminal", "vnm_process_custody_owner"):
-        executable = prefix / "bin" / name
-        if not executable.is_file() or executable.is_symlink():
-            raise RuntimeError(f"Missing controlled executable: {executable}")
+    executable = prefix / "bin/vnm_terminal"
+    if not executable.is_file() or executable.is_symlink():
+        raise RuntimeError(f"Missing controlled executable: {executable}")
     for path in sorted(payload.rglob("*")):
         if not path.is_file() or path.is_symlink():
             continue
         with path.open("rb") as stream:
             if stream.read(4) != b"\x7fELF":
                 continue
-        if path.name in {"vnm_terminal", "vnm_process_custody_owner"}:
+        if path.name == "vnm_terminal":
             sections = subprocess.run(["readelf", "-WS", str(path)], check=True,
                                       capture_output=True, text=True).stdout
             if re.search(r"\.(?:z?debug\S*|stab\S*|symtab|gdb_index|gnu_debug\S*)\s",
@@ -37,11 +36,10 @@ def inspect_payload(payload):
 
 def finalize_payload(payload):
     prefix = payload / "usr"
-    for name in ("vnm_terminal", "vnm_process_custody_owner"):
-        executable = prefix / "bin" / name
-        if not executable.is_file() or executable.is_symlink():
-            raise RuntimeError(f"Missing owned executable: {executable}")
-        subprocess.run(["strip", "--strip-unneeded", str(executable)], check=True)
+    executable = prefix / "bin/vnm_terminal"
+    if not executable.is_file() or executable.is_symlink():
+        raise RuntimeError(f"Missing owned executable: {executable}")
+    subprocess.run(["strip", "--strip-unneeded", str(executable)], check=True)
 
     # The fonts are linked into the executable. This install target also exports
     # its SDK archive, which has no role in a runtime package.

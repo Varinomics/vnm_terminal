@@ -20,16 +20,8 @@ def duplicate_role(paths):
         path) for path in paths]
     if all(privacy) and len({match[1] for match in privacy}) == len(paths):
         return "Privacy manifest belongs to each distinct Qt framework bundle"
-    if set(paths) in (
-        {"usr/share/doc/vnm_terminal/LICENSE", "usr/share/licenses/vnm_process_custody/LICENSE"},
-        {"LICENSE", "share/licenses/vnm_process_custody/LICENSE"},
-    ):
-        return "GPL license texts identify the application and custody component separately"
     managed_licenses = {Path("LICENSE"), Path("Licenses/LICENSE.txt")}
-    if {Path(path) for path in paths} in (
-        managed_licenses,
-        managed_licenses | {Path("share/licenses/vnm_process_custody/LICENSE")},
-    ):
+    if {Path(path) for path in paths} == managed_licenses:
         return "IFW's native License operation manages Licenses/LICENSE.txt beside component notices"
     notices = {
         "libgssapi-krb5-2", "libk5crypto3", "libkrb5-3", "libkrb5support0",

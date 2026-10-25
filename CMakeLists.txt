@@ -424,8 +424,6 @@ set(vnm_terminal_sources
     src/app_cli.h
     src/standalone_environment.cpp
     src/standalone_environment.h
-    src/standalone_native_receipts.cpp
-    src/standalone_native_receipts.h
 )
 
 if(VNM_TERMINAL_BUILD_PACKAGES)
@@ -469,9 +467,6 @@ target_link_libraries(vnm_terminal PRIVATE
     vnm_terminal::vnm_terminal_environment_policy
     Qt6::Svg
 )
-if(APPLE)
-    target_link_libraries(vnm_terminal PRIVATE vnm_process_custody::vnm_process_custody)
-endif()
 
 target_compile_definitions(vnm_terminal PRIVATE
     VNM_TERMINAL_VERSION_STRING="${PROJECT_VERSION}"
@@ -500,10 +495,6 @@ if(APPLE)
             MACOSX_BUNDLE_ICON_FILE "vnm_terminal.icns"
         )
     endif()
-endif()
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR APPLE)
-    vnm_process_custody_deploy_owner(vnm_terminal)
 endif()
 
 if(WIN32)

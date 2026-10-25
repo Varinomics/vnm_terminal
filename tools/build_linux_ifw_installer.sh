@@ -117,8 +117,6 @@ mkdir -p "$package_data_root/$package_libdir" "$package_data_root/share/icons"
 cp -a "$payload_libdir" "$package_data_root/$package_libdir/"
 mkdir -p "$package_data_root/share/doc" "$package_data_root/share/licenses"
 cp -a "$payload_path/usr/share/doc/vnm_fonts" "$package_data_root/share/doc/"
-cp -a "$payload_path/usr/share/licenses/vnm_process_custody" \
-    "$package_data_root/share/licenses/"
 cp -a "$script_dir/../packaging/linux/ifw/notices" \
     "$package_data_root/share/licenses/qt-installer-framework"
 cp -a "$repository_root/LICENSE" \

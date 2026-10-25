@@ -4,7 +4,7 @@ vnm_write_toolchain_context("${CMAKE_CURRENT_BINARY_DIR}/nested-toolchain.cmake"
 set(vnm_package_dependency_context "${CMAKE_CURRENT_BINARY_DIR}/package-dependencies.cmake")
 file(WRITE "${vnm_package_dependency_context}"
     "set(CMAKE_PREFIX_PATH [==[${CMAKE_PREFIX_PATH}]==] CACHE STRING \"\" FORCE)\n")
-foreach(package IN ITEMS Qt6 vnm_msdf_text Freetype msdfgen vnm_process_custody)
+foreach(package IN ITEMS Qt6 vnm_msdf_text Freetype msdfgen)
     if(${package}_DIR AND NOT "${${package}_DIR}" MATCHES "-NOTFOUND$")
         file(APPEND "${vnm_package_dependency_context}"
             "set(${package}_DIR [==[${${package}_DIR}]==] CACHE PATH \"\" FORCE)\n")

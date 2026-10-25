@@ -26,5 +26,4 @@ The corresponding compression notices are included as `zlib-README`,
 - [XZ / liblzma 5.2.4](https://github.com/tukaani-project/xz/releases/tag/v5.2.4)
 - [bzip2 1.0.8](https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz)
 
-The application font and process-custody notices are retained separately under
-`share/doc/vnm_fonts` and `share/licenses/vnm_process_custody`.
+The application font notices are retained separately under `share/doc/vnm_fonts`.

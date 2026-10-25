@@ -8,7 +8,6 @@
 #include "app_options_settings_adapter.h"
 #include "app_profile_text.h"
 #include "standalone_environment.h"
-#include "standalone_native_receipts.h"
 #include "vnm_terminal/app_support/codex_command_environment.h"
 #include "terminal_file_drop.h"
 #include "vnm_terminal/app_support/app_settings.h"
@@ -1161,7 +1160,6 @@ int main(int argc, char** argv)
                         base_environment,
                         std::nullopt,
                         std::nullopt,
-                        chrome::make_standalone_native_receipt_hook(),
                     });
                 if (!terminal_start.accepted) {
                     if (state.backend_error_count == 0) {
