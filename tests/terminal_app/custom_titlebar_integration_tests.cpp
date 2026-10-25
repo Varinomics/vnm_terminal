@@ -2266,8 +2266,8 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
         Q_ARG(QString, user_title));
     ok &= check(title_edit_emitted,
         "shared titlebar emits an accepted user title");
-    ok &= check(window.title() == user_title,
-        "accepted user title becomes the native window title");
+    ok &= check(window.title() == icon_spinner + QStringLiteral(" ") + user_title,
+        "accepted user title preserves the activity marker in the native window title");
     ok &= check(titlebar.root_item()->property("title").toString() == user_title,
         "accepted user title becomes the shared titlebar title");
     ok &= check(shared_title_label->property("text").toString() == user_title,
@@ -2276,11 +2276,11 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
     const QString updated_marker = scalar_text(chrome_test::k_activity_marker_dingbat_last);
     backend_ptr->emit_output(
         osc1_icon_name_sequence(updated_marker + QStringLiteral("updated-icon")) +
-        osc2_title_sequence(QStringLiteral("process-updated title")));
+        osc2_title_sequence(spinner + QStringLiteral(" process-updated title")));
     term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
     pump_events(app);
-    ok &= check(window.title() == user_title,
-        "terminal metadata does not overwrite an accepted user title");
+    ok &= check(window.title() == updated_marker + QStringLiteral(" ") + user_title,
+        "terminal metadata updates the native activity marker while preserving the user title");
     ok &= check(titlebar.root_item()->property("title").toString() == user_title,
         "terminal metadata preserves the shared user title");
     ok &= check(
@@ -2289,14 +2289,37 @@ bool test_title_sync_and_button_rect_offsets(QGuiApplication& app)
     ok &= check(shared_activity_marker->property("text").toString() == updated_marker,
         "updated activity marker reaches the rendered shared marker label");
 
+    backend_ptr->emit_output(osc1_icon_name_sequence(QStringLiteral("plain-icon")));
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    pump_events(app);
+    ok &= check(window.title() == spinner + QStringLiteral(" ") + user_title,
+        "custom native title falls back to the terminal title activity marker");
+    ok &= check(shared_activity_marker->property("text").toString() == spinner,
+        "custom chrome uses the same fallback activity marker as the native title");
+
+    backend_ptr->emit_output(osc2_title_sequence(QStringLiteral("process-ready title")));
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    pump_events(app);
+    ok &= check(window.title() == user_title,
+        "custom native title drops the activity marker when terminal metadata has none");
+    ok &= check(shared_activity_marker->property("text").toString().isEmpty(),
+        "custom chrome drops the activity marker when terminal metadata has none");
+
+    backend_ptr->emit_output(
+        osc2_title_sequence(updated_marker + QStringLiteral(" process-active title")));
+    term::VNM_TerminalSurface_render_bridge::drain_backend_callback_events(surface);
+    pump_events(app);
+    ok &= check(window.title() == updated_marker + QStringLiteral(" ") + user_title,
+        "custom native title resumes activity-marker updates from the terminal title");
+
     const bool empty_title_edit_emitted = QMetaObject::invokeMethod(
         titlebar.root_item(),
         "title_edit_accepted",
         Q_ARG(QString, QString()));
     ok &= check(empty_title_edit_emitted,
         "shared titlebar relays an accepted empty user title");
-    ok &= check(window.title().isEmpty(),
-        "an accepted empty title remains a valid native window title");
+    ok &= check(window.title() == updated_marker,
+        "an accepted empty title retains only the native activity marker");
     ok &= check(shared_title_label->property("text").toString().isEmpty(),
         "an accepted empty title remains blank in the shared titlebar");
 
@@ -4498,6 +4521,9 @@ int main(int argc, char** argv)
             QStringLiteral("--native-outer-edge-pixels")))
     {
         return test_terminal_chrome_native_outer_edge_pixels(app) ? 0 : 1;
+    }
+    if (QCoreApplication::arguments().contains(QStringLiteral("--title-metadata"))) {
+        return test_title_sync_and_button_rect_offsets(app) ? 0 : 1;
     }
 
     bool ok = true;

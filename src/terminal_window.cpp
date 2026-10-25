@@ -374,10 +374,15 @@ void connect_terminal_metadata_to_chrome(
                 visible_terminal_title(surface.terminal_title()),
                 surface.terminal_icon_name());
             content.display_title = **user_title;
+            QString window_title = activity_marker_text(content);
+            if (!window_title.isEmpty() && !content.display_title.isEmpty()) {
+                window_title += QLatin1Char(' ');
+            }
+            window_title += content.display_title;
             apply_window_title(
                 window,
                 titlebar,
-                **user_title,
+                window_title,
                 content);
             return;
         }
