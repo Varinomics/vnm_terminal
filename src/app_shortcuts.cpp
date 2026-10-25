@@ -1,4 +1,5 @@
 #include "vnm_terminal/app_support/app_shortcuts.h"
+#include "vnm_terminal/keyboard_modifiers.h"
 
 #include <QClipboard>
 #include <QEvent>
@@ -15,16 +16,7 @@ namespace {
 
 Qt::KeyboardModifiers physical_shortcut_modifiers(Qt::KeyboardModifiers modifiers)
 {
-#if defined(Q_OS_MACOS)
-    if (!QGuiApplication::testAttribute(Qt::AA_MacDontSwapCtrlAndMeta)) {
-        const bool qt_control = modifiers.testFlag(Qt::ControlModifier);
-        const bool qt_meta    = modifiers.testFlag(Qt::MetaModifier);
-        modifiers &= ~(Qt::ControlModifier | Qt::MetaModifier);
-        if (qt_control) { modifiers |= Qt::MetaModifier;    }
-        if (qt_meta)    { modifiers |= Qt::ControlModifier; }
-    }
-#endif
-    return modifiers;
+    return vnm_terminal::physical_keyboard_modifiers(modifiers);
 }
 
 bool item_belongs_to(QQuickItem* item, const QQuickItem* root)

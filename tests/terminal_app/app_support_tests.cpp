@@ -7,6 +7,7 @@
 #include "vnm_terminal/app_support/terminal_settings_model.h"
 #include "vnm_terminal/app_support/terminal_settings_window.h"
 #include "vnm_terminal/app_support/terminal_search_bar.h"
+#include "vnm_terminal/app_support/terminal_scrollbar.h"
 
 #include "terminal_file_drop.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
@@ -39,6 +40,7 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QWheelEvent>
 #include <qqml.h>
 
 #include <cstddef>
@@ -62,6 +64,48 @@ class App_support_tests final : public QObject
     }
 
 private slots:
+    void scrollbar_wheel_uses_physical_control_data()
+    {
+        QTest::addColumn<bool>("dont_swap");
+        QTest::addColumn<int>("control_modifier");
+        QTest::addColumn<int>("command_modifier");
+        QTest::newRow("physical") << true << int(Qt::ControlModifier) << int(Qt::MetaModifier);
+#if defined(Q_OS_MACOS)
+        QTest::newRow("qt-swapped") << false << int(Qt::MetaModifier) << int(Qt::ControlModifier);
+#endif
+    }
+
+    void scrollbar_wheel_uses_physical_control()
+    {
+        QFETCH(bool, dont_swap);
+        QFETCH(int, control_modifier);
+        QFETCH(int, command_modifier);
+        const bool original = QGuiApplication::testAttribute(Qt::AA_MacDontSwapCtrlAndMeta);
+        const auto restore = qScopeGuard([original] {
+            QGuiApplication::setAttribute(Qt::AA_MacDontSwapCtrlAndMeta, original);
+        });
+        QGuiApplication::setAttribute(Qt::AA_MacDontSwapCtrlAndMeta, dont_swap);
+        VNM_TerminalSurface surface;
+        terminal_app::Terminal_scrollbar scrollbar;
+        scrollbar.set_surface(&surface);
+        QSignalSpy changes(&surface, &VNM_TerminalSurface::font_size_changed);
+        const qreal initial_font_size = surface.font_size();
+        const auto wheel = [&scrollbar](int modifier) {
+            QWheelEvent event(QPointF(1, 1), QPointF(1, 1), {}, QPoint(0, 120),
+                Qt::NoButton, Qt::KeyboardModifiers(static_cast<Qt::KeyboardModifier>(modifier)),
+                Qt::NoScrollPhase, false);
+            event.setAccepted(false);
+            QCoreApplication::sendEvent(&scrollbar, &event);
+            return event.isAccepted();
+        };
+        QVERIFY(!wheel(command_modifier));
+        QCOMPARE(surface.font_size(), initial_font_size);
+        QCOMPARE(changes.size(), 0);
+        QVERIFY(wheel(control_modifier));
+        QVERIFY(surface.font_size() > initial_font_size);
+        QCOMPARE(changes.size(), 1);
+    }
+
     void font_picker_initializes_and_prioritizes_the_shipped_default()
     {
         terminal_app::Terminal_settings_controller controller;

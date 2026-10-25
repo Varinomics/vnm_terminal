@@ -1,4 +1,5 @@
 #include "vnm_terminal/app_support/terminal_scrollbar.h"
+#include "vnm_terminal/keyboard_modifiers.h"
 
 #include "vnm_terminal/internal/vnm_terminal_surface_render_bridge.h"
 #include "vnm_terminal/internal/wheel_gesture.h"
@@ -240,7 +241,7 @@ void scrollbar::Terminal_scrollbar::mousePressEvent(QMouseEvent* event)
     }
 
     set_drag_active(false);
-    if ((event->modifiers() & Qt::ControlModifier) != 0) {
+    if (vnm_terminal::physical_keyboard_modifiers(event->modifiers()).testFlag(Qt::ControlModifier)) {
         (void)apply_offset_from_position(
             event->position().y(),
             thumb.height() / 2.0,
@@ -295,7 +296,7 @@ void scrollbar::Terminal_scrollbar::wheelEvent(QWheelEvent* event)
         return;
     }
 
-    if ((event->modifiers() & Qt::ControlModifier) != 0) {
+    if (vnm_terminal::physical_keyboard_modifiers(event->modifiers()).testFlag(Qt::ControlModifier)) {
         if (zoom_surface_from_wheel(event)) {
             event->accept();
         }

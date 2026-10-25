@@ -4515,6 +4515,11 @@ bool test_settings_native_window_owner_reassignment()
 
 int main(int argc, char** argv)
 {
+#if defined(Q_OS_MACOS)
+    // Synthetic Control gestures use the product's physical modifier convention.
+    // Both Qt conventions have separate scrollbar wheel coverage.
+    QGuiApplication::setAttribute(Qt::AA_MacDontSwapCtrlAndMeta);
+#endif
     QGuiApplication app(argc, argv);
     vnm_terminal::apply_terminal_renderer_minimum_surface_format();
     if (QCoreApplication::arguments().contains(
