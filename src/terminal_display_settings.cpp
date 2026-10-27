@@ -155,11 +155,12 @@ QVariantMap terminal_settings_payload(const Terminal_settings_snapshot& settings
     return result;
 }
 
-Terminal_display_settings::Terminal_display_settings(bool dark_mode, QSettings* store)
+Terminal_display_settings::Terminal_display_settings(
+    bool dark_mode, QSettings* store, Terminal_settings_snapshot defaults)
 :
     m_store(store),
     m_values(terminal_settings_payload(
-        store ? load_terminal_settings_snapshot(*store) : Terminal_settings_snapshot{})),
+        store ? load_terminal_settings_snapshot(*store, std::move(defaults)) : std::move(defaults))),
     m_dark_mode(dark_mode)
 {
     if (store) {

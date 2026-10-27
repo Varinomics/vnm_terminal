@@ -29,7 +29,9 @@ std::optional<Terminal_settings_snapshot> terminal_settings_from_json(
 class Terminal_display_settings
 {
 public:
-    Terminal_display_settings(bool dark_mode, QSettings* store = nullptr);
+    Terminal_display_settings(
+        bool dark_mode, QSettings* store = nullptr,
+        Terminal_settings_snapshot defaults = {});
     const QVariantMap& values() const;
     bool apply_changes(const QVariantMap& changes, bool source_dark_mode);
     bool set_dark_mode(bool dark_mode);

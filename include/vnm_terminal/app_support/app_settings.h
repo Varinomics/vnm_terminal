@@ -33,7 +33,8 @@ struct Terminal_settings_snapshot
     std::optional<int> scrollback_buffer_size_mib;
 };
 
-Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings);
+Terminal_settings_snapshot load_terminal_settings_snapshot(
+    QSettings& settings, Terminal_settings_snapshot snapshot = {});
 Terminal_settings_snapshot terminal_settings_snapshot(
     const VNM_TerminalSurface& surface);
 void save_terminal_settings_snapshot(

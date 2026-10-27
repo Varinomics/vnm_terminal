@@ -238,10 +238,9 @@ void save_persisted_appearance_settings(
 
 } // namespace detail
 
-Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
+Terminal_settings_snapshot load_terminal_settings_snapshot(
+    QSettings& settings, Terminal_settings_snapshot snapshot)
 {
-    Terminal_settings_snapshot snapshot;
-
     settings.beginGroup(QLatin1String(k_window_settings_group));
     if (const std::optional<qreal> font_size = detail::settings_font_size(settings)) {
         snapshot.font_size = *font_size;
@@ -259,10 +258,12 @@ Terminal_settings_snapshot load_terminal_settings_snapshot(QSettings& settings)
     detail::apply_if_present(
         appearance.row_timestamp_tooltip,
         snapshot.row_timestamp_tooltip_enabled);
-    snapshot.scrollback_buffer_size_mib = appearance.scrollback_buffer_size_mib;
+    if (appearance.scrollback_buffer_size_mib) {
+        snapshot.scrollback_buffer_size_mib = appearance.scrollback_buffer_size_mib;
+    }
     settings.beginGroup(QLatin1String(k_interaction_settings_group));
     snapshot.copy_on_select = settings.value(
-        QLatin1String(k_interaction_copy_on_select), false).toBool();
+        QLatin1String(k_interaction_copy_on_select), snapshot.copy_on_select).toBool();
     settings.endGroup();
     return snapshot;
 }
