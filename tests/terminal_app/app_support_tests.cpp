@@ -9,7 +9,7 @@
 #include "vnm_terminal/app_support/terminal_search_bar.h"
 #include "vnm_terminal/app_support/terminal_scrollbar.h"
 
-#include "terminal_file_drop.h"
+#include "vnm_terminal/app_support/terminal_file_drop.h"
 #include "vnm_terminal/vnm_terminal_surface.h"
 
 #include <vnm_font_namespace.h>
@@ -274,9 +274,62 @@ private slots:
         QVERIFY(!terminal_app::quote_terminal_paths(
             {QStringLiteral("C:/Users/Ada/x\" & echo DROP_SENTINEL & rem \".txt")},
             {QStringLiteral("cmd.exe")}).has_value());
+    }
+
+    void terminal_drop_cmd_options_preserve_safe_paths()
+    {
+        for (const QString& option : {QStringLiteral("/v:on"), QStringLiteral("/v:1")}) {
+            const QStringList command{QStringLiteral("cmd.exe"), option};
+            QVERIFY(terminal_app::terminal_file_drop_supported(command));
+            const auto text = terminal_app::quote_terminal_paths(
+                {QStringLiteral("C:/Users/Ada/a file.txt")}, command);
+            QVERIFY(text);
+            QCOMPARE(*text, QStringLiteral("\"C:/Users/Ada/a file.txt\""));
+            for (const QString& path : {
+                    QStringLiteral("C:/Users/Ada/100% done.txt"),
+                    QStringLiteral("C:/Users/Ada/important! file.txt"),
+                    QStringLiteral("C:/Users/Ada/a\"file.txt")})
+            {
+                QVERIFY(!terminal_app::quote_terminal_paths({path}, command));
+            }
+        }
+    }
+
+    void terminal_drop_shell_identity_survives_unsupported_quoting()
+    {
+        const QStringList paths{QStringLiteral("/tmp/a file.txt")};
+        const QList<QStringList> commands{
+            {QStringLiteral("csh")},
+            {QStringLiteral("tcsh")},
+        };
+        for (const QStringList& command : commands) {
+            QVERIFY(terminal_app::terminal_file_drop_is_shell_command(command));
+            QVERIFY(!terminal_app::terminal_file_drop_supported(command));
+            QVERIFY(!terminal_app::quote_terminal_paths(paths, command));
+        }
+        QVERIFY(!terminal_app::terminal_file_drop_is_shell_command({QStringLiteral("codex")}));
+        QVERIFY(!terminal_app::terminal_file_drop_supported({QStringLiteral("codex")}));
+        QVERIFY(terminal_app::terminal_file_drop_supported({QStringLiteral("/bin/sh")}));
+    }
+
+    void terminal_drop_literal_input_preserves_prompt_paths()
+    {
+        using Mode = terminal_app::Terminal_file_drop_mode;
+        QVERIFY(terminal_app::terminal_file_drop_supported(
+            {QStringLiteral("codex")}, Mode::LITERAL_TEXT));
+        const QStringList paths{
+            QStringLiteral("C:/work/readme.txt"),
+            QStringLiteral("C:/Ada's files/100% important! notes.txt"),
+            QStringLiteral("C:/work/\u03bb.txt"),
+        };
+        const auto text = terminal_app::quote_terminal_paths(
+            paths, {QStringLiteral("pwsh"), QStringLiteral("-Command"), QStringLiteral("codex")},
+            Mode::LITERAL_TEXT);
+        QVERIFY(text);
+        QCOMPARE(*text, QStringLiteral(
+            "C:/work/readme.txt \"C:/Ada's files/100% important! notes.txt\" C:/work/\u03bb.txt"));
         QVERIFY(!terminal_app::quote_terminal_paths(
-            {QStringLiteral("C:/Users/Ada/file.txt")},
-            {QStringLiteral("cmd.exe"), QStringLiteral("/v:on")}).has_value());
+            {paths.constFirst(), QStringLiteral("/tmp/line\nbreak")}, {}, Mode::LITERAL_TEXT));
     }
 
     void terminal_drop_accepts_only_local_urls()
@@ -314,9 +367,16 @@ private slots:
             {crafted_local_url},
             {QStringLiteral("cmd.exe")}).has_value());
 
-        QVERIFY(!terminal_app::terminal_drop_text_for_local_urls(
+        const auto network_text = terminal_app::terminal_drop_text_for_local_urls(
             {QUrl(QStringLiteral("file://server/share/file.txt"))},
-            {QStringLiteral("/bin/sh")}).has_value());
+            {QStringLiteral("/bin/sh")});
+        QVERIFY(network_text);
+        QCOMPARE(*network_text, QStringLiteral("'//server/share/file.txt'"));
+        const QString lexical_path = directory.filePath(QStringLiteral("link/../selected.txt"));
+        const auto lexical_text = terminal_app::terminal_drop_text_for_local_urls(
+            {QUrl::fromLocalFile(lexical_path)}, {QStringLiteral("/bin/sh")});
+        QVERIFY(lexical_text);
+        QCOMPARE(*lexical_text, QLatin1Char('\'') + lexical_path + QLatin1Char('\''));
         QVERIFY(!terminal_app::terminal_drop_text_for_local_urls(
             {QUrl(QStringLiteral("file:relative.txt"))},
             {QStringLiteral("/bin/sh")}).has_value());

@@ -1,4 +1,4 @@
-#include "terminal_file_drop.h"
+#include "vnm_terminal/app_support/terminal_file_drop.h"
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
@@ -26,6 +26,8 @@ enum class Shell_syntax
     POSIX,
     POWERSHELL,
     CMD,
+    LITERAL,
+    UNSUPPORTED,
 };
 
 std::optional<Shell_syntax> shell_syntax_for_command(const QStringList& command)
@@ -57,16 +59,11 @@ std::optional<Shell_syntax> shell_syntax_for_command(const QStringList& command)
     }
 
     if (executable == QStringLiteral("cmd")) {
-        for (qsizetype index = 1; index < command.size(); ++index) {
-            const QString argument = command.at(index).toLower();
-            if (argument == QStringLiteral("/v:on") ||
-                argument == QStringLiteral("/v:1"))
-            {
-                return std::nullopt;
-            }
-        }
-
         return Shell_syntax::CMD;
+    }
+
+    if (executable == QStringLiteral("csh") || executable == QStringLiteral("tcsh")) {
+        return Shell_syntax::UNSUPPORTED;
     }
 
     return std::nullopt;
@@ -95,6 +92,20 @@ std::optional<QString> quote_path(const QString& path, Shell_syntax syntax)
     }
 
     switch (syntax) {
+        case Shell_syntax::LITERAL: {
+            bool needs_quotes = path.contains(QLatin1Char('"'));
+            for (const QChar character : path) {
+                needs_quotes = needs_quotes || character.isSpace();
+            }
+            if (!needs_quotes) {
+                return path;
+            }
+
+            QString escaped_path = path;
+            escaped_path.replace(QStringLiteral("\\"), QStringLiteral("\\\\"));
+            escaped_path.replace(QStringLiteral("\""), QStringLiteral("\\\""));
+            return QStringLiteral("\"") + escaped_path + QStringLiteral("\"");
+        }
         case Shell_syntax::POSIX: {
             QString escaped_path = path;
             escaped_path.replace(QStringLiteral("'"), QStringLiteral("'\\''"));
@@ -117,6 +128,8 @@ std::optional<QString> quote_path(const QString& path, Shell_syntax syntax)
             }
 
             return QStringLiteral("\"") + path + QStringLiteral("\"");
+        case Shell_syntax::UNSUPPORTED:
+            return std::nullopt;
     }
 
     Q_UNREACHABLE();
@@ -186,11 +199,27 @@ private:
 
 } // namespace
 
+bool terminal_file_drop_is_shell_command(const QStringList& command)
+{
+    return shell_syntax_for_command(command).has_value();
+}
+
+bool terminal_file_drop_supported(const QStringList& command, Terminal_file_drop_mode mode)
+{
+    if (mode == Terminal_file_drop_mode::LITERAL_TEXT) {
+        return true;
+    }
+    const auto syntax = shell_syntax_for_command(command);
+    return syntax && *syntax != Shell_syntax::UNSUPPORTED;
+}
+
 std::optional<QString> quote_terminal_paths(
     const QStringList& paths,
-    const QStringList& command)
+    const QStringList& command,
+    Terminal_file_drop_mode mode)
 {
-    const std::optional<Shell_syntax> syntax = shell_syntax_for_command(command);
+    const std::optional<Shell_syntax> syntax = mode == Terminal_file_drop_mode::LITERAL_TEXT
+        ? Shell_syntax::LITERAL : shell_syntax_for_command(command);
     if (!syntax.has_value() || paths.isEmpty()) {
         return std::nullopt;
     }
@@ -211,7 +240,8 @@ std::optional<QString> quote_terminal_paths(
 
 std::optional<QString> terminal_drop_text_for_local_urls(
     const QList<QUrl>& urls,
-    const QStringList& command)
+    const QStringList& command,
+    Terminal_file_drop_mode mode)
 {
     if (urls.isEmpty()) {
         return std::nullopt;
@@ -220,39 +250,30 @@ std::optional<QString> terminal_drop_text_for_local_urls(
     QStringList paths;
     paths.reserve(urls.size());
     for (const QUrl& url : urls) {
-        const QString host = url.host();
-        if (!url.isLocalFile() ||
-            (!host.isEmpty() && host.compare(
-                QStringLiteral("localhost"), Qt::CaseInsensitive) != 0))
-        {
+        if (!url.isValid() || !url.isLocalFile()) {
             return std::nullopt;
         }
 
-        const QString local_path = url.toLocalFile();
+        QUrl file_url = url;
+        if (file_url.host().compare(QStringLiteral("localhost"), Qt::CaseInsensitive) == 0) {
+            file_url.setHost(QString{});
+        }
+        const QString local_path = file_url.toLocalFile();
         if (local_path.isEmpty() || !QDir::isAbsolutePath(local_path)) {
             return std::nullopt;
         }
 
-#ifdef Q_OS_WIN
-        if (local_path.startsWith(QStringLiteral("//")) ||
-            local_path.startsWith(QStringLiteral("\\\\")))
-        {
-            return std::nullopt;
-        }
-#endif
-
-        const QString path = QDir::cleanPath(local_path);
-        paths.append(path);
+        paths.append(local_path);
     }
 
-    return quote_terminal_paths(paths, command);
+    return quote_terminal_paths(paths, command, mode);
 }
 
 void install_terminal_file_drop(
     VNM_TerminalSurface& surface,
     const QStringList& command)
 {
-    if (!shell_syntax_for_command(command).has_value()) {
+    if (!terminal_file_drop_supported(command)) {
         return;
     }
 
