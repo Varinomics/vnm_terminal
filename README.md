@@ -45,7 +45,7 @@ options are available in **Settings**.
 | --- | --- |
 | Search | `Ctrl+F` (`Cmd+F` on macOS). `Enter` or `F3` goes to the next result; add `Shift` for the previous result. |
 | Open a link | `Ctrl+left-click` on an HTTP, HTTPS, or mailto link. |
-| Paste | `Ctrl+V` or `Ctrl+Shift+V`; configurable in Settings. |
+| Paste | `Ctrl+V` or `Ctrl+Shift+V`; configurable in Settings. On Windows, pasting while the clipboard holds an image and no text sends `Alt+V` to the program, which is how Claude Code and Codex attach a clipboard image; the file reference a screenshot tool adds beside the image does not count as text. |
 | Copy on selection | Enable under **Settings > Behavior**; disabled by default. |
 | Rename the window | Alt+left-click the built-in titlebar, edit, then press `Enter`. |
 

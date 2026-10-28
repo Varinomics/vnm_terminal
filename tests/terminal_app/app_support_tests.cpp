@@ -1,4 +1,5 @@
 #include "vnm_terminal/app_support/app_settings.h"
+#include "vnm_terminal/app_support/app_shortcuts.h"
 #include "vnm_terminal/app_support/backend_output_capture_json.h"
 #include "vnm_terminal/app_support/terminal_display_settings.h"
 #include "vnm_terminal/app_support/terminal_settings_reconciler.h"
@@ -23,6 +24,7 @@
 #include <QGuiApplication>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QKeyEvent>
 #include <QList>
 #include <QMimeData>
 #include <QMetaType>
@@ -404,6 +406,41 @@ private slots:
         QVERIFY(QCoreApplication::sendEvent(&surface, &event));
         QVERIFY(event.isAccepted());
         QCOMPARE(event.dropAction(), Qt::CopyAction);
+    }
+
+    void image_paste_shortcut_delivers_alt_v_to_the_target()
+    {
+        struct Key_press
+        {
+            int                    key;
+            Qt::KeyboardModifiers  modifiers;
+            QString                text;
+        };
+
+        class Key_recorder final : public QObject
+        {
+        public:
+            QList<Key_press> presses;
+
+        protected:
+            bool event(QEvent* event) override
+            {
+                if (event->type() == QEvent::KeyPress) {
+                    const auto* press = static_cast<QKeyEvent*>(event);
+                    presses.append({press->key(), press->modifiers(), press->text()});
+                    return true;
+                }
+                return QObject::event(event);
+            }
+        };
+
+        Key_recorder recorder;
+        terminal_app::send_image_paste_shortcut(recorder);
+
+        QCOMPARE(recorder.presses.size(), 1);
+        QCOMPARE(recorder.presses.constFirst().key, int(Qt::Key_V));
+        QCOMPARE(recorder.presses.constFirst().modifiers, Qt::KeyboardModifiers(Qt::AltModifier));
+        QCOMPARE(recorder.presses.constFirst().text, QStringLiteral("v"));
     }
 
     void shared_display_settings_preserve_font_across_modes_and_restart()

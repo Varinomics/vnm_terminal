@@ -48,6 +48,11 @@ Search_shortcut_action terminal_search_shortcut_action(
     bool                    search_ui_visible,
     bool                    query_active);
 
+// Windows console applications bind clipboard-image paste to Alt+V and receive
+// Ctrl+V only as text, so a paste of an image-only clipboard reaches them as
+// this key press. The target is expected to be the terminal surface.
+void send_image_paste_shortcut(QObject& target);
+
 class Terminal_shortcut_filter final : public QObject
 #if defined(Q_OS_MACOS)
     , private QAbstractNativeEventFilter

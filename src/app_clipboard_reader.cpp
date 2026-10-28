@@ -16,6 +16,13 @@
 #include <QtGlobal>
 
 #if defined(Q_OS_WIN)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
 #include <fcntl.h>
 #include <io.h>
 #endif
@@ -31,6 +38,8 @@ namespace {
 constexpr int k_clipboard_broker_timeout_ms = 2000;
 constexpr qsizetype k_clipboard_broker_maximum_bytes = 8 * 1024 * 1024;
 constexpr qsizetype k_clipboard_broker_maximum_error_bytes = 64 * 1024;
+// Exit status of a broker that read no text but found an image on the clipboard.
+constexpr int k_clipboard_broker_image_only_exit_code = 5;
 
 QString internal_clipboard_read_argument()
 {
@@ -45,13 +54,15 @@ public:
         QString program,
         QStringList arguments,
         qsizetype maximum_bytes,
-        Clipboard_completion completion)
+        Clipboard_completion completion,
+        Clipboard_image_only_handler image_only = {})
     :
         m_context(&context),
         m_process(this),
         m_deadline(this),
         m_maximum_bytes(maximum_bytes),
-        m_completion(std::move(completion))
+        m_completion(std::move(completion)),
+        m_image_only(std::move(image_only))
     {
         Q_ASSERT(context.thread() == QThread::currentThread());
         Q_ASSERT(maximum_bytes > 0);
@@ -103,6 +114,7 @@ public:
         Q_ASSERT(thread() == QThread::currentThread());
         m_settled = true;
         m_completion = {};
+        m_image_only = {};
         m_deadline.stop();
         retire_process();
     }
@@ -129,7 +141,7 @@ private:
         m_process.kill();
     }
 
-    void finish(std::optional<QString> text, QString error)
+    void finish(std::optional<QString> text, QString error, bool image_only = false)
     {
         if (m_settled) {
             retire_process();
@@ -139,9 +151,14 @@ private:
         m_settled = true;
         m_deadline.stop();
         Clipboard_completion completion = std::move(m_completion);
+        Clipboard_image_only_handler image_only_handler = std::move(m_image_only);
         retire_process();
         if (m_context) {
             completion(std::move(text));
+        }
+        // The completion may have destroyed the context.
+        if (image_only && image_only_handler && m_context) {
+            image_only_handler();
         }
         if (!error.isEmpty()) {
             write_diagnostic(Diagnostic_level::WARNING, error);
@@ -190,6 +207,13 @@ private:
             return;
         }
 
+        if (exit_status == QProcess::NormalExit &&
+            exit_code == k_clipboard_broker_image_only_exit_code)
+        {
+            finish(QString{}, {}, true);
+            return;
+        }
+
         if (exit_status != QProcess::NormalExit || exit_code != 0) {
             finish(std::nullopt,
                 QStringLiteral("Clipboard broker exited with status %1, code %2: %3")
@@ -208,14 +232,15 @@ private:
         finish(std::move(text), {});
     }
 
-    QPointer<QObject>     m_context;
-    QProcess             m_process;
-    QTimer               m_deadline;
-    qsizetype            m_maximum_bytes;
-    Clipboard_completion m_completion;
-    QByteArray           m_output;
-    QByteArray           m_error_output;
-    bool                 m_settled = false;
+    QPointer<QObject>            m_context;
+    QProcess                     m_process;
+    QTimer                       m_deadline;
+    qsizetype                    m_maximum_bytes;
+    Clipboard_completion         m_completion;
+    Clipboard_image_only_handler m_image_only;
+    QByteArray                   m_output;
+    QByteArray                   m_error_output;
+    bool                         m_settled = false;
 };
 
 std::optional<QString> read_clipboard_text_directly()
@@ -230,6 +255,19 @@ std::optional<QString> read_clipboard_text_directly()
 
     return clipboard->text(QClipboard::Clipboard);
 }
+
+#if defined(Q_OS_WIN)
+// Windows synthesizes the Unicode, ANSI and OEM text formats from one another,
+// and DIB, DIBV5 and bitmap likewise, so one probe per family is enough. The
+// clipboard itself is asked because Qt renders a file-drop entry as a `file:`
+// URL, which screenshot tools place beside their image.
+bool clipboard_holds_image_without_text()
+{
+    static const UINT png_format = RegisterClipboardFormatW(L"PNG");
+    return !IsClipboardFormatAvailable(CF_UNICODETEXT) &&
+        (IsClipboardFormatAvailable(CF_DIB) || IsClipboardFormatAvailable(png_format));
+}
+#endif
 
 bool set_standard_output_binary()
 {
@@ -257,6 +295,11 @@ int run_clipboard_text_broker(int argc, char** argv)
     if (!set_standard_output_binary()) {
         return 3;
     }
+#if defined(Q_OS_WIN)
+    if (clipboard_holds_image_without_text()) {
+        return k_clipboard_broker_image_only_exit_code;
+    }
+#endif
 
     const std::optional<QString> text = read_clipboard_text_directly();
     if (!text.has_value()) {
@@ -295,7 +338,10 @@ int run_clipboard_text_broker(int argc, char** argv)
     return 0;
 }
 
-Clipboard_cancel read_clipboard_text_with_broker(QObject* context, Clipboard_completion completion)
+Clipboard_cancel read_clipboard_text_with_broker(
+    QObject*                      context,
+    Clipboard_completion          completion,
+    Clipboard_image_only_handler  image_only)
 {
     Q_ASSERT(context != nullptr);
     Q_ASSERT(context->thread() == QThread::currentThread());
@@ -306,13 +352,15 @@ Clipboard_cancel read_clipboard_text_with_broker(QObject* context, Clipboard_com
         QCoreApplication::applicationFilePath(),
         {internal_clipboard_read_argument()},
         k_clipboard_broker_maximum_bytes,
-        std::move(completion));
+        std::move(completion),
+        std::move(image_only));
     return [request] {
         if (request) {
             request->cancel();
         }
     };
 #else
+    static_cast<void>(image_only);
     const QPointer<QObject> request = new QObject(context);
     QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit,
         request.data(), [request] { delete request.data(); });

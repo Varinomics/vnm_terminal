@@ -91,6 +91,7 @@ using chrome::apply_scrollback_limit_option;
 using chrome::apply_synchronized_output_scroll_policy_option;
 using chrome::apply_terminal_shell_geometry;
 using chrome::clipboard_broker_mode_requested;
+using chrome::Clipboard_completion;
 using chrome::Command_line_setting_overrides;
 using chrome::command_line_setting_overrides;
 using chrome::connect_presentation_metrics_recorder;
@@ -157,6 +158,7 @@ using chrome::save_persisted_appearance_settings;
 using chrome::save_persisted_interaction_settings;
 using chrome::Runtime_state;
 using chrome::save_persisted_terminal_window_state;
+using chrome::send_image_paste_shortcut;
 using chrome::settle_command_line_window_geometry;
 using chrome::set_terminal_chrome_palette;
 using chrome::settings_window_position;
@@ -519,7 +521,13 @@ int main(int argc, char** argv)
     auto* surface = new VNM_TerminalSurface(window.contentItem());
     vnm_terminal::terminal_app::install_terminal_file_drop(*surface, options.command);
     surface->set_cursor_settle_delay_ms(80);
-    surface->set_clipboard_text_reader(read_clipboard_text_with_broker);
+    surface->set_clipboard_text_reader(
+        [](QObject* context, Clipboard_completion completion) {
+            return read_clipboard_text_with_broker(
+                context,
+                std::move(completion),
+                [context] { send_image_paste_shortcut(*context); });
+        });
     surface->set_selection_trace_enabled(options.selection_trace_enabled);
 #if VNM_TERMINAL_PROFILING_ENABLED
     std::unique_ptr<term::Hierarchical_profiler> gui_profiler;

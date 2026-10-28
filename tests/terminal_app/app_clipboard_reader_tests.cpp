@@ -23,6 +23,9 @@ int run_fixture(const QString& mode)
     if (mode == QStringLiteral("hang")) {
         return QCoreApplication::exec();
     }
+    if (mode == QStringLiteral("image_only")) {
+        return chrome::k_clipboard_broker_image_only_exit_code;
+    }
 
     QByteArray output;
     FILE* destination = stdout;
@@ -96,6 +99,31 @@ bool test_result(const QString& mode, std::optional<QString> expected, bool miss
     ok &= await_destruction(request);
     ok &= check(completions == 1, "broker completes exactly once");
     ok &= check(received == expected, "broker returns expected text or explicit failure");
+    return ok;
+}
+
+bool test_image_only(
+    const QString&  mode,
+    bool            destroy_context_in_completion,
+    QStringList     expected_events)
+{
+    auto context = std::make_unique<QObject>();
+    QStringList events;
+    auto* request = new chrome::Clipboard_broker_request(
+        *context, QCoreApplication::applicationFilePath(), {QStringLiteral("--broker-fixture"), mode},
+        chrome::k_clipboard_broker_maximum_bytes,
+        [&](std::optional<QString> text) {
+            events << (!text ? QStringLiteral("failure")
+                : text->isEmpty() ? QStringLiteral("empty") : QStringLiteral("text"));
+            if (destroy_context_in_completion) {
+                context.reset();
+            }
+        },
+        [&] { events << QStringLiteral("image"); });
+
+    bool ok = await_destruction(request);
+    ok &= check(events == expected_events,
+        "image-only handler follows exactly the completions that report an image-only clipboard");
     return ok;
 }
 
@@ -249,6 +277,12 @@ int main(int argc, char** argv)
     ok &= test_result(QStringLiteral("overflow"), std::nullopt);
     ok &= test_result(QStringLiteral("stderr_overflow"), std::nullopt);
     ok &= test_result(QStringLiteral("text"), std::nullopt, true);
+    ok &= test_result(QStringLiteral("image_only"), QString{});
+    ok &= test_image_only(QStringLiteral("image_only"), false, {QStringLiteral("empty"), QStringLiteral("image")});
+    ok &= test_image_only(QStringLiteral("image_only"), true, {QStringLiteral("empty")});
+    ok &= test_image_only(QStringLiteral("text"), false, {QStringLiteral("text")});
+    ok &= test_image_only(QStringLiteral("empty"), false, {QStringLiteral("empty")});
+    ok &= test_image_only(QStringLiteral("failure"), false, {QStringLiteral("failure")});
     ok &= test_cancellation(false, true);
     ok &= test_cancellation(false, false);
     ok &= test_cancellation(true, true);

@@ -2,6 +2,7 @@
 #include "vnm_terminal/keyboard_modifiers.h"
 
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QEvent>
 #include <QGuiApplication>
 #include <QKeyEvent>
@@ -115,6 +116,12 @@ Search_shortcut_action terminal_search_shortcut_action(
         return Search_shortcut_action::PREVIOUS;
     }
     return Search_shortcut_action::NONE;
+}
+
+void send_image_paste_shortcut(QObject& target)
+{
+    QKeyEvent press(QEvent::KeyPress, Qt::Key_V, Qt::AltModifier, QStringLiteral("v"));
+    QCoreApplication::sendEvent(&target, &press);
 }
 
 Terminal_shortcut_filter::Terminal_shortcut_filter(
