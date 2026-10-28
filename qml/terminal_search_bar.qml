@@ -20,9 +20,10 @@ Item {
         readonly property real content_right: scrollbar_visible
             ? terminalSurface.x + terminalSurface.width
             : root.width - terminalSurface.x
+        readonly property bool stacked: width < 400
 
         width: Math.min(460, Math.max(0, content_right - terminalSurface.x))
-        height: 30
+        height: stacked ? 60 : 30
         x: content_right - width
         y: terminalSurface.y
         color: searchBar.chromeBackgroundColor
@@ -68,9 +69,9 @@ Item {
             objectName: "terminal_search_query_input"
             anchors.left: parent.left
             anchors.leftMargin: 8
-            anchors.right: result_label.left
+            anchors.right: panel.stacked ? dismiss_button.left : result_label.left
             anchors.rightMargin: 6
-            anchors.verticalCenter: parent.verticalCenter
+            y: 3
             height: 24
             color: searchBar.chromeActive ? "#ebeff5" : "#939ca9"
             selectionColor: "#315d8d"
@@ -97,7 +98,7 @@ Item {
             objectName: "terminal_search_result_text"
             anchors.right: match_case_button.left
             anchors.rightMargin: 8
-            anchors.verticalCenter: parent.verticalCenter
+            anchors.verticalCenter: match_case_button.verticalCenter
             width: 72
             horizontalAlignment: Text.AlignRight
             color: searchBar.chromeActive ? "#ebeff5" : "#939ca9"
@@ -111,6 +112,7 @@ Item {
             objectName: "terminal_search_match_case_button"
             anchors.right: previous_button.left
             anchors.top: parent.top
+            anchors.topMargin: panel.stacked ? 30 : 0
             anchors.bottom: parent.bottom
             width: 100
             color: match_case_mouse.pressed ? "#343d4a"
@@ -135,6 +137,7 @@ Item {
             objectName: "terminal_search_previous_button"
             anchors.right: next_button.left
             anchors.top: parent.top
+            anchors.topMargin: panel.stacked ? 30 : 0
             anchors.bottom: parent.bottom
             width: 28
             color: previous_mouse.pressed ? "#343d4a"
@@ -159,8 +162,9 @@ Item {
         Rectangle {
             id: next_button
             objectName: "terminal_search_next_button"
-            anchors.right: dismiss_button.left
+            anchors.right: panel.stacked ? parent.right : dismiss_button.left
             anchors.top: parent.top
+            anchors.topMargin: panel.stacked ? 30 : 0
             anchors.bottom: parent.bottom
             width: 28
             color: next_mouse.pressed ? "#343d4a"
@@ -187,8 +191,8 @@ Item {
             objectName: "terminal_search_dismiss_button"
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.bottom: parent.bottom
             width: 28
+            height: 30
             color: dismiss_mouse.pressed ? "#343d4a"
                 : dismiss_mouse.containsMouse ? "#272f3a" : "transparent"
 
