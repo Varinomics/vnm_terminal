@@ -120,30 +120,36 @@ terminal description is needed on the destination.
 
 Link `vnm_terminal::vnm_terminal_app_support` and include
 [`<vnm_terminal/app_support/codex_command_environment.h>`](../include/vnm_terminal/app_support/codex_command_environment.h).
-Call `Codex_command_environment::prepare()` on the final command and
-environment before starting the backend. Keep that object alive for the
-terminal session; it owns the scripts prepared for a direct Codex launch.
-Other commands and their environments pass through unchanged.
+Call `prepare_codex_command()` on the final `Terminal_process_start_request`
+before passing it to `VNM_TerminalSurface::start_terminal()`. The function
+prepares a direct launch without creating files or retaining session state.
+Other commands and their requests pass through unchanged.
 
 For a verified Codex executable or interpreter invocation, pass
-`Codex_invocation{argument_prefix_size}` to `prepare()`. The prefix includes
+`Codex_invocation{argument_prefix_size}` to `prepare_codex_command()`. The prefix includes
 the absolute executable and any fixed interpreter arguments: one for a native
 Codex executable, or two for Node and its verified Codex entry point. On
 Windows, the executable must be native. The adapter inserts Codex options
 after that prefix and preserves the remaining arguments. Without an explicit
 invocation, it detects `codex` and `codex-pet` by executable name.
 
-The adapter enables SIXEL for Codex and passes
+The adapter selects `terminal_identity = "vnm-terminal-sixel"` for Codex,
+clears inherited terminal-detection hints in the request, and passes
 `-c 'shell_environment_policy.set.TERM="xterm-256color"'` for commands run
 through Codex's shell tools. Codex environment allowlists or later command-line
 overrides can change that result. It does not configure external MCP servers.
 Multiplexer graphics restrictions still apply.
 
-The app support library bundles the readable launch scripts and materializes
-them only for direct Codex launches. It leaves PATH unchanged and creates no
-replacement `codex` commands. Rebuild embedding applications to pick up changes;
-their direct launches need no separate script deployment. Applications that
-offer the explicit shell commands must also deploy the installed launchers.
+The ordinary backend starts the installed program with this scoped identity.
+Native executables and verified native interpreter prefixes retain their
+argument arrays. PATH and the parent environment remain unchanged, and ordinary
+shell launches retain `xterm-256color`. Applications that offer the explicit
+`vnm-codex` shell commands must also deploy the installed launchers.
 
-Direct Windows launches preserve argument arrays through the PowerShell script,
-including verified interpreter prefixes. Windows PowerShell 5.1 is supported.
+On Windows, named commands are resolved against the request's PATH. Installed
+PowerShell entry points use PowerShell 7 when it is on PATH, otherwise Windows
+PowerShell 5.1. Installed `.cmd` and `.bat` entry points use `cmd.exe` and its
+batch quoting rules. Line breaks in batch arguments are rejected because
+`cmd.exe` cannot preserve them. These interpreters run the installed scripts
+directly; native Codex executables and verified Node entry points do not require
+a shell. A missing command or required interpreter is reported as a launch error.

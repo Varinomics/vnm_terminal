@@ -161,13 +161,7 @@ target_include_directories(vnm_terminal_title_metadata_headers INTERFACE
 )
 target_link_libraries(vnm_terminal_title_metadata_headers INTERFACE Qt6::Core)
 
-qt_add_resources(vnm_terminal_codex_resource_sources
-    resources/codex_commands.qrc
-)
-
-
 add_library(vnm_terminal_app_support STATIC
-    ${vnm_terminal_codex_resource_sources}
     src/app_clipboard_reader.cpp
     src/hosted_clipboard_reader.cpp
     include/vnm_terminal/app_support/clipboard_reader.h
