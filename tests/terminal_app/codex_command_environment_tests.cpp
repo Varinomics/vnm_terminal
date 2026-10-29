@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #if defined(Q_OS_WIN)
@@ -528,6 +529,23 @@ void run_tests()
         request_environment(raw_codex) == environment, "failed preparation changed request");
 
 #if defined(Q_OS_WIN)
+    // PowerShell also reads U+2018 to U+201B as single quotes. The last argument runs a
+    // command instead of arriving intact if the script launch leaves any of them undoubled.
+    const QStringList typographic_arguments{
+        "left\u2018quote", "right\u2019quote", "low\u201aquote", "reversed\u201bquote",
+        "x\u2019; Write-Output INJECTED; \u2019y"};
+    const QString quoted_directory = fixture.filePath("owner\u2019s scripts");
+    require(QDir().mkpath(quoted_directory), "create typographic quote directory");
+    write_powershell_fixture(QDir(quoted_directory).filePath("codex.ps1"), executable);
+    for (const auto& [program, script_arguments] : {
+        std::pair{fixture.filePath("codex.ps1"), typographic_arguments},
+        std::pair{QDir(quoted_directory).filePath("codex.ps1"), arguments}})
+    {
+        auto request = make_request(QStringList{program} + script_arguments, environment, fixture.path());
+        require(prepare_codex_command(request, error), error);
+        check_direct_launch(request, script_arguments, original_path, expected_wrapper);
+    }
+
     QStringList batch_arguments = arguments;
     batch_arguments.removeAll("line\nbreak");
     batch_arguments += QStringList{

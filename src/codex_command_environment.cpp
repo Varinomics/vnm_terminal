@@ -100,7 +100,11 @@ QString resolve_windows_program(
 
 QString powershell_literal(QString value)
 {
-    value.replace(QLatin1Char('\''), QStringLiteral("''"));
+    // PowerShell also reads U+2018 to U+201B as single quotes, so each of them must be
+    // doubled like the ASCII apostrophe or it ends the literal early.
+    for (const QChar quote : {u'\'', u'\u2018', u'\u2019', u'\u201a', u'\u201b'}) {
+        value.replace(quote, QString(2, quote));
+    }
     return QLatin1Char('\'') + value + QLatin1Char('\'');
 }
 
