@@ -113,6 +113,19 @@ overrides can change that result. It does not configure external MCP servers.
 Shell aliases, functions, and explicit paths inside a shell can bypass the
 adapter; multiplexer graphics restrictions still apply.
 
-The Windows child launcher is embedded in the app support library. Rebuild
-embedding applications to pick up changes; no separate launcher deployment is
-needed.
+The app support library bundles readable scripts. On Windows, session-local
+`.cmd` commands serve CMD and `.ps1` commands serve PowerShell; POSIX sessions
+use shell scripts. The adapter directory is prepended to that session's PATH,
+and the adapters remove it before resolving the installed command. No native
+executable is extracted or compiled at runtime. Rebuild embedding applications
+to pick up changes; no separate adapter deployment is needed.
+
+CMD adapters follow ordinary batch argument parsing and command-length limits.
+Quote prompts and paths containing CMD metacharacters. PowerShell and direct
+launches preserve argument arrays through the PowerShell script, including
+verified interpreter prefixes; Windows PowerShell 5.1 is supported.
+
+WSL and SSH start programs in another environment. The local adapter directory
+does not install adapters into a distribution or a remote host. Those sessions
+need scripts on the destination if Codex-specific graphics adaptation is wanted;
+their normal terminal identity is not changed by a local Codex launch.

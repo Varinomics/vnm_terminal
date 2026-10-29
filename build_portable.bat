@@ -471,8 +471,7 @@ if errorlevel 1 (
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tests\windows_portable_payload_tests.ps1" ^
-    -PayloadPath "%PORTABLE_DIR%" ^
-    -EmbeddedLauncherPath "%BUILD_DIR%\codex_launcher\%CONFIG%\vnm_terminal_codex_launcher.exe"
+    -PayloadPath "%PORTABLE_DIR%"
 if errorlevel 1 (
     echo ERROR: Windows release payload validation failed.
     exit /b 1

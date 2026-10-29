@@ -17,7 +17,7 @@ struct Codex_invocation
 class Codex_command_environment
 {
 public:
-    // Keep this owner alive for the terminal session: its PATH commands live in
+    // Keep this owner alive for the terminal session: its PATH scripts live in
     // a private directory that is removed when the owner is destroyed.
     // An explicit invocation identifies a verified Codex launch without executable-name inference.
     // Windows callers supply a native executable; its prefix remains before Codex CLI options.

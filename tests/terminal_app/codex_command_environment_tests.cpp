@@ -422,6 +422,13 @@ void run_tests()
         require(commands.prepare(direct, environment, error), error);
         private_path = environment.value("PATH").section(QDir::listSeparator(), 0, 0);
         require(QDir(private_path).exists(), "private command directory missing");
+#if defined(Q_OS_WIN)
+        for (const QString& file_name : QDir(private_path).entryList(QDir::Files)) {
+            QFile script(QDir(private_path).filePath(file_name));
+            require(script.open(QIODevice::ReadOnly), "could not inspect the session script");
+            require(script.read(2) != "MZ", "session adapter materialized a native executable");
+        }
+#endif
         require(environment.value("TERM") == "xterm-256color", "ordinary terminal TERM changed");
         require(environment.value("TERM_PROGRAM") == "inherited-terminal", "ordinary terminal hint changed");
         require(QProcessEnvironment::systemEnvironment() == parent, "parent environment changed");
@@ -467,7 +474,7 @@ void run_tests()
         const QString cmd_tail =
             " \"\" \"with spaces\" --flag \"unicode-\u03bb\" \"C:\\working files\\\\\" "
             "\"amp&ersand\" \"pipe|value\" \"caret^value\" \"bang!value\" \"(parentheses)\" "
-            "\"percent%value\" \"dollar$value\" percent%value dollar$value unquoted!value unquoted^^caret";
+            "\"percent%value\" \"dollar$value\" percent%value dollar$value unquoted!value";
         for (const QString& name : QStringList{"codex", "codex-pet"}) {
             const QStringList cmd{parent.value("COMSPEC"), "/d", "/v:off", "/c", name + cmd_tail};
             const QStringList cmd_arguments = original_cmd_arguments(
@@ -534,9 +541,8 @@ void run_tests()
                     fixture.path(), long_arguments, original_path, "native");
             }
 
-            const QString native_cmd_tail = cmd_tail +
-                " unquoted^&value unquoted^|value unquoted^^value ^(unquoted-parentheses^)";
-            const QStringList cmd{parent.value("COMSPEC"), "/d", "/v:off", "/c", name + native_cmd_tail};
+            // Batch adapters forward quoted arguments using cmd's ordinary script semantics.
+            const QStringList cmd{parent.value("COMSPEC"), "/d", "/v:off", "/c", name + cmd_tail};
             const QStringList native_cmd_arguments = original_cmd_arguments(
                 cmd, native_environment, other_directory.path(), original_path);
             check_launch(cmd,
@@ -553,8 +559,8 @@ void run_tests()
             require(QFile::copy(executable, other_directory.filePath(name + ".exe")), "copy cwd native fixture");
             const QStringList cwd_cmd{
                 parent.value("COMSPEC"), "/d", "/v:off", "/s", "/c",
-                "\"\"" + QDir::toNativeSeparators(QDir(private_path).filePath(name + ".exe")) +
-                    "\"" + native_cmd_tail + "\""};
+                "\"\"" + QDir::toNativeSeparators(QDir(private_path).filePath(name + ".cmd")) +
+                    "\"" + cmd_tail + "\""};
             check_launch(cwd_cmd,
                 cmd_environment, other_directory.path(), native_cmd_arguments, original_path, "native");
         }
