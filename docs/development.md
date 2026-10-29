@@ -63,6 +63,33 @@ generated `.qmlc` disk caches. Child commands retain the caller's original
 environment. Embedding hosts must apply this policy themselves; the libraries
 do not modify their host's environment.
 
+## Clipboard integration for hosted Windows terminals
+
+Link `vnm_terminal::vnm_terminal_app_support`, include
+`<vnm_terminal/app_support/clipboard_reader.h>`, and call
+`install_hosted_clipboard_reader(surface)` when creating each terminal surface.
+Deploy the `vnm_terminal_clipboard_broker` target beside the executable that
+hosts the surface. The helper needs that host's Qt platform-plugin deployment
+and `qt.conf` paths. Both the reader and helper build with
+`VNM_TERMINAL_BUILD_STANDALONE_APP=OFF`.
+
+Hosts with independently deployed Qt layouts must give their broker a distinct
+output filename and pass its program path to `install_hosted_clipboard_reader`.
+This keeps each host's broker and embedded Qt paths under its own deployment
+ownership when the hosts share a runtime directory.
+
+The helper reads the local clipboard outside the GUI process. Real text takes
+precedence over an image; an image without a Windows text format sends Alt+V,
+including when a screenshot tool also supplies a file reference. The receiving
+CLI must support that image-paste shortcut. Cancelling a read or destroying the
+surface suppresses its callbacks. Other platforms keep the ordinary Qt paste
+path. The standalone application's existing self-dispatch remains unchanged.
+
+Configure `VNM_TERMINAL_APP_SUPPORT_BUILD_TESTS=ON` to build the focused reader
+tests without the standalone application. The Windows
+`vnm_terminal_hosted_clipboard` test runs the deployed helper against the native
+clipboard and exercises the installed reader through a terminal surface.
+
 ## Codex integration for embedding applications
 
 Link `vnm_terminal::vnm_terminal_app_support` and include

@@ -1,5 +1,5 @@
 #include "app_cli.h"
-#include "app_clipboard_reader.h"
+#include "vnm_terminal/app_support/clipboard_reader.h"
 #include "app_clipboard_policy.h"
 #include "app_common.h"
 #include "vnm_terminal/app_support/app_hyperlink_policy.h"

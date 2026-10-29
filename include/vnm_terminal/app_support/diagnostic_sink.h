@@ -10,6 +10,7 @@ enum class Diagnostic_level
 {
     WARNING,
     ERROR,
+    DEBUG_WARNING,
 };
 
 // The message view is valid only for the duration of the call. A missing sink

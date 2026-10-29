@@ -26,8 +26,9 @@ Diagnostic_sink& configured_diagnostic_sink()
 const char* diagnostic_level_name(Diagnostic_level level)
 {
     switch (level) {
-        case Diagnostic_level::WARNING: return "warning";
-        case Diagnostic_level::ERROR:   return "error";
+        case Diagnostic_level::WARNING:       return "warning";
+        case Diagnostic_level::ERROR:         return "error";
+        case Diagnostic_level::DEBUG_WARNING: return "debug warning";
     }
     return "error";
 }

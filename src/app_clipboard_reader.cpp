@@ -1,4 +1,4 @@
-#include "app_clipboard_reader.h"
+#include "vnm_terminal/app_support/clipboard_reader.h"
 
 #include "vnm_terminal/app_support/diagnostic_sink.h"
 
@@ -161,7 +161,7 @@ private:
             image_only_handler();
         }
         if (!error.isEmpty()) {
-            write_diagnostic(Diagnostic_level::WARNING, error);
+            write_diagnostic(Diagnostic_level::DEBUG_WARNING, error);
         }
     }
 
@@ -248,7 +248,7 @@ std::optional<QString> read_clipboard_text_directly()
     QClipboard* clipboard = QGuiApplication::clipboard();
     if (clipboard == nullptr) {
         write_diagnostic(
-            Diagnostic_level::WARNING,
+            Diagnostic_level::DEBUG_WARNING,
             QStringLiteral("vnm_terminal: no application clipboard is available"));
         return std::nullopt;
     }
@@ -274,7 +274,7 @@ bool set_standard_output_binary()
 #if defined(Q_OS_WIN)
     if (_setmode(_fileno(stdout), _O_BINARY) == -1) {
         write_diagnostic(
-            Diagnostic_level::WARNING,
+            Diagnostic_level::DEBUG_WARNING,
             QStringLiteral("vnm_terminal: failed to switch clipboard broker stdout to binary mode"));
         return false;
     }
@@ -307,13 +307,13 @@ int run_clipboard_text_broker(int argc, char** argv)
     }
 
     if (text->size() > k_clipboard_broker_maximum_bytes) {
-        write_diagnostic(Diagnostic_level::WARNING,
+        write_diagnostic(Diagnostic_level::DEBUG_WARNING,
             QStringLiteral("Clipboard text exceeds the broker size limit."));
         return 4;
     }
     const QByteArray bytes = text->toUtf8();
     if (bytes.size() > k_clipboard_broker_maximum_bytes) {
-        write_diagnostic(Diagnostic_level::WARNING,
+        write_diagnostic(Diagnostic_level::DEBUG_WARNING,
             QStringLiteral("Clipboard text exceeds the broker size limit."));
         return 4;
     }
@@ -323,14 +323,14 @@ int run_clipboard_text_broker(int argc, char** argv)
             std::fwrite(bytes.constData(), 1U, byte_count, stdout);
         if (written != byte_count) {
             write_diagnostic(
-                Diagnostic_level::WARNING,
+                Diagnostic_level::DEBUG_WARNING,
                 QStringLiteral("vnm_terminal: failed to write clipboard broker output"));
             return 3;
         }
     }
     if (std::fflush(stdout) != 0) {
         write_diagnostic(
-            Diagnostic_level::WARNING,
+            Diagnostic_level::DEBUG_WARNING,
             QStringLiteral("vnm_terminal: failed to flush clipboard broker output"));
         return 3;
     }
@@ -341,7 +341,8 @@ int run_clipboard_text_broker(int argc, char** argv)
 Clipboard_cancel read_clipboard_text_with_broker(
     QObject*                      context,
     Clipboard_completion          completion,
-    Clipboard_image_only_handler  image_only)
+    Clipboard_image_only_handler  image_only,
+    QString                       broker_program)
 {
     Q_ASSERT(context != nullptr);
     Q_ASSERT(context->thread() == QThread::currentThread());
@@ -349,7 +350,7 @@ Clipboard_cancel read_clipboard_text_with_broker(
 #if defined(Q_OS_WIN)
     const QPointer<Clipboard_broker_request> request = new Clipboard_broker_request(
         *context,
-        QCoreApplication::applicationFilePath(),
+        broker_program.isEmpty() ? QCoreApplication::applicationFilePath() : std::move(broker_program),
         {internal_clipboard_read_argument()},
         k_clipboard_broker_maximum_bytes,
         std::move(completion),
@@ -361,6 +362,7 @@ Clipboard_cancel read_clipboard_text_with_broker(
     };
 #else
     static_cast<void>(image_only);
+    static_cast<void>(broker_program);
     const QPointer<QObject> request = new QObject(context);
     QObject::connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit,
         request.data(), [request] { delete request.data(); });

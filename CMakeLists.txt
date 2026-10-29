@@ -26,6 +26,9 @@ option(VNM_TERMINAL_BUILD_PACKAGES
 option(VNM_TERMINAL_BUILD_STANDALONE_APP
     "Build the standalone vnm_terminal application"
     ON)
+option(VNM_TERMINAL_APP_SUPPORT_BUILD_TESTS
+    "Build focused app-support tests without requiring the standalone application"
+    "${PROJECT_IS_TOP_LEVEL}")
 
 if(VNM_TERMINAL_DISTRIBUTION_BUILD AND VNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY)
     message(FATAL_ERROR
@@ -134,6 +137,7 @@ set(vnm_terminal_app_support_headers
     include/vnm_terminal/app_support/app_settings.h
     include/vnm_terminal/app_support/backend_output_capture_json.h
     include/vnm_terminal/app_support/codex_command_environment.h
+    include/vnm_terminal/app_support/clipboard_reader.h
     include/vnm_terminal/app_support/terminal_display_settings.h
     include/vnm_terminal/app_support/terminal_settings_reconciler.h
     include/vnm_terminal/app_support/diagnostic_sink.h
@@ -199,6 +203,9 @@ endif()
 
 add_library(vnm_terminal_app_support STATIC
     ${vnm_terminal_codex_resource_sources}
+    src/app_clipboard_reader.cpp
+    src/hosted_clipboard_reader.cpp
+    include/vnm_terminal/app_support/clipboard_reader.h
     src/app_hyperlink_policy.cpp
     include/vnm_terminal/app_support/app_hyperlink_policy.h
     src/codex_command_environment.cpp
@@ -295,6 +302,19 @@ target_link_libraries(vnm_terminal_app_support
 add_library(
     vnm_terminal::vnm_terminal_app_support
     ALIAS vnm_terminal_app_support)
+
+# Hosted workers do not run standalone main(), so their reader uses a dedicated
+# executable instead of relaunching a host that cannot dispatch the broker mode.
+if(WIN32)
+    add_executable(vnm_terminal_clipboard_broker WIN32 src/clipboard_broker_main.cpp)
+    target_link_libraries(vnm_terminal_clipboard_broker PRIVATE vnm_terminal_app_support)
+    set_target_properties(vnm_terminal_clipboard_broker PROPERTIES AUTOMOC OFF)
+    if(PROJECT_IS_TOP_LEVEL)
+        install(TARGETS vnm_terminal_clipboard_broker
+            RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    endif()
+endif()
+
 add_library(vnm_terminal_default_shell STATIC
     include/vnm_terminal/default_shell.h
     src/default_shell.cpp
@@ -374,6 +394,13 @@ if(PROJECT_IS_TOP_LEVEL)
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vnm_terminal")
 endif()
 
+if(VNM_TERMINAL_APP_SUPPORT_BUILD_TESTS)
+    include(CTest)
+    if(BUILD_TESTING)
+        add_subdirectory(tests/clipboard_reader)
+    endif()
+endif()
+
 if(NOT VNM_TERMINAL_BUILD_STANDALONE_APP)
     return()
 endif()
@@ -386,8 +413,6 @@ find_package(Qt6Svg 6.12 REQUIRED COMPONENTS
 # Compile the window implementation once for the app and its integration tests.
 # Entry-point, CLI and test-driver definitions remain on their executables.
 add_library(vnm_terminal_app_impl OBJECT
-    src/app_clipboard_reader.cpp
-    src/app_clipboard_reader.h
     src/app_clipboard_policy.cpp
     src/app_clipboard_policy.h
     src/app_common.cpp
