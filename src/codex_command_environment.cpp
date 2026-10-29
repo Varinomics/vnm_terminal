@@ -114,6 +114,11 @@ bool Codex_command_environment::prepare(
             // Windows PowerShell needs a BOM for non-ASCII installation paths.
             content.prepend("\xEF\xBB\xBF");
         }
+        if (name.endsWith(QStringLiteral(".cmd"))) {
+            // CMD's label scanner needs CRLF, independently of Git's checkout line endings.
+            content.replace("\r\n", "\n");
+            content.replace("\n", "\r\n");
+        }
 #endif
         QFile output(m_directory.filePath(name));
         if (!output.open(QIODevice::WriteOnly) || output.write(content) != content.size()) {
