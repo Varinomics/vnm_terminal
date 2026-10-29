@@ -165,41 +165,6 @@ qt_add_resources(vnm_terminal_codex_resource_sources
     resources/codex_commands.qrc
 )
 
-if(WIN32)
-    # Embed the launcher so consumers of app_support need no separately deployed executable.
-    add_executable(vnm_terminal_codex_launcher src/windows_codex_launcher.cpp)
-    set_target_properties(vnm_terminal_codex_launcher PROPERTIES
-        AUTOMOC OFF
-        MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/codex_launcher/$<CONFIG>"
-    )
-    if(MINGW)
-        target_link_options(vnm_terminal_codex_launcher PRIVATE
-            -municode -static -static-libgcc -static-libstdc++)
-    endif()
-    set(vnm_terminal_codex_launcher_resource
-        "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>/codex_launcher_resource.cpp")
-    file(GENERATE
-        OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/generated/codex_launcher_$<CONFIG>.qrc"
-        CONTENT [=[
-<RCC>
-  <qresource prefix="/vnm_terminal/codex">
-    <file alias="codex_launcher.exe">../codex_launcher/$<CONFIG>/vnm_terminal_codex_launcher.exe</file>
-  </qresource>
-</RCC>
-]=])
-    add_custom_command(
-        OUTPUT "${vnm_terminal_codex_launcher_resource}"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory
-            "${CMAKE_CURRENT_BINARY_DIR}/generated/$<CONFIG>"
-        COMMAND Qt6::rcc --name codex_launcher
-            --output "${vnm_terminal_codex_launcher_resource}"
-            "${CMAKE_CURRENT_BINARY_DIR}/generated/codex_launcher_$<CONFIG>.qrc"
-        DEPENDS vnm_terminal_codex_launcher "$<TARGET_FILE:vnm_terminal_codex_launcher>"
-        VERBATIM
-    )
-    list(APPEND vnm_terminal_codex_resource_sources "${vnm_terminal_codex_launcher_resource}")
-endif()
 
 add_library(vnm_terminal_app_support STATIC
     ${vnm_terminal_codex_resource_sources}
@@ -405,6 +370,40 @@ if(NOT VNM_TERMINAL_BUILD_STANDALONE_APP)
     return()
 endif()
 
+set(vnm_terminal_codex_commands_dir "${CMAKE_CURRENT_BINARY_DIR}/codex_commands")
+if(WIN32)
+    set(vnm_terminal_codex_templates vnm-codex.cmd vnm-codex.ps1)
+    set(vnm_terminal_codex_helper launch_codex.ps1)
+    set(vnm_terminal_codex_newline CRLF)
+else()
+    set(vnm_terminal_codex_templates vnm-codex)
+    set(vnm_terminal_codex_helper launch_codex.sh)
+    set(vnm_terminal_codex_newline UNIX)
+endif()
+
+set(vnm_terminal_codex_command_files)
+foreach(CODEX_COMMAND IN ITEMS codex codex-pet)
+    foreach(template IN LISTS vnm_terminal_codex_templates)
+        string(REPLACE "vnm-codex" "vnm-${CODEX_COMMAND}" command_name "${template}")
+        set(command_path "${vnm_terminal_codex_commands_dir}/${command_name}")
+        configure_file("resources/codex/${template}" "${command_path}"
+            @ONLY NEWLINE_STYLE ${vnm_terminal_codex_newline})
+        list(APPEND vnm_terminal_codex_command_files "${command_path}")
+    endforeach()
+endforeach()
+unset(CODEX_COMMAND)
+
+set(vnm_terminal_codex_helper_path
+    "${vnm_terminal_codex_commands_dir}/${vnm_terminal_codex_helper}")
+configure_file("resources/codex/${vnm_terminal_codex_helper}"
+    "${vnm_terminal_codex_helper_path}" COPYONLY)
+list(APPEND vnm_terminal_codex_command_files "${vnm_terminal_codex_helper_path}")
+if(UNIX)
+    file(CHMOD ${vnm_terminal_codex_command_files}
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+            GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+endif()
+
 find_package(Qt6 6.12 REQUIRED COMPONENTS Svg)
 find_package(Qt6Svg 6.12 REQUIRED COMPONENTS
     QSvgPlugin
@@ -462,6 +461,22 @@ else()
         ${vnm_terminal_sources}
     )
 endif()
+
+# Keep scripts usable from the build tree and from copied macOS bundles even
+# when only their templates changed and the application does not need relinking.
+if(APPLE)
+    # Non-Mach-O helpers belong in Resources, outside native-code deployment and signing scans.
+    set(vnm_terminal_codex_output_dir "$<TARGET_BUNDLE_CONTENT_DIR:vnm_terminal>/Resources/bin")
+else()
+    set(vnm_terminal_codex_output_dir "$<TARGET_FILE_DIR:vnm_terminal>")
+endif()
+add_custom_target(vnm_terminal_codex_commands
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${vnm_terminal_codex_output_dir}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        ${vnm_terminal_codex_command_files} "${vnm_terminal_codex_output_dir}"
+    VERBATIM
+)
+add_dependencies(vnm_terminal vnm_terminal_codex_commands)
 
 add_dependencies(vnm_terminal vnm_terminal_build_info)
 

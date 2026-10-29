@@ -398,6 +398,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Install the explicit shell commands beside the portable application launcher.
+"%CMAKE%" --install "%BUILD_DIR%" --config "%CONFIG%" ^
+    --prefix "%PORTABLE_DIR%" --component vnm_terminal_portable_codex_commands
+if errorlevel 1 (
+    echo ERROR: failed to deploy the Codex launcher scripts.
+    exit /b 1
+)
+
 copy /y "%~dp0LICENSE" "%PORTABLE_DIR%\LICENSE" >nul
 copy /y "%~dp0THIRD_PARTY_NOTICES.md" "%PORTABLE_DIR%\THIRD_PARTY_NOTICES.md" >nul
 
@@ -471,8 +479,7 @@ if errorlevel 1 (
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tests\windows_portable_payload_tests.ps1" ^
-    -PayloadPath "%PORTABLE_DIR%" ^
-    -EmbeddedLauncherPath "%BUILD_DIR%\codex_launcher\%CONFIG%\vnm_terminal_codex_launcher.exe"
+    -PayloadPath "%PORTABLE_DIR%"
 if errorlevel 1 (
     echo ERROR: Windows release payload validation failed.
     exit /b 1

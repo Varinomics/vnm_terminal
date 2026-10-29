@@ -3,8 +3,6 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$PayloadPath,
 
-    [string]$EmbeddedLauncherPath,
-
     [string]$ArchivePath,
 
     [string]$InstallerPath
@@ -76,10 +74,6 @@ $payloadRoot = (Resolve-Path -LiteralPath $PayloadPath).Path
 $runtimeRoot = Join-Path $payloadRoot 'vnm_terminal_runtime'
 Assert-SymbolFreeExecutable (Join-Path $payloadRoot 'vnm_terminal.exe')
 Assert-SymbolFreeExecutable (Join-Path $runtimeRoot 'vnm_terminal.exe')
-# This helper is embedded by rcc. Check its exact build input before packaging.
-if ($EmbeddedLauncherPath) {
-    Assert-SymbolFreeExecutable (Resolve-Path -LiteralPath $EmbeddedLauncherPath).Path
-}
 if ($InstallerPath) {
     Assert-SymbolFreeExecutable (Resolve-Path -LiteralPath $InstallerPath).Path
 }

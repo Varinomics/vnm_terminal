@@ -1,9 +1,9 @@
 #Requires -Version 5.1
+param([string[]] $CommandPrefix, [string[]] $Arguments = @())
+
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
-$codex_command = $args[0]
-$codex_arguments = @($args | Select-Object -Skip 1)
-$saved_path = $env:PATH
+$codex_command = $CommandPrefix[0]
 
 function quote_native_argument([string] $value) {
     $quoted = [Text.StringBuilder]::new('"')
@@ -51,11 +51,6 @@ foreach ($name in $identity_names) {
 }
 
 try {
-    # Resolve the user's original command without rediscovering this PATH shim.
-    $shim_directory = $PSScriptRoot.Replace('/', '\').TrimEnd('\')
-    $env:PATH = (($saved_path -split ';' | Where-Object {
-        !$_.Replace('/', '\').TrimEnd('\').Equals($shim_directory, [StringComparison]::OrdinalIgnoreCase)
-    }) -join ';')
     $resolved = Get-Command -Name ([WildcardPattern]::Escape($codex_command)) `
         -CommandType Application, ExternalScript -ErrorAction Stop | Select-Object -First 1
     # Parent-terminal hints otherwise hide TERM or select an unsupported protocol.
@@ -63,51 +58,33 @@ try {
         [Environment]::SetEnvironmentVariable($name, [NullString]::Value, 'Process')
     }
     $env:TERM = 'vnm-terminal-sixel'
-    $forwarded_arguments = @('-c', "shell_environment_policy.set.TERM='xterm-256color'") + $codex_arguments
-    if ($resolved.CommandType -eq 'ExternalScript') {
-        # Keep the user's script in its caller's host; its internal forwarding follows that host's rules.
-        if ($MyInvocation.ExpectingInput) {
-            $input | & $resolved.Path @forwarded_arguments
+    $forwarded_arguments = @(
+        for ($index = 1; $index -lt $CommandPrefix.Length; ++$index) {
+            $CommandPrefix[$index]
         }
-        else {
-            & $resolved.Path @forwarded_arguments
+        '-c'
+        "shell_environment_policy.set.TERM='xterm-256color'"
+        foreach ($argument in $Arguments) {
+            $argument
         }
-        $codex_exit_code = $LASTEXITCODE
+    )
+    if ($resolved.CommandType -eq 'Application') {
+        # Fully quoted arguments pass through the Windows PowerShell binder unchanged.
+        # Use its string mode in newer hosts too, retaining native IO and console control handling.
+        $PSNativeCommandArgumentPassing = 'Legacy'
+        $forwarded_arguments = @($forwarded_arguments | ForEach-Object { quote_native_argument $_ })
+    }
+    # Scripts keep their caller's host and argument array; native commands keep its terminal handles.
+    if ($MyInvocation.ExpectingInput) {
+        $input | & $resolved.Path @forwarded_arguments
     }
     else {
-        # A native child preserves terminal handles and PowerShell pipeline behavior without its argv rewriter.
-        $native_arguments = ($forwarded_arguments | ForEach-Object { quote_native_argument $_ }) -join ' '
-        $launcher = "$PSScriptRoot/codex_launcher.exe"
-        # The file transport leaves the Windows command-line limit available to the original arguments.
-        $argument_file = [IO.Path]::Combine($PSScriptRoot, [IO.Path]::GetRandomFileName())
-        $stream = [IO.File]::Open($argument_file, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write)
-        try {
-            try {
-                $bytes = [Text.Encoding]::Unicode.GetBytes($native_arguments)
-                $stream.Write($bytes, 0, $bytes.Length)
-            }
-            finally {
-                $stream.Dispose()
-            }
-            if ($MyInvocation.ExpectingInput) {
-                $input | & $launcher --arguments-file $resolved.Path $argument_file
-            }
-            else {
-                & $launcher --arguments-file $resolved.Path $argument_file
-            }
-            $codex_exit_code = $LASTEXITCODE
-        }
-        finally {
-            [IO.File]::Delete($argument_file)
-        }
+        & $resolved.Path @forwarded_arguments
     }
+    $codex_exit_code = $LASTEXITCODE
 }
 finally {
     # NullString passes an actual CLR null; PowerShell otherwise binds $null as an empty string.
-    if ($null -eq $saved_path) {
-        $saved_path = [NullString]::Value
-    }
-    [Environment]::SetEnvironmentVariable('PATH', $saved_path, 'Process')
     foreach ($name in $identity_names) {
         $saved_value = $saved_identity[$name]
         if ($null -eq $saved_value) {

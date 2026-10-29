@@ -19,6 +19,12 @@ install(TARGETS vnm_terminal
         COMPONENT "${vnm_terminal_runtime_component}"
 )
 
+if(NOT APPLE)
+    install(PROGRAMS ${vnm_terminal_codex_command_files}
+        DESTINATION "${CMAKE_INSTALL_BINDIR}"
+        COMPONENT "${vnm_terminal_runtime_component}")
+endif()
+
 if(WIN32)
     vnm_terminal_install_conpty(
         DESTINATION "${vnm_terminal_executable_destination}"
@@ -29,6 +35,11 @@ if(WIN32)
     vnm_terminal_install_conpty(
         DESTINATION "."
         COMPONENT vnm_terminal_portable_conpty
+        EXCLUDE_FROM_ALL)
+
+    install(PROGRAMS ${vnm_terminal_codex_command_files}
+        DESTINATION "."
+        COMPONENT vnm_terminal_portable_codex_commands
         EXCLUDE_FROM_ALL)
 endif()
 

@@ -64,8 +64,22 @@ vnm_terminal --window-size 1000x640 -- cmd.exe
 Use `--native-titlebar` for the platform's window frame, or `--help` for all
 command-line options.
 
-With SIXEL enabled, run `codex` or `codex-pet` inside the terminal for Codex
-graphics. Direct launches such as `vnm_terminal -- codex` also work.
+With SIXEL enabled, run the installed `vnm-codex` or `vnm-codex-pet` helper
+inside your shell for Codex graphics in the same window. They run your installed
+Codex command and return to the shell when it exits. Direct launches such as
+`vnm_terminal -- codex` also work.
+
+The terminal leaves PATH unchanged. If the helper's directory is not already
+on PATH, use its full path. For example, in PowerShell:
+
+```powershell
+& 'C:\Tools\vnm_terminal\vnm-codex.ps1'
+& 'C:\Tools\vnm_terminal\vnm-codex-pet.ps1'
+```
+
+Use the `.cmd` files in CMD. Linux and macOS helpers have no extension; macOS
+bundles keep them in `vnm_terminal.app/Contents/Resources/bin`. See
+[Codex launcher locations and shell behavior](docs/development.md#installed-codex-launchers).
 
 ## Development
 

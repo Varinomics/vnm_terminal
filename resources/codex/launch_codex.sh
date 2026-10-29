@@ -7,23 +7,6 @@ set -eu
 argument_prefix_size=$1
 codex_command=$2
 shift 2
-shim_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-remaining_path=$PATH
-original_path=
-separator=
-while :; do
-    path_entry=${remaining_path%%:*}
-    if [ "$path_entry" != "$shim_directory" ]; then
-        original_path=$original_path$separator$path_entry
-        separator=:
-    fi
-    case $remaining_path in
-        *:*) remaining_path=${remaining_path#*:} ;;
-        *) break ;;
-    esac
-done
-PATH=$original_path
-export PATH
 
 unset TERM_PROGRAM TERM_PROGRAM_VERSION GHOSTTY_RESOURCES_DIR WEZTERM_VERSION WEZTERM_EXECUTABLE \
     ITERM_SESSION_ID ITERM_PROFILE ITERM_PROFILE_NAME TERM_SESSION_ID \

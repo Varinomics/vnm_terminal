@@ -90,13 +90,40 @@ tests without the standalone application. The Windows
 `vnm_terminal_hosted_clipboard` test runs the deployed helper against the native
 clipboard and exercises the installed reader through a terminal surface.
 
+## Installed Codex launchers
+
+`vnm-codex` and `vnm-codex-pet` run the corresponding installed Codex command
+in the current terminal. They forward arguments and the working directory,
+apply the SIXEL environment to Codex, and preserve the calling shell's
+environment. The terminal does not change PATH or install shell functions.
+Use the helper's full path when its directory is not on PATH.
+
+| Distribution | Helper location |
+| --- | --- |
+| Windows installer or portable ZIP | `vnm-codex.cmd` / `vnm-codex.ps1` and their `vnm-codex-pet` counterparts beside `vnm_terminal.exe` |
+| Linux DEB, RPM, or CMake install | `vnm-codex` and `vnm-codex-pet` in the installation's `bin` directory |
+| Linux RUN installer | `/opt/vnm_terminal/bin/vnm-codex` and `/opt/vnm_terminal/bin/vnm-codex-pet` with the default installation directory |
+| Linux AppImage | `usr/bin/vnm-codex` and `usr/bin/vnm-codex-pet` inside the mounted or extracted AppImage |
+| macOS application bundle | `vnm_terminal.app/Contents/Resources/bin/vnm-codex` and `vnm_terminal.app/Contents/Resources/bin/vnm-codex-pet` |
+
+Keep the adjacent `launch_codex.sh` or `launch_codex.ps1` with the launchers.
+PowerShell uses the `.ps1` commands and supports Windows PowerShell 5.1 and
+PowerShell 7. CMD uses `.cmd` commands with ordinary batch argument parsing
+and command-length limits; quote prompts and paths containing metacharacters.
+
+WSL and SSH start programs in another environment. Install and invoke the
+scripts in the distribution or remote host where Codex runs. Local helpers do
+not propagate there. Ordinary shells retain `TERM=xterm-256color`; no custom
+terminal description is needed on the destination.
+
 ## Codex integration for embedding applications
 
 Link `vnm_terminal::vnm_terminal_app_support` and include
 [`<vnm_terminal/app_support/codex_command_environment.h>`](../include/vnm_terminal/app_support/codex_command_environment.h).
 Call `Codex_command_environment::prepare()` on the final command and
 environment before starting the backend. Keep that object alive for the
-terminal session; it owns the session's private command directory.
+terminal session; it owns the scripts prepared for a direct Codex launch.
+Other commands and their environments pass through unchanged.
 
 For a verified Codex executable or interpreter invocation, pass
 `Codex_invocation{argument_prefix_size}` to `prepare()`. The prefix includes
@@ -110,9 +137,13 @@ The adapter enables SIXEL for Codex and passes
 `-c 'shell_environment_policy.set.TERM="xterm-256color"'` for commands run
 through Codex's shell tools. Codex environment allowlists or later command-line
 overrides can change that result. It does not configure external MCP servers.
-Shell aliases, functions, and explicit paths inside a shell can bypass the
-adapter; multiplexer graphics restrictions still apply.
+Multiplexer graphics restrictions still apply.
 
-The Windows child launcher is embedded in the app support library. Rebuild
-embedding applications to pick up changes; no separate launcher deployment is
-needed.
+The app support library bundles the readable launch scripts and materializes
+them only for direct Codex launches. It leaves PATH unchanged and creates no
+replacement `codex` commands. Rebuild embedding applications to pick up changes;
+their direct launches need no separate script deployment. Applications that
+offer the explicit shell commands must also deploy the installed launchers.
+
+Direct Windows launches preserve argument arrays through the PowerShell script,
+including verified interpreter prefixes. Windows PowerShell 5.1 is supported.

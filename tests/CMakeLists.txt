@@ -316,6 +316,8 @@ add_executable(vnm_terminal_codex_command_environment
 vnm_terminal_configure_test_process(vnm_terminal_codex_command_environment)
 target_link_libraries(vnm_terminal_codex_command_environment PRIVATE
     vnm_terminal::vnm_terminal_app_support)
+target_compile_definitions(vnm_terminal_codex_command_environment PRIVATE
+    VNM_TERMINAL_CODEX_COMMANDS_DIR="${vnm_terminal_codex_commands_dir}")
 set_target_properties(vnm_terminal_codex_command_environment PROPERTIES AUTOMOC OFF)
 vnm_terminal_add_target_test(vnm_terminal_codex_command_environment)
 
