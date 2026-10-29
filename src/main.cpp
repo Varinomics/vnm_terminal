@@ -45,7 +45,6 @@
 #include <QObject>
 #include <QPoint>
 #include <QPointF>
-#include <QProcessEnvironment>
 #include <QQmlEngine>
 #include <QtQuickControls2/QQuickStyle>
 #include <QQuickWindow>
@@ -1134,24 +1133,18 @@ int main(int argc, char** argv)
         print_error(QStringLiteral("failed to sanitize the captured child environment"));
         return k_exit_start_failed;
     }
-    QProcessEnvironment launch_environment;
-    for (const auto& entry : *sanitized_environment) {
-        launch_environment.insert(entry.name, entry.value);
-    }
-    chrome::Codex_command_environment codex_commands;
+    vnm_terminal::Terminal_process_start_request launch_request{
+        options.command,
+        options.working_directory.isEmpty() ? QDir::currentPath() : options.working_directory,
+        std::move(*sanitized_environment),
+        std::nullopt,
+        std::nullopt,
+    };
     QString codex_error;
-    if (!codex_commands.prepare(options.command, launch_environment, codex_error)) {
+    if (!chrome::prepare_codex_command(launch_request, codex_error)) {
         print_error(codex_error);
         return k_exit_start_failed;
     }
-    sanitized_environment->clear();
-    for (const QString& name : launch_environment.keys()) {
-        sanitized_environment->push_back({name, launch_environment.value(name)});
-    }
-    const QString terminal_working_directory =
-        options.working_directory.isEmpty()
-            ? QDir::currentPath()
-            : options.working_directory;
     const auto start_result =
         vnm::qt::post(
             &app,
@@ -1159,16 +1152,9 @@ int main(int argc, char** argv)
              &state,
              surface,
              &timeout_timer,
-             terminal_working_directory,
-             base_environment = std::move(*sanitized_environment)] {
+             launch_request = std::move(launch_request)] {
                 const vnm_terminal::Terminal_process_start_result terminal_start =
-                    surface->start_terminal({
-                        options.command,
-                        terminal_working_directory,
-                        base_environment,
-                        std::nullopt,
-                        std::nullopt,
-                    });
+                    surface->start_terminal(launch_request);
                 if (!terminal_start.accepted) {
                     if (state.backend_error_count == 0) {
                         print_error(QStringLiteral(

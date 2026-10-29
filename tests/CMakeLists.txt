@@ -314,6 +314,9 @@ add_executable(vnm_terminal_codex_command_environment
     terminal_app/codex_command_environment_tests.cpp
 )
 vnm_terminal_configure_test_process(vnm_terminal_codex_command_environment)
+if(MINGW)
+    target_link_options(vnm_terminal_codex_command_environment PRIVATE -municode)
+endif()
 target_link_libraries(vnm_terminal_codex_command_environment PRIVATE
     vnm_terminal::vnm_terminal_app_support)
 target_compile_definitions(vnm_terminal_codex_command_environment PRIVATE

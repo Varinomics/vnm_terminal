@@ -23,7 +23,9 @@ int main()
 {
     using namespace vnm_terminal::terminal_app;
     static_assert(std::is_default_constructible_v<Terminal_settings_snapshot>);
-    static_assert(std::is_default_constructible_v<Codex_command_environment>);
+    static_assert(std::is_same_v<
+        decltype(&prepare_codex_command),
+        bool (*)(vnm_terminal::Terminal_process_start_request&, QString&, std::optional<Codex_invocation>)>);
     static_assert(std::is_base_of_v<QObject, Terminal_shortcut_filter>);
     static_assert(std::is_base_of_v<QObject, Terminal_qml_chrome>);
     static_assert(std::is_base_of_v<QQuickPaintedItem, Terminal_scrollbar>);
