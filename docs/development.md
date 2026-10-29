@@ -104,7 +104,7 @@ Use the helper's full path when its directory is not on PATH.
 | Linux DEB, RPM, or CMake install | `vnm-codex` and `vnm-codex-pet` in the installation's `bin` directory |
 | Linux RUN installer | `/opt/vnm_terminal/bin/vnm-codex` and `/opt/vnm_terminal/bin/vnm-codex-pet` with the default installation directory |
 | Linux AppImage | `usr/bin/vnm-codex` and `usr/bin/vnm-codex-pet` inside the mounted or extracted AppImage |
-| macOS application bundle | `vnm_terminal.app/Contents/MacOS/vnm-codex` and `vnm_terminal.app/Contents/MacOS/vnm-codex-pet` |
+| macOS application bundle | `vnm_terminal.app/Contents/Resources/bin/vnm-codex` and `vnm_terminal.app/Contents/Resources/bin/vnm-codex-pet` |
 
 Keep the adjacent `launch_codex.sh` or `launch_codex.ps1` with the launchers.
 PowerShell uses the `.ps1` commands and supports Windows PowerShell 5.1 and

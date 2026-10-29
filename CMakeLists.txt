@@ -464,10 +464,16 @@ endif()
 
 # Keep scripts usable from the build tree and from copied macOS bundles even
 # when only their templates changed and the application does not need relinking.
+if(APPLE)
+    # Non-Mach-O helpers belong in Resources, outside native-code deployment and signing scans.
+    set(vnm_terminal_codex_output_dir "$<TARGET_BUNDLE_CONTENT_DIR:vnm_terminal>/Resources/bin")
+else()
+    set(vnm_terminal_codex_output_dir "$<TARGET_FILE_DIR:vnm_terminal>")
+endif()
 add_custom_target(vnm_terminal_codex_commands
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:vnm_terminal>"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${vnm_terminal_codex_output_dir}"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        ${vnm_terminal_codex_command_files} "$<TARGET_FILE_DIR:vnm_terminal>"
+        ${vnm_terminal_codex_command_files} "${vnm_terminal_codex_output_dir}"
     VERBATIM
 )
 add_dependencies(vnm_terminal vnm_terminal_codex_commands)

@@ -78,7 +78,7 @@ on PATH, use its full path. For example, in PowerShell:
 ```
 
 Use the `.cmd` files in CMD. Linux and macOS helpers have no extension; macOS
-bundles keep them in `vnm_terminal.app/Contents/MacOS`. See
+bundles keep them in `vnm_terminal.app/Contents/Resources/bin`. See
 [Codex launcher locations and shell behavior](docs/development.md#installed-codex-launchers).
 
 ## Development
