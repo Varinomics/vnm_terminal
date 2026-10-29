@@ -4,7 +4,6 @@ param([string[]] $CommandPrefix, [string[]] $Arguments = @())
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $codex_command = $CommandPrefix[0]
-$saved_path = $env:PATH
 
 function quote_native_argument([string] $value) {
     $quoted = [Text.StringBuilder]::new('"')
@@ -52,11 +51,6 @@ foreach ($name in $identity_names) {
 }
 
 try {
-    # Resolve the user's original command without rediscovering this PATH shim.
-    $shim_directory = $PSScriptRoot.Replace('/', '\').TrimEnd('\')
-    $env:PATH = (($saved_path -split ';' | Where-Object {
-        !$_.Replace('/', '\').TrimEnd('\').Equals($shim_directory, [StringComparison]::OrdinalIgnoreCase)
-    }) -join ';')
     $resolved = Get-Command -Name ([WildcardPattern]::Escape($codex_command)) `
         -CommandType Application, ExternalScript -ErrorAction Stop | Select-Object -First 1
     # Parent-terminal hints otherwise hide TERM or select an unsupported protocol.
@@ -91,10 +85,6 @@ try {
 }
 finally {
     # NullString passes an actual CLR null; PowerShell otherwise binds $null as an empty string.
-    if ($null -eq $saved_path) {
-        $saved_path = [NullString]::Value
-    }
-    [Environment]::SetEnvironmentVariable('PATH', $saved_path, 'Process')
     foreach ($name in $identity_names) {
         $saved_value = $saved_identity[$name]
         if ($null -eq $saved_value) {

@@ -370,6 +370,40 @@ if(NOT VNM_TERMINAL_BUILD_STANDALONE_APP)
     return()
 endif()
 
+set(vnm_terminal_codex_commands_dir "${CMAKE_CURRENT_BINARY_DIR}/codex_commands")
+if(WIN32)
+    set(vnm_terminal_codex_templates vnm-codex.cmd vnm-codex.ps1)
+    set(vnm_terminal_codex_helper launch_codex.ps1)
+    set(vnm_terminal_codex_newline CRLF)
+else()
+    set(vnm_terminal_codex_templates vnm-codex)
+    set(vnm_terminal_codex_helper launch_codex.sh)
+    set(vnm_terminal_codex_newline UNIX)
+endif()
+
+set(vnm_terminal_codex_command_files)
+foreach(CODEX_COMMAND IN ITEMS codex codex-pet)
+    foreach(template IN LISTS vnm_terminal_codex_templates)
+        string(REPLACE "vnm-codex" "vnm-${CODEX_COMMAND}" command_name "${template}")
+        set(command_path "${vnm_terminal_codex_commands_dir}/${command_name}")
+        configure_file("resources/codex/${template}" "${command_path}"
+            @ONLY NEWLINE_STYLE ${vnm_terminal_codex_newline})
+        list(APPEND vnm_terminal_codex_command_files "${command_path}")
+    endforeach()
+endforeach()
+unset(CODEX_COMMAND)
+
+set(vnm_terminal_codex_helper_path
+    "${vnm_terminal_codex_commands_dir}/${vnm_terminal_codex_helper}")
+configure_file("resources/codex/${vnm_terminal_codex_helper}"
+    "${vnm_terminal_codex_helper_path}" COPYONLY)
+list(APPEND vnm_terminal_codex_command_files "${vnm_terminal_codex_helper_path}")
+if(UNIX)
+    file(CHMOD ${vnm_terminal_codex_command_files}
+        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+            GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+endif()
+
 find_package(Qt6 6.12 REQUIRED COMPONENTS Svg)
 find_package(Qt6Svg 6.12 REQUIRED COMPONENTS
     QSvgPlugin
@@ -427,6 +461,16 @@ else()
         ${vnm_terminal_sources}
     )
 endif()
+
+# Keep scripts usable from the build tree and from copied macOS bundles even
+# when only their templates changed and the application does not need relinking.
+add_custom_target(vnm_terminal_codex_commands
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:vnm_terminal>"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        ${vnm_terminal_codex_command_files} "$<TARGET_FILE_DIR:vnm_terminal>"
+    VERBATIM
+)
+add_dependencies(vnm_terminal vnm_terminal_codex_commands)
 
 add_dependencies(vnm_terminal vnm_terminal_build_info)
 

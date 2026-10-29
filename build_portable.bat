@@ -398,6 +398,14 @@ if errorlevel 1 (
     exit /b 1
 )
 
+REM Install the explicit shell commands beside the portable application launcher.
+"%CMAKE%" --install "%BUILD_DIR%" --config "%CONFIG%" ^
+    --prefix "%PORTABLE_DIR%" --component vnm_terminal_portable_codex_commands
+if errorlevel 1 (
+    echo ERROR: failed to deploy the Codex launcher scripts.
+    exit /b 1
+)
+
 copy /y "%~dp0LICENSE" "%PORTABLE_DIR%\LICENSE" >nul
 copy /y "%~dp0THIRD_PARTY_NOTICES.md" "%PORTABLE_DIR%\THIRD_PARTY_NOTICES.md" >nul
 
