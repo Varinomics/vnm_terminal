@@ -626,7 +626,8 @@ void run_tests()
         for (const QString& program : QStringList{name, native_program}) {
             auto request = make_request(QStringList{program} + arguments, environment, fixture.path());
             require(prepare_codex_command(request, error), error);
-            require(request.argv.front() == native_program && !request.windows_native_arguments,
+            require(request.argv.front().compare(native_program, Qt::CaseInsensitive) == 0 &&
+                !request.windows_native_arguments,
                 "native Codex executable did not keep structured arguments");
             check_direct_launch(request, arguments, original_path, "native");
         }
