@@ -1,8 +1,14 @@
 #include "vnm_terminal/default_shell.h"
 
 #include <QByteArray>
+#include <QCoreApplication>
 #include <QTest>
 #include <QtGlobal>
+
+#if defined(_WIN32)
+#include <QProcess>
+#include <QProcessEnvironment>
+#endif
 
 #if defined(__linux__)
 #include <cerrno>
@@ -53,6 +59,29 @@ class Default_shell_tests final : public QObject
     Q_OBJECT
 
 private slots:
+#if defined(_WIN32)
+    void unicode_environment_value_stays_one_separated_argument()
+    {
+        // A new process receives the native Unicode environment without passing
+        // the fixture through qputenv's narrow Windows representation.
+        QProcess child;
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert(QStringLiteral("COMSPEC"),
+            QStringLiteral("C:\\shell \u03bb-\u4e2d-\U0001f600\\shell.exe"));
+        child.setProcessEnvironment(environment);
+        child.start(QCoreApplication::applicationFilePath(), {QStringLiteral("--unicode-comspec-probe")});
+        QVERIFY2(child.waitForStarted(), qPrintable(child.errorString()));
+        const bool finished = child.waitForFinished(10000);
+        if (!finished) {
+            child.kill();
+            child.waitForFinished(5000);
+        }
+        QVERIFY2(finished, "Unicode COMSPEC child did not finish");
+        QCOMPARE(child.exitStatus(), QProcess::NormalExit);
+        QCOMPARE(child.exitCode(), 0);
+    }
+#endif
+
     void empty_or_absent_environment_uses_platform_default_shell()
     {
 #if defined(_WIN32)
@@ -120,6 +149,22 @@ private slots:
     }
 };
 
-QTEST_GUILESS_MAIN(Default_shell_tests)
+int main(int argc, char** argv)
+{
+    QCoreApplication application(argc, argv);
+#if defined(_WIN32)
+    if (application.arguments().contains(QStringLiteral("--unicode-comspec-probe"))) {
+        const QStringList expected{QStringLiteral("C:\\shell \u03bb-\u4e2d-\U0001f600\\shell.exe")};
+        const QStringList actual = vnm_terminal::default_shell_argv();
+        if (actual != expected) {
+            qWarning("Unicode COMSPEC was not preserved as one argument");
+            return 1;
+        }
+        return 0;
+    }
+#endif
+    Default_shell_tests tests;
+    return QTest::qExec(&tests, argc, argv);
+}
 
 #include "default_shell_tests.moc"

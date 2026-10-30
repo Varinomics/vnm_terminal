@@ -346,6 +346,12 @@ if(WIN32)
 endif()
 
 if(WIN32)
+    add_executable(vnm_terminal_process_arguments_tests terminal_app/process_arguments_tests.cpp)
+    target_include_directories(vnm_terminal_process_arguments_tests PRIVATE "${PROJECT_SOURCE_DIR}/src")
+    target_link_libraries(vnm_terminal_process_arguments_tests PRIVATE
+        vnm_terminal_process_arguments Qt6::Test)
+    vnm_terminal_add_target_test(vnm_terminal_process_arguments_tests)
+
     add_executable(vnm_terminal_portable_launcher_win
         terminal_app/portable_launcher_win_tests.c
     )

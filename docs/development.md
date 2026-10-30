@@ -48,6 +48,16 @@ Transcript capture/replay is opt-in for local diagnostics through
 `-DVNM_TERMINAL_ENABLE_TRANSCRIPT_CAPTURE_REPLAY=ON`. Distribution builds use
 `-DVNM_TERMINAL_DISTRIBUTION_BUILD=ON` and reject transcript capture.
 
+## Windows command-line arguments
+
+The runtime and portable launcher parse the full Unicode command line with
+Windows `CommandLineToArgvW`. Arguments after `--` preserve Unicode text,
+empty strings, embedded quotes, and trailing backslashes. Native callers
+should quote arguments for that parser; its doubled-quote handling differs
+from the CRT in ambiguous forms such as `a"b"" c d`, which produces three
+arguments (`ab"`, `c`, and `d`). The default `COMSPEC` path is also read as
+Unicode and remains one executable-name argument, including spaces.
+
 ## QML runtime
 
 Application QML and `VNM_Chrome` use embedded compiled QML units. Keep

@@ -835,6 +835,14 @@ jobs:
               }
           }
 
+      - name: Verify packaged Unicode child arguments
+        shell: pwsh
+        working-directory: vnm_terminal
+        run: |
+          & tests/terminal_app/windows_package_arguments.ps1 `
+              -PayloadRoot dist/portable_candidate `
+              -OutputRoot (Join-Path $env:RUNNER_TEMP 'vnm-terminal-package-arguments')
+
       - name: Exercise generated Qt IFW installation lifecycle
         shell: pwsh
         working-directory: vnm_terminal

@@ -19,7 +19,11 @@ namespace {
 
 QString environment_or_default(const char* name, const QString& fallback)
 {
+#if defined(_WIN32)
+    const QString value = qEnvironmentVariable(name);
+#else
     const QString value = QString::fromLocal8Bit(qgetenv(name));
+#endif
     return value.trimmed().isEmpty() ? fallback : value;
 }
 

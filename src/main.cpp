@@ -7,6 +7,7 @@
 #include "app_options.h"
 #include "app_options_settings_adapter.h"
 #include "app_profile_text.h"
+#include "process_arguments.h"
 #include "standalone_environment.h"
 #include "vnm_terminal/app_support/codex_command_environment.h"
 #include "vnm_terminal/app_support/terminal_file_drop.h"
@@ -185,15 +186,6 @@ using chrome::Parse_result;
 using chrome::prepare_capture_file;
 using chrome::print_usage;
 using chrome::validate_capture_paths;
-
-QStringList raw_arguments(int argc, char** argv)
-{
-    QStringList arguments;
-    for (int index = 0; index < argc; ++index) {
-        arguments.push_back(QString::fromLocal8Bit(argv[index]));
-    }
-    return arguments;
-}
 
 struct Qt_arguments
 {
@@ -388,7 +380,12 @@ private:
 #ifndef VNM_TERMINAL_APP_NO_MAIN
 int main(int argc, char** argv)
 {
-    const QStringList arguments = raw_arguments(argc, argv);
+    const chrome::Process_arguments process_arguments = chrome::process_arguments(argc, argv);
+    if (!process_arguments.error.isEmpty()) {
+        print_error(process_arguments.error);
+        return k_exit_start_failed;
+    }
+    const QStringList& arguments = process_arguments.arguments;
     if (clipboard_broker_mode_requested(arguments)) {
         return chrome::run_clipboard_text_broker(argc, argv);
     }

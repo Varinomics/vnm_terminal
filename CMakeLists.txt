@@ -262,11 +262,19 @@ add_library(
     vnm_terminal::vnm_terminal_app_support
     ALIAS vnm_terminal_app_support)
 
+add_library(vnm_terminal_process_arguments STATIC src/process_arguments.cpp src/process_arguments.h)
+target_link_libraries(vnm_terminal_process_arguments PUBLIC Qt6::Core)
+set_target_properties(vnm_terminal_process_arguments PROPERTIES AUTOMOC OFF)
+if(WIN32)
+    target_link_libraries(vnm_terminal_process_arguments PRIVATE shell32)
+endif()
+
 # Hosted workers do not run standalone main(), so their reader uses a dedicated
 # executable instead of relaunching a host that cannot dispatch the broker mode.
 if(WIN32)
     add_executable(vnm_terminal_clipboard_broker WIN32 src/clipboard_broker_main.cpp)
-    target_link_libraries(vnm_terminal_clipboard_broker PRIVATE vnm_terminal_app_support)
+    target_link_libraries(vnm_terminal_clipboard_broker PRIVATE
+        vnm_terminal_app_support vnm_terminal_process_arguments)
     set_target_properties(vnm_terminal_clipboard_broker PROPERTIES AUTOMOC OFF)
     if(PROJECT_IS_TOP_LEVEL)
         install(TARGETS vnm_terminal_clipboard_broker
@@ -499,6 +507,7 @@ endif()
 
 target_link_libraries(vnm_terminal PRIVATE
     vnm_terminal_app_impl
+    vnm_terminal_process_arguments
     vnm_terminal::vnm_terminal_environment_policy
     Qt6::Svg
 )
