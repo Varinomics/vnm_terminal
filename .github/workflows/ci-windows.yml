@@ -836,12 +836,23 @@ jobs:
           }
 
       - name: Verify packaged Unicode child arguments
+        id: package_arguments
         shell: pwsh
         working-directory: vnm_terminal
         run: |
-          & tests/terminal_app/windows_package_arguments.ps1 `
+          $debugger = (Get-Command gdb.exe -ErrorAction Stop).Source
+          & "$env:WINDOWS_INSTALLER_RECIPE_ROOT/tests/terminal_app/windows_package_arguments.ps1" `
               -PayloadRoot dist/portable_candidate `
-              -OutputRoot (Join-Path $env:RUNNER_TEMP 'vnm-terminal-package-arguments')
+              -OutputRoot (Join-Path $env:RUNNER_TEMP 'vnm-terminal-package-arguments') `
+              -DebuggerPath $debugger
+
+      - name: Preserve failed packaged command evidence
+        if: always() && steps.package_arguments.outcome == 'failure'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: vnm-terminal-windows-package-arguments-failure
+          path: ${{ runner.temp }}/vnm-terminal-package-arguments
+          if-no-files-found: warn
 
       - name: Exercise generated Qt IFW installation lifecycle
         shell: pwsh
