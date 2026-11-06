@@ -1,0 +1,2 @@
+Temporary contribution coverage verification fixture.
+This branch must be closed without merging; it asserts no signature or material approval.
