@@ -1,0 +1,28 @@
+name: Contribution coverage
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, closed]
+  push:
+    branches: [contribution-records]
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: Optional open PR number; blank rechecks every open PR
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: contribution-coverage-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  contribution-coverage:
+    uses: Varinomics/vnm_terminal_surface/.github/workflows/check-contributions.yml@master
+    with:
+      pull_request: ${{ inputs.pull_request || '' }}

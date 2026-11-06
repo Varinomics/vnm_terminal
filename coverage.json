@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "generation": 0,
+  "repository_id": 1245712579,
+  "custodians": [
+    20025756
+  ],
+  "agreements": [
+    {
+      "id": "individual-v1.0",
+      "path": "docs/contributions/individual-cla-v1.0.md",
+      "sha256": "6e0c34ac32e4a1c31494996f04d48b839191a6759968923955dd249329a2bd55"
+    },
+    {
+      "id": "corporate-v1.0",
+      "path": "docs/contributions/corporate-cla-v1.0.md",
+      "sha256": "9c8db4dd805c03ba74ea9462582691cee847804a464b483c8a42aa4bb9708469"
+    }
+  ],
+  "individuals": [],
+  "corporations": [],
+  "corporate_authorizations": [],
+  "exceptions": [],
+  "material_reviews": []
+}
