@@ -1,0 +1,2 @@
+Temporary native contribution workflow verification fixture.
+Close this branch without merging. No legal acceptance or ownership clearance is asserted.
