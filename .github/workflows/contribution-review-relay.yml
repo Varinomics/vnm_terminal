@@ -1,0 +1,16 @@
+name: Contribution review relay
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions: {}
+
+jobs:
+  signal-review:
+    name: Signal a contribution review change
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      # Fork review events have no write token; the default-branch workflow re-reads GitHub metadata.
+      - run: 'true'
