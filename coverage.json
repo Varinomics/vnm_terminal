@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generation": 0,
+  "generation": 1,
   "repository_id": 1245712579,
   "custodians": [
     20025756
@@ -15,11 +15,23 @@
       "id": "corporate-v1.0",
       "path": "docs/contributions/corporate-cla-v1.0.md",
       "sha256": "9c8db4dd805c03ba74ea9462582691cee847804a464b483c8a42aa4bb9708469"
+    },
+    {
+      "id": "individual-v1.1",
+      "path": "docs/contributions/individual-cla-v1.1.md",
+      "sha256": "a99c54e7def4103e64f74175eda9a6789e0925265f2caa2e0d96da9b4e3a039f"
+    },
+    {
+      "id": "corporate-v1.1",
+      "path": "docs/contributions/corporate-cla-v1.1.md",
+      "sha256": "582711d7d554f6adaad9e97f859979e5354effdc137ebc4a3b190be84b4f2699"
     }
   ],
-  "individuals": [],
-  "corporations": [],
-  "corporate_authorizations": [],
-  "exceptions": [],
-  "material_reviews": []
+  "online_signing": {
+    "schema_version": 1,
+    "aliases": [],
+    "exceptions": [],
+    "invalid_receipts": [],
+    "authority_endings": []
+  }
 }
