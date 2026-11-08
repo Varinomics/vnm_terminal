@@ -151,7 +151,7 @@ Window {
 
         property alias content_object_name: tip_text.objectName
 
-        delay: 400
+        delay: 800
         timeout: 12000
         padding: 8
 
