@@ -80,6 +80,7 @@ public:
     QRectF content_interior_rect() const;
     qreal device_pixel_ratio() const;
     void set_title(const QString& title);
+    void set_secondary_title(const QString& title);
     void set_title_editing_enabled(bool enabled);
     // Shows the title editor's reset badge while a user title is in effect.
     void set_title_reset_available(bool available);

@@ -221,6 +221,11 @@ void chrome::Terminal_qml_chrome::set_title(const QString& title)
     set_property("title", title);
 }
 
+void chrome::Terminal_qml_chrome::set_secondary_title(const QString& title)
+{
+    set_property("secondary_title", title);
+}
+
 void chrome::Terminal_qml_chrome::set_title_editing_enabled(bool enabled)
 {
     set_property("title_editing_enabled", enabled);

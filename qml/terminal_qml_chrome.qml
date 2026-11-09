@@ -7,6 +7,7 @@ Item {
     objectName: "terminal_qml_chrome_root"
 
     property string title: ""
+    property string secondary_title: ""
     property bool title_editing_enabled: true
     property bool title_reset_available: false
     property string activity_marker_text: ""
@@ -82,6 +83,11 @@ Item {
     readonly property real content_interior_height: frame_shell.content_interior_height
     readonly property Item titlebar_item: frame_shell.titlebar_item
 
+    function escaped_title(value) {
+        return value.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+    }
+
     function reduced_chrome_width(logical_width, physical_reduction) {
         var dpr = VNM_chrome_geometry.normalized_device_pixel_ratio(device_pixel_ratio)
         return Math.max(
@@ -114,6 +120,18 @@ Item {
         titlebar_activity_marker: root.active ? "#71b4ff" : "#5f7793"
         titlebar_content_border: "transparent"
         window_frame_border: root.frame_edge_color
+    }
+
+    Binding {
+        target: frame_shell.titlebar_item
+        property: "title_rich_text"
+        value: root.secondary_title.length > 0
+            ? '<font size="2">' + root.escaped_title(root.title) + '</font><br>'
+                + '<font size="1" color="' + Qt.tint(terminal_chrome_theme.titlebar_text,
+                    Qt.rgba(root.frame_background_color.r, root.frame_background_color.g,
+                        root.frame_background_color.b, 0.25)) + '">'
+                + root.escaped_title(root.secondary_title) + '</font>'
+            : ""
     }
 
     VNM_NativeWindowFrame {
