@@ -29,12 +29,9 @@ Controller.prototype.configureUserLogFile = function()
     if (!installer.fileExists(powershellPath) || probeScript == "")
         return;
 
-    var result = installer.execute(
+    var result = Controller.prototype.executeWindowsPowerShell(
         powershellPath,
-        ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"],
-        probeScript,
-        "UTF-8",
-        "UTF-8");
+        probeScript);
     if (result.length != 2 || result[1] != 0)
         return;
 
@@ -83,6 +80,24 @@ Controller.prototype.windowsPowerShellPath = function()
         + "Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 }
 
+Controller.prototype.executeWindowsPowerShell = function(powershellPath, script)
+{
+    // Decode IFW's UTF-8 stdin, including its BOM, before PowerShell parses it.
+    // The returned path must use the UTF-8 encoding IFW expects as well.
+    var bootstrap = "$env:PSModulePath = $PSHOME + '\\Modules'; "
+        + "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); "
+        + "$reader = [IO.StreamReader]::new("
+        + "[Console]::OpenStandardInput(), [Text.Encoding]::UTF8, $true); "
+        + "try { . ([scriptblock]::Create($reader.ReadToEnd())) } "
+        + "finally { $reader.Dispose() }";
+    return installer.execute(
+        powershellPath,
+        ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", bootstrap],
+        script,
+        "UTF-8",
+        "UTF-8");
+}
+
 // Must name the file config.xml declares through MaintenanceToolName. IFW
 // refuses any target directory that contains it, which is how it recognizes
 // one of its own installations.
@@ -113,21 +128,16 @@ Controller.prototype.runReplacementHelper = function(targetDirectory, action)
     if (!installer.fileExists(powershellPath) || supportScript == "") {
         return ["not-started\nSetup cannot run its replacement helper on this computer.", 2];
     }
-    var invocation = "\n[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)\n"
+    var invocation = "\n"
         + "$script:VnmTerminalReplacementRemovalMayHaveStarted = $true\n"
-        // The leading blank line terminates the library; the final statement
-        // must stay on one line for Windows PowerShell's stdin/EOF parser.
         + "try { Invoke-VnmTerminalSetupReplacement -TargetDirectory '"
         + targetDirectory.replace(/'/g, "''") + "' -Action '" + action + "' } "
         + "catch { if (!$script:VnmTerminalReplacementRemovalMayHaveStarted) { "
         + "[Console]::Out.WriteLine('not-started'); [Console]::Out.WriteLine($_.Exception.Message); exit 2 }; "
         + "[Console]::Out.WriteLine($_.Exception.Message); exit 1 }\n";
-    return installer.execute(
+    return Controller.prototype.executeWindowsPowerShell(
         powershellPath,
-        ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "-"],
-        supportScript + invocation,
-        "UTF-8",
-        "UTF-8");
+        supportScript + invocation);
 }
 
 Controller.prototype.offerSelectedInstallationReplacement = function()

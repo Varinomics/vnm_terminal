@@ -176,7 +176,7 @@ global.installer = {
         state.executions.push(execution);
         if (program !== powershellPath)
             throw new Error("unexpected synchronous execution: " + program);
-        if (args[4] === "-") {
+        if (stdIn === state.logProbeScript) {
             if (!state.logProbeStarts) return [];
             const outputEncoding = stdOutCodec === "UTF-8"
                 ? "utf8"
@@ -1334,7 +1334,7 @@ Assert-IfwContract `
     ($controllerScript -match 'installer\.setValue\s*\(\s*"LogFileName"\s*,\s*"\\\\\\\\\.\\\\NUL"\s*\)') `
     'logging must start from an absolute device fallback that cannot resolve below TargetDir'
 Assert-IfwContract `
-    ($controllerScript -match 'readFile\s*\(\s*":/metadata/installer-theme/log_path_probe\.ps1"[\s\S]*?installer\.execute\s*\(') `
+    ($controllerScript -match 'readFile\s*\(\s*":/metadata/installer-theme/log_path_probe\.ps1"[\s\S]*?Controller\.prototype\.executeWindowsPowerShell\s*\(\s*powershellPath\s*,\s*probeScript\s*\)') `
     'the controller must execute the exact embedded writable-path probe'
 Assert-IfwContract `
     ($controllerScript -match 'result\.length\s*!=\s*2\s*\|\|\s*result\[1\]\s*!=\s*0[\s\S]*?\^\(\?:\[A-Za-z\][\s\S]*?installer\.setValue\s*\(\s*"LogFileName"') `

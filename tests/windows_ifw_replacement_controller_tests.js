@@ -2,6 +2,7 @@ const fs = require('fs');
 const vm = require('vm');
 const assert = require('assert/strict');
 const path = require('path');
+const os = require('os');
 const childProcess = require('child_process');
 const source = fs.readFileSync(path.join(__dirname,'../packaging/windows/ifw/controller.qs'),'utf8');
 const support = fs.readFileSync(path.join(__dirname,'../packaging/windows/ifw/replacement_support.ps1'),'utf8');
@@ -11,6 +12,7 @@ function fixture(options = {}) {
     const steps = [];
     const inputs = [];
     const callbacks = {};
+    const values = {};
     let exists = options.exists !== false;
     let change;
     const field = { text:original,
@@ -39,10 +41,12 @@ function fixture(options = {}) {
             fileExists:p => (p.endsWith('powershell.exe') && !options.missingHost)
                 || (p.endsWith('vnm_terminal_maintenance.exe') && exists),
             hasAdminRights:() => options.admin === true,
-            readFile:p => p.endsWith('log_path_probe.ps1') ? '' : (options.missingLibrary ? '' : support),
-            setValue:(k,v) => {if(k !== 'LogFileName') steps.push([k,v]);},
+            readFile:p => p.endsWith('log_path_probe.ps1') ? (options.logProbeScript || '')
+                : (options.missingLibrary ? '' : support),
+            setValue:(k,v) => {values[k]=v; if(k !== 'LogFileName') steps.push([k,v]);},
             execute:(p,a,input) => {
                 inputs.push({program:p,args:a,input:input});
+                if (options.execute) return options.execute(p,a,input);
                 const action=input.includes("-Action 'Validate'") ? 'Validate' : 'Remove';
                 steps.push(action);
                 if(action==='Validate') return options.validation || ['validated',0];
@@ -68,7 +72,7 @@ function fixture(options = {}) {
     vm.createContext(context);
     vm.runInContext(source,context);
     const wizard = new context.Controller();
-    return {context,steps,inputs,page,callbacks,wizard,controller:context.Controller.prototype};
+    return {context,steps,inputs,page,callbacks,values,wizard,controller:context.Controller.prototype};
 }
 let f=fixture({exists:false});
 f.controller.TargetDirectoryPageCallback();
@@ -185,6 +189,60 @@ for (const [target,action] of [
     assert.match(rejected.stdout,/^not-started\r?\n/);
     assert.doesNotMatch(rejected.stdout,/unsafe-target/,'Quoted target text must remain an argument');
     assert.equal(rejected.stderr,'');
+}
+for (const bom of [false, true]) {
+    f=fixture();
+    const text='ASCII J\u00fcrgen \u0395\u03bb\u03ad\u03bd\u03b7 \u{1F5A5}';
+    const script="[CmdletBinding()]\nparam()\n"
+        + "if ($env:PSModulePath -cne ($PSHOME + '\\Modules')) { throw 'Unexpected module path' }\n"
+        + "$value = ConvertFrom-Json '" + JSON.stringify({text}) + "'\n"
+        + "[Console]::Out.WriteLine($value.text)\nexit 7\n";
+    f.controller.executeWindowsPowerShell(f.controller.windowsPowerShellPath(),script);
+    const request=f.inputs[0];
+    const result=childProcess.spawnSync(request.program,request.args,{
+        input:Buffer.concat([bom ? Buffer.from([0xef,0xbb,0xbf]) : Buffer.alloc(0),
+            Buffer.from(request.input,'utf8')]),
+        encoding:'utf8',windowsHide:true,timeout:60000,
+        env:{...process.env,PSModulePath:'C:\\windows-ifw-fixture-modules'}
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status,7,'The UTF-8 script must preserve its exit code, BOM=' + bom);
+    assert.equal(result.stdout,text + '\r\n','Unicode and param-first script scope must survive');
+    assert.equal(result.stderr,'','Native modules must load without the inherited host path');
+}
+const probe=fs.readFileSync(path.join(__dirname,'../packaging/windows/ifw/log_path_probe.ps1'),'utf8');
+const probeRoot=fs.mkdtempSync(path.join(os.tmpdir(),'vnm-terminal-ifw-log-path-'));
+try {
+    for (const profileName of ['Alex','J\u00fcrgen','\u0395\u03bb\u03ad\u03bd\u03b7','\u042e\u0440\u0438\u0439','\u5c71\u7530','\u{20BB7}\u7530']) {
+        const profile=path.join(probeRoot,profileName);
+        fs.mkdirSync(profile);
+        // One complete stdin statement cannot execute the probe with default paths
+        // if a host fails to parse its explicit scratch candidate invocation.
+        const script="& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
+            + Buffer.from(probe,'utf8').toString('base64')
+            + "')))) -CandidatePath ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
+            + Buffer.from(profile,'utf8').toString('base64') + "')))\n";
+        f=fixture({logProbeScript:script,execute:(program,args,input) => {
+            const result=childProcess.spawnSync(program,args,{
+                input:Buffer.concat([Buffer.from([0xef,0xbb,0xbf]),Buffer.from(input,'utf8')]),
+                encoding:'utf8',windowsHide:true,timeout:60000
+            });
+            assert.ifError(result.error);
+            assert.equal(result.status,0,'The real log-path probe must succeed: ' + profileName);
+            assert.equal(result.stderr,'');
+            assert.equal(result.stdout,result.stdout.trim() + '\r\n',
+                'The path must be the only output, without a BOM');
+            return [result.stdout,result.status];
+        }});
+        const logPath=f.values.LogFileName;
+        assert.equal(path.dirname(logPath),
+            path.join(fs.realpathSync.native(profile),'Varinomics','vnm_terminal'));
+        assert.match(path.basename(logPath),/^InstallationLog-[0-9a-f]{32}\.txt$/);
+        assert.equal(fs.statSync(logPath).size,0,'The stored path must name the file the probe created');
+    }
+}
+finally {
+    fs.rmSync(probeRoot,{recursive:true,force:true});
 }
 console.log('Controller source behavior and exact Windows PowerShell stdin fixtures passed. '
     + 'No wizard, elevation, removal or lifecycle coverage.');
