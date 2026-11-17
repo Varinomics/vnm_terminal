@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Window
+import VNM_Chrome
 
 Item {
     id: root
@@ -66,6 +67,11 @@ Item {
 
         TextInput {
             id: query_input
+            VNM_TextInputClipboardNotifications {
+                target: query_input
+                // The overlay is a window sibling of the terminal's scene.
+                presentation_active: terminalSurface.visible && terminalSurface.enabled
+            }
             objectName: "terminal_search_query_input"
             anchors.left: parent.left
             anchors.leftMargin: 8

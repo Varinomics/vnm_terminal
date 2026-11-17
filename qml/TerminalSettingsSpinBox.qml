@@ -26,6 +26,10 @@ Basic.SpinBox {
     }
 
     contentItem: TextInput {
+        id: input
+
+        VNM_TextInputClipboardNotifications { target: input }
+
         text: spin.displayText
         font: spin.font
         color: spin.settings_style.value_color

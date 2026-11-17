@@ -7,6 +7,8 @@
 
 #include "vnm_terminal/vnm_terminal_surface.h"
 
+#include "vnm_qml_chrome/vnm_qml_chrome_runtime.h"
+
 #include <vnm_font_namespace.h>
 
 #include <QCoreApplication>
@@ -36,6 +38,10 @@ Terminal_search_bar::Terminal_search_bar(
     m_surface(&surface),
     m_context(std::make_unique<QQmlContext>(engine.rootContext()))
 {
+    if (!vnm_init_qml_chrome_runtime(engine)) {
+        m_error_string = QStringLiteral("failed to initialize vnm_qml_chrome runtime");
+        return;
+    }
     // The chevrons are Font Awesome 4 codepoints, so the bar registers that
     // face itself rather than naming a family and relying on some other library
     // in the process having registered one. Registration marks the family name,

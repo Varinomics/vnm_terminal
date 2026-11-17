@@ -16,6 +16,7 @@
 #include <vnm_font_namespace.h>
 
 #include <QCoreApplication>
+#include <QClipboard>
 #include <QDragEnterEvent>
 #include <QFile>
 #include <QFont>
@@ -36,11 +37,13 @@
 #include <QQmlEngine>
 #include <QQmlExpression>
 #include <QQuickWindow>
+#include <QQuickRenderControl>
 #include <QQuickItem>
 #include <QScopeGuard>
 #include <QSettings>
 #include <QSignalSpy>
 #include <QTemporaryDir>
+#include <QVariant>
 #include <QTest>
 #include <QWheelEvent>
 #include <qqml.h>
@@ -48,8 +51,34 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <utility>
 
 namespace terminal_app = vnm_terminal::terminal_app;
+
+namespace {
+
+class Search_clipboard_data : public QMimeData
+{
+public:
+    explicit Search_clipboard_data(std::shared_ptr<int> reads)
+    :
+        m_reads(std::move(reads))
+    {
+        setText(QStringLiteral("Clipboard selection"));
+    }
+
+protected:
+    QVariant retrieveData(const QString& format, QMetaType type) const override
+    {
+        ++*m_reads;
+        return QMimeData::retrieveData(format, type);
+    }
+
+private:
+    std::shared_ptr<int> m_reads;
+};
+
+} // namespace
 
 class App_support_tests final : public QObject
 {
@@ -1290,6 +1319,53 @@ private slots:
         toggle.evaluate();
         QVERIFY(surface.search_case_sensitive());
         QVERIFY(warnings.isEmpty());
+    }
+
+    void terminal_search_clipboard_follows_the_logical_scene()
+    {
+        QQmlEngine engine;
+        QQuickRenderControl render_control;
+        QQuickWindow window(&render_control);
+        window.resize(600, 300);
+        QQuickItem scene(window.contentItem());
+        scene.setSize(QSizeF(600, 300));
+        VNM_TerminalSurface surface(&scene);
+        surface.setSize(QSizeF(600, 300));
+        terminal_app::Terminal_search_bar search(engine, window, surface);
+        QVERIFY2(search.is_valid(), qPrintable(search.error_string()));
+        surface.set_search_query(QStringLiteral("project"));
+        search.show_search();
+        auto* const input = search.root_item()->findChild<QQuickItem*>(
+            QStringLiteral("terminal_search_query_input"));
+        QVERIFY(input);
+        QCOMPARE(search.root_item()->parentItem(), window.contentItem());
+        QVERIFY(!window.isVisible());
+        const QString text = input->property("text").toString();
+        const int cursor = input->property("cursorPosition").toInt();
+        const int selection_start = input->property("selectionStart").toInt();
+        const int selection_end = input->property("selectionEnd").toInt();
+        const auto reads = std::make_shared<int>(0);
+        QGuiApplication::clipboard()->setMimeData(new Search_clipboard_data(reads));
+        const auto clear_clipboard = qScopeGuard([] { QGuiApplication::clipboard()->clear(); });
+        *reads = 0;
+        QGuiApplication::clipboard()->dataChanged();
+        QVERIFY(*reads > 0);
+
+        scene.setVisible(false);
+        QVERIFY(search.root_item()->isVisible());
+        QVERIFY(input->isVisible());
+        *reads = 0;
+        QGuiApplication::clipboard()->dataChanged();
+        QCOMPARE(*reads, 0);
+        scene.setVisible(true);
+        QVERIFY(*reads > 0);
+        QCOMPARE(input->property("text").toString(), text);
+        QCOMPARE(input->property("cursorPosition").toInt(), cursor);
+        QCOMPARE(input->property("selectionStart").toInt(), selection_start);
+        QCOMPARE(input->property("selectionEnd").toInt(), selection_end);
+        *reads = 0;
+        QGuiApplication::clipboard()->dataChanged();
+        QVERIFY(*reads > 0);
     }
 
     void settings_font_picker_tracks_the_selected_family()
