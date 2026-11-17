@@ -8,6 +8,7 @@ Window {
     id: win
     objectName: "terminal_settings_window"
     property bool dark_mode: true
+    property QtObject offscreenPreferences: null
 
     readonly property TerminalSettingsStyle settings_style: terminal_style
     readonly property int settings_font_pixel_size: settings_style.font_pixel_size
@@ -741,6 +742,29 @@ Window {
                             objectName: "invert_brightness_switch"
                             checked: surface.invertBrightness
                             onToggled: surface.invertBrightness = checked
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+                        visible: win.offscreenPreferences !== null
+
+                        S_Form_Label {
+                            text: "MSAA"
+                        }
+
+                        TerminalSettingsSwitch {
+                            settings_style: win.settings_style
+                            objectName: "offscreen_msaa_switch"
+                            Layout.leftMargin: 14
+                            checked: win.offscreenPreferences !== null
+                                && win.offscreenPreferences.multisampleAntialiasing
+                            onToggled: {
+                                if (win.offscreenPreferences !== null) {
+                                    win.offscreenPreferences.request_multisample_antialiasing(checked)
+                                }
+                            }
                         }
                     }
                 }

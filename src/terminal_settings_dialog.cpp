@@ -48,6 +48,7 @@ bool Terminal_settings_dialog::show_window(const QVariantMap& values, bool dark_
             return false;
         }
         m_window->set_fallback_anchor_window_title(m_anchor_window_title);
+        m_window->set_offscreen_preferences(m_offscreen_preferences);
     }
     refresh(values, dark_mode);
     QWindow* anchor = nullptr;
@@ -69,6 +70,14 @@ void Terminal_settings_dialog::refresh(const QVariantMap& values, bool dark_mode
     if (m_window) {
         m_model->set_values(values);
         m_window->set_dark_mode(dark_mode);
+    }
+}
+
+void Terminal_settings_dialog::set_offscreen_preferences(QObject* preferences)
+{
+    m_offscreen_preferences = preferences;
+    if (m_window) {
+        m_window->set_offscreen_preferences(preferences);
     }
 }
 

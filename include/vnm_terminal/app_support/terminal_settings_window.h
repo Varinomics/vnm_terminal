@@ -57,6 +57,10 @@ public:
 
     void set_transient_parent(QWindow* parent);
     void set_dark_mode(bool dark_mode);
+    // The host exposes multisampleAntialiasing and
+    // request_multisample_antialiasing(bool). A null object leaves this
+    // embedding-specific preference out of the shared panel.
+    void set_offscreen_preferences(QObject* preferences);
     void set_fallback_anchor_window_title(const QString& title);
     // On Windows the provider is copied and called once at the start of each
     // show. Its native id is used only when it names a visible top-level

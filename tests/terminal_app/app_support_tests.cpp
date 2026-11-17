@@ -80,6 +80,23 @@ private:
 
 } // namespace
 
+class Offscreen_preferences_fixture final : public QObject
+{
+    Q_OBJECT
+    Q_PROPERTY(bool multisampleAntialiasing MEMBER m_enabled NOTIFY changed)
+
+public:
+    bool m_enabled = true;
+    Q_INVOKABLE void request_multisample_antialiasing(bool value)
+    {
+        m_enabled = value;
+        emit changed();
+    }
+
+signals:
+    void changed();
+};
+
 class App_support_tests final : public QObject
 {
     Q_OBJECT
@@ -1247,6 +1264,18 @@ private slots:
         QVERIFY(window->isVisible());
         QCOMPARE(window->title(), QStringLiteral("Terminal settings"));
         QVERIFY(warnings.isEmpty());
+        auto* msaa = window->findChild<QQuickItem*>(QStringLiteral("offscreen_msaa_switch"));
+        QVERIFY(msaa != nullptr);
+        QVERIFY(!msaa->parentItem()->isVisible());
+        Offscreen_preferences_fixture offscreen;
+        settings.set_offscreen_preferences(&offscreen);
+        QVERIFY(msaa->parentItem()->isVisible());
+        QVERIFY(msaa->property("checked").toBool());
+        QVERIFY(msaa->setProperty("checked", false));
+        QVERIFY(QMetaObject::invokeMethod(msaa, "toggled"));
+        QVERIFY(!offscreen.m_enabled);
+        settings.set_offscreen_preferences(nullptr);
+        QVERIFY(!msaa->parentItem()->isVisible());
         QQuickItem* font_size = window->findChild<QQuickItem*>(QStringLiteral("font_size_spin"));
         QVERIFY(font_size != nullptr);
         QVERIFY(font_size->setProperty("value", 21));

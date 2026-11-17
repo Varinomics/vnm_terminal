@@ -27,6 +27,7 @@ public:
 
     bool show_window(const QVariantMap& values, bool dark_mode);
     void refresh(const QVariantMap& values, bool dark_mode);
+    void set_offscreen_preferences(QObject* preferences);
     QString error_string() const;
 
 signals:
@@ -34,6 +35,7 @@ signals:
 
 private:
     QPointer<QQmlApplicationEngine> m_engine;
+    QPointer<QObject> m_offscreen_preferences;
     QString m_anchor_window_title;
     QString m_error_string;
     std::unique_ptr<Terminal_settings_model> m_model;

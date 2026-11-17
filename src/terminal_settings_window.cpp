@@ -284,6 +284,13 @@ settings::Terminal_settings_window::Terminal_settings_window(
         &model, &Terminal_settings_model::request_font_family);
 }
 
+void settings::Terminal_settings_window::set_offscreen_preferences(QObject* preferences)
+{
+    if (m_window) {
+        m_window->setProperty("offscreenPreferences", QVariant::fromValue(preferences));
+    }
+}
+
 void settings::Terminal_settings_window::initialize(
     QQmlEngine&                   engine,
     QObject&                      preferences,
