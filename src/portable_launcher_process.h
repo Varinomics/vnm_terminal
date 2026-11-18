@@ -17,6 +17,8 @@ typedef struct portable_launcher_config_t
     const wchar_t* runtime_path_too_long;
     const wchar_t* runtime_missing;
     const wchar_t* command_line_too_long;
+    // An exact argv[1] match forwards the standard streams and reports errors on stderr.
+    const wchar_t* stdio_argument_or_null;
 } portable_launcher_config_t;
 
 // Launches synchronously with the package directory as cwd and forwards argv[1..).
