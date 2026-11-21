@@ -202,31 +202,21 @@ jobs:
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
 
-      - name: Verify Visual Studio 2026 toolchain
+      - name: Provision and verify Visual Studio 2026 MSVC 14.51
         shell: pwsh
         run: |
-          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
-          $instances = @(& $vswhere -latest -products '*' -version '[18.0,19.0)' `
-              -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json)
-          if ($instances.Count -ne 1 -or !$instances[0].isComplete -or !$instances[0].isLaunchable) {
-              throw 'A complete, launchable Visual Studio 2026 installation is required.'
-          }
-          $vs = $instances[0].installationPath
-          $tools = Get-ChildItem -LiteralPath "$vs/VC/Tools/MSVC" -Directory |
-              Where-Object Name -Like '14.51.*' | Sort-Object { [version]$_.Name } -Descending |
-              Select-Object -First 1
-          if (!$tools) { throw 'MSVC v145 14.51 is required.' }
-          $instances[0] | Select-Object installationPath, installationVersion, isComplete, isLaunchable |
-              ConvertTo-Json
+          $msvc = & "$env:WINDOWS_INSTALLER_RECIPE_ROOT/.github/scripts/initialize_msvc_145.ps1"
           [ordered]@{
+              Windows = (Get-ItemProperty 'HKLM:/SOFTWARE/Microsoft/Updates' `
+                  -Name UpdateExeVolatile -ErrorAction SilentlyContinue).UpdateExeVolatile
               CBS = Test-Path 'HKLM:/SOFTWARE/Microsoft/Windows/CurrentVersion/Component Based Servicing/RebootPending'
               WindowsUpdate = Test-Path 'HKLM:/SOFTWARE/Microsoft/Windows/CurrentVersion/WindowsUpdate/Auto Update/RebootRequired'
               PendingFileRename = $null -ne (Get-ItemProperty `
                   'HKLM:/SYSTEM/CurrentControlSet/Control/Session Manager' `
                   -Name PendingFileRenameOperations -ErrorAction SilentlyContinue)
           } | ConvertTo-Json
-          "VS2026_PATH=$vs" >> $env:GITHUB_ENV
-          "MSVC_COMPILER_DIR=$($tools.FullName)/bin/Hostx64/x64" >> $env:GITHUB_ENV
+          "VS2026_PATH=$($msvc.InstallationPath)" >> $env:GITHUB_ENV
+          "MSVC_COMPILER_DIR=$($msvc.CompilerDirectory)" >> $env:GITHUB_ENV
 
       - name: Install and identify compiler cache
         id: compiler_cache
@@ -548,6 +538,11 @@ jobs:
           SOURCE_TUPLE: ${{ needs.resolve-dependencies.outputs.source_tuple }}
         run: |
           node vnm_terminal/tools/dependencies_lock.js verify-checkout vnm_terminal "${GITHUB_WORKSPACE}"
+
+      - name: Provision and verify Visual Studio 2026 MSVC 14.51
+        shell: pwsh
+        run: |
+          & "$env:WINDOWS_INSTALLER_RECIPE_ROOT/.github/scripts/initialize_msvc_145.ps1" -RequireArm64 | Out-Null
 
       - name: Resolve source-built ConPTY inputs
         id: conpty-inputs
