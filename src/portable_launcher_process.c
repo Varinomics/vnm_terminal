@@ -121,12 +121,60 @@ cleanup:
     return started;
 }
 
+static BOOL resolve_path_option(
+    const wchar_t* in_option,
+    int            in_argc,
+    wchar_t**      in_argv,
+    DWORD          in_capacity,
+    wchar_t*       out_argument)
+{
+    const size_t option_length = wcslen(in_option);
+    for (int i = 1; i < in_argc && wcscmp(in_argv[i], L"--") != 0; ++i) {
+        const wchar_t* argument = in_argv[i];
+        size_t prefix_length = 0;
+        if (wcscmp(argument, in_option) == 0) {
+            if (++i == in_argc || wcsncmp(in_argv[i], L"--", 2) == 0) {
+                return TRUE;
+            }
+            argument = in_argv[i];
+        }
+        else
+        if (wcsncmp(argument, in_option, option_length) == 0 && argument[option_length] == L'=') {
+            prefix_length = option_length + 1;
+        }
+        else {
+            continue;
+        }
+
+        const wchar_t* path = argument + prefix_length;
+        if (!*path) {
+            return TRUE;
+        }
+
+        // Use the caller's drive and per-drive working directories before the
+        // runtime starts in the package directory. Leave option errors to it.
+        const DWORD capacity = in_capacity - (DWORD)prefix_length;
+        const DWORD length   = GetFullPathNameW(path, capacity, out_argument + prefix_length, NULL);
+        if (!length) {
+            return FALSE;
+        }
+        if (length >= capacity) {
+            SetLastError(ERROR_FILENAME_EXCED_RANGE);
+            return FALSE;
+        }
+        wmemcpy(out_argument, argument, prefix_length);
+        in_argv[i] = out_argument;
+        return TRUE;
+    }
+    return TRUE;
+}
+
 static int launch_runtime(const portable_launcher_config_t* in_config, int argc, wchar_t** argv)
 {
-    wchar_t launcher_path[VNM_TERMINAL_MAX_PATH_CHARS + 1];
     wchar_t launcher_dir[ VNM_TERMINAL_MAX_PATH_CHARS + 1];
     wchar_t target_path[  VNM_TERMINAL_MAX_PATH_CHARS + 1];
     wchar_t command_line[ VNM_TERMINAL_MAX_CMDLINE + 1];
+    wchar_t path_argument[VNM_TERMINAL_MAX_CMDLINE + 1];
     const BOOL stdio = argc > 1 && in_config->stdio_argument_or_null &&
                        wcscmp(argv[1], in_config->stdio_argument_or_null) == 0;
     PROCESS_INFORMATION process_info = {0};
@@ -135,23 +183,20 @@ static int launch_runtime(const portable_launcher_config_t* in_config, int argc,
 
     launcher_length = GetModuleFileNameW(
         NULL,
-        launcher_path,
-        (DWORD)PORTABLE_LAUNCHER_ARRAY_COUNT(launcher_path));
+        launcher_dir,
+        (DWORD)PORTABLE_LAUNCHER_ARRAY_COUNT(launcher_dir));
     if (launcher_length == 0) {
         show_last_error(stdio, in_config->title, in_config->locate_error);
         return 1;
     }
     if (!portable_launcher_module_path_is_complete(
             launcher_length,
-            PORTABLE_LAUNCHER_ARRAY_COUNT(launcher_path)))
+            PORTABLE_LAUNCHER_ARRAY_COUNT(launcher_dir)))
     {
         show_error_message(stdio, in_config->title, L"The portable launcher path is too long.");
         return 1;
     }
 
-    for (size_t i = 0; i <= launcher_length; ++i) {
-        launcher_dir[i] = launcher_path[i];
-    }
     portable_launcher_trim_to_directory(launcher_length, launcher_dir);
 
     if (!portable_launcher_join_text(
@@ -167,6 +212,14 @@ static int launch_runtime(const portable_launcher_config_t* in_config, int argc,
         return 1;
     }
 
+    if (!stdio && in_config->path_option_or_null &&
+        !resolve_path_option(
+            in_config->path_option_or_null, argc, argv,
+            (DWORD)PORTABLE_LAUNCHER_ARRAY_COUNT(path_argument), path_argument))
+    {
+        show_last_error(FALSE, in_config->title, L"Could not resolve the path for the packaged application.");
+        return 1;
+    }
     if (!portable_launcher_build_command_line(
             target_path, argc, argv, PORTABLE_LAUNCHER_ARRAY_COUNT(command_line), command_line))
     {
